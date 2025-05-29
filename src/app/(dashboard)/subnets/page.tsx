@@ -80,7 +80,7 @@ export default async function SubnetsPage() {
                       <DeleteConfirmationDialog
                         itemId={subnet.id}
                         itemName={subnet.networkAddress}
-                        deleteAction={() => import("@/lib/actions").then(actions => actions.deleteSubnetAction(subnet.id))}
+                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteSubnetAction(id))}
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete subnet">
                             <Trash2 className="h-4 w-4" />

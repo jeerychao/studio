@@ -52,7 +52,7 @@ export default async function VlansPage() {
                       <DeleteConfirmationDialog
                         itemId={vlan.id}
                         itemName={`VLAN ${vlan.vlanNumber}`}
-                        deleteAction={() => import("@/lib/actions").then(actions => actions.deleteVLANAction(vlan.id))}
+                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteVLANAction(id))}
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete VLAN">
                             <Trash2 className="h-4 w-4" />

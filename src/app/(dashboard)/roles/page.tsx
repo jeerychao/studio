@@ -52,7 +52,7 @@ export default async function RolesPage() {
                       <DeleteConfirmationDialog
                         itemId={role.id}
                         itemName={role.name}
-                        deleteAction={() => import("@/lib/actions").then(actions => actions.deleteRoleAction(role.id))}
+                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteRoleAction(id))}
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete Role">
                             <Trash2 className="h-4 w-4" />

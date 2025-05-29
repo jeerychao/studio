@@ -79,7 +79,7 @@ export default async function UsersPage() {
                       <DeleteConfirmationDialog
                         itemId={user.id}
                         itemName={user.username}
-                        deleteAction={() => import("@/lib/actions").then(actions => actions.deleteUserAction(user.id))}
+                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteUserAction(id))}
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete User">
                             <Trash2 className="h-4 w-4" />

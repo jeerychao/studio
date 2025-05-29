@@ -92,7 +92,7 @@ export default async function IPAddressesPage({
                       <DeleteConfirmationDialog
                         itemId={ip.id}
                         itemName={ip.ipAddress}
-                        deleteAction={() => import("@/lib/actions").then(actions => actions.deleteIPAddressAction(ip.id))}
+                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteIPAddressAction(id))}
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete IP Address">
                             <Trash2 className="h-4 w-4" />
