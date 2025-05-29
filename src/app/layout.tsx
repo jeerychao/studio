@@ -1,11 +1,11 @@
 
 import type {Metadata} from 'next';
-import { Inter } from 'next/font/google'; // Changed from Geist_Sans
+import { Inter } from 'next/font/google';
 import './globals.css';
-import { Toaster } from "@/components/ui/toaster"; // Global toaster
+import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({ // Changed from Geist_Sans
-  variable: '--font-inter', // Changed variable name
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
 });
 
@@ -20,12 +20,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head />
-      <body className={`${inter.variable} font-sans antialiased`}> {/* Use updated font variable */}
+    <html lang="en" suppressHydrationWarning>{/* Ensure no whitespace node before body; Next.js handles <head> */}<body className={`${inter.variable} font-sans antialiased`}>
         {children}
         <Toaster />
-      </body>
-    </html>
+      </body></html>
   );
 }
