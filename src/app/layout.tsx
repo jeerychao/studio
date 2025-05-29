@@ -20,6 +20,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning><body className="font-sans antialiased">{children}<Toaster /></body></html>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Next.js will inject metadata, CSS links, etc., here.
+            An explicitly empty <head /> tag is often safer for hydration. */}
+      </head>
+      <body className="font-sans antialiased">
+        {children}
+        <Toaster />
+      </body>
+    </html>
   );
 }
