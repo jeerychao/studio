@@ -37,21 +37,16 @@ import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
 import { createSubnetAction, updateSubnetAction } from "@/lib/actions";
-import { parseAndValidateCIDR } from "@/lib/ip-utils"; // Import the CIDR validator
+import { parseAndValidateCIDR } from "@/lib/ip-utils";
 
 const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR notation is too short (e.g., x.x.x.x/y)")
     .refine((val) => {
       const parsed = parseAndValidateCIDR(val);
-      // For user input, we only care if it's valid CIDR, backend will normalize the IP to network address.
-      // Or, if we want to be strict that the typed IP IS the network address:
-      // return parsed !== null && parsed.ip === parsed.networkAddress; 
       return parsed !== null;
     }, "Invalid CIDR notation (e.g., 192.168.1.0/24). Ensure the IP is the network address for the given prefix."),
-  gateway: z.string().ip({ version: "v4", message: "Invalid IPv4 gateway address" }).optional().or(z.literal('')),
   vlanId: z.string().optional(),
   description: z.string().max(200, "Description too long").optional(),
-  // utilization is no longer part of the form
 });
 
 type SubnetFormValues = z.infer<typeof subnetFormSchema>;
@@ -59,8 +54,8 @@ type SubnetFormValues = z.infer<typeof subnetFormSchema>;
 interface SubnetFormSheetProps {
   subnet?: Subnet;
   vlans: VLAN[];
-  children?: React.ReactNode; // For custom trigger
-  buttonProps?: ButtonProps; // For default trigger styling
+  children?: React.ReactNode;
+  buttonProps?: ButtonProps;
 }
 
 const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
@@ -74,7 +69,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
     resolver: zodResolver(subnetFormSchema),
     defaultValues: {
       cidr: subnet?.cidr || "",
-      gateway: subnet?.gateway || "",
       vlanId: subnet?.vlanId || "",
       description: subnet?.description || "",
     },
@@ -84,7 +78,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
-        gateway: subnet?.gateway || "",
         vlanId: subnet?.vlanId || "",
         description: subnet?.description || "",
       });
@@ -96,17 +89,15 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
     try {
       const actionData = {
         cidr: data.cidr,
-        gateway: data.gateway || undefined, // Ensure empty string becomes undefined
-        vlanId: data.vlanId || undefined,
+        vlanId: data.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : (data.vlanId || undefined),
         description: data.description || undefined,
       };
 
       if (isEditing && subnet) {
-        // For update, we might also pass utilization if it were editable, but it's not in this simplified form
         await updateSubnetAction(subnet.id, { ...actionData, utilization: subnet.utilization });
         toast({ title: "Subnet Updated", description: `Subnet ${data.cidr} has been successfully updated.` });
       } else {
-        await createSubnetAction(actionData); // Utilization defaults to 0 in createSubnetAction
+        await createSubnetAction(actionData);
         toast({ title: "Subnet Created", description: `Subnet ${data.cidr} has been successfully created.` });
       }
       setIsOpen(false);
@@ -154,40 +145,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
                 </FormItem>
               )}
             />
-            {/* Subnet Mask is now calculated from CIDR, so no input field.
-                Optionally, display calculated mask and IP range here (read-only)
-                For example:
-                const currentCidr = form.watch("cidr");
-                const [calculatedInfo, setCalculatedInfo] = React.useState<{mask: string, range: string} | null>(null);
-                React.useEffect(() => {
-                  const parsed = parseAndValidateCIDR(currentCidr);
-                  if(parsed) {
-                    setCalculatedInfo({mask: parsed.subnetMask, range: parsed.ipRange || "N/A"});
-                  } else {
-                    setCalculatedInfo(null);
-                  }
-                }, [currentCidr]);
-
-                {calculatedInfo && (
-                  <div>
-                    <p>Calculated Mask: {calculatedInfo.mask}</p>
-                    <p>Calculated Range: {calculatedInfo.range}</p>
-                  </div>
-                )}
-            */}
-            <FormField
-              control={form.control}
-              name="gateway"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Gateway (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 192.168.1.1" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="vlanId"
@@ -197,7 +154,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
                   <Select
                     onValueChange={(value) => {
                       if (value === NO_VLAN_SENTINEL_VALUE) {
-                        field.onChange(""); // Update react-hook-form with empty string
+                        field.onChange(""); 
                       } else {
                         field.onChange(value);
                       }

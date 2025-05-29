@@ -11,10 +11,9 @@ import {
   mockUsers, 
   mockRoles,
   mockAuditLogs
-} from "./data"; // Assuming data is mutable for simulation
-import { parseAndValidateCIDR, subnetMaskToPrefix } from "./ip-utils";
+} from "./data";
+import { parseAndValidateCIDR } from "./ip-utils";
 
-// Helper to generate simple IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // --- Subnet Actions ---
@@ -24,7 +23,6 @@ export async function getSubnetsAction(): Promise<Subnet[]> {
 
 export async function createSubnetAction(data: { 
   cidr: string; 
-  gateway?: string; 
   vlanId?: string; 
   description?: string; 
 }): Promise<Subnet> {
@@ -35,11 +33,11 @@ export async function createSubnetAction(data: {
 
   const newSubnet: Subnet = {
     id: generateId(),
-    cidr: data.cidr, // Store the user-provided CIDR
+    cidr: data.cidr,
     networkAddress: parsedCidr.networkAddress,
     subnetMask: parsedCidr.subnetMask,
     ipRange: parsedCidr.ipRange,
-    gateway: data.gateway || undefined,
+    // gateway: undefined, // Gateway removed from creation form
     vlanId: data.vlanId || undefined,
     description: data.description || undefined,
     utilization: 0,
@@ -51,7 +49,7 @@ export async function createSubnetAction(data: {
   return newSubnet;
 }
 
-export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id">> & { cidr?: string }): Promise<Subnet | null> {
+export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "gateway">> & { cidr?: string }): Promise<Subnet | null> {
   const index = mockSubnets.findIndex(s => s.id === id);
   if (index === -1) return null;
 
@@ -68,7 +66,8 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
     subnetToUpdate.ipRange = parsedCidr.ipRange;
   }
 
-  if (data.hasOwnProperty('gateway')) subnetToUpdate.gateway = data.gateway || undefined;
+  // Gateway is no longer updatable through this action
+  // if (data.hasOwnProperty('gateway')) subnetToUpdate.gateway = data.gateway || undefined;
   if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId || undefined;
   if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
   if (data.hasOwnProperty('utilization')) subnetToUpdate.utilization = data.utilization;
@@ -84,7 +83,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
 export async function deleteSubnetAction(id: string): Promise<{ success: boolean }> {
   const initialLength = mockSubnets.length;
   const subnetToDelete = mockSubnets.find(s => s.id === id);
-  // Basic "cascade delete" for IPs in this subnet
+
   const ipsInSubnet = mockIPAddresses.filter(ip => ip.subnetId === id);
   ipsInSubnet.forEach(ip => {
     const ipIndex = mockIPAddresses.findIndex(i => i.id === ip.id);
@@ -131,7 +130,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<VLAN, "id"
 export async function deleteVLANAction(id: string): Promise<{ success: boolean }> {
   const initialLength = mockVLANs.length;
   const vlanToDelete = mockVLANs.find(v => v.id === id);
-  // Unset vlanId from subnets associated with this VLAN
+
   mockSubnets.forEach(subnet => {
     if (subnet.vlanId === id) {
       subnet.vlanId = undefined;
@@ -147,7 +146,7 @@ export async function deleteVLANAction(id: string): Promise<{ success: boolean }
   }
 
   revalidatePath("/vlans");
-  revalidatePath("/subnets"); // because vlanId in subnets might change
+  revalidatePath("/subnets");
   return { success: mockVLANs.length < initialLength };
 }
 
@@ -158,7 +157,6 @@ export async function getIPAddressesAction(subnetId?: string): Promise<IPAddress
 }
 
 export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promise<IPAddress> {
-  // Check for duplicates within the same subnet
   const existingIP = mockIPAddresses.find(ip => ip.subnetId === data.subnetId && ip.ipAddress === data.ipAddress);
   if (existingIP) {
     throw new Error("IP address already exists in this subnet.");
@@ -167,7 +165,7 @@ export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promis
   mockIPAddresses.push(newIP);
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_ip_address', timestamp: new Date().toISOString(), details: `Created IP ${newIP.ipAddress} in subnet ${newIP.subnetId}` });
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard"); // For utilization updates
+  revalidatePath("/dashboard");
   return newIP;
 }
 
@@ -175,7 +173,6 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
   const index = mockIPAddresses.findIndex(ip => ip.id === id);
   if (index === -1) return null;
 
-  // If IP address or subnet ID is changing, check for duplicates
   if ((data.ipAddress && data.ipAddress !== mockIPAddresses[index].ipAddress) || (data.subnetId && data.subnetId !== mockIPAddresses[index].subnetId)) {
     const targetIp = data.ipAddress || mockIPAddresses[index].ipAddress;
     const targetSubnetId = data.subnetId || mockIPAddresses[index].subnetId;
@@ -270,11 +267,10 @@ export async function updateRoleAction(id: string, data: Partial<Omit<Role, "id"
 export async function deleteRoleAction(id: string): Promise<{ success: boolean }> {
   const initialLength = mockRoles.length;
   const roleToDelete = mockRoles.find(r => r.id === id);
-  // Basic: Unassign this role from users
+
   mockUsers.forEach(user => {
     if (user.roleId === id) {
-      // In a real app, you might assign a default role or handle this differently
-      user.roleId = ''; // Or a default role ID
+      user.roleId = ''; 
     }
   });
 
@@ -286,7 +282,7 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean }
     }
   }
   revalidatePath("/roles");
-  revalidatePath("/users"); // Because user roles might change
+  revalidatePath("/users");
   return { success: mockRoles.length < initialLength };
 }
 
@@ -298,15 +294,12 @@ export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<
     return result;
   } catch (error: any) {
     console.error("AI Subnet Suggestion Error:", error);
-    // It's important to return an error structure that the client can handle
-    // For now, re-throwing, but a production app might return a specific error object
     throw new Error(error.message || "Failed to get AI subnet suggestion.");
   }
 }
 
 // --- Audit Log Actions ---
 export async function getAuditLogsAction(): Promise<AuditLog[]> {
-  // Augment logs with username for display if not already present (simulating a join)
   return mockAuditLogs.map(log => {
     if (!log.username) {
       const user = mockUsers.find(u => u.id === log.userId);

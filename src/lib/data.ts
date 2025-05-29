@@ -1,9 +1,9 @@
 
 import type { Subnet, VLAN, IPAddress, User, Role, AuditLog } from '@/types';
-import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils'; // Assuming ip-utils.ts will be created or functions moved
+import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils';
 
 // Helper to generate initial subnet data with calculated fields
-function createInitialSubnet(id: string, cidr: string, gateway?: string, vlanId?: string, description?: string, utilization?: number): Subnet {
+function createInitialSubnet(id: string, cidr: string, vlanId?: string, description?: string, utilization?: number): Subnet {
   const prefix = cidrToPrefix(cidr);
   const ipPart = cidr.split('/')[0];
   const networkAddress = calculateNetworkAddress(ipPart, prefix);
@@ -16,7 +16,7 @@ function createInitialSubnet(id: string, cidr: string, gateway?: string, vlanId?
     networkAddress,
     subnetMask,
     ipRange,
-    gateway,
+    // gateway field removed from direct creation
     vlanId,
     description,
     utilization,
@@ -25,10 +25,16 @@ function createInitialSubnet(id: string, cidr: string, gateway?: string, vlanId?
 
 
 export const mockSubnets: Subnet[] = [
-  createInitialSubnet('subnet-1', '192.168.1.0/24', '192.168.1.1', 'vlan-1', 'Main Office Network', 60),
-  createInitialSubnet('subnet-2', '10.0.0.0/16', '10.0.0.1', 'vlan-2', 'Server Farm', 45),
-  createInitialSubnet('subnet-3', '172.16.0.0/20', undefined, undefined, 'Guest WiFi', 80),
+  createInitialSubnet('subnet-1', '192.168.1.0/24', 'vlan-1', 'Main Office Network', 60), // Original gateway '192.168.1.1' removed from direct creation. It might exist if data has it.
+  createInitialSubnet('subnet-2', '10.0.0.0/16', 'vlan-2', 'Server Farm', 45), // Original gateway '10.0.0.1' removed.
+  createInitialSubnet('subnet-3', '172.16.0.0/20', undefined, 'Guest WiFi', 80), // No gateway previously, still no gateway.
 ];
+
+// Manually re-add gateway to specific mock subnets if needed for other parts of the app or testing,
+// but the createInitialSubnet and form will not handle it.
+if (mockSubnets[0]) mockSubnets[0].gateway = '192.168.1.1';
+if (mockSubnets[1]) mockSubnets[1].gateway = '10.0.0.1';
+
 
 export const mockVLANs: VLAN[] = [
   { id: 'vlan-1', vlanNumber: 10, description: 'Office VLAN', subnetCount: 1 },
@@ -61,9 +67,6 @@ export const mockAuditLogs: AuditLog[] = [
   { id: 'log-2', userId: 'user-2', username: 'net_admin', action: 'assign_ip', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Assigned IP 192.168.1.10 to John Doe\'s PC' },
   { id: 'log-3', userId: 'user-1', username: 'admin', action: 'update_vlan', timestamp: new Date().toISOString(), details: 'Updated VLAN 10 description' },
 ];
-
-// Simulating DB operations
-// In a real app, these would be async and interact with a database.
 
 export const getSubnets = async (): Promise<Subnet[]> => {
   return new Promise(resolve => setTimeout(() => resolve(mockSubnets), 500));
