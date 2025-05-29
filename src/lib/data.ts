@@ -1,10 +1,33 @@
 
 import type { Subnet, VLAN, IPAddress, User, Role, AuditLog } from '@/types';
+import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils'; // Assuming ip-utils.ts will be created or functions moved
+
+// Helper to generate initial subnet data with calculated fields
+function createInitialSubnet(id: string, cidr: string, gateway?: string, vlanId?: string, description?: string, utilization?: number): Subnet {
+  const prefix = cidrToPrefix(cidr);
+  const ipPart = cidr.split('/')[0];
+  const networkAddress = calculateNetworkAddress(ipPart, prefix);
+  const subnetMask = prefixToSubnetMask(prefix);
+  const ipRange = calculateIpRange(networkAddress, prefix) || undefined;
+
+  return {
+    id,
+    cidr,
+    networkAddress,
+    subnetMask,
+    ipRange,
+    gateway,
+    vlanId,
+    description,
+    utilization,
+  };
+}
+
 
 export const mockSubnets: Subnet[] = [
-  { id: 'subnet-1', networkAddress: '192.168.1.0', subnetMask: '255.255.255.0', gateway: '192.168.1.1', vlanId: 'vlan-1', description: 'Main Office Network', utilization: 60 },
-  { id: 'subnet-2', networkAddress: '10.0.0.0', subnetMask: '255.255.0.0', gateway: '10.0.0.1', vlanId: 'vlan-2', description: 'Server Farm', utilization: 45 },
-  { id: 'subnet-3', networkAddress: '172.16.0.0', subnetMask: '255.255.240.0', description: 'Guest WiFi', utilization: 80 },
+  createInitialSubnet('subnet-1', '192.168.1.0/24', '192.168.1.1', 'vlan-1', 'Main Office Network', 60),
+  createInitialSubnet('subnet-2', '10.0.0.0/16', '10.0.0.1', 'vlan-2', 'Server Farm', 45),
+  createInitialSubnet('subnet-3', '172.16.0.0/20', undefined, undefined, 'Guest WiFi', 80),
 ];
 
 export const mockVLANs: VLAN[] = [

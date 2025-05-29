@@ -1,8 +1,10 @@
 
 export interface Subnet {
   id: string;
-  networkAddress: string;
-  subnetMask: string;
+  cidr: string; // e.g., "192.168.1.0/30" - Primary identifier
+  networkAddress: string; // Calculated e.g., "192.168.1.0"
+  subnetMask: string; // Calculated e.g., "255.255.255.252"
+  ipRange?: string; // Calculated e.g., "192.168.1.1 - 192.168.1.2"
   gateway?: string;
   vlanId?: string;
   description?: string;

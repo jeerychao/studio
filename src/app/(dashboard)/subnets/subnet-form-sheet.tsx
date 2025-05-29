@@ -37,14 +37,21 @@ import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
 import { createSubnetAction, updateSubnetAction } from "@/lib/actions";
+import { parseAndValidateCIDR } from "@/lib/ip-utils"; // Import the CIDR validator
 
 const subnetFormSchema = z.object({
-  networkAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 network address" }),
-  subnetMask: z.string().ip({ version: "v4", message: "Invalid IPv4 subnet mask" }),
+  cidr: z.string().min(7, "CIDR notation is too short (e.g., x.x.x.x/y)")
+    .refine((val) => {
+      const parsed = parseAndValidateCIDR(val);
+      // For user input, we only care if it's valid CIDR, backend will normalize the IP to network address.
+      // Or, if we want to be strict that the typed IP IS the network address:
+      // return parsed !== null && parsed.ip === parsed.networkAddress; 
+      return parsed !== null;
+    }, "Invalid CIDR notation (e.g., 192.168.1.0/24). Ensure the IP is the network address for the given prefix."),
   gateway: z.string().ip({ version: "v4", message: "Invalid IPv4 gateway address" }).optional().or(z.literal('')),
   vlanId: z.string().optional(),
   description: z.string().max(200, "Description too long").optional(),
-  utilization: z.coerce.number().min(0).max(100).optional(),
+  // utilization is no longer part of the form
 });
 
 type SubnetFormValues = z.infer<typeof subnetFormSchema>;
@@ -66,24 +73,20 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
   const form = useForm<SubnetFormValues>({
     resolver: zodResolver(subnetFormSchema),
     defaultValues: {
-      networkAddress: subnet?.networkAddress || "",
-      subnetMask: subnet?.subnetMask || "",
+      cidr: subnet?.cidr || "",
       gateway: subnet?.gateway || "",
       vlanId: subnet?.vlanId || "",
       description: subnet?.description || "",
-      utilization: subnet?.utilization || 0,
     },
   });
   
   React.useEffect(() => {
     if (isOpen) {
       form.reset({
-        networkAddress: subnet?.networkAddress || "",
-        subnetMask: subnet?.subnetMask || "",
+        cidr: subnet?.cidr || "",
         gateway: subnet?.gateway || "",
         vlanId: subnet?.vlanId || "",
         description: subnet?.description || "",
-        utilization: subnet?.utilization || 0,
       });
     }
   }, [isOpen, subnet, form]);
@@ -91,12 +94,20 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
 
   async function onSubmit(data: SubnetFormValues) {
     try {
+      const actionData = {
+        cidr: data.cidr,
+        gateway: data.gateway || undefined, // Ensure empty string becomes undefined
+        vlanId: data.vlanId || undefined,
+        description: data.description || undefined,
+      };
+
       if (isEditing && subnet) {
-        await updateSubnetAction(subnet.id, data);
-        toast({ title: "Subnet Updated", description: `Subnet ${data.networkAddress} has been successfully updated.` });
+        // For update, we might also pass utilization if it were editable, but it's not in this simplified form
+        await updateSubnetAction(subnet.id, { ...actionData, utilization: subnet.utilization });
+        toast({ title: "Subnet Updated", description: `Subnet ${data.cidr} has been successfully updated.` });
       } else {
-        await createSubnetAction(data);
-        toast({ title: "Subnet Created", description: `Subnet ${data.networkAddress} has been successfully created.` });
+        await createSubnetAction(actionData); // Utilization defaults to 0 in createSubnetAction
+        toast({ title: "Subnet Created", description: `Subnet ${data.cidr} has been successfully created.` });
       }
       setIsOpen(false);
       form.reset();
@@ -125,37 +136,45 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit Subnet" : "Add New Subnet"}</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the details of the existing subnet." : "Fill in the details for the new subnet."}
+            {isEditing ? "Update the details of the existing subnet." : "Provide the CIDR for the new subnet (e.g., 192.168.1.0/24). Other details are optional."}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">
             <FormField
               control={form.control}
-              name="networkAddress"
+              name="cidr"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Network Address</FormLabel>
+                  <FormLabel>Network Address (CIDR)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., 192.168.1.0" {...field} />
+                    <Input placeholder="e.g., 192.168.1.0/24" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="subnetMask"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Subnet Mask</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 255.255.255.0" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Subnet Mask is now calculated from CIDR, so no input field.
+                Optionally, display calculated mask and IP range here (read-only)
+                For example:
+                const currentCidr = form.watch("cidr");
+                const [calculatedInfo, setCalculatedInfo] = React.useState<{mask: string, range: string} | null>(null);
+                React.useEffect(() => {
+                  const parsed = parseAndValidateCIDR(currentCidr);
+                  if(parsed) {
+                    setCalculatedInfo({mask: parsed.subnetMask, range: parsed.ipRange || "N/A"});
+                  } else {
+                    setCalculatedInfo(null);
+                  }
+                }, [currentCidr]);
+
+                {calculatedInfo && (
+                  <div>
+                    <p>Calculated Mask: {calculatedInfo.mask}</p>
+                    <p>Calculated Range: {calculatedInfo.range}</p>
+                  </div>
+                )}
+            */}
             <FormField
               control={form.control}
               name="gateway"
@@ -199,19 +218,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="utilization"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Utilization (%) (Optional)</FormLabel>
-                  <FormControl>
-                    <Input type="number" min="0" max="100" placeholder="e.g., 60" {...field} />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

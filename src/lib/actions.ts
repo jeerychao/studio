@@ -3,7 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import { suggestSubnet, type SuggestSubnetInput } from "@/ai/flows/suggest-subnet";
-import type { Subnet, VLAN, IPAddress, User, Role, AISuggestionResponse } from "@/types";
+import type { Subnet, VLAN, IPAddress, User, Role, AISuggestionResponse, AuditLog } from "@/types";
 import { 
   mockSubnets, 
   mockVLANs, 
@@ -12,6 +12,7 @@ import {
   mockRoles,
   mockAuditLogs
 } from "./data"; // Assuming data is mutable for simulation
+import { parseAndValidateCIDR, subnetMaskToPrefix } from "./ip-utils";
 
 // Helper to generate simple IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -21,20 +22,60 @@ export async function getSubnetsAction(): Promise<Subnet[]> {
   return mockSubnets;
 }
 
-export async function createSubnetAction(data: Omit<Subnet, "id" | "utilization">): Promise<Subnet> {
-  const newSubnet: Subnet = { ...data, id: generateId(), utilization: 0 };
+export async function createSubnetAction(data: { 
+  cidr: string; 
+  gateway?: string; 
+  vlanId?: string; 
+  description?: string; 
+}): Promise<Subnet> {
+  const parsedCidr = parseAndValidateCIDR(data.cidr);
+  if (!parsedCidr) {
+    throw new Error("Invalid CIDR notation or the IP address is not the network address for the given prefix.");
+  }
+
+  const newSubnet: Subnet = {
+    id: generateId(),
+    cidr: data.cidr, // Store the user-provided CIDR
+    networkAddress: parsedCidr.networkAddress,
+    subnetMask: parsedCidr.subnetMask,
+    ipRange: parsedCidr.ipRange,
+    gateway: data.gateway || undefined,
+    vlanId: data.vlanId || undefined,
+    description: data.description || undefined,
+    utilization: 0,
+  };
   mockSubnets.push(newSubnet);
-  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_subnet', timestamp: new Date().toISOString(), details: `Created subnet ${newSubnet.networkAddress}` });
+  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_subnet', timestamp: new Date().toISOString(), details: `Created subnet ${newSubnet.cidr}` });
   revalidatePath("/subnets");
   revalidatePath("/dashboard");
   return newSubnet;
 }
 
-export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id">>): Promise<Subnet | null> {
+export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id">> & { cidr?: string }): Promise<Subnet | null> {
   const index = mockSubnets.findIndex(s => s.id === id);
   if (index === -1) return null;
-  mockSubnets[index] = { ...mockSubnets[index], ...data };
-  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ${mockSubnets[index].networkAddress}` });
+
+  let subnetToUpdate = { ...mockSubnets[index] };
+
+  if (data.cidr) {
+    const parsedCidr = parseAndValidateCIDR(data.cidr);
+    if (!parsedCidr) {
+      throw new Error("Invalid CIDR notation or the IP address is not the network address for the given prefix.");
+    }
+    subnetToUpdate.cidr = data.cidr;
+    subnetToUpdate.networkAddress = parsedCidr.networkAddress;
+    subnetToUpdate.subnetMask = parsedCidr.subnetMask;
+    subnetToUpdate.ipRange = parsedCidr.ipRange;
+  }
+
+  if (data.hasOwnProperty('gateway')) subnetToUpdate.gateway = data.gateway || undefined;
+  if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId || undefined;
+  if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
+  if (data.hasOwnProperty('utilization')) subnetToUpdate.utilization = data.utilization;
+
+
+  mockSubnets[index] = subnetToUpdate;
+  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ${subnetToUpdate.cidr}` });
   revalidatePath("/subnets");
   revalidatePath("/dashboard");
   return mockSubnets[index];
@@ -54,7 +95,7 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   if (subnetIndex !== -1) {
      mockSubnets.splice(subnetIndex, 1);
      if (subnetToDelete) {
-        mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'delete_subnet', timestamp: new Date().toISOString(), details: `Deleted subnet ${subnetToDelete.networkAddress}` });
+        mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'delete_subnet', timestamp: new Date().toISOString(), details: `Deleted subnet ${subnetToDelete.cidr}` });
      }
   }
   

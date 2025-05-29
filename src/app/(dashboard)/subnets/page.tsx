@@ -4,8 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getSubnetsAction, getVLANsAction, deleteSubnetAction } from "@/lib/actions"; // Import deleteSubnetAction
-import type { Subnet, VLAN } from "@/types";
+import { getSubnetsAction, getVLANsAction, deleteSubnetAction } from "@/lib/actions";
+import type { Subnet } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
 import Link from "next/link";
@@ -41,8 +41,10 @@ export default async function SubnetsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>CIDR</TableHead>
                   <TableHead>Network Address</TableHead>
                   <TableHead>Subnet Mask</TableHead>
+                  <TableHead>IP Range</TableHead>
                   <TableHead>Gateway</TableHead>
                   <TableHead>VLAN</TableHead>
                   <TableHead>Utilization</TableHead>
@@ -55,10 +57,12 @@ export default async function SubnetsPage() {
                   <TableRow key={subnet.id}>
                     <TableCell className="font-medium">
                       <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline text-primary">
-                        {subnet.networkAddress}
+                        {subnet.cidr}
                       </Link>
                     </TableCell>
+                    <TableCell>{subnet.networkAddress}</TableCell>
                     <TableCell>{subnet.subnetMask}</TableCell>
+                    <TableCell>{subnet.ipRange || "N/A"}</TableCell>
                     <TableCell>{subnet.gateway || "N/A"}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{getVlanNumber(subnet.vlanId)}</Badge>
@@ -77,8 +81,8 @@ export default async function SubnetsPage() {
                       </SubnetFormSheet>
                       <DeleteConfirmationDialog
                         itemId={subnet.id}
-                        itemName={subnet.networkAddress}
-                        deleteAction={deleteSubnetAction} // Pass the server action directly
+                        itemName={subnet.cidr} // Use CIDR for item name
+                        deleteAction={deleteSubnetAction}
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete subnet">
                             <Trash2 className="h-4 w-4" />
