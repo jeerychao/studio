@@ -1,10 +1,10 @@
 
-import { Edit, Trash2, Cable } from "lucide-react"; // PlusCircle removed
+import { Edit, Trash2, Cable } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import { getVLANsAction } from "@/lib/actions";
+import { getVLANsAction, deleteVLANAction } from "@/lib/actions"; // Import deleteVLANAction
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
 
@@ -17,9 +17,8 @@ export default async function VlansPage() {
         title="VLAN Management"
         description="Organize and manage your Virtual LANs."
         icon={Cable}
-        actionElement={<VlanFormSheet />} // Use actionElement
+        actionElement={<VlanFormSheet />}
       />
-      {/* The VlanFormSheet that was here for "Add VLAN" is now passed to PageHeader's actionElement */}
 
       <Card>
         <CardHeader>
@@ -42,7 +41,7 @@ export default async function VlansPage() {
                   <TableRow key={vlan.id}>
                     <TableCell className="font-medium">{vlan.vlanNumber}</TableCell>
                     <TableCell className="max-w-md truncate">{vlan.description || "N/A"}</TableCell>
-                    <TableCell>{vlan.subnetCount ?? 0}</TableCell> {/* Assuming subnetCount is populated */}
+                    <TableCell>{vlan.subnetCount ?? 0}</TableCell>
                     <TableCell className="text-right">
                       <VlanFormSheet vlan={vlan}>
                         <Button variant="ghost" size="icon" aria-label="Edit VLAN">
@@ -52,7 +51,7 @@ export default async function VlansPage() {
                       <DeleteConfirmationDialog
                         itemId={vlan.id}
                         itemName={`VLAN ${vlan.vlanNumber}`}
-                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteVLANAction(id))}
+                        deleteAction={deleteVLANAction} // Pass the server action directly
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete VLAN">
                             <Trash2 className="h-4 w-4" />

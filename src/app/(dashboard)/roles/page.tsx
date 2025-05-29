@@ -1,10 +1,10 @@
 
-import { Edit, Trash2, ShieldCheck } from "lucide-react"; // PlusCircle removed
+import { Edit, Trash2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import { getRolesAction } from "@/lib/actions";
+import { getRolesAction, deleteRoleAction } from "@/lib/actions"; // Import deleteRoleAction
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { RoleFormSheet } from "./role-form-sheet";
 
@@ -17,9 +17,8 @@ export default async function RolesPage() {
         title="Role Management"
         description="Define user roles and their permissions (permissions UI not implemented)."
         icon={ShieldCheck}
-        actionElement={<RoleFormSheet />} // Use actionElement
+        actionElement={<RoleFormSheet />}
       />
-      {/* The RoleFormSheet that was here for "Add Role" is now passed to PageHeader's actionElement */}
 
       <Card>
         <CardHeader>
@@ -52,7 +51,7 @@ export default async function RolesPage() {
                       <DeleteConfirmationDialog
                         itemId={role.id}
                         itemName={role.name}
-                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteRoleAction(id))}
+                        deleteAction={deleteRoleAction} // Pass the server action directly
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete Role">
                             <Trash2 className="h-4 w-4" />

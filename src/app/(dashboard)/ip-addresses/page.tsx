@@ -1,15 +1,16 @@
 
-import { PlusCircle, Edit, Trash2, Globe } from "lucide-react"; // PlusCircle might not be needed if actionButton is removed from PageHeader
+import { Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getIPAddressesAction, getSubnetsAction } from "@/lib/actions";
+import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction } from "@/lib/actions"; // Import deleteIPAddressAction
 import type { IPAddress, IPAddressStatus, Subnet } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
+import { Edit, Trash2 } from "lucide-react";
 
 export default async function IPAddressesPage({
   searchParams,
@@ -19,7 +20,7 @@ export default async function IPAddressesPage({
   const selectedSubnetId = typeof searchParams?.subnetId === 'string' ? searchParams.subnetId : undefined;
   
   const ipAddresses = await getIPAddressesAction(selectedSubnetId);
-  const subnets = await getSubnetsAction(); // For filter and form
+  const subnets = await getSubnetsAction();
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
     switch (status) {
@@ -38,12 +39,9 @@ export default async function IPAddressesPage({
         title="IP Address Management"
         description={`Manage IP addresses. Currently viewing: ${currentSubnetName}`}
         icon={Globe}
-        // actionButton removed, as the primary "Add IP Address" button is below.
-        // If an actionElement were needed, it would be passed here.
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
-        {/* This IPAddressFormSheet renders the "Add IP Address" button */}
         <IPAddressFormSheet subnets={subnets} currentSubnetId={selectedSubnetId} /> 
       </div>
       
@@ -92,7 +90,7 @@ export default async function IPAddressesPage({
                       <DeleteConfirmationDialog
                         itemId={ip.id}
                         itemName={ip.ipAddress}
-                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteIPAddressAction(id))}
+                        deleteAction={deleteIPAddressAction} // Pass the server action directly
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete IP Address">
                             <Trash2 className="h-4 w-4" />

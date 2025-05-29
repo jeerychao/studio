@@ -1,19 +1,19 @@
 
-import { Edit, Trash2, Users as UsersIcon } from "lucide-react"; // PlusCircle removed
+import { Edit, Trash2, Users as UsersIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getUsersAction, getRolesAction } from "@/lib/actions";
+import { getUsersAction, getRolesAction, deleteUserAction } from "@/lib/actions"; // Import deleteUserAction
 import type { User, Role } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { UserFormSheet } from "./user-form-sheet";
 
 export default async function UsersPage() {
   const users = await getUsersAction();
-  const roles = await getRolesAction(); // For displaying role name
+  const roles = await getRolesAction();
 
   const getRoleName = (roleId: string) => {
     const role = roles.find(r => r.id === roleId);
@@ -30,9 +30,8 @@ export default async function UsersPage() {
         title="User Management"
         description="Administer user accounts and their roles."
         icon={UsersIcon}
-        actionElement={<UserFormSheet roles={roles} />} // Use actionElement
+        actionElement={<UserFormSheet roles={roles} />}
       />
-      {/* The UserFormSheet that was here for "Add User" is now passed to PageHeader's actionElement */}
 
       <Card>
         <CardHeader>
@@ -79,7 +78,7 @@ export default async function UsersPage() {
                       <DeleteConfirmationDialog
                         itemId={user.id}
                         itemName={user.username}
-                        deleteAction={(id) => import("@/lib/actions").then(actions => actions.deleteUserAction(id))}
+                        deleteAction={deleteUserAction} // Pass the server action directly
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete User">
                             <Trash2 className="h-4 w-4" />
