@@ -20,9 +20,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>{/* Ensure no whitespace node before body; Next.js handles <head> */}<body className={`${inter.variable} font-sans antialiased`}>
-        {children}
-        <Toaster />
-      </body></html>
+    <html lang="en" suppressHydrationWarning><body className={`${inter.variable} font-sans antialiased`}>{children}<Toaster /></body></html>
   );
 }
