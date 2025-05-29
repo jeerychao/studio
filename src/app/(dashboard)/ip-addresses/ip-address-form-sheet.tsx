@@ -42,7 +42,7 @@ const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserve
 
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
-  subnetId: z.string().min(1, "Subnet is required"),
+  subnetId: z.string().optional(), // Made optional
   status: z.enum(ipAddressStatusOptions, { required_error: "Status is required"}),
   allocatedTo: z.string().max(100, "Allocated To too long").optional(),
   description: z.string().max(200, "Description too long").optional(),
@@ -53,7 +53,7 @@ type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
 interface IPAddressFormSheetProps {
   ipAddress?: IPAddress;
   subnets: Subnet[];
-  currentSubnetId?: string; // To pre-select subnet if adding from a filtered view
+  currentSubnetId?: string; 
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
@@ -78,7 +78,7 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
     if (isOpen) {
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
-            subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 ? subnets[0].id : ""),
+            subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""), // Default to first if creating and no currentSubnetId
             status: ipAddress?.status || "free",
             allocatedTo: ipAddress?.allocatedTo || "",
             description: ipAddress?.description || "",
@@ -88,11 +88,20 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
 
   async function onSubmit(data: IPAddressFormValues) {
     try {
+      // Ensure subnetId is provided if status is 'allocated' or 'reserved' or if it's a new IP being created in a specific subnet context
+      if (!data.subnetId && (data.status !== 'free' || (!isEditing && currentSubnetId))) {
+        toast({ title: "Subnet Required", description: "A subnet must be selected unless the IP is 'free' and not being added to a specific subnet.", variant: "destructive"});
+        return;
+      }
       if (isEditing && ipAddress) {
         await updateIPAddressAction(ipAddress.id, data);
         toast({ title: "IP Address Updated", description: `IP ${data.ipAddress} has been successfully updated.` });
       } else {
-        await createIPAddressAction(data);
+        if (!data.subnetId) { // Should be caught by above, but as a safeguard for create
+             toast({ title: "Subnet Required", description: "Please select a subnet to create the IP address.", variant: "destructive"});
+             return;
+        }
+        await createIPAddressAction(data as Omit<IPAddress, "id">); // Cast as subnetId will be present
         toast({ title: "IP Address Created", description: `IP ${data.ipAddress} has been successfully created.` });
       }
       setIsOpen(false);
@@ -145,14 +154,19 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
               name="subnetId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subnet</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={subnets.length === 0}>
+                  <FormLabel>Subnet</FormLabel> {/* Label changed from "Subnet (Required)" to "Subnet" */}
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === "NO_SUBNET_SELECTED" ? "" : value)} 
+                    value={field.value || "NO_SUBNET_SELECTED"}
+                    disabled={subnets.length === 0 && !field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder={subnets.length > 0 ? "Select a subnet" : "No subnets available"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                       <SelectItem value={"NO_SUBNET_SELECTED"}>No Subnet / Global Pool</SelectItem>
                       {subnets.map((subnet) => (
                         <SelectItem key={subnet.id} value={subnet.id}>
                           {subnet.networkAddress} ({subnet.description || "No description"})

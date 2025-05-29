@@ -5,7 +5,6 @@ export interface Subnet {
   networkAddress: string; // Calculated e.g., "192.168.1.0"
   subnetMask: string; // Calculated e.g., "255.255.255.252"
   ipRange?: string; // Calculated e.g., "192.168.1.1 - 192.168.1.2"
-  gateway?: string;
   vlanId?: string;
   description?: string;
   utilization?: number; // Percentage 0-100
@@ -23,7 +22,7 @@ export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
 export interface IPAddress {
   id: string;
   ipAddress: string;
-  subnetId: string;
+  subnetId?: string; // Made optional
   status: IPAddressStatus;
   allocatedTo?: string;
   description?: string;
@@ -71,3 +70,4 @@ export interface AuditLog {
   timestamp: string; // ISO date string
   details?: string; // e.g., "Created subnet 192.168.1.0/24"
 }
+
