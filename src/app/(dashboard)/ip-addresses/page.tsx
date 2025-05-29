@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction } from "@/lib/actions"; // Import deleteIPAddressAction
-import type { IPAddress, IPAddressStatus, Subnet } from "@/types";
+import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction } from "@/lib/actions"; // Import deleteIPAddressAction and getVLANsAction
+import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
@@ -21,6 +21,7 @@ export default async function IPAddressesPage({
   
   const ipAddresses = await getIPAddressesAction(selectedSubnetId);
   const subnets = await getSubnetsAction();
+  const vlans = await getVLANsAction(); // Fetch VLANs
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
     switch (status) {
@@ -32,6 +33,24 @@ export default async function IPAddressesPage({
   };
 
   const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "All Subnets";
+
+  const getVlanDisplayForIp = (ip: IPAddress): string => {
+    if (!ip.subnetId) {
+      return "N/A"; // IP not in any subnet
+    }
+    const subnet = subnets.find(s => s.id === ip.subnetId);
+    if (!subnet) {
+      return "N/A"; // Subnet not found for this IP
+    }
+    if (!subnet.vlanId) {
+      return "No VLAN"; // Subnet exists but not assigned to a VLAN
+    }
+    const vlan = vlans.find(v => v.id === subnet.vlanId);
+    if (!vlan) {
+      return "N/A"; // VLAN ID exists on subnet but VLAN not found
+    }
+    return `${vlan.vlanNumber}`;
+  };
 
   return (
     <>
@@ -63,6 +82,7 @@ export default async function IPAddressesPage({
                   <TableHead>Status</TableHead>
                   <TableHead>Allocated To</TableHead>
                   <TableHead>Subnet</TableHead>
+                  <TableHead>VLAN</TableHead> {/* New VLAN column */}
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -78,7 +98,10 @@ export default async function IPAddressesPage({
                     </TableCell>
                     <TableCell>{ip.allocatedTo || "N/A"}</TableCell>
                     <TableCell>
-                      {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "Unknown Subnet"}
+                      {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "N/A"}
+                    </TableCell>
+                    <TableCell> {/* VLAN data cell */}
+                      <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{ip.description || "N/A"}</TableCell>
                     <TableCell className="text-right">
@@ -90,7 +113,7 @@ export default async function IPAddressesPage({
                       <DeleteConfirmationDialog
                         itemId={ip.id}
                         itemName={ip.ipAddress}
-                        deleteAction={deleteIPAddressAction} // Pass the server action directly
+                        deleteAction={deleteIPAddressAction} 
                         triggerButton={
                           <Button variant="ghost" size="icon" aria-label="Delete IP Address">
                             <Trash2 className="h-4 w-4" />
