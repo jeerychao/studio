@@ -1,9 +1,10 @@
 
+
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { suggestSubnet, type SuggestSubnetInput } from "@/ai/flows/suggest-subnet";
-import type { Subnet, VLAN, IPAddress, User, Role, AISuggestionResponse, AuditLog } from "@/types";
+import type { Subnet, VLAN, IPAddress, User, Role, AISuggestionResponse, AuditLog, IPAddressStatus } from "@/types";
 import { 
   mockSubnets, 
   mockVLANs, 
@@ -46,9 +47,11 @@ export async function createSubnetAction(data: {
     throw new Error("Invalid CIDR notation provided. Please use format X.X.X.X/Y.");
   }
   
-  if (parsedCidr.inputIp !== parsedCidr.networkAddress) {
-    throw new Error(`The IP address ${parsedCidr.inputIp} is not the network address for the prefix /${parsedCidr.prefix}. Please use ${parsedCidr.networkAddress}/${parsedCidr.prefix}.`);
-  }
+  // The system will now use the canonical network address derived by parseAndValidateCIDR.
+  // The check for inputIp !== networkAddress is removed to be more forgiving.
+  // if (parsedCidr.inputIp !== parsedCidr.networkAddress) {
+  //   throw new Error(`The IP address ${parsedCidr.inputIp} is not the network address for the prefix /${parsedCidr.prefix}. Please use ${parsedCidr.networkAddress}/${parsedCidr.prefix}.`);
+  // }
 
   const canonicalCidr = `${parsedCidr.networkAddress}/${parsedCidr.prefix}`;
 
@@ -66,7 +69,7 @@ export async function createSubnetAction(data: {
 
   const newSubnet: Subnet = {
     id: generateId(),
-    cidr: canonicalCidr,
+    cidr: canonicalCidr, // Store the canonical CIDR
     networkAddress: parsedCidr.networkAddress,
     subnetMask: parsedCidr.subnetMask,
     ipRange: parsedCidr.ipRange,
@@ -96,9 +99,11 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
       throw new Error("Invalid new CIDR notation provided.");
     }
 
-    if (newParsedCidr.inputIp !== newParsedCidr.networkAddress) {
-        throw new Error(`The IP address ${newParsedCidr.inputIp} is not the network address for the prefix /${newParsedCidr.prefix}. Please use ${newParsedCidr.networkAddress}/${newParsedCidr.prefix} for the new CIDR.`);
-    }
+    // The system will now use the canonical network address derived by parseAndValidateCIDR.
+    // The check for inputIp !== networkAddress is removed.
+    // if (newParsedCidr.inputIp !== newParsedCidr.networkAddress) {
+    //     throw new Error(`The IP address ${newParsedCidr.inputIp} is not the network address for the prefix /${newParsedCidr.prefix}. Please use ${newParsedCidr.networkAddress}/${newParsedCidr.prefix} for the new CIDR.`);
+    // }
     
     const newCanonicalCidr = `${newParsedCidr.networkAddress}/${newParsedCidr.prefix}`;
 
@@ -114,23 +119,18 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
         throw new Error(`The new CIDR ${newCanonicalCidr} overlaps with existing subnet ${existingSubnet.cidr}.`);
       }
     }
-
-    // Handle existing allocated IPs for this subnet if the CIDR changes
-    const allocatedIpsInSubnet = mockIPAddresses.filter(ip => ip.subnetId === id && ip.status === 'allocated');
+    
     const ipsDeallocatedDetails: string[] = [];
-
-    for (const allocatedIp of allocatedIpsInSubnet) {
-      if (!isIpInCidrRange(allocatedIp.ipAddress, newParsedCidr)) {
-        // This IP is no longer in the new range. Deallocate and disassociate.
-        const ipIndex = mockIPAddresses.findIndex(ip => ip.id === allocatedIp.id);
-        if (ipIndex !== -1) {
+    mockIPAddresses.forEach((ip, ipIndex) => {
+      if (ip.subnetId === id && ip.status === 'allocated') {
+        if (!isIpInCidrRange(ip.ipAddress, newParsedCidr)) {
+          ipsDeallocatedDetails.push(`${ip.ipAddress} (was ${ip.allocatedTo || 'N/A'})`);
           mockIPAddresses[ipIndex].status = 'free';
           mockIPAddresses[ipIndex].allocatedTo = undefined;
           mockIPAddresses[ipIndex].subnetId = undefined; // Disassociate from this subnet
-          ipsDeallocatedDetails.push(`${allocatedIp.ipAddress} (was ${allocatedIp.allocatedTo || 'N/A'})`);
         }
       }
-    }
+    });
     
     if (ipsDeallocatedDetails.length > 0) {
       mockAuditLogs.unshift({ 
@@ -143,14 +143,14 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
       });
     }
 
-    subnetToUpdate.cidr = newCanonicalCidr;
+    subnetToUpdate.cidr = newCanonicalCidr; // Store the canonical CIDR
     subnetToUpdate.networkAddress = newParsedCidr.networkAddress;
     subnetToUpdate.subnetMask = newParsedCidr.subnetMask;
     subnetToUpdate.ipRange = newParsedCidr.ipRange;
   }
 
   // Update other properties
-  if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId === "" ? undefined : data.vlanId; // Handles NO_VLAN_SENTINEL_VALUE from form
+  if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId === "" ? undefined : data.vlanId;
   if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
   
   mockSubnets[index] = subnetToUpdate;
@@ -168,13 +168,11 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   const initialLength = mockSubnets.length;
   const subnetToDelete = mockSubnets.find(s => s.id === id);
 
-  // Disassociate IP addresses rather than deleting them, set status to free
   mockIPAddresses.forEach(ip => {
     if (ip.subnetId === id) {
       ip.subnetId = undefined;
       ip.status = 'free';
       ip.allocatedTo = undefined;
-      // Consider adding an audit log entry for each IP disassociated/freed here
       mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'auto_disassociate_ip_on_subnet_delete', timestamp: new Date().toISOString(), details: `IP ${ip.ipAddress} disassociated and set to free due to deletion of subnet ${subnetToDelete?.cidr}` });
     }
   });
@@ -254,11 +252,10 @@ export async function deleteVLANAction(id: string): Promise<{ success: boolean }
 // --- IP Address Actions ---
 export async function getIPAddressesAction(subnetId?: string): Promise<IPAddress[]> {
   if (subnetId) return mockIPAddresses.filter(ip => ip.subnetId === subnetId);
-  return mockIPAddresses; // Returns all IPs if no subnetId is provided
+  return mockIPAddresses;
 }
 
 export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promise<IPAddress> {
-  // Ensure subnetId is provided if status is 'allocated' or 'reserved', or simply if IP is being created in a subnet context
   if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) {
       throw new Error("Subnet ID is required to create an 'allocated' or 'reserved' IP address.");
   }
@@ -280,7 +277,7 @@ export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promis
     if (existingIPInSubnet) {
       throw new Error(`IP address ${data.ipAddress} already exists in subnet ${targetSubnet.networkAddress}.`);
     }
-  } else { // IP is being created without a subnet (e.g. status 'free' in global pool)
+  } else { 
       const globallyExistingIP = mockIPAddresses.find(ip => ip.ipAddress === data.ipAddress && !ip.subnetId);
       if (globallyExistingIP) {
           throw new Error(`IP address ${data.ipAddress} already exists in the global pool (not assigned to a subnet).`);
@@ -309,12 +306,11 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
   const originalIPData = mockIPAddresses[index];
   const updatedIPData = { ...originalIPData, ...data };
 
-  // If subnetId or ipAddress changes, validate the new combination
-  if (data.subnetId !== undefined || data.ipAddress) { // data.subnetId can be empty string for disassociation
-    const targetSubnetId = updatedIPData.subnetId; // This could be undefined or an empty string from form (meaning disassociate)
+  if (data.subnetId !== undefined || data.ipAddress) { 
+    const targetSubnetId = updatedIPData.subnetId; 
     const targetIpAddress = updatedIPData.ipAddress;
 
-    if (targetSubnetId) { // IP is being associated or moved to a specific subnet
+    if (targetSubnetId) { 
         const targetSubnet = mockSubnets.find(s => s.id === targetSubnetId);
         if (!targetSubnet) {
             throw new Error("Target subnet not found.");
@@ -335,11 +331,11 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
         if (conflictingIP) {
             throw new Error(`IP address ${targetIpAddress} already exists in subnet ${targetSubnet.networkAddress}.`);
         }
-    } else { // IP is being disassociated from a subnet or is in the global pool
+    } else { 
         const globallyConflictingIP = mockIPAddresses.find(ip => 
             ip.id !== id && 
             ip.ipAddress === targetIpAddress && 
-            !ip.subnetId // Check only against other global pool IPs
+            !ip.subnetId 
         );
         if (globallyConflictingIP) {
             throw new Error(`IP address ${targetIpAddress} already exists in the global pool (not assigned to a subnet).`);
@@ -504,7 +500,25 @@ export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<
   try {
     const result = await suggestSubnet(input);
     mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'ai_suggest_subnet', timestamp: new Date().toISOString(), details: `AI suggested subnet for: ${input.newSegmentDescription}` });
-    return result; 
+    // Attempt to parse the suggestedSubnet string from the AI into the AISuggestion object structure
+    // This part is crucial for the frontend to correctly display the structured data
+    try {
+      const suggestedSubnetJSON = JSON.parse(result.suggestedSubnet as any); // Cast as any if the AI output is a string that needs parsing
+      return {
+        suggestedSubnet: {
+          subnetAddress: suggestedSubnetJSON.suggestedSubnet.subnetAddress,
+          ipRange: suggestedSubnetJSON.suggestedSubnet.ipRange,
+        },
+        justification: result.justification,
+      };
+    } catch (parseError) {
+      console.error("AI Subnet Suggestion - JSON parsing error:", parseError);
+      // Fallback or re-throw: if parsing fails, we might return the raw string or a structured error
+      // For now, let's re-throw or handle it gracefully depending on desired behavior.
+      // This ensures the frontend still gets a somewhat structured response even if parsing fails.
+      // However, the AI prompt explicitly asks for a JSON structure.
+      throw new Error("AI returned an invalid JSON format for the suggested subnet.");
+    }
   } catch (error: any) {
     console.error("AI Subnet Suggestion Error:", error);
     throw new Error(error.message || "Failed to get AI subnet suggestion.");
@@ -522,3 +536,5 @@ export async function getAuditLogsAction(): Promise<AuditLog[]> {
     return log;
   });
 }
+
+    
