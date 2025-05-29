@@ -56,6 +56,8 @@ interface SubnetFormSheetProps {
   buttonProps?: ButtonProps; // For default trigger styling
 }
 
+const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
+
 export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: SubnetFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
@@ -173,14 +175,23 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>VLAN (Optional)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={(value) => {
+                      if (value === NO_VLAN_SENTINEL_VALUE) {
+                        field.onChange(""); // Update react-hook-form with empty string
+                      } else {
+                        field.onChange(value);
+                      }
+                    }}
+                    value={field.value === "" ? NO_VLAN_SENTINEL_VALUE : field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a VLAN" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No VLAN</SelectItem>
+                      <SelectItem value={NO_VLAN_SENTINEL_VALUE}>No VLAN</SelectItem>
                       {vlans.map((vlan) => (
                         <SelectItem key={vlan.id} value={vlan.id}>
                           VLAN {vlan.vlanNumber} ({vlan.description || "No description"})
