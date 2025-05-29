@@ -1,0 +1,66 @@
+
+import { PageHeader } from "@/components/page-header";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { getAuditLogsAction } from "@/lib/actions";
+import type { AuditLog } from "@/types";
+import { ListChecks } from "lucide-react"; // Using ListChecks for audit logs
+
+export default async function AuditLogsPage() {
+  const logs = await getAuditLogsAction();
+
+  const formatDate = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Audit Logs"
+        description="Track user activities and system events."
+        icon={ListChecks}
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle>System Activity Log</CardTitle>
+          <CardDescription>A chronological record of actions performed within the IPAM system.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {logs.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-sm text-muted-foreground">{formatDate(log.timestamp)}</TableCell>
+                    <TableCell className="font-medium">{log.username || "System"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="capitalize">
+                        {log.action.replace(/_/g, " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-md truncate">{log.details || "N/A"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-10">
+              <p className="text-muted-foreground">No audit logs found.</p>
+            </div>
+          )}
+          {/* Add pagination controls here if many logs */}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
