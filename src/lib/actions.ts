@@ -1,5 +1,4 @@
 
-
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -47,12 +46,6 @@ export async function createSubnetAction(data: {
     throw new Error("Invalid CIDR notation provided. Please use format X.X.X.X/Y.");
   }
   
-  // The system will now use the canonical network address derived by parseAndValidateCIDR.
-  // The check for inputIp !== networkAddress is removed to be more forgiving.
-  // if (parsedCidr.inputIp !== parsedCidr.networkAddress) {
-  //   throw new Error(`The IP address ${parsedCidr.inputIp} is not the network address for the prefix /${parsedCidr.prefix}. Please use ${parsedCidr.networkAddress}/${parsedCidr.prefix}.`);
-  // }
-
   const canonicalCidr = `${parsedCidr.networkAddress}/${parsedCidr.prefix}`;
 
   const existingSubnetByCidr = mockSubnets.find(subnet => subnet.cidr === canonicalCidr);
@@ -69,7 +62,7 @@ export async function createSubnetAction(data: {
 
   const newSubnet: Subnet = {
     id: generateId(),
-    cidr: canonicalCidr, // Store the canonical CIDR
+    cidr: canonicalCidr, 
     networkAddress: parsedCidr.networkAddress,
     subnetMask: parsedCidr.subnetMask,
     ipRange: parsedCidr.ipRange,
@@ -84,77 +77,83 @@ export async function createSubnetAction(data: {
   return newSubnet;
 }
 
-export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "networkAddress" | "subnetMask" | "ipRange" | "utilization">> & { cidr?: string }): Promise<Subnet | null> {
+export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "utilization">> & { cidr?: string }): Promise<Subnet | null> {
   const index = mockSubnets.findIndex(s => s.id === id);
-  if (index === -1) return null;
+  if (index === -1) {
+    // This case should ideally be prevented by UI, but as a safeguard:
+    throw new Error("Subnet not found for update.");
+  }
 
   let subnetToUpdate = { ...mockSubnets[index] };
   const originalCidrForLog = subnetToUpdate.cidr;
   let cidrChanged = false;
+  let newCanonicalCidrToStore = subnetToUpdate.cidr; 
 
   if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
     cidrChanged = true;
-    const newParsedCidr = parseAndValidateCIDR(data.cidr);
-    if (!newParsedCidr) {
-      throw new Error("Invalid new CIDR notation provided.");
+    const newParsedCidrInfo = parseAndValidateCIDR(data.cidr); 
+    if (!newParsedCidrInfo) {
+      throw new Error("Invalid new CIDR notation provided. Please use format X.X.X.X/Y.");
     }
-
-    // The system will now use the canonical network address derived by parseAndValidateCIDR.
-    // The check for inputIp !== networkAddress is removed.
-    // if (newParsedCidr.inputIp !== newParsedCidr.networkAddress) {
-    //     throw new Error(`The IP address ${newParsedCidr.inputIp} is not the network address for the prefix /${newParsedCidr.prefix}. Please use ${newParsedCidr.networkAddress}/${newParsedCidr.prefix} for the new CIDR.`);
-    // }
     
-    const newCanonicalCidr = `${newParsedCidr.networkAddress}/${newParsedCidr.prefix}`;
-
-    const conflictingSubnetByCidr = mockSubnets.find(s => s.id !== id && s.cidr === newCanonicalCidr);
-    if (conflictingSubnetByCidr) {
-      throw new Error(`Another subnet with CIDR ${newCanonicalCidr} already exists.`);
-    }
+    newCanonicalCidrToStore = `${newParsedCidrInfo.networkAddress}/${newParsedCidrInfo.prefix}`;
 
     for (const existingSubnet of mockSubnets) {
       if (existingSubnet.id === id) continue; 
-      const existingParsedCidr = parseAndValidateCIDR(existingSubnet.cidr);
-      if (existingParsedCidr && doSubnetsOverlap(newParsedCidr, existingParsedCidr)) {
-        throw new Error(`The new CIDR ${newCanonicalCidr} overlaps with existing subnet ${existingSubnet.cidr}.`);
+      const existingParsedCidr = parseAndValidateCIDR(existingSubnet.cidr); 
+      if (existingParsedCidr && doSubnetsOverlap(newParsedCidrInfo, existingParsedCidr)) { 
+        throw new Error(`The new subnet CIDR ${newCanonicalCidrToStore} overlaps with existing subnet ${existingSubnet.cidr}.`);
       }
     }
     
+    const ipsInSubnet = mockIPAddresses.filter(ip => ip.subnetId === id);
     const ipsDeallocatedDetails: string[] = [];
-    mockIPAddresses.forEach((ip, ipIndex) => {
-      if (ip.subnetId === id && ip.status === 'allocated') {
-        if (!isIpInCidrRange(ip.ipAddress, newParsedCidr)) {
-          ipsDeallocatedDetails.push(`${ip.ipAddress} (was ${ip.allocatedTo || 'N/A'})`);
-          mockIPAddresses[ipIndex].status = 'free';
-          mockIPAddresses[ipIndex].allocatedTo = undefined;
-          mockIPAddresses[ipIndex].subnetId = undefined; // Disassociate from this subnet
+
+    for (const ip of ipsInSubnet) {
+      // Check if the IP falls outside the NEW canonical range
+      if (!isIpInCidrRange(ip.ipAddress, newParsedCidrInfo)) { 
+        const ipIndexInMock = mockIPAddresses.findIndex(mockIp => mockIp.id === ip.id);
+        if (ipIndexInMock !== -1) {
+          const ipToModify = mockIPAddresses[ipIndexInMock];
+          // Log details of the IP being handled
+          ipsDeallocatedDetails.push(`${ipToModify.ipAddress} (was status: ${ipToModify.status}, allocatedTo: ${ipToModify.allocatedTo || 'N/A'})`);
+          
+          // Modify the IP's properties
+          ipToModify.status = 'free';
+          ipToModify.allocatedTo = undefined;
+          ipToModify.subnetId = undefined; // Disassociate from this subnet
         }
       }
-    });
+    }
     
     if (ipsDeallocatedDetails.length > 0) {
       mockAuditLogs.unshift({ 
         id: generateId(), 
         userId: 'user-1', 
         username: 'admin', 
-        action: 'auto_deallocate_ip_on_subnet_resize', 
+        action: 'auto_handle_ip_on_subnet_resize', 
         timestamp: new Date().toISOString(), 
-        details: `Subnet ${originalCidrForLog} (ID: ${id}) resized to ${newCanonicalCidr}. Automatically deallocated and disassociated IPs: ${ipsDeallocatedDetails.join('; ')}.` 
+        details: `Subnet ${originalCidrForLog} (ID: ${id}) resized to ${newCanonicalCidrToStore}. Automatically handled out-of-range IPs: ${ipsDeallocatedDetails.join('; ')}. These IPs are now 'free' and unassociated.` 
       });
     }
 
-    subnetToUpdate.cidr = newCanonicalCidr; // Store the canonical CIDR
-    subnetToUpdate.networkAddress = newParsedCidr.networkAddress;
-    subnetToUpdate.subnetMask = newParsedCidr.subnetMask;
-    subnetToUpdate.ipRange = newParsedCidr.ipRange;
+    subnetToUpdate.cidr = newCanonicalCidrToStore; 
+    subnetToUpdate.networkAddress = newParsedCidrInfo.networkAddress;
+    subnetToUpdate.subnetMask = newParsedCidrInfo.subnetMask;
+    subnetToUpdate.ipRange = newParsedCidrInfo.ipRange;
   }
 
-  // Update other properties
-  if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId === "" ? undefined : data.vlanId;
-  if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
+  // Update other properties (vlanId, description)
+  // Assuming NO_VLAN_SENTINEL_VALUE is handled in the form sheet and data.vlanId will be "" if no vlan.
+  if (data.hasOwnProperty('vlanId')) {
+    subnetToUpdate.vlanId = data.vlanId === "" ? undefined : data.vlanId;
+  }
+  if (data.hasOwnProperty('description')) {
+    subnetToUpdate.description = data.description || undefined;
+  }
   
   mockSubnets[index] = subnetToUpdate;
-  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ID ${id} (Old CIDR: ${originalCidrForLog}, New CIDR: ${subnetToUpdate.cidr})` });
+  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ID ${id} (Old CIDR: ${originalCidrForLog}, New CIDR: ${newCanonicalCidrToStore})` });
   
   revalidatePath("/subnets");
   if (cidrChanged) { 
@@ -500,10 +499,8 @@ export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<
   try {
     const result = await suggestSubnet(input);
     mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'ai_suggest_subnet', timestamp: new Date().toISOString(), details: `AI suggested subnet for: ${input.newSegmentDescription}` });
-    // Attempt to parse the suggestedSubnet string from the AI into the AISuggestion object structure
-    // This part is crucial for the frontend to correctly display the structured data
     try {
-      const suggestedSubnetJSON = JSON.parse(result.suggestedSubnet as any); // Cast as any if the AI output is a string that needs parsing
+      const suggestedSubnetJSON = JSON.parse(result.suggestedSubnet as any); 
       return {
         suggestedSubnet: {
           subnetAddress: suggestedSubnetJSON.suggestedSubnet.subnetAddress,
@@ -513,10 +510,6 @@ export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<
       };
     } catch (parseError) {
       console.error("AI Subnet Suggestion - JSON parsing error:", parseError);
-      // Fallback or re-throw: if parsing fails, we might return the raw string or a structured error
-      // For now, let's re-throw or handle it gracefully depending on desired behavior.
-      // This ensures the frontend still gets a somewhat structured response even if parsing fails.
-      // However, the AI prompt explicitly asks for a JSON structure.
       throw new Error("AI returned an invalid JSON format for the suggested subnet.");
     }
   } catch (error: any) {
@@ -536,5 +529,4 @@ export async function getAuditLogsAction(): Promise<AuditLog[]> {
     return log;
   });
 }
-
     
