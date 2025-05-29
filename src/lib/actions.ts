@@ -91,7 +91,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
   if (index === -1) return null;
 
   let subnetToUpdate = { ...mockSubnets[index] };
-  let oldParsedCidr = parseAndValidateCIDR(subnetToUpdate.cidr); // For logging if needed
+  const originalCidrForLog = subnetToUpdate.cidr; // Store original CIDR for logging
 
   if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
     const newParsedCidr = parseAndValidateCIDR(data.cidr);
@@ -125,7 +125,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
     const allocatedIpsInSubnet = mockIPAddresses.filter(ip => ip.subnetId === id && ip.status === 'allocated');
     for (const allocatedIp of allocatedIpsInSubnet) {
       if (!isIpInCidrRange(allocatedIp.ipAddress, newParsedCidr)) {
-        throw new Error(`Cannot change CIDR to ${newCanonicalCidr}: Allocated IP address ${allocatedIp.ipAddress} would be outside the new range.`);
+        throw new Error(`Cannot change CIDR to ${newCanonicalCidr}: A currently allocated IP address (${allocatedIp.ipAddress}) in this subnet would be outside the new range. Please deallocate or move such IPs first.`);
       }
     }
 
@@ -135,11 +135,11 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
     subnetToUpdate.ipRange = newParsedCidr.ipRange;
   }
 
-  if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId || undefined;
+  if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId || undefined; // Handles setting to undefined if empty string passed
   if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
   
   mockSubnets[index] = subnetToUpdate;
-  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ID ${id} (Old CIDR: ${oldParsedCidr?.cidr}, New CIDR: ${subnetToUpdate.cidr})` });
+  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ID ${id} (Old CIDR: ${originalCidrForLog}, New CIDR: ${subnetToUpdate.cidr})` });
   revalidatePath("/subnets");
   revalidatePath("/dashboard");
   return mockSubnets[index];
@@ -149,10 +149,13 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   const initialLength = mockSubnets.length;
   const subnetToDelete = mockSubnets.find(s => s.id === id);
 
-  const ipsInSubnet = mockIPAddresses.filter(ip => ip.subnetId === id);
-  ipsInSubnet.forEach(ip => {
-    const ipIndex = mockIPAddresses.findIndex(i => i.id === ip.id);
-    if (ipIndex !== -1) mockIPAddresses.splice(ipIndex, 1);
+  // Remove associated IP addresses
+  const ipsToRemove = mockIPAddresses.filter(ip => ip.subnetId === id);
+  ipsToRemove.forEach(ipToRemove => {
+      const ipIndex = mockIPAddresses.findIndex(ip => ip.id === ipToRemove.id);
+      if (ipIndex !== -1) {
+          mockIPAddresses.splice(ipIndex, 1);
+      }
   });
 
   const subnetIndex = mockSubnets.findIndex(s => s.id === id);
@@ -164,7 +167,7 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   }
   
   revalidatePath("/subnets");
-  revalidatePath("/ip-addresses");
+  revalidatePath("/ip-addresses"); // Also revalidate IPs page as they might have been deleted
   revalidatePath("/dashboard");
   return { success: mockSubnets.length < initialLength };
 }
@@ -208,9 +211,10 @@ export async function deleteVLANAction(id: string): Promise<{ success: boolean }
   const initialLength = mockVLANs.length;
   const vlanToDelete = mockVLANs.find(v => v.id === id);
 
+  // Update subnets that reference this VLAN
   mockSubnets.forEach(subnet => {
     if (subnet.vlanId === id) {
-      subnet.vlanId = undefined;
+      subnet.vlanId = undefined; // Or handle as per requirements, e.g., prevent deletion if used
     }
   });
   
@@ -223,7 +227,7 @@ export async function deleteVLANAction(id: string): Promise<{ success: boolean }
   }
 
   revalidatePath("/vlans");
-  revalidatePath("/subnets");
+  revalidatePath("/subnets"); // Revalidate subnets as their VLAN info might have changed
   return { success: mockVLANs.length < initialLength };
 }
 
@@ -253,6 +257,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
   const targetIp = data.ipAddress || mockIPAddresses[index].ipAddress;
   const targetSubnetId = data.subnetId || mockIPAddresses[index].subnetId;
 
+  // If IP address or subnet is changing, check for conflicts
   if (targetIp !== mockIPAddresses[index].ipAddress || targetSubnetId !== mockIPAddresses[index].subnetId) {
     const existingIP = mockIPAddresses.find(ip => ip.id !== id && ip.subnetId === targetSubnetId && ip.ipAddress === targetIp);
     if (existingIP) {
@@ -334,6 +339,14 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean }
   const userToDelete = mockUsers.find(u => u.id === id);
   const userIndex = mockUsers.findIndex(u => u.id === id);
   if (userIndex !== -1) {
+    // Check if this is the last admin user
+    const adminRole = mockRoles.find(role => role.name.toLowerCase() === 'administrator');
+    if (adminRole && mockUsers[userIndex].roleId === adminRole.id) {
+        const otherAdmins = mockUsers.filter(u => u.id !== id && u.roleId === adminRole.id);
+        if (otherAdmins.length === 0) {
+            throw new Error("Cannot delete the last administrator user.");
+        }
+    }
     mockUsers.splice(userIndex, 1);
     if (userToDelete) {
         mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'delete_user', timestamp: new Date().toISOString(), details: `Deleted user ${userToDelete.username}` });
@@ -377,44 +390,60 @@ export async function updateRoleAction(id: string, data: Partial<Omit<Role, "id"
   return mockRoles[index];
 }
 
-export async function deleteRoleAction(id: string): Promise<{ success: boolean }> {
-  const initialLength = mockRoles.length;
+export async function deleteRoleAction(id: string): Promise<{ success: boolean; message?: string }>{
   const roleToDelete = mockRoles.find(r => r.id === id);
+  if (!roleToDelete) {
+    return { success: false, message: "Role not found." };
+  }
 
-  const defaultRoleId = mockRoles.find(r => r.name === 'Viewer')?.id || ''; 
-  mockUsers.forEach(user => {
-    if (user.roleId === id) {
-      user.roleId = defaultRoleId; 
-    }
-  });
+  // Prevent deletion of the 'Administrator' role if it's the special one
+  if (roleToDelete.name.toLowerCase() === 'administrator') {
+     // Optional: Check if it's the *last* admin role or if there are other admins,
+     // but for simplicity, let's prevent deletion of any role named "Administrator".
+     // More complex logic would ensure at least one admin role or one admin user always exists.
+    throw new Error("The 'Administrator' role cannot be deleted.");
+  }
+  
+  const usersInRole = mockUsers.filter(user => user.roleId === id).length;
+  if (usersInRole > 0) {
+    throw new Error(`Cannot delete role "${roleToDelete.name}" as it is currently assigned to ${usersInRole} user(s). Please reassign users first.`);
+  }
 
+  const initialLength = mockRoles.length;
   const roleIndex = mockRoles.findIndex(r => r.id === id);
+
   if (roleIndex !== -1) {
     mockRoles.splice(roleIndex, 1);
-    if (roleToDelete) {
-        mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'delete_role', timestamp: new Date().toISOString(), details: `Deleted role ${roleToDelete.name}` });
-    }
+    mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'delete_role', timestamp: new Date().toISOString(), details: `Deleted role ${roleToDelete.name}` });
+    revalidatePath("/roles");
+    revalidatePath("/users"); // Users' displayed role name might change if it was 'N/A'
+    return { success: true };
   }
-  revalidatePath("/roles");
-  revalidatePath("/users"); 
-  return { success: mockRoles.length < initialLength };
+  return { success: false, message: "Failed to delete role." };
 }
 
 // --- AI Subnet Suggestion Action ---
 export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<AISuggestionResponse> {
   try {
+    // Assuming suggestSubnet (the AI flow) is correctly imported and works
     const result = await suggestSubnet(input);
+    // The AI flow should return an object matching AISuggestionResponse,
+    // which includes { suggestedSubnet: { subnetAddress: string, ipRange: string }, justification: string }
+    // No need to re-parse if the flow adheres to its output schema.
     mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'ai_suggest_subnet', timestamp: new Date().toISOString(), details: `AI suggested subnet for: ${input.newSegmentDescription}` });
-    return JSON.parse(JSON.stringify(result)); 
+    return result; 
   } catch (error: any) {
     console.error("AI Subnet Suggestion Error:", error);
+    // Pass through the error message from the AI flow if available
     throw new Error(error.message || "Failed to get AI subnet suggestion.");
   }
 }
 
 // --- Audit Log Actions ---
 export async function getAuditLogsAction(): Promise<AuditLog[]> {
-  const logsCopy = JSON.parse(JSON.stringify(mockAuditLogs));
+  // Return a deep copy to prevent direct modification of mock data if it were mutable elsewhere
+  const logsCopy: AuditLog[] = JSON.parse(JSON.stringify(mockAuditLogs));
+  // Denormalize username for display if not present
   return logsCopy.map((log: AuditLog) => {
     if (!log.username && log.userId) { 
       const user = mockUsers.find(u => u.id === log.userId);
