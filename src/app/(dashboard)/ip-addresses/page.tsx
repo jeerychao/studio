@@ -82,7 +82,7 @@ export default async function IPAddressesPage({
                   <TableHead>Status</TableHead>
                   <TableHead>Allocated To</TableHead>
                   <TableHead>Subnet</TableHead>
-                  <TableHead>VLAN</TableHead> {/* New VLAN column */}
+                  <TableHead>VLAN</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>

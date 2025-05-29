@@ -45,7 +45,6 @@ export default async function SubnetsPage() {
                   <TableHead>Network Address</TableHead>
                   <TableHead>Subnet Mask</TableHead>
                   <TableHead>Available IP Range</TableHead>
-                  {/* <TableHead>Gateway</TableHead> Gateway column removed */}
                   <TableHead>VLAN</TableHead>
                   <TableHead>Utilization</TableHead>
                   <TableHead>Description</TableHead>
@@ -63,7 +62,6 @@ export default async function SubnetsPage() {
                     <TableCell>{subnet.networkAddress}</TableCell>
                     <TableCell>{subnet.subnetMask}</TableCell>
                     <TableCell>{subnet.ipRange || "N/A"}</TableCell>
-                    {/* <TableCell>{subnet.gateway || "N/A"}</TableCell> Gateway cell removed */}
                     <TableCell>
                       <Badge variant="outline">{getVlanNumber(subnet.vlanId)}</Badge>
                     </TableCell>
