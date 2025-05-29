@@ -12,15 +12,14 @@ import {
   ShieldCheck,
   Wrench,
   FileUp,
-  FileDown,
   BrainCircuit,
   Settings2,
-  LogOut,
-  ChevronDown,
-  ChevronRight,
+  // LogOut, // LogOut was not used
+  // ChevronDown, // ChevronDown is implicitly used by AccordionTrigger
+  // ChevronRight, // ChevronRight was not used explicitly
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button"; // Button was not used
 import {
   Accordion,
   AccordionContent,
@@ -39,7 +38,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   {
-    href: "/ip-management",
+    href: "/ip-management", // This href is a conceptual grouping, not a direct link
     label: "IP Management",
     icon: Network,
     subItems: [
@@ -49,7 +48,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    href: "/user-management",
+    href: "/user-management", // Conceptual grouping
     label: "User Management",
     icon: Users,
     subItems: [
@@ -58,15 +57,15 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    href: "/tools",
+    href: "/tools", // Conceptual grouping
     label: "Tools",
     icon: Wrench,
     subItems: [
-      { href: "/tools/import-export", label: "Import/Export", icon: FileUp }, // FileUp or FileDown, using one for brevity
+      { href: "/tools/import-export", label: "Import/Export", icon: FileUp },
       { href: "/tools/subnet-suggestion", label: "AI Subnet Suggestion", icon: BrainCircuit },
     ],
   },
-  { href: "/audit-logs", label: "Audit Logs", icon: Settings2 }, // Using Settings2 as generic log icon
+  { href: "/audit-logs", label: "Audit Logs", icon: Settings2 },
 ];
 
 export function SidebarNav() {
@@ -78,10 +77,10 @@ export function SidebarNav() {
 
   const renderNavItem = (item: NavItem, isSubItem = false) => {
     const Icon = item.icon;
-    const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/");
+    const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/" && item.href.length > 1); // Ensure href isn't just "/" for startsWith
     
     const linkClass = cn(
-      "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent",
+      "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
       isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
       isSubItem ? "text-sm" : "font-medium"
     );
@@ -89,26 +88,24 @@ export function SidebarNav() {
     if (item.subItems) {
       return (
         <AccordionItem key={item.href} value={item.href} className="border-none">
-          <AccordionTrigger 
+          <AccordionTrigger
             className={cn(
-              linkClass, 
+              linkClass,
               "justify-between hover:no-underline",
-              openAccordion.includes(item.href) && !isActive ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
+              // Apply active-like style if accordion is open but not the current active page/section
+              openAccordion.includes(item.href) && !item.subItems.some(sub => pathname.startsWith(sub.href)) && !isActive ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
             )}
-            onClick={() => {
-              setOpenAccordion(prev => 
-                prev.includes(item.href) 
-                  ? prev.filter(val => val !== item.href)
-                  : [...prev, item.href]
-              );
-            }}
+            // Removed onClick handler from here
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
               <Icon className="h-5 w-5" />
-              {item.label}
+              <span className="truncate">{item.label}</span>
+            </div>
+             <div className="hidden items-center gap-3 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+              <Icon className="h-5 w-5" />
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pb-0 pl-4 pt-1">
+          <AccordionContent className="pb-0 pl-4 pt-1 group-data-[collapsible=icon]:hidden">
             <nav className="flex flex-col gap-1">
               {item.subItems.map((subItem) => renderNavItem(subItem, true))}
             </nav>
@@ -120,17 +117,17 @@ export function SidebarNav() {
     return (
       <Link key={item.href} href={item.href} className={linkClass}>
         <Icon className="h-5 w-5" />
-        {item.label}
+        <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>
       </Link>
     );
   };
 
   return (
-    <Accordion 
-      type="multiple" 
-      className="w-full" 
+    <Accordion
+      type="multiple"
+      className="w-full"
       value={openAccordion}
-      onValueChange={setOpenAccordion}
+      onValueChange={setOpenAccordion} // This will be called by Radix Accordion when a trigger is clicked
     >
       {navItems.map((item) => renderNavItem(item))}
     </Accordion>
