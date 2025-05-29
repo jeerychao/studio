@@ -1,5 +1,5 @@
 
-import { PlusCircle, Edit, Trash2, Globe, Filter } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Globe } from "lucide-react"; // PlusCircle might not be needed if actionButton is removed from PageHeader
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -38,15 +38,13 @@ export default async function IPAddressesPage({
         title="IP Address Management"
         description={`Manage IP addresses. Currently viewing: ${currentSubnetName}`}
         icon={Globe}
-        actionButton={{
-          label: "Add IP Address",
-          onClick: () => { /* Handled by IPAddressFormSheet trigger */ },
-          icon: PlusCircle,
-        }}
+        // actionButton removed, as the primary "Add IP Address" button is below.
+        // If an actionElement were needed, it would be passed here.
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
-        <IPAddressFormSheet subnets={subnets} currentSubnetId={selectedSubnetId} />
+        {/* This IPAddressFormSheet renders the "Add IP Address" button */}
+        <IPAddressFormSheet subnets={subnets} currentSubnetId={selectedSubnetId} /> 
       </div>
       
       <Card>

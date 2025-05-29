@@ -1,5 +1,5 @@
 
-import { PlusCircle, Edit, Trash2, Users as UsersIcon } from "lucide-react";
+import { Edit, Trash2, Users as UsersIcon } from "lucide-react"; // PlusCircle removed
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,13 +30,9 @@ export default async function UsersPage() {
         title="User Management"
         description="Administer user accounts and their roles."
         icon={UsersIcon}
-        actionButton={{
-          label: "Add User",
-          onClick: () => { /* Handled by UserFormSheet trigger */ },
-          icon: PlusCircle,
-        }}
+        actionElement={<UserFormSheet roles={roles} />} // Use actionElement
       />
-      <UserFormSheet roles={roles} /> {/* Trigger is inside this component */}
+      {/* The UserFormSheet that was here for "Add User" is now passed to PageHeader's actionElement */}
 
       <Card>
         <CardHeader>

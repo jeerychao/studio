@@ -1,5 +1,5 @@
 
-import { PlusCircle, Edit, Trash2, Cable } from "lucide-react";
+import { Edit, Trash2, Cable } from "lucide-react"; // PlusCircle removed
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,13 +17,9 @@ export default async function VlansPage() {
         title="VLAN Management"
         description="Organize and manage your Virtual LANs."
         icon={Cable}
-        actionButton={{
-          label: "Add VLAN",
-          onClick: () => { /* Handled by VlanFormSheet trigger */ },
-          icon: PlusCircle,
-        }}
+        actionElement={<VlanFormSheet />} // Use actionElement
       />
-      <VlanFormSheet /> {/* Trigger is inside this component */}
+      {/* The VlanFormSheet that was here for "Add VLAN" is now passed to PageHeader's actionElement */}
 
       <Card>
         <CardHeader>

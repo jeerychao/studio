@@ -1,5 +1,5 @@
 
-import { PlusCircle, Edit, Trash2, ShieldCheck } from "lucide-react";
+import { Edit, Trash2, ShieldCheck } from "lucide-react"; // PlusCircle removed
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,13 +17,9 @@ export default async function RolesPage() {
         title="Role Management"
         description="Define user roles and their permissions (permissions UI not implemented)."
         icon={ShieldCheck}
-        actionButton={{
-          label: "Add Role",
-          onClick: () => { /* Handled by RoleFormSheet trigger */ },
-          icon: PlusCircle,
-        }}
+        actionElement={<RoleFormSheet />} // Use actionElement
       />
-      <RoleFormSheet /> {/* Trigger is inside this component */}
+      {/* The RoleFormSheet that was here for "Add Role" is now passed to PageHeader's actionElement */}
 
       <Card>
         <CardHeader>

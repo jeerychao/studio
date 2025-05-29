@@ -1,19 +1,17 @@
 
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+// Removed Button import as it's no longer constructed here if actionElement is used.
+// If PageHeader might still need to render its own buttons for other purposes,
+// Button import could be kept, but for this specific actionElement change, it's not strictly needed for the action part.
 
 interface PageHeaderProps {
   title: string;
   description?: string;
   icon?: LucideIcon;
-  actionButton?: {
-    label: string;
-    onClick: () => void;
-    icon?: LucideIcon;
-  };
+  actionElement?: React.ReactNode; // Changed from actionButton
 }
 
-export function PageHeader({ title, description, icon: Icon, actionButton }: PageHeaderProps) {
+export function PageHeader({ title, description, icon: Icon, actionElement }: PageHeaderProps) {
   return (
     <div className="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -23,12 +21,8 @@ export function PageHeader({ title, description, icon: Icon, actionButton }: Pag
           {description && <p className="text-muted-foreground">{description}</p>}
         </div>
       </div>
-      {actionButton && (
-        <Button onClick={actionButton.onClick}>
-          {actionButton.icon && <actionButton.icon className="mr-2 h-4 w-4" />}
-          {actionButton.label}
-        </Button>
-      )}
+      {/* Render the provided actionElement directly */}
+      {actionElement && <div>{actionElement}</div>}
     </div>
   );
 }
