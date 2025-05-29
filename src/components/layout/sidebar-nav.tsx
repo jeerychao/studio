@@ -88,7 +88,7 @@ export function SidebarNav() {
 
     if (item.subItems) {
       return (
-        <AccordionItem value={item.href} className="border-none">
+        <AccordionItem key={item.href} value={item.href} className="border-none">
           <AccordionTrigger 
             className={cn(
               linkClass, 
