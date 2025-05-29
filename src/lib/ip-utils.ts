@@ -153,3 +153,18 @@ export function cidrToPrefix(cidr: string): number {
     if (isNaN(prefix) || prefix < 0 || prefix > 32) throw new Error('Invalid prefix in CIDR');
     return prefix;
 }
+
+// Helper: Calculate the number of usable IP addresses in a subnet
+export function getUsableIpCount(prefix: number): number {
+  if (prefix === 32) {
+    return 1; // Single host
+  }
+  if (prefix === 31) {
+    return 2; // Point-to-point link, both IPs usable as per RFC 3021
+  }
+  if (prefix >= 0 && prefix <= 30) {
+    // Total addresses = 2^(32-prefix). Subtract 2 for network and broadcast addresses.
+    return Math.pow(2, 32 - prefix) - 2;
+  }
+  return 0; // For invalid prefixes or /0 where "usable for hosts" is typically 0
+}

@@ -12,13 +12,29 @@ import {
   mockRoles,
   mockAuditLogs
 } from "./data";
-import { parseAndValidateCIDR } from "./ip-utils";
+import { parseAndValidateCIDR, getUsableIpCount, cidrToPrefix } from "./ip-utils";
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // --- Subnet Actions ---
 export async function getSubnetsAction(): Promise<Subnet[]> {
-  return mockSubnets;
+  // Create a deep copy to avoid modifying the original mockSubnets array during utilization calculation
+  const subnetsCopy: Subnet[] = JSON.parse(JSON.stringify(mockSubnets));
+  
+  subnetsCopy.forEach(subnet => {
+    const prefix = cidrToPrefix(subnet.cidr);
+    const totalUsableIps = getUsableIpCount(prefix);
+    const allocatedIps = mockIPAddresses.filter(
+      ip => ip.subnetId === subnet.id && ip.status === 'allocated'
+    ).length;
+
+    let calculatedUtilization = 0;
+    if (totalUsableIps > 0) {
+      calculatedUtilization = Math.round((allocatedIps / totalUsableIps) * 100);
+    }
+    subnet.utilization = calculatedUtilization;
+  });
+  return subnetsCopy;
 }
 
 export async function createSubnetAction(data: { 
@@ -44,7 +60,7 @@ export async function createSubnetAction(data: {
     ipRange: parsedCidr.ipRange,
     vlanId: data.vlanId || undefined,
     description: data.description || undefined,
-    utilization: 0, // Default utilization for new subnets
+    utilization: 0, // New subnets start with 0 utilization
   };
   mockSubnets.push(newSubnet);
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_subnet', timestamp: new Date().toISOString(), details: `Created subnet ${newSubnet.cidr}` });
@@ -53,7 +69,7 @@ export async function createSubnetAction(data: {
   return newSubnet;
 }
 
-export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "gateway">> & { cidr?: string }): Promise<Subnet | null> {
+export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "gateway" | "utilization">> & { cidr?: string }): Promise<Subnet | null> {
   const index = mockSubnets.findIndex(s => s.id === id);
   if (index === -1) return null;
 
@@ -76,7 +92,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
 
   if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId || undefined;
   if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
-  if (data.hasOwnProperty('utilization')) subnetToUpdate.utilization = data.utilization;
+  // Utilization is not directly updatable, it's calculated in getSubnetsAction
 
 
   mockSubnets[index] = subnetToUpdate;
@@ -183,7 +199,7 @@ export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promis
   mockIPAddresses.push(newIP);
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_ip_address', timestamp: new Date().toISOString(), details: `Created IP ${newIP.ipAddress} in subnet ${newIP.subnetId}` });
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard"); // Revalidate dashboard as IP allocation changes utilization
   return newIP;
 }
 
@@ -204,7 +220,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
   mockIPAddresses[index] = { ...mockIPAddresses[index], ...data };
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_ip_address', timestamp: new Date().toISOString(), details: `Updated IP ${mockIPAddresses[index].ipAddress}` });
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard"); // Revalidate dashboard as IP allocation changes utilization
   return mockIPAddresses[index];
 }
 
@@ -220,7 +236,7 @@ export async function deleteIPAddressAction(id: string): Promise<{ success: bool
     }
   }
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard"); // Revalidate dashboard as IP allocation changes utilization
   return { success: mockIPAddresses.length < initialLength };
 }
 

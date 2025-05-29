@@ -4,27 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { mockSubnets, mockIPAddresses, mockVLANs, mockAuditLogs } from "@/lib/data";
+import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
+import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
 import { Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight, Cable } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
-  const subnets = await mockSubnets;
-  const ips = await mockIPAddresses;
-  const vlans = await mockVLANs;
-  const logs = await mockAuditLogs;
+  const subnets = await getSubnetsAction();
+  const ips = await getIPAddressesAction();
+  // const vlans = await getVLANsAction(); // vlans not directly used on this page for now
+  const logs = await getAuditLogsAction();
 
   const totalIPs = subnets.reduce((acc, subnet) => {
-    // Simplified: assumes /24 for calculation if not specified, otherwise estimate
-    const maskParts = subnet.subnetMask.split('.').map(Number);
-    let hostBits = 0;
-    if (maskParts.length === 4) {
-      const maskBinary = maskParts.map(part => part.toString(2).padStart(8, '0')).join('');
-      hostBits = maskBinary.split('').filter(bit => bit === '0').length;
-    } else { // Fallback for CIDR or simple masks, rough estimate
-      hostBits = 8; // Default to /24 like for simplicity
-    }
-    return acc + (Math.pow(2, hostBits) -2); // Subtract network and broadcast
+    const prefix = cidrToPrefix(subnet.cidr);
+    return acc + getUsableIpCount(prefix);
   }, 0);
 
   const allocatedIPs = ips.filter(ip => ip.status === 'allocated').length;
@@ -47,12 +40,12 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total IP Addresses</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Usable IPs</CardTitle>
             <Globe className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalIPs.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Estimated available IPs</p>
+            <p className="text-xs text-muted-foreground">Estimated usable IPs</p>
           </CardContent>
         </Card>
         <Card>
@@ -97,13 +90,13 @@ export default async function DashboardPage() {
                 {logs.slice(0, 5).map((log) => (
                   <TableRow key={log.id}>
                     <TableCell>
-                      <div className="font-medium">{log.username}</div>
+                      <div className="font-medium">{log.username || "System"}</div>
                       <div className="hidden text-sm text-muted-foreground md:inline">
                         {/* Placeholder for user email or ID */}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{log.action.replace('_', ' ').toUpperCase()}</Badge>
+                      <Badge variant="outline" className="capitalize">{log.action.replace(/_/g, " ")}</Badge>
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate">{log.details}</TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
@@ -134,7 +127,7 @@ export default async function DashboardPage() {
                 {criticalSubnets.map(subnet => (
                   <li key={subnet.id} className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">{subnet.networkAddress}/{subnet.subnetMask}</p>
+                      <p className="font-medium">{subnet.networkAddress}/{cidrToPrefix(subnet.cidr)}</p>
                       <p className="text-sm text-muted-foreground">{subnet.description || 'No description'}</p>
                     </div>
                     <div className="text-right">

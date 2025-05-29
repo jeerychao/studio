@@ -3,7 +3,7 @@ import type { Subnet, VLAN, IPAddress, User, Role, AuditLog } from '@/types';
 import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils';
 
 // Helper to generate initial subnet data with calculated fields
-function createInitialSubnet(id: string, cidr: string, vlanId?: string, description?: string, utilization?: number): Subnet {
+function createInitialSubnet(id: string, cidr: string, vlanId?: string, description?: string): Subnet {
   const prefix = cidrToPrefix(cidr);
   const ipPart = cidr.split('/')[0];
   const networkAddress = calculateNetworkAddress(ipPart, prefix);
@@ -16,18 +16,17 @@ function createInitialSubnet(id: string, cidr: string, vlanId?: string, descript
     networkAddress,
     subnetMask,
     ipRange,
-    // gateway field removed from direct creation
     vlanId,
     description,
-    utilization,
+    // Utilization will be calculated dynamically by getSubnetsAction
   };
 }
 
 
 export const mockSubnets: Subnet[] = [
-  createInitialSubnet('subnet-1', '192.168.1.0/24', 'vlan-1', 'Main Office Network', 60), // Original gateway '192.168.1.1' removed from direct creation. It might exist if data has it.
-  createInitialSubnet('subnet-2', '10.0.0.0/16', 'vlan-2', 'Server Farm', 45), // Original gateway '10.0.0.1' removed.
-  createInitialSubnet('subnet-3', '172.16.0.0/20', undefined, 'Guest WiFi', 80), // No gateway previously, still no gateway.
+  createInitialSubnet('subnet-1', '192.168.1.0/24', 'vlan-1', 'Main Office Network'),
+  createInitialSubnet('subnet-2', '10.0.0.0/16', 'vlan-2', 'Server Farm'),
+  createInitialSubnet('subnet-3', '172.16.0.0/20', undefined, 'Guest WiFi'),
 ];
 
 // Manually re-add gateway to specific mock subnets if needed for other parts of the app or testing,
@@ -68,6 +67,9 @@ export const mockAuditLogs: AuditLog[] = [
   { id: 'log-3', userId: 'user-1', username: 'admin', action: 'update_vlan', timestamp: new Date().toISOString(), details: 'Updated VLAN 10 description' },
 ];
 
+// The following export functions that return Promises are kept for potential future use
+// if data fetching becomes asynchronous (e.g., from a database).
+// For the current direct mock data usage in actions, they might not be directly called by pages.
 export const getSubnets = async (): Promise<Subnet[]> => {
   return new Promise(resolve => setTimeout(() => resolve(mockSubnets), 500));
 };
