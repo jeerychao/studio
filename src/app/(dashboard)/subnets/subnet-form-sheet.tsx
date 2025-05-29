@@ -43,8 +43,10 @@ const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR notation is too short (e.g., x.x.x.x/y)")
     .refine((val) => {
       const parsed = parseAndValidateCIDR(val);
-      return parsed !== null;
-    }, "Invalid CIDR notation (e.g., 192.168.1.0/24). Ensure the IP is the network address for the given prefix."),
+      // For the form, we just check if it's a structurally valid CIDR.
+      // The backend (actions.ts) will perform stricter checks like ensuring the IP part is the network address for CREATION.
+      return parsed !== null; 
+    }, "Invalid CIDR notation format (e.g., 192.168.1.0/24). Please ensure the IP address and prefix length are valid."),
   vlanId: z.string().optional(),
   description: z.string().max(200, "Description too long").optional(),
 });
@@ -88,14 +90,15 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
   async function onSubmit(data: SubnetFormValues) {
     try {
       const actionData = {
-        cidr: data.cidr,
+        cidr: data.cidr, // The action will parse this again and use the canonical network address
         vlanId: data.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : (data.vlanId || undefined),
         description: data.description || undefined,
       };
 
       if (isEditing && subnet) {
-        await updateSubnetAction(subnet.id, { ...actionData, utilization: subnet.utilization });
-        toast({ title: "Subnet Updated", description: `Subnet ${data.cidr} has been successfully updated.` });
+        // Utilization is not part of the form data, it's calculated
+        await updateSubnetAction(subnet.id, actionData );
+        toast({ title: "Subnet Updated", description: `Subnet has been successfully updated.` });
       } else {
         await createSubnetAction(actionData);
         toast({ title: "Subnet Created", description: `Subnet ${data.cidr} has been successfully created.` });
@@ -159,7 +162,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
                         field.onChange(value);
                       }
                     }}
-                    value={field.value === "" ? NO_VLAN_SENTINEL_VALUE : field.value}
+                    value={field.value === "" || field.value === undefined ? NO_VLAN_SENTINEL_VALUE : field.value}
                   >
                     <FormControl>
                       <SelectTrigger>

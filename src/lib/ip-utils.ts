@@ -88,40 +88,35 @@ export function calculateIpRange(networkAddr: string, prefix: number): string | 
 }
 
 export interface ParsedCIDR {
-    ip: string;
+    inputIp: string; // The original IP part of the user's CIDR input string
     prefix: number;
-    networkAddress: string;
+    networkAddress: string; // Calculated network address
     subnetMask: string;
-    broadcastAddress: string;
+    broadcastAddress: string; // Calculated broadcast address
     firstUsableIp?: string;
     lastUsableIp?: string;
     ipRange?: string;
 }
 
 // Helper: Validate and parse CIDR string
+// Now, it calculates the network address based on the input IP and prefix,
+// rather than requiring the input IP to already be the network address.
 export function parseAndValidateCIDR(cidr: string): ParsedCIDR | null {
   const match = cidr.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
   if (!match) return null;
   
-  const [, ip, prefixStr] = match;
+  const [, inputIp, prefixStr] = match; // Renamed 'ip' to 'inputIp' for clarity
   const prefix = parseInt(prefixStr, 10);
 
   if (prefix < 0 || prefix > 32) return null;
 
-  const ipParts = ip.split('.').map(Number);
+  const ipParts = inputIp.split('.').map(Number);
   if (ipParts.some(part => part < 0 || part > 255) || ipParts.length !== 4) return null;
   
-  const networkAddress = calculateNetworkAddress(ip, prefix);
-  // For subnet creation, the IP part of CIDR must be the network address itself.
-  if (ip !== networkAddress) {
-    // console.warn(`Provided IP ${ip} in CIDR ${cidr} is not the network address. Using ${networkAddress}.`);
-    // Depending on strictness, you might return null or use the calculated networkAddress.
-    // For user input that should define a network, it's better to be strict.
-    return null; 
-  }
-
+  // Calculate the true network address from the input IP and prefix
+  const networkAddress = calculateNetworkAddress(inputIp, prefix);
   const subnetMask = prefixToSubnetMask(prefix);
-  const broadcastAddress = calculateBroadcastAddress(networkAddress, prefix);
+  const broadcastAddress = calculateBroadcastAddress(networkAddress, prefix); // Use calculated networkAddress
   const ipRange = calculateIpRange(networkAddress, prefix);
   
   let firstUsableIp: string | undefined;
@@ -133,11 +128,10 @@ export function parseAndValidateCIDR(cidr: string): ParsedCIDR | null {
     lastUsableIp = parts[1];
   }
 
-
   return { 
-    ip, // The original IP from CIDR, which we've validated is the network address
+    inputIp, // Store the original IP from user's CIDR string
     prefix, 
-    networkAddress, 
+    networkAddress, // This is the calculated, canonical network address
     subnetMask,
     broadcastAddress,
     firstUsableIp,
@@ -167,4 +161,24 @@ export function getUsableIpCount(prefix: number): number {
     return Math.pow(2, 32 - prefix) - 2;
   }
   return 0; // For invalid prefixes or /0 where "usable for hosts" is typically 0
+}
+
+// Helper: Check if two subnets (represented by their ParsedCIDR details) overlap
+export function doSubnetsOverlap(subnet1Details: ParsedCIDR, subnet2Details: ParsedCIDR): boolean {
+  const s1NetworkNum = ipToNumber(subnet1Details.networkAddress);
+  const s1BroadcastNum = ipToNumber(subnet1Details.broadcastAddress);
+  const s2NetworkNum = ipToNumber(subnet2Details.networkAddress);
+  const s2BroadcastNum = ipToNumber(subnet2Details.broadcastAddress);
+
+  // Overlap exists if max(start1, start2) <= min(end1, end2)
+  return Math.max(s1NetworkNum, s2NetworkNum) <= Math.min(s1BroadcastNum, s2BroadcastNum);
+}
+
+// Helper: Check if a given IP address string is within a given CIDR's range (network to broadcast)
+export function isIpInCidrRange(ipAddress: string, cidrDetails: ParsedCIDR): boolean {
+  const ipNum = ipToNumber(ipAddress);
+  const networkNum = ipToNumber(cidrDetails.networkAddress);
+  const broadcastNum = ipToNumber(cidrDetails.broadcastAddress);
+
+  return ipNum >= networkNum && ipNum <= broadcastNum;
 }

@@ -12,13 +12,12 @@ import {
   mockRoles,
   mockAuditLogs
 } from "./data";
-import { parseAndValidateCIDR, getUsableIpCount, cidrToPrefix } from "./ip-utils";
+import { parseAndValidateCIDR, getUsableIpCount, cidrToPrefix, doSubnetsOverlap, isIpInCidrRange } from "./ip-utils";
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // --- Subnet Actions ---
 export async function getSubnetsAction(): Promise<Subnet[]> {
-  // Create a deep copy to avoid modifying the original mockSubnets array during utilization calculation
   const subnetsCopy: Subnet[] = JSON.parse(JSON.stringify(mockSubnets));
   
   subnetsCopy.forEach(subnet => {
@@ -44,23 +43,41 @@ export async function createSubnetAction(data: {
 }): Promise<Subnet> {
   const parsedCidr = parseAndValidateCIDR(data.cidr);
   if (!parsedCidr) {
-    throw new Error("Invalid CIDR notation or the IP address is not the network address for the given prefix.");
+    // This case should ideally be caught by form validation, but as a safeguard:
+    throw new Error("Invalid CIDR notation provided.");
+  }
+  
+  // Check if the IP part of the user-provided CIDR is the actual network address
+  // This enforces that users define subnets by their canonical network address.
+  if (parsedCidr.inputIp !== parsedCidr.networkAddress) {
+    throw new Error(`The IP address ${parsedCidr.inputIp} is not the network address for the prefix /${parsedCidr.prefix}. Please use ${parsedCidr.networkAddress}/${parsedCidr.prefix}.`);
   }
 
-  const existingSubnet = mockSubnets.find(subnet => subnet.cidr === data.cidr);
-  if (existingSubnet) {
-    throw new Error(`Subnet with CIDR ${data.cidr} already exists.`);
+  const canonicalCidr = `${parsedCidr.networkAddress}/${parsedCidr.prefix}`;
+
+  // Check for duplicate CIDR (based on canonical representation)
+  const existingSubnetByCidr = mockSubnets.find(subnet => subnet.cidr === canonicalCidr);
+  if (existingSubnetByCidr) {
+    throw new Error(`Subnet with CIDR ${canonicalCidr} already exists.`);
+  }
+
+  // Check for overlaps with other existing subnets
+  for (const existingSubnet of mockSubnets) {
+    const existingParsedCidr = parseAndValidateCIDR(existingSubnet.cidr);
+    if (existingParsedCidr && doSubnetsOverlap(parsedCidr, existingParsedCidr)) {
+      throw new Error(`The new subnet ${canonicalCidr} overlaps with existing subnet ${existingSubnet.cidr}.`);
+    }
   }
 
   const newSubnet: Subnet = {
     id: generateId(),
-    cidr: data.cidr,
+    cidr: canonicalCidr, // Store the canonical CIDR
     networkAddress: parsedCidr.networkAddress,
     subnetMask: parsedCidr.subnetMask,
     ipRange: parsedCidr.ipRange,
     vlanId: data.vlanId || undefined,
     description: data.description || undefined,
-    utilization: 0, // New subnets start with 0 utilization
+    utilization: 0,
   };
   mockSubnets.push(newSubnet);
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_subnet', timestamp: new Date().toISOString(), details: `Created subnet ${newSubnet.cidr}` });
@@ -69,34 +86,60 @@ export async function createSubnetAction(data: {
   return newSubnet;
 }
 
-export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "gateway" | "utilization">> & { cidr?: string }): Promise<Subnet | null> {
+export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "networkAddress" | "subnetMask" | "ipRange" | "utilization">> & { cidr?: string }): Promise<Subnet | null> {
   const index = mockSubnets.findIndex(s => s.id === id);
   if (index === -1) return null;
 
   let subnetToUpdate = { ...mockSubnets[index] };
+  let oldParsedCidr = parseAndValidateCIDR(subnetToUpdate.cidr); // For logging if needed
 
   if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
-    const existingSubnet = mockSubnets.find(subnet => subnet.cidr === data.cidr && subnet.id !== id);
-    if (existingSubnet) {
-      throw new Error(`Another subnet with CIDR ${data.cidr} already exists.`);
+    const newParsedCidr = parseAndValidateCIDR(data.cidr);
+    if (!newParsedCidr) {
+      throw new Error("Invalid new CIDR notation provided.");
     }
-    const parsedCidr = parseAndValidateCIDR(data.cidr);
-    if (!parsedCidr) {
-      throw new Error("Invalid CIDR notation or the IP address is not the network address for the given prefix.");
+
+    // Enforce that the IP part of the new CIDR is its network address
+    if (newParsedCidr.inputIp !== newParsedCidr.networkAddress) {
+        throw new Error(`The IP address ${newParsedCidr.inputIp} is not the network address for the prefix /${newParsedCidr.prefix}. Please use ${newParsedCidr.networkAddress}/${newParsedCidr.prefix} for the new CIDR.`);
     }
-    subnetToUpdate.cidr = data.cidr;
-    subnetToUpdate.networkAddress = parsedCidr.networkAddress;
-    subnetToUpdate.subnetMask = parsedCidr.subnetMask;
-    subnetToUpdate.ipRange = parsedCidr.ipRange;
+    
+    const newCanonicalCidr = `${newParsedCidr.networkAddress}/${newParsedCidr.prefix}`;
+
+    // Check if another subnet (excluding the current one) already has this new CIDR
+    const conflictingSubnetByCidr = mockSubnets.find(s => s.id !== id && s.cidr === newCanonicalCidr);
+    if (conflictingSubnetByCidr) {
+      throw new Error(`Another subnet with CIDR ${newCanonicalCidr} already exists.`);
+    }
+
+    // Check for overlaps with other existing subnets (excluding the current one being updated)
+    for (const existingSubnet of mockSubnets) {
+      if (existingSubnet.id === id) continue; // Skip self
+      const existingParsedCidr = parseAndValidateCIDR(existingSubnet.cidr);
+      if (existingParsedCidr && doSubnetsOverlap(newParsedCidr, existingParsedCidr)) {
+        throw new Error(`The new CIDR ${newCanonicalCidr} overlaps with existing subnet ${existingSubnet.cidr}.`);
+      }
+    }
+
+    // Check if existing allocated IPs for this subnet are still valid within the new CIDR
+    const allocatedIpsInSubnet = mockIPAddresses.filter(ip => ip.subnetId === id && ip.status === 'allocated');
+    for (const allocatedIp of allocatedIpsInSubnet) {
+      if (!isIpInCidrRange(allocatedIp.ipAddress, newParsedCidr)) {
+        throw new Error(`Cannot change CIDR to ${newCanonicalCidr}: Allocated IP address ${allocatedIp.ipAddress} would be outside the new range.`);
+      }
+    }
+
+    subnetToUpdate.cidr = newCanonicalCidr;
+    subnetToUpdate.networkAddress = newParsedCidr.networkAddress;
+    subnetToUpdate.subnetMask = newParsedCidr.subnetMask;
+    subnetToUpdate.ipRange = newParsedCidr.ipRange;
   }
 
   if (data.hasOwnProperty('vlanId')) subnetToUpdate.vlanId = data.vlanId || undefined;
   if (data.hasOwnProperty('description')) subnetToUpdate.description = data.description || undefined;
-  // Utilization is not directly updatable, it's calculated in getSubnetsAction
-
-
+  
   mockSubnets[index] = subnetToUpdate;
-  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ${subnetToUpdate.cidr}` });
+  mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_subnet', timestamp: new Date().toISOString(), details: `Updated subnet ID ${id} (Old CIDR: ${oldParsedCidr?.cidr}, New CIDR: ${subnetToUpdate.cidr})` });
   revalidatePath("/subnets");
   revalidatePath("/dashboard");
   return mockSubnets[index];
@@ -199,7 +242,7 @@ export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promis
   mockIPAddresses.push(newIP);
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'create_ip_address', timestamp: new Date().toISOString(), details: `Created IP ${newIP.ipAddress} in subnet ${newIP.subnetId}` });
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard"); // Revalidate dashboard as IP allocation changes utilization
+  revalidatePath("/dashboard"); 
   return newIP;
 }
 
@@ -220,7 +263,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
   mockIPAddresses[index] = { ...mockIPAddresses[index], ...data };
   mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'update_ip_address', timestamp: new Date().toISOString(), details: `Updated IP ${mockIPAddresses[index].ipAddress}` });
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard"); // Revalidate dashboard as IP allocation changes utilization
+  revalidatePath("/dashboard"); 
   return mockIPAddresses[index];
 }
 
@@ -236,7 +279,7 @@ export async function deleteIPAddressAction(id: string): Promise<{ success: bool
     }
   }
   revalidatePath("/ip-addresses");
-  revalidatePath("/dashboard"); // Revalidate dashboard as IP allocation changes utilization
+  revalidatePath("/dashboard"); 
   return { success: mockIPAddresses.length < initialLength };
 }
 
@@ -338,9 +381,7 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean }
   const initialLength = mockRoles.length;
   const roleToDelete = mockRoles.find(r => r.id === id);
 
-  // Set roleId to a default or empty string for users who had this role
-  // This assumes you have a default role or can handle an empty roleId
-  const defaultRoleId = mockRoles.find(r => r.name === 'Viewer')?.id || ''; // Example: assign 'Viewer' or empty
+  const defaultRoleId = mockRoles.find(r => r.name === 'Viewer')?.id || ''; 
   mockUsers.forEach(user => {
     if (user.roleId === id) {
       user.roleId = defaultRoleId; 
@@ -355,7 +396,7 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean }
     }
   }
   revalidatePath("/roles");
-  revalidatePath("/users"); // Revalidate users if their roles might have changed
+  revalidatePath("/users"); 
   return { success: mockRoles.length < initialLength };
 }
 
@@ -364,7 +405,7 @@ export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<
   try {
     const result = await suggestSubnet(input);
     mockAuditLogs.unshift({ id: generateId(), userId: 'user-1', username: 'admin', action: 'ai_suggest_subnet', timestamp: new Date().toISOString(), details: `AI suggested subnet for: ${input.newSegmentDescription}` });
-    return JSON.parse(JSON.stringify(result)); // Ensure a plain object is returned
+    return JSON.parse(JSON.stringify(result)); 
   } catch (error: any) {
     console.error("AI Subnet Suggestion Error:", error);
     throw new Error(error.message || "Failed to get AI subnet suggestion.");
@@ -373,15 +414,12 @@ export async function suggestSubnetAIAction(input: SuggestSubnetInput): Promise<
 
 // --- Audit Log Actions ---
 export async function getAuditLogsAction(): Promise<AuditLog[]> {
-  // Create a deep copy to avoid modifying the original mockAuditLogs array during username population
   const logsCopy = JSON.parse(JSON.stringify(mockAuditLogs));
   return logsCopy.map((log: AuditLog) => {
-    if (!log.username && log.userId) { // Only populate if username is missing and userId exists
+    if (!log.username && log.userId) { 
       const user = mockUsers.find(u => u.id === log.userId);
       return { ...log, username: user ? user.username : 'System' };
     }
     return log;
   });
 }
-
-    
