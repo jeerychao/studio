@@ -1,5 +1,5 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId } from '@/types';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog } from '@/types'; // Added AuditLog
 import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils';
 import { PERMISSIONS } from '@/types';
 
@@ -43,8 +43,7 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, name: 'View Import/Export Tool', group: 'Tools' },
   { id: PERMISSIONS.PERFORM_TOOLS_IMPORT, name: 'Perform Data Import', group: 'Tools' },
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: 'Perform Data Export', group: 'Tools' },
-  { id: PERMISSIONS.VIEW_TOOLS_SUBNET_SUGGESTION, name: 'View AI Subnet Suggestion Tool', group: 'Tools' },
-  { id: PERMISSIONS.USE_TOOLS_SUBNET_SUGGESTION, name: 'Use AI Subnet Suggestion Tool', group: 'Tools' },
+  // Removed AI Subnet Suggestion Permissions
 ];
 
 // Helper to generate initial subnet data with calculated fields
@@ -63,6 +62,7 @@ function createInitialSubnet(id: string, cidr: string, vlanId?: string, descript
     ipRange,
     vlanId,
     description,
+    // utilization is calculated dynamically by getSubnetsAction
   };
 }
 
@@ -75,7 +75,7 @@ export const mockSubnets: Subnet[] = [
 
 
 export const mockVLANs: VLAN[] = [
-  { id: 'vlan-1', vlanNumber: 10, description: 'Office VLAN' }, 
+  { id: 'vlan-1', vlanNumber: 10, description: 'Office VLAN' },
   { id: 'vlan-2', vlanNumber: 20, description: 'Servers VLAN' },
   { id: 'vlan-3', vlanNumber: 30, description: 'Guest VLAN' },
 ];
@@ -89,16 +89,16 @@ export const mockIPAddresses: IPAddress[] = [
 ];
 
 export const mockRoles: Role[] = [
-  { 
-    id: ADMIN_ROLE_ID, 
-    name: 'Administrator' as RoleName, 
-    description: 'Full system access. Can manage all resources, users, roles, and system settings.', 
+  {
+    id: ADMIN_ROLE_ID,
+    name: 'Administrator' as RoleName,
+    description: 'Full system access. Can manage all resources, users, roles, and system settings.',
     permissions: mockPermissions.map(p => p.id) // All permissions
   },
-  { 
-    id: OPERATOR_ROLE_ID, 
-    name: 'Operator' as RoleName, 
-    description: 'Manages IP resources. Cannot manage users, roles, or most system settings.', 
+  {
+    id: OPERATOR_ROLE_ID,
+    name: 'Operator' as RoleName,
+    description: 'Manages IP resources. Cannot manage users, roles, or most system settings.',
     permissions: [
       PERMISSIONS.VIEW_DASHBOARD,
       PERMISSIONS.VIEW_SUBNET, PERMISSIONS.CREATE_SUBNET, PERMISSIONS.EDIT_SUBNET, PERMISSIONS.DELETE_SUBNET,
@@ -106,16 +106,16 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
     ]
   },
-  { 
-    id: VIEWER_ROLE_ID, 
-    name: 'Viewer' as RoleName, 
-    description: 'Read-only access to IP resources and dashboard.', 
+  {
+    id: VIEWER_ROLE_ID,
+    name: 'Viewer' as RoleName,
+    description: 'Read-only access to IP resources and dashboard.',
     permissions: [
       PERMISSIONS.VIEW_DASHBOARD,
       PERMISSIONS.VIEW_SUBNET,
       PERMISSIONS.VIEW_VLAN,
       PERMISSIONS.VIEW_IPADDRESS,
-    ] 
+    ]
   },
 ];
 
@@ -126,12 +126,15 @@ export const mockUsers: User[] = [
 ];
 
 
-export let mockAuditLogs: AuditLog[] = [ 
+export let mockAuditLogs: AuditLog[] = [
   { id: 'log-1', userId: 'user-1', username: 'admin_user', action: 'create_subnet', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Created subnet 172.16.0.0/20' },
   { id: 'log-2', userId: 'user-2', username: 'operator_jane', action: 'assign_ip', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Assigned IP 192.168.1.10 to John Doe\'s PC' },
   { id: 'log-3', userId: 'user-1', username: 'admin_user', action: 'update_vlan', timestamp: new Date().toISOString(), details: 'Updated VLAN 10 description' },
 ];
 
+// These getter functions are kept for potential direct use if needed,
+// but server actions (get<Resource>Action) are preferred for components
+// as they can encapsulate more logic like dynamic calculations.
 export const getSubnets = async (): Promise<Subnet[]> => {
   return new Promise(resolve => setTimeout(() => resolve(mockSubnets), 100));
 };

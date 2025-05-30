@@ -12,9 +12,9 @@ import {
   ShieldCheck,
   Wrench,
   FileUp,
-  BrainCircuit,
+  // BrainCircuit, // Removed: No longer used
   Settings2,
-  ListChecks 
+  ListChecks
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -67,7 +67,7 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, // Or a general VIEW_TOOLS
     subItems: [
       { href: "/tools/import-export", label: "Import/Export", icon: FileUp, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
-      { href: "/tools/subnet-suggestion", label: "AI Subnet Suggestion", icon: BrainCircuit, requiredPermission: PERMISSIONS.VIEW_TOOLS_SUBNET_SUGGESTION },
+      // Removed AI Subnet Suggestion link
     ],
   },
   { href: "/audit-logs", label: "Audit Logs", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
@@ -80,17 +80,22 @@ export function SidebarNav() {
   const filterNavItemsByPermission = (items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
     if (!user) return [];
     return items.filter(item => {
-      const hasAccess = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true; // Default to true if no permission specified (should not happen for main items)
+      const hasAccess = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true; 
       
       if (hasAccess && item.subItems) {
         item.subItems = filterNavItemsByPermission(item.subItems, user);
         // If it's a group item and all its subItems are filtered out, don't show the group.
-        if ((item.href.includes("-management") || item.href.includes("/tools") || item.href === "/ip-management") && item.subItems.length === 0) {
+        // Ensure "Tools" group remains if "Import/Export" is still there.
+        if ((item.href.includes("-management") || item.href === "/tools") && item.subItems.length === 0 && item.label !== "Tools") {
              return false;
+        }
+        // Specifically for "Tools", if it has no subitems, hide it.
+        if (item.label === "Tools" && item.subItems.length === 0) {
+            return false;
         }
       }
       return hasAccess;
-    });
+    }).filter(item => item !== null); // Ensure we filter out nulls if groups become empty
   };
   
   const accessibleNavItems = React.useMemo(() => filterNavItemsByPermission(navItemConfigs, currentUser), [currentUser]);
@@ -101,15 +106,10 @@ export function SidebarNav() {
   });
 
   React.useEffect(() => {
-    // Update open accordion state if path changes and belongs to a different parent
     const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     if (activeParent && !openAccordion.includes(activeParent.href)) {
-        // Heuristic: if only one group should be open at a time, replace instead of add
-        // setOpenAccordion([activeParent.href]); 
-        // For multiple open accordions:
         setOpenAccordion(prev => {
             if (prev.includes(activeParent.href)) return prev;
-            // If you want only one accordion open, uncomment the line above this useEffect and remove this logic
             return [...prev.filter(g => !navItemConfigs.find(i => i.href === g && i.subItems)), activeParent.href];
         });
     }
@@ -133,7 +133,6 @@ export function SidebarNav() {
             className={cn(
               linkClass,
               "justify-between hover:no-underline",
-              // Ensure consistent active styling for accordion trigger
                openAccordion.includes(item.href) && (isActive || item.subItems.some(sub => pathname.startsWith(sub.href))) ? "bg-sidebar-primary text-sidebar-primary-foreground" : 
                (openAccordion.includes(item.href) ? "text-sidebar-primary-foreground bg-sidebar-accent" : "")
             )}
