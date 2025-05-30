@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, Search, Bell, UserCircle } from "lucide-react";
+import { Menu, Search, Bell, UserCircle, Network } from "lucide-react"; // Added Network for mobile drawer
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -83,8 +83,10 @@ export function Header() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Settings</DropdownMenuItem>
-            <DropdownMenuItem>Support</DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings">Settings</Link>
+            </DropdownMenuItem>
+            {/* Support DropdownMenuItem removed */}
             <DropdownMenuSeparator />
             <DropdownMenuItem>Logout</DropdownMenuItem>
           </DropdownMenuContent>
