@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; 
+import type { Subnet, VLAN, IPAddress } from "@/types"; // Added types for clarity
 import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
 
@@ -74,30 +75,82 @@ export default function ImportExportPage() {
     let dataToExport: any[] = [];
     let filename = `${dataType}_export.csv`;
     let csvContent = "";
+    let csvHeaders: string[] = [];
 
-    const convertToCSV = (data: any[], headers: string[]) => {
-      let csv = headers.join(",") + "\n";
+    const convertToCSV = (data: any[], headersToUse: string[]) => {
+      let csv = headersToUse.join(",") + "\n";
       data.forEach(row => {
-        csv += headers.map(header => JSON.stringify(row[header as keyof typeof row] || "")).join(",") + "\n";
+        // Ensure consistent order based on headersToUse
+        csv += headersToUse.map(header => JSON.stringify(row[header as keyof typeof row] || "")).join(",") + "\n";
       });
       return csv;
     };
 
     if (dataType === "subnets") {
-      dataToExport = mockSubnets; 
-      csvContent = convertToCSV(dataToExport, ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "description", "utilization"]);
+      const subnetsForCsv = mockSubnets.map(subnet => {
+        const { vlanId, gateway, ...rest } = subnet; // gateway is not currently in export headers
+        const vlan = mockVLANs.find(v => v.id === subnet.vlanId);
+        return {
+          ...rest,
+          vlanNumber: vlan ? vlan.vlanNumber.toString() : "",
+          ipRange: subnet.ipRange || "", // Ensure ipRange is always a string for CSV
+          utilization: subnet.utilization || 0, // Ensure utilization is always a number or 0
+          description: subnet.description || "",
+        };
+      });
+      dataToExport = subnetsForCsv;
+      csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "description", "utilization"];
+      csvContent = convertToCSV(dataToExport, csvHeaders);
     } else if (dataType === "vlans") {
-      dataToExport = mockVLANs;
-      csvContent = convertToCSV(dataToExport, ["id", "vlanNumber", "description", "subnetCount"]);
+      // VLAN export already uses vlanNumber, ensure subnetCount is present
+      dataToExport = mockVLANs.map(vlan => ({
+        ...vlan,
+        subnetCount: vlan.subnetCount || 0, // Ensure subnetCount is always a number or 0
+        description: vlan.description || "",
+      }));
+      csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
+      csvContent = convertToCSV(dataToExport, csvHeaders);
     } else if (dataType === "ips") {
-      dataToExport = mockIPAddresses;
-      csvContent = convertToCSV(dataToExport, ["id", "ipAddress", "subnetId", "vlanId", "status", "allocatedTo", "description"]);
+      const ipsForCsv = mockIPAddresses.map(ip => {
+        const { vlanId, ...rest } = ip;
+        let effectiveVlanNumberStr = "";
+        
+        if (ip.vlanId) { // Direct assignment
+          const directVlan = mockVLANs.find(v => v.id === ip.vlanId);
+          if (directVlan) {
+            effectiveVlanNumberStr = directVlan.vlanNumber.toString();
+          }
+        } else if (ip.subnetId) { // Inherited from subnet
+          const parentSubnet = mockSubnets.find(s => s.id === ip.subnetId);
+          if (parentSubnet?.vlanId) {
+            const inheritedVlan = mockVLANs.find(v => v.id === parentSubnet.vlanId);
+            if (inheritedVlan) {
+              effectiveVlanNumberStr = inheritedVlan.vlanNumber.toString();
+            }
+          }
+        }
+        return {
+          ...rest,
+          vlanNumber: effectiveVlanNumberStr,
+          subnetId: ip.subnetId || "",
+          allocatedTo: ip.allocatedTo || "",
+          description: ip.description || "",
+        };
+      });
+      dataToExport = ipsForCsv;
+      csvHeaders = ["id", "ipAddress", "subnetId", "vlanNumber", "status", "allocatedTo", "description"];
+      csvContent = convertToCSV(dataToExport, csvHeaders);
     }
 
-    if(dataToExport.length === 0) {
-        toast({ title: "Export Failed", description: `No data available for ${dataType}.`, variant: "destructive"});
+    if(dataToExport.length === 0 && dataType !== "vlans" && dataType !== "ips" && dataType !== "subnets" ) { // Check if dataType was actually processed
+        toast({ title: "Export Error", description: `Unknown data type: ${dataType}.`, variant: "destructive"});
         return;
     }
+    if (dataToExport.length === 0) {
+         toast({ title: "No Data", description: `No data available to export for ${dataType}.`});
+        return;
+    }
+
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
