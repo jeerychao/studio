@@ -42,24 +42,36 @@ const userFormSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username too long"),
   email: z.string().email("Invalid email address"),
   roleId: z.string().min(1, "Role is required"),
-  // Treat empty strings as undefined for optional fields, makes Zod validation cleaner
-  password: z.string().optional().transform(e => e === "" ? undefined : e),
+  password: z.preprocess(
+    (val) => (val === "" ? undefined : val), // Convert empty string to undefined before validation
+    z.string()
+      .min(8, "Password must be 8-12 characters long.")
+      .max(12, "Password must be 8-12 characters long.")
+      .refine(val => {
+        const categories = [
+          /[A-Z]/.test(val),      // Uppercase
+          /[a-z]/.test(val),      // Lowercase
+          /[0-9]/.test(val),      // Numbers
+          /[^A-Za-z0-9]/.test(val) // Symbols
+        ];
+        const satisfiedCategories = categories.filter(Boolean).length;
+        return satisfiedCategories >= 2;
+      }, {
+        message: "Password must contain at least two of: uppercase, lowercase, numbers, or symbols.",
+      })
+      .optional() // Makes the whole chain optional; required for new users is handled in onSubmit
+  ),
   confirmPassword: z.string().optional().transform(e => e === "" ? undefined : e),
 })
-.refine((data) => { // Ensure passwords match if a password is provided
-  return data.password === data.confirmPassword;
+.refine((data) => {
+  // Passwords must match if a password is provided
+  if (data.password || data.confirmPassword) {
+    return data.password === data.confirmPassword;
+  }
+  return true; // No password provided, so no mismatch
 }, {
   message: "Passwords do not match",
   path: ["confirmPassword"], 
-})
-.refine((data) => { // Ensure password length if a password is provided
-  if (data.password && data.password.length > 0) { // Check only if password is not empty
-    return data.password.length >= 8;
-  }
-  return true; // No password provided or empty string, so length rule doesn't apply here
-}, {
-  message: "Password must be at least 8 characters long.",
-  path: ["password"], 
 });
 
 
@@ -101,15 +113,14 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
   }, [isOpen, user, roles, form]);
 
   async function onSubmit(data: UserFormValues) {
-    // Password is required for new users - Zod schema handles length and match if provided.
-    if (!isEditing && (!data.password || data.password.length === 0)) {
+    if (!isEditing && !data.password) { // Password is required for new users
         form.setError("password", { type: "manual", message: "Password is required for new users." });
         toast({ title: "Password Required", description: "Password is required for new users.", variant: "destructive" });
         return;
     }
-    // Zod schema now handles:
+    // Zod schema handles:
     // 1. Password match (if confirmPassword is provided)
-    // 2. Password length (if password is provided and not empty)
+    // 2. Password length and complexity (if password is provided and not empty)
 
     const payload: Partial<User> & { password?: string } = {
       username: data.username,
@@ -117,7 +128,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
       roleId: data.roleId,
     };
 
-    if (data.password && data.password.length > 0) {
+    if (data.password) { // data.password will be undefined if empty string was transformed
       payload.password = data.password;
     }
 
@@ -126,6 +137,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         await updateUserAction(user.id, payload);
         toast({ title: "User Updated", description: `User ${data.username} has been successfully updated.` });
       } else {
+        // For create, password in payload is already handled if present
         await createUserAction(payload as Omit<User, "id" | "avatar" | "lastLogin"> & { password: string });
         toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
       }
@@ -221,7 +233,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
                     <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
                   </FormControl>
                   <FormDescription>
-                    Password must be at least 8 characters long.
+                    Password must be 8-12 characters long and include at least two of: uppercase letters, lowercase letters, numbers, and symbols.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
