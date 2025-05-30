@@ -19,6 +19,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -41,17 +42,26 @@ const userFormSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username too long"),
   email: z.string().email("Invalid email address"),
   roleId: z.string().min(1, "Role is required"),
-  password: z.string().optional(),
-  confirmPassword: z.string().optional(),
-}).refine((data) => {
-  if (data.password || data.confirmPassword) { // If either password field is touched
-    return data.password === data.confirmPassword;
-  }
-  return true; // No password change attempted or both are empty
+  // Treat empty strings as undefined for optional fields, makes Zod validation cleaner
+  password: z.string().optional().transform(e => e === "" ? undefined : e),
+  confirmPassword: z.string().optional().transform(e => e === "" ? undefined : e),
+})
+.refine((data) => { // Ensure passwords match if a password is provided
+  return data.password === data.confirmPassword;
 }, {
   message: "Passwords do not match",
-  path: ["confirmPassword"], // Error message will be displayed under confirmPassword field
+  path: ["confirmPassword"], 
+})
+.refine((data) => { // Ensure password length if a password is provided
+  if (data.password && data.password.length > 0) { // Check only if password is not empty
+    return data.password.length >= 8;
+  }
+  return true; // No password provided or empty string, so length rule doesn't apply here
+}, {
+  message: "Password must be at least 8 characters long.",
+  path: ["password"], 
 });
+
 
 type UserFormValues = z.infer<typeof userFormSchema>;
 
@@ -84,25 +94,22 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         username: user?.username || "",
         email: user?.email || "",
         roleId: user?.roleId || (roles.length > 0 ? roles[0].id : ""),
-        password: "", // Always reset password fields on open
+        password: "", 
         confirmPassword: "",
         });
     }
   }, [isOpen, user, roles, form]);
 
   async function onSubmit(data: UserFormValues) {
-    // Password validation
+    // Password is required for new users - Zod schema handles length and match if provided.
     if (!isEditing && (!data.password || data.password.length === 0)) {
         form.setError("password", { type: "manual", message: "Password is required for new users." });
         toast({ title: "Password Required", description: "Password is required for new users.", variant: "destructive" });
         return;
     }
-    if (data.password && data.password.length > 0 && data.password.length < 8) {
-        form.setError("password", { type: "manual", message: "Password must be at least 8 characters." });
-        toast({ title: "Password Too Short", description: "Password must be at least 8 characters.", variant: "destructive" });
-        return;
-    }
-    // The refine in Zod schema already handles password mismatch
+    // Zod schema now handles:
+    // 1. Password match (if confirmPassword is provided)
+    // 2. Password length (if password is provided and not empty)
 
     const payload: Partial<User> & { password?: string } = {
       username: data.username,
@@ -110,25 +117,20 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
       roleId: data.roleId,
     };
 
-    // Only include password in payload if it's provided (and thus, intended for change/set)
     if (data.password && data.password.length > 0) {
       payload.password = data.password;
     }
 
     try {
       if (isEditing && user) {
-        // For updateUserAction, payload might or might not have a password.
-        // The action itself handles if a password needs to be updated.
         await updateUserAction(user.id, payload);
         toast({ title: "User Updated", description: `User ${data.username} has been successfully updated.` });
       } else {
-        // For createUserAction, payload must include a password.
-        // The validation above ensures data.password is present and valid.
         await createUserAction(payload as Omit<User, "id" | "avatar" | "lastLogin"> & { password: string });
         toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
       }
       setIsOpen(false);
-      form.reset(); // Reset form to default values for next open
+      form.reset(); 
     } catch (error) {
       toast({
         title: "Error",
@@ -218,6 +220,9 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
                   <FormControl>
                     <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
                   </FormControl>
+                  <FormDescription>
+                    Password must be at least 8 characters long.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -229,7 +234,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Confirm new password" {...field} />
+                    <Input type="password" placeholder={isEditing && !form.getValues().password ? "Leave blank to keep current" : "Confirm new password"} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -251,3 +256,4 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
     </Sheet>
   );
 }
+
