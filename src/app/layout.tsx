@@ -1,8 +1,8 @@
-
 import type {Metadata} from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "next-themes";
 
 const inter = Inter({
   variable: '--font-inter',
@@ -21,13 +21,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <head>
-        {/* Next.js will inject metadata, CSS links, etc., here.
-            An explicitly empty <head /> tag is often safer for hydration. */}
-      </head>
+      <head />
       <body className="font-sans antialiased">
-        {children}
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

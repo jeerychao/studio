@@ -1,9 +1,7 @@
-
 "use server";
 
 import { revalidatePath } from "next/cache";
-// import { suggestSubnet, type SuggestSubnetInput } from "@/ai/flows/suggest-subnet"; // Removed: AI feature
-import type { Subnet, VLAN, IPAddress, User, Role, AuditLog, IPAddressStatus, RoleName, PermissionId, Permission } from "@/types"; // Removed AISuggestionResponse
+import type { Subnet, VLAN, IPAddress, User, Role, AuditLog, IPAddressStatus, RoleName, PermissionId, Permission } from "@/types";
 import { PERMISSIONS } from "@/types";
 import {
   mockSubnets,
@@ -21,19 +19,15 @@ import { parseAndValidateCIDR, getUsableIpCount, cidrToPrefix, doSubnetsOverlap,
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Mock function to get current user - in a real app, this would come from session/auth
-// For now, let's simulate having different users.
-// You can change this in your browser console for testing: `localStorage.setItem('mock_current_user_id_v3', 'user-id-here');` then refresh.
-// Default to admin_user if nothing is set.
-const getCurrentUser = async (): Promise<{ userId: string, username: string }> => {
-  // This is a server-side function, so direct localStorage access isn't typical.
-  // In a real scenario, this would involve async storage or session context.
-  // For this mock, we'll assume a default or a mechanism to simulate user context.
-  const adminUser = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
+// In a real app, current user would come from auth session on the server.
+// For this mock, we'll hardcode a default or use a mechanism to simulate.
+const getAuditUserInfo = async (): Promise<{ userId: string, username: string }> => {
+  // This is a simplified mock. In a real app, this would resolve the current user from session.
+  const adminUser = mockUsers.find(u => u.id === ADMIN_ROLE_ID); // Using admin role ID as an example of a fixed ID
   if (adminUser) {
     return { userId: adminUser.id, username: adminUser.username };
   }
-  return { userId: 'system-default', username: 'System' }; // Fallback
+  return { userId: 'system-default-id', username: 'System' }; // Fallback
 };
 
 
@@ -66,21 +60,13 @@ export async function createSubnetAction(data: {
   vlanId?: string;
   description?: string;
 }): Promise<Subnet> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const parsedCidr = parseAndValidateCIDR(data.cidr);
   if (!parsedCidr) {
-    throw new Error("Invalid CIDR notation provided. Please use format X.X.X.X/Y and ensure the IP is a valid network address for the prefix.");
+    throw new Error("Invalid CIDR notation provided. Please use format X.X.X.X/Y.");
   }
 
-  // Use the canonical network address from parsing for consistency
   const canonicalCidrToStore = `${parsedCidr.networkAddress}/${parsedCidr.prefix}`;
-
-  // Check if the user-provided CIDR's IP part matches the canonical network address.
-  // This check ensures consistency in how subnets are defined.
-  if (data.cidr !== canonicalCidrToStore && data.cidr.split('/')[0] !== parsedCidr.networkAddress) {
-    throw new Error(`The IP address part of your CIDR ('${data.cidr.split('/')[0]}') is not the canonical network address for /${parsedCidr.prefix}. Please use '${canonicalCidrToStore}' instead.`);
-  }
-
 
   const existingSubnetByCidr = mockSubnets.find(subnet => subnet.cidr === canonicalCidrToStore);
   if (existingSubnetByCidr) {
@@ -113,7 +99,7 @@ export async function createSubnetAction(data: {
 }
 
 export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, "id" | "utilization">> & { cidr?: string }): Promise<Subnet | null> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const index = mockSubnets.findIndex(s => s.id === id);
   if (index === -1) {
     throw new Error("Subnet not found for update.");
@@ -127,17 +113,12 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
   if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
     const newParsedCidrInfo = parseAndValidateCIDR(data.cidr);
     if (!newParsedCidrInfo) {
-      throw new Error("Invalid new CIDR notation provided.");
+      throw new Error("Invalid new CIDR notation provided for update.");
     }
     newCanonicalCidr = `${newParsedCidrInfo.networkAddress}/${newParsedCidrInfo.prefix}`;
 
-    if (data.cidr !== newCanonicalCidr && data.cidr.split('/')[0] !== newParsedCidrInfo.networkAddress) {
-        throw new Error(`The IP address part of your new CIDR ('${data.cidr.split('/')[0]}') is not the canonical network address for /${newParsedCidrInfo.prefix}. Please use '${newCanonicalCidr}' instead.`);
-    }
-
-
     const conflictingExistingSubnet = mockSubnets.find(existingSubnet => {
-        if (existingSubnet.id === id) return false; // Don't compare with itself
+        if (existingSubnet.id === id) return false; 
         const existingParsedCidr = parseAndValidateCIDR(existingSubnet.cidr);
         return existingParsedCidr && doSubnetsOverlap(newParsedCidrInfo, existingParsedCidr);
     });
@@ -145,16 +126,15 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
     if (conflictingExistingSubnet) {
         throw new Error(`The new subnet CIDR ${newCanonicalCidr} overlaps with existing subnet ${conflictingExistingSubnet.cidr}.`);
     }
-
-    // Handle IPs that might become out of range
+    
     const ipsHandledDetails: string[] = [];
     mockIPAddresses.forEach(ip => {
-      if (ip.subnetId === id && ip.status === 'allocated') { // Only consider allocated IPs from the current subnet
+      if (ip.subnetId === id && ip.status === 'allocated') { 
         if (!isIpInCidrRange(ip.ipAddress, newParsedCidrInfo)) {
           ipsHandledDetails.push(`${ip.ipAddress} (was status: ${ip.status}, allocatedTo: ${ip.allocatedTo || 'N/A'})`);
           ip.status = 'free';
           ip.allocatedTo = undefined;
-          ip.subnetId = undefined; // Disassociate from this subnet
+          ip.subnetId = undefined; 
         }
       }
     });
@@ -193,7 +173,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<Subnet, 
 }
 
 export async function deleteSubnetAction(id: string): Promise<{ success: boolean }> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const subnetToDelete = mockSubnets.find(s => s.id === id);
 
   mockIPAddresses.forEach(ip => {
@@ -230,7 +210,7 @@ export async function getVLANsAction(): Promise<VLAN[]> {
 }
 
 export async function createVLANAction(data: Omit<VLAN, "id" | "subnetCount">): Promise<VLAN> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const existingVLAN = mockVLANs.find(v => v.vlanNumber === data.vlanNumber);
   if (existingVLAN) {
     throw new Error(`VLAN ${data.vlanNumber} already exists.`);
@@ -243,7 +223,7 @@ export async function createVLANAction(data: Omit<VLAN, "id" | "subnetCount">): 
 }
 
 export async function updateVLANAction(id: string, data: Partial<Omit<VLAN, "id" | "subnetCount">>): Promise<VLAN | null> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const index = mockVLANs.findIndex(v => v.id === id);
   if (index === -1) return null;
 
@@ -263,7 +243,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<VLAN, "id"
 }
 
 export async function deleteVLANAction(id: string): Promise<{ success: boolean; message?: string }> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const vlanToDelete = mockVLANs.find(v => v.id === id);
   if (!vlanToDelete) {
     return { success: false, message: "VLAN not found." };
@@ -298,7 +278,7 @@ export async function getIPAddressesAction(subnetId?: string): Promise<IPAddress
 }
 
 export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promise<IPAddress> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) {
       throw new Error("Subnet ID is required to create an 'allocated' or 'reserved' IP address that is not in the global pool.");
   }
@@ -348,7 +328,7 @@ export async function createIPAddressAction(data: Omit<IPAddress, "id">): Promis
 }
 
 export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAddress, "id">>): Promise<IPAddress | null> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const index = mockIPAddresses.findIndex(ip => ip.id === id);
   if (index === -1) return null;
 
@@ -414,7 +394,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<IPAdd
 }
 
 export async function deleteIPAddressAction(id: string): Promise<{ success: boolean }> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const ipToDelete = mockIPAddresses.find(ip => ip.id === id);
   const ipIndex = mockIPAddresses.findIndex(ip => ip.id === id);
 
@@ -441,7 +421,7 @@ export async function getUsersAction(): Promise<User[]> {
 }
 
 export async function createUserAction(data: Omit<User, "id" | "avatar" | "lastLogin" | "roleName"> & { password?: string }): Promise<User> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const existingUserByEmail = mockUsers.find(u => u.email === data.email);
   if (existingUserByEmail) {
     throw new Error(`User with email ${data.email} already exists.`);
@@ -462,6 +442,7 @@ export async function createUserAction(data: Omit<User, "id" | "avatar" | "lastL
     avatar: `https://placehold.co/100x100.png?text=${data.username.substring(0,1).toUpperCase()}`,
     lastLogin: new Date().toISOString()
   };
+  // In a real app, password would be hashed here before saving
   mockUsers.push(newUser);
   serverMockAuditLogs.unshift({ id: generateId(), userId: auditUser.userId, username: auditUser.username, action: 'create_user', timestamp: new Date().toISOString(), details: `Created user ${newUser.username}${data.password ? ' (password set)' : ''}` });
   revalidatePath("/users");
@@ -470,7 +451,7 @@ export async function createUserAction(data: Omit<User, "id" | "avatar" | "lastL
 }
 
 export async function updateUserAction(id: string, data: Partial<Omit<User, "id" | "roleName">> & { password?: string }): Promise<User | null> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const index = mockUsers.findIndex(u => u.id === id);
   if (index === -1) return null;
 
@@ -493,6 +474,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<User, "id"
 
   const { password, ...userDataToUpdate } = data;
   mockUsers[index] = { ...mockUsers[index], ...userDataToUpdate };
+  // In a real app, if password is present, it would be hashed and updated here
 
   let auditDetails = `Updated user ${mockUsers[index].username}`;
   if (password && password.length > 0) {
@@ -505,7 +487,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<User, "id"
 }
 
 export async function deleteUserAction(id: string): Promise<{ success: boolean; message?: string }> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const userToDelete = mockUsers.find(u => u.id === id);
   if (!userToDelete) {
     return { success: false, message: "User not found."};
@@ -529,6 +511,44 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
   return { success: false, message: "User deletion failed." };
 }
 
+interface UpdateOwnPasswordPayload {
+  currentPassword?: string; // For mock, might not use for actual verification
+  newPassword?: string;
+}
+
+export async function updateOwnPasswordAction(userId: string, payload: UpdateOwnPasswordPayload): Promise<{ success: boolean; message?: string }> {
+  const auditUser = await getAuditUserInfo(); // Or get specific user triggering this
+  const userIndex = mockUsers.findIndex(u => u.id === userId);
+
+  if (userIndex === -1) {
+    return { success: false, message: "User not found." };
+  }
+
+  // Mock password verification: In a real app, you'd verify payload.currentPassword against a stored hash.
+  // For this mock, we'll assume currentPassword is valid if provided (or ignore it for simplicity).
+  if (!payload.newPassword) {
+      return { success: false, message: "New password cannot be empty."};
+  }
+
+  // Zod validation for newPassword complexity should be handled by the form calling this action.
+  // Here, we just simulate the update.
+
+  // "Update" password (in a real app, hash and save payload.newPassword)
+  // For mock, we just log it.
+  serverMockAuditLogs.unshift({
+    id: generateId(),
+    userId: userId, // The user whose password is changed
+    username: mockUsers[userIndex].username,
+    action: 'update_own_password',
+    timestamp: new Date().toISOString(),
+    details: `User ${mockUsers[userIndex].username} changed their password.`
+  });
+
+  revalidatePath("/settings"); // Or wherever user profile settings are
+  return { success: true, message: "Password updated successfully." };
+}
+
+
 // --- Role Actions ---
 export async function getRolesAction(): Promise<Role[]> {
   return mockRoles.map(role => ({
@@ -542,7 +562,7 @@ export async function createRoleAction(data: Omit<Role, "id" | "userCount" | "pe
 }
 
 export async function updateRoleAction(id: string, data: Partial<Omit<Role, "id" | "userCount" | "name">> & {permissions?: PermissionId[]} ): Promise<Role | null> {
-  const auditUser = await getCurrentUser();
+  const auditUser = await getAuditUserInfo();
   const index = mockRoles.findIndex(r => r.id === id);
   if (index === -1) return null;
 
@@ -569,16 +589,13 @@ export async function updateRoleAction(id: string, data: Partial<Omit<Role, "id"
     details: `Updated role ${mockRoles[index].name}. Description: ${data.description !== undefined ? 'changed' : 'unchanged'}. Permissions: ${data.permissions !== undefined ? 'changed' : 'unchanged'}.`
   });
   revalidatePath("/roles");
-  revalidatePath("/users");
+  revalidatePath("/users"); // User permissions might change if their role's permissions changed
   return mockRoles[index];
 }
 
 export async function deleteRoleAction(id: string): Promise<{ success: boolean; message?: string }>{
   throw new Error("Deleting fixed roles (Administrator, Operator, Viewer) is not allowed.");
 }
-
-// --- AI Subnet Suggestion Action ---
-// Removed suggestSubnetAIAction
 
 // --- Audit Log Actions ---
 export async function getAuditLogsAction(): Promise<AuditLog[]> {
@@ -596,3 +613,4 @@ export async function getAuditLogsAction(): Promise<AuditLog[]> {
 export async function getAllPermissionsAction(): Promise<Permission[]> {
     return mockPermissions;
 }
+
