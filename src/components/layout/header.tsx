@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, Search, Bell, UserCircle, Network } from "lucide-react"; // Added Network for mobile drawer
+import { Menu, Search, Bell, UserCircle, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,11 +13,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { SidebarNav } from "./sidebar-nav"; // For mobile drawer
-import { useSidebar } from "@/components/ui/sidebar"; // To control main sidebar toggle
+import { SidebarNav } from "./sidebar-nav";
+import { useSidebar } from "@/components/ui/sidebar";
+import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user"; // Import the key
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+      window.location.reload();
+    }
+  };
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -86,9 +94,8 @@ export function Header() {
             <DropdownMenuItem asChild>
               <Link href="/settings">Settings</Link>
             </DropdownMenuItem>
-            {/* Support DropdownMenuItem removed */}
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

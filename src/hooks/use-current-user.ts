@@ -11,7 +11,7 @@ export interface CurrentUserContextValue extends User {
   permissions: PermissionId[];
 }
 
-const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3';
+export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3'; // Export the key
 
 const adminUser = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
 const operatorUser = mockUsers.find(u => u.roleId === OPERATOR_ROLE_ID);
@@ -25,13 +25,22 @@ export function useCurrentUser(): CurrentUserContextValue {
   const [currentUserId, setCurrentUserId] = React.useState<string | undefined>(
     SERVER_AND_INITIAL_CLIENT_USER_ID
   );
+  const [isClient, setIsClient] = React.useState(false);
+
 
   // This effect runs only on the client, after the initial render.
   React.useEffect(() => {
+    setIsClient(true); // Indicate that we are now on the client
     const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
-    // If localStorage has a value and it's different from the current state, update.
-    if (storedUserId && storedUserId !== currentUserId) {
+    
+    if (storedUserId) {
       setCurrentUserId(storedUserId);
+    } else {
+      // If nothing in localStorage, set it to the default (admin) for next time
+      if (SERVER_AND_INITIAL_CLIENT_USER_ID) {
+        localStorage.setItem(MOCK_USER_STORAGE_KEY, SERVER_AND_INITIAL_CLIENT_USER_ID);
+        setCurrentUserId(SERVER_AND_INITIAL_CLIENT_USER_ID);
+      }
     }
 
     // Setup developer console tools
@@ -39,7 +48,6 @@ export function useCurrentUser(): CurrentUserContextValue {
       const userExists = mockUsers.find(u => u.id === userId);
       if (userExists) {
         localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-        // Reloading will cause useEffect to pick up the new localStorage value
         window.location.reload();
       } else {
         console.error(`User with ID ${userId} not found in mockUsers. Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
@@ -52,25 +60,24 @@ export function useCurrentUser(): CurrentUserContextValue {
             console.error("No mock users found for cycling.");
             return;
         }
-        // Determine current user from localStorage for cycling logic, default to initial if not found
-        const currentCycleIdInStorage = localStorage.getItem(MOCK_USER_STORAGE_KEY) || SERVER_AND_INITIAL_CLIENT_USER_ID;
-        const currentIndex = rolesCycle.indexOf(currentCycleIdInStorage || rolesCycle[0]);
+        
+        const currentCycleIdInStorage = localStorage.getItem(MOCK_USER_STORAGE_KEY) || SERVER_AND_INITIAL_CLIENT_USER_ID || rolesCycle[0];
+        const currentIndex = rolesCycle.indexOf(currentCycleIdInStorage);
         const nextUserId = rolesCycle[(currentIndex + 1) % rolesCycle.length];
         
         localStorage.setItem(MOCK_USER_STORAGE_KEY, nextUserId);
         window.location.reload();
     };
-  }, []); // Empty dependency array ensures this runs once on client mount.
-            // currentUserId was removed from deps to avoid potential loops if dev tools were called weirdly.
-            // The primary goal is to sync from localStorage ONCE on mount.
+  }, []); 
 
-  const userDataToUse = mockUsers.find(u => u.id === currentUserId);
+  // During server render or initial client render (before useEffect runs), use the default.
+  // Once isClient is true, use currentUserId (which might have been updated from localStorage).
+  const userIdToLookup = isClient ? currentUserId : SERVER_AND_INITIAL_CLIENT_USER_ID;
+  const userDataToUse = mockUsers.find(u => u.id === userIdToLookup);
 
   if (!userDataToUse) {
     const fallbackUser = adminUser || mockUsers[0]; 
     if (!fallbackUser) {
-        // This should ideally not be reached if adminUser always exists.
-        // Return a "guest" or minimal permission state.
         const guestRole = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
         return { 
             id: 'guest-fallback', username: 'Guest', email: '', roleId: guestRole?.id || VIEWER_ROLE_ID,
@@ -80,8 +87,7 @@ export function useCurrentUser(): CurrentUserContextValue {
     
     const fallbackRole = mockRoles.find(r => r.id === fallbackUser.roleId);
     if(!fallbackRole) throw new Error("Fallback user has no valid role.");
-
-    // console.warn(`Current user ID (${currentUserId}) not found or not yet resolved from client storage, falling back to admin user for hook.`);
+    
     return { ...fallbackUser, roleName: fallbackRole.name, permissions: fallbackRole.permissions };
   }
 
