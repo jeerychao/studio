@@ -35,15 +35,15 @@ import {
 } from "@/components/ui/select";
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types"; // Added VLAN
-import { createIPAddressAction, updateIPAddressAction, getVLANsAction } from "@/lib/actions"; // Added getVLANsAction
+import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types";
+import { createIPAddressAction, updateIPAddressAction } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
   subnetId: z.string().optional(),
-  vlanId: z.string().optional(), // Added vlanId
+  vlanId: z.string().optional(),
   status: z.enum(ipAddressStatusOptions, { required_error: "Status is required"}),
   allocatedTo: z.string().max(100, "Allocated To too long").optional(),
   description: z.string().max(200, "Description too long").optional(),
@@ -54,7 +54,7 @@ type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
 interface IPAddressFormSheetProps {
   ipAddress?: IPAddress;
   subnets: Subnet[];
-  vlans: VLAN[]; // Added vlans prop
+  vlans: VLAN[];
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
@@ -74,7 +74,7 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
     defaultValues: {
       ipAddress: ipAddress?.ipAddress || "",
       subnetId: ipAddress?.subnetId || currentSubnetId || "",
-      vlanId: ipAddress?.vlanId || "", // Initialize vlanId
+      vlanId: ipAddress?.vlanId || "",
       status: ipAddress?.status || "free",
       allocatedTo: ipAddress?.allocatedTo || "",
       description: ipAddress?.description || "",
@@ -86,7 +86,7 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
             subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""),
-            vlanId: ipAddress?.vlanId || "", // Reset vlanId
+            vlanId: ipAddress?.vlanId || "", 
             status: ipAddress?.status || "free",
             allocatedTo: ipAddress?.allocatedTo || "",
             description: ipAddress?.description || "",
@@ -96,14 +96,17 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
 
   async function onSubmit(data: IPAddressFormValues) {
     try {
-      if (!data.subnetId && (data.status !== 'free' || (!isEditing && currentSubnetId))) {
-        toast({ title: "Subnet Required", description: "A subnet must be selected unless the IP is 'free' and not being added to a specific subnet.", variant: "destructive"});
+      const isAddingToSpecificSubnet = !isEditing && currentSubnetId;
+      const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
+
+      if (!effectiveSubnetId && (data.status !== 'free' || isAddingToSpecificSubnet)) {
+        toast({ title: "Subnet Required", description: "A subnet must be selected unless the IP is 'free' and not being added to a specific subnet context.", variant: "destructive"});
         return;
       }
 
       const payload = {
         ...data,
-        subnetId: data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined),
+        subnetId: effectiveSubnetId,
         vlanId: data.vlanId === INHERIT_VLAN_SENTINEL ? undefined : (data.vlanId || undefined),
       };
 
@@ -111,10 +114,6 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
         await updateIPAddressAction(ipAddress.id, payload);
         toast({ title: "IP Address Updated", description: `IP ${data.ipAddress} has been successfully updated.` });
       } else {
-        if (!payload.subnetId && (payload.status === 'allocated' || payload.status === 'reserved')) {
-             toast({ title: "Subnet Required", description: "Please select a subnet to create an allocated or reserved IP address.", variant: "destructive"});
-             return;
-        }
         await createIPAddressAction(payload as Omit<IPAddress, "id">);
         toast({ title: "IP Address Created", description: `IP ${data.ipAddress} has been successfully created.` });
       }
@@ -287,3 +286,5 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
     </Sheet>
   );
 }
+
+    
