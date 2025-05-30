@@ -43,7 +43,7 @@ const roleFormSchema = z.object({
 type RoleFormValues = z.infer<typeof roleFormSchema>;
 
 interface RoleFormSheetProps {
-  role: Role; 
+  role: Role;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
@@ -51,48 +51,55 @@ interface RoleFormSheetProps {
 export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
-  const isEditing = true; 
+  const isEditing = true;
 
   const [allPermissions, setAllPermissions] = React.useState<Permission[]>([]);
-  const [isLoadingPermissions, setIsLoadingPermissions] = React.useState(true);
+  const [isLoadingPermissions, setIsLoadingPermissions] = React.useState(false);
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
+    // Default values will be set in useEffect
     defaultValues: {
-      name: role?.name || "",
-      description: role?.description || "",
-      permissions: role?.permissions || [],
+      name: "",
+      description: "",
+      permissions: [],
     },
   });
-  
+
+  // Effect to fetch all available system permissions
+  React.useEffect(() => {
+    if (isOpen && allPermissions.length === 0) { // Only fetch if sheet is open and permissions aren't loaded
+      setIsLoadingPermissions(true);
+      getAllPermissionsAction()
+        .then((fetchedPermissions) => {
+          setAllPermissions(fetchedPermissions);
+        })
+        .catch((error) => {
+          toast({ title: "Error fetching permissions", description: (error as Error).message, variant: "destructive" });
+        })
+        .finally(() => {
+          setIsLoadingPermissions(false);
+        });
+    }
+  }, [isOpen, allPermissions.length, toast]);
+
+  // Effect to reset form fields when the sheet opens or the specific role prop changes
   React.useEffect(() => {
     if (isOpen) {
-        form.reset({
-            name: role.name, 
-            description: role.description || "",
-            permissions: role.permissions || [],
-        });
-        
-        async function fetchPermissions() {
-            setIsLoadingPermissions(true);
-            try {
-                const fetchedPermissions = await getAllPermissionsAction();
-                setAllPermissions(fetchedPermissions);
-            } catch (error) {
-                toast({ title: "Error fetching permissions", description: (error as Error).message, variant: "destructive" });
-            } finally {
-                setIsLoadingPermissions(false);
-            }
-        }
-        fetchPermissions();
+      form.reset({
+        name: role.name,
+        description: role.description || "",
+        permissions: role.permissions || [], // These are the *role's current* permissions
+      });
     }
-  }, [isOpen, role, form, toast]);
+  }, [isOpen, role.id, role.name, role.description, role.permissions, form]);
+
 
   async function onSubmit(data: RoleFormValues) {
     try {
-      await updateRoleAction(role.id, { 
+      await updateRoleAction(role.id, {
         description: data.description,
-        permissions: data.permissions as PermissionId[], // Cast as PermissionId[]
+        permissions: data.permissions as PermissionId[],
       });
       toast({ title: "Role Updated", description: `Permissions and description for role ${role.name} have been successfully updated.` });
       setIsOpen(false);
@@ -162,7 +169,7 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
             <FormItem className="flex-grow flex flex-col min-h-0">
                 <FormLabel>Permissions</FormLabel>
                 <FormDescription>Select the permissions this role should have.</FormDescription>
-                {isLoadingPermissions ? (
+                {isLoadingPermissions && allPermissions.length === 0 ? (
                     <p>Loading permissions...</p>
                 ) : (
                 <ScrollArea className="flex-grow border rounded-md p-4 mt-2">
@@ -223,7 +230,7 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
                   Cancel
                 </Button>
               </SheetClose>
-              <Button type="submit" disabled={form.formState.isSubmitting || isLoadingPermissions}>
+              <Button type="submit" disabled={form.formState.isSubmitting || (isLoadingPermissions && allPermissions.length === 0) }>
                 {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
             </SheetFooter>
