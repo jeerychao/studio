@@ -41,8 +41,16 @@ const userFormSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username too long"),
   email: z.string().email("Invalid email address"),
   roleId: z.string().min(1, "Role is required"),
-  // Password field would be here in a real app, likely with confirmation
-  // For this example, we'll omit password handling for simplicity
+  password: z.string().optional(),
+  confirmPassword: z.string().optional(),
+}).refine((data) => {
+  if (data.password || data.confirmPassword) { // If either password field is touched
+    return data.password === data.confirmPassword;
+  }
+  return true; // No password change attempted or both are empty
+}, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"], // Error message will be displayed under confirmPassword field
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
@@ -65,6 +73,8 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
       username: user?.username || "",
       email: user?.email || "",
       roleId: user?.roleId || "",
+      password: "",
+      confirmPassword: "",
     },
   });
 
@@ -74,21 +84,51 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         username: user?.username || "",
         email: user?.email || "",
         roleId: user?.roleId || (roles.length > 0 ? roles[0].id : ""),
+        password: "", // Always reset password fields on open
+        confirmPassword: "",
         });
     }
   }, [isOpen, user, roles, form]);
 
   async function onSubmit(data: UserFormValues) {
+    // Password validation
+    if (!isEditing && (!data.password || data.password.length === 0)) {
+        form.setError("password", { type: "manual", message: "Password is required for new users." });
+        toast({ title: "Password Required", description: "Password is required for new users.", variant: "destructive" });
+        return;
+    }
+    if (data.password && data.password.length > 0 && data.password.length < 8) {
+        form.setError("password", { type: "manual", message: "Password must be at least 8 characters." });
+        toast({ title: "Password Too Short", description: "Password must be at least 8 characters.", variant: "destructive" });
+        return;
+    }
+    // The refine in Zod schema already handles password mismatch
+
+    const payload: Partial<User> & { password?: string } = {
+      username: data.username,
+      email: data.email,
+      roleId: data.roleId,
+    };
+
+    // Only include password in payload if it's provided (and thus, intended for change/set)
+    if (data.password && data.password.length > 0) {
+      payload.password = data.password;
+    }
+
     try {
       if (isEditing && user) {
-        await updateUserAction(user.id, data);
+        // For updateUserAction, payload might or might not have a password.
+        // The action itself handles if a password needs to be updated.
+        await updateUserAction(user.id, payload);
         toast({ title: "User Updated", description: `User ${data.username} has been successfully updated.` });
       } else {
-        await createUserAction(data);
+        // For createUserAction, payload must include a password.
+        // The validation above ensures data.password is present and valid.
+        await createUserAction(payload as Omit<User, "id" | "avatar" | "lastLogin"> & { password: string });
         toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
       }
       setIsOpen(false);
-      form.reset();
+      form.reset(); // Reset form to default values for next open
     } catch (error) {
       toast({
         title: "Error",
@@ -114,7 +154,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit User" : "Add New User"}</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the user's details." : "Fill in the details for the new user."}
+            {isEditing ? "Update the user's details. Leave password fields blank to keep current password." : "Fill in the details for the new user."}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -169,7 +209,32 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
                 </FormItem>
               )}
             />
-            {/* Add password fields here if implementing full auth */}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{isEditing ? "New Password (Optional)" : "Password"}</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="Confirm new password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
