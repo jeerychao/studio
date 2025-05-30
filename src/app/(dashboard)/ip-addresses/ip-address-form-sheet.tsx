@@ -44,7 +44,7 @@ const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
   subnetId: z.string().optional(),
   vlanId: z.string().optional(), // This will store the actual vlanId or "" for "Inherit"
-  status: z.enum(ipAddressStatusOptions, { required_error: "Status is required"}),
+  status: z.enum(["allocated", "free", "reserved"], { required_error: "Status is required"}), // Changed this line
   allocatedTo: z.string().max(100, "Allocated To too long").optional(),
   description: z.string().max(200, "Description too long").optional(),
 });
