@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from 'react';
 import { Globe, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,15 +19,37 @@ import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/h
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from 'next/navigation';
 
+function LoadingIPAddresses() {
+  return (
+    <>
+      <PageHeader
+        title="IP Address Management"
+        description="Loading..."
+        icon={Globe}
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle>IP Address List</CardTitle>
+          <CardDescription>Fetching IP addresses...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-10">
+            <p className="text-muted-foreground">Loading data...</p>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
 
-export default function IPAddressesPage() { 
-  const searchParams = useSearchParams(); 
+function IPAddressesView() {
+  const searchParams = useSearchParams();
   const selectedSubnetId = searchParams.get("subnetId") || undefined;
 
   const [ipAddresses, setIpAddresses] = React.useState<IPAddress[]>([]);
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
-  
+
   const currentUser = useCurrentUser();
   const { toast } = useToast();
 
@@ -69,14 +92,14 @@ export default function IPAddressesPage() {
 
   const getVlanDisplayForIp = (ip: IPAddress): string => {
     let vlanToDisplay: VLAN | undefined;
-    if (ip.vlanId) { 
+    if (ip.vlanId) {
       vlanToDisplay = vlans.find(v => v.id === ip.vlanId);
-    } else if (ip.subnetId) { 
+    } else if (ip.subnetId) {
       const subnet = subnets.find(s => s.id === ip.subnetId);
       if (subnet?.vlanId) {
         vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
       } else if (subnet) {
-        return "No VLAN (Subnet)"; 
+        return "No VLAN (Subnet)";
       }
     }
     return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "N/A";
@@ -96,7 +119,7 @@ export default function IPAddressesPage() {
     <>
       <PageHeader
         title="IP Address Management"
-        description={`Manage IP addresses. Currently viewing: ${currentSubnetName}`}
+        description={`Manage IP addresses. Currently viewing: ${currentSubnetName || 'All Subnets'}`}
         icon={Globe}
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
@@ -182,5 +205,13 @@ export default function IPAddressesPage() {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+export default function IPAddressesPage() {
+  return (
+    <Suspense fallback={<LoadingIPAddresses />}>
+      <IPAddressesView />
+    </Suspense>
   );
 }
