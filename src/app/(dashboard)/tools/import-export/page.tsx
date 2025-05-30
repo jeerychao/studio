@@ -10,11 +10,19 @@ import { Label } from "@/components/ui/label";
 import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; 
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { PERMISSIONS } from "@/types";
 
 export default function ImportExportPage() {
   const [importFile, setImportFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
   const { toast } = useToast();
+  const currentUser = useCurrentUser();
+
+  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT);
+  const canImport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT);
+  const canExport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT);
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -34,6 +42,10 @@ export default function ImportExportPage() {
   };
 
   const handleImport = async () => {
+    if (!canImport) {
+        toast({ title: "Permission Denied", description: "You do not have permission to import data.", variant: "destructive" });
+        return;
+    }
     if (!importFile) {
       toast({ title: "No File Selected", description: "Please select a file to import.", variant: "destructive" });
       return;
@@ -55,6 +67,10 @@ export default function ImportExportPage() {
   };
 
   const handleExport = (dataType: "subnets" | "vlans" | "ips") => {
+    if (!canExport) {
+        toast({ title: "Permission Denied", description: "You do not have permission to export data.", variant: "destructive" });
+        return;
+    }
     let dataToExport: any[] = [];
     let filename = `${dataType}_export.csv`;
     let csvContent = "";
@@ -67,7 +83,6 @@ export default function ImportExportPage() {
       return csv;
     };
 
-    // Note: Using mock data directly. A real export would fetch fresh data via actions.
     if (dataType === "subnets") {
       dataToExport = mockSubnets; 
       csvContent = convertToCSV(dataToExport, ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "description", "utilization"]);
@@ -100,6 +115,15 @@ export default function ImportExportPage() {
     }
   };
 
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Wrench className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view Import/Export tools.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -117,12 +141,13 @@ export default function ImportExportPage() {
           <CardContent className="space-y-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
               <Label htmlFor="import-file-input">Select File (.xlsx, .csv)</Label>
-              <Input id="import-file-input" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" />
+              <Input id="import-file-input" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" disabled={!canImport} />
             </div>
             {importFile && <p className="text-sm text-muted-foreground">Selected file: {importFile.name}</p>}
-            <Button onClick={handleImport} disabled={!importFile || isImporting} className="w-full">
+            <Button onClick={handleImport} disabled={!importFile || isImporting || !canImport} className="w-full">
               {isImporting ? "Importing..." : <><FileUp className="mr-2 h-4 w-4" /> Process Import</>}
             </Button>
+            {!canImport && <p className="text-xs text-destructive">You do not have permission to import data.</p>}
             <p className="text-xs text-muted-foreground">
               Note: Ensure columns match the expected schema. First row should be headers. 
               Refer to documentation for template. All column data will be validated.
@@ -138,19 +163,20 @@ export default function ImportExportPage() {
           <CardContent className="space-y-4">
             <p className="text-sm">Select data type to export:</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Button variant="outline" onClick={() => handleExport("subnets")} className="w-full">
+                <Button variant="outline" onClick={() => handleExport("subnets")} className="w-full" disabled={!canExport}>
                 <FileDown className="mr-2 h-4 w-4" /> Export Subnets
                 </Button>
-                <Button variant="outline" onClick={() => handleExport("vlans")} className="w-full">
+                <Button variant="outline" onClick={() => handleExport("vlans")} className="w-full" disabled={!canExport}>
                 <FileDown className="mr-2 h-4 w-4" /> Export VLANs
                 </Button>
-                <Button variant="outline" onClick={() => handleExport("ips")} className="w-full">
+                <Button variant="outline" onClick={() => handleExport("ips")} className="w-full" disabled={!canExport}>
                 <FileDown className="mr-2 h-4 w-4" /> Export IP Addresses
                 </Button>
-                 <Button variant="outline" onClick={() => toast({title: "Coming Soon", description:"Full system backup export is planned."})} className="w-full sm:col-span-2">
+                 <Button variant="outline" onClick={() => toast({title: "Coming Soon", description:"Full system backup export is planned."})} className="w-full sm:col-span-2" disabled={!canExport}>
                 <FileDown className="mr-2 h-4 w-4" /> Export All Data (Backup)
                 </Button>
             </div>
+            {!canExport && <p className="text-xs text-destructive mt-2">You do not have permission to export data.</p>}
           </CardContent>
         </Card>
       </div>

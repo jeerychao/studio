@@ -14,7 +14,7 @@ import {
   FileUp,
   BrainCircuit,
   Settings2,
-  ListChecks // Used for Audit Logs, Settings2 was a placeholder before
+  ListChecks 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -24,88 +24,97 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import * as React from "react";
-import { useCurrentUser, canManageUsers, canManageSettings } from "@/hooks/use-current-user";
-import type { RoleName } from "@/types";
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import type { PermissionId } from "@/types";
+import { PERMISSIONS } from "@/types";
 
 
 interface NavItemConfig {
   href: string;
   label: string;
   icon: React.ElementType;
+  requiredPermission?: PermissionId; // Permission needed to see this top-level item or group
   subItems?: NavItemConfig[];
-  requiredRoles?: RoleName[]; // Roles that can see this item
 }
 
 const navItemConfigs: NavItemConfig[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, requiredRoles: ['Administrator', 'Operator', 'Viewer'] },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, requiredPermission: PERMISSIONS.VIEW_DASHBOARD },
   {
-    href: "/ip-management", 
+    href: "/ip-management", // Dummy href for group, not directly navigable
     label: "IP Management",
     icon: Network,
-    requiredRoles: ['Administrator', 'Operator', 'Viewer'],
+    requiredPermission: PERMISSIONS.VIEW_SUBNET, // Or a more generic VIEW_IP_MANAGEMENT if defined
     subItems: [
-      { href: "/subnets", label: "Subnets", icon: Network, requiredRoles: ['Administrator', 'Operator', 'Viewer'] },
-      { href: "/vlans", label: "VLANs", icon: Cable, requiredRoles: ['Administrator', 'Operator', 'Viewer'] },
-      { href: "/ip-addresses", label: "IP Addresses", icon: Globe, requiredRoles: ['Administrator', 'Operator', 'Viewer'] },
+      { href: "/subnets", label: "Subnets", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
+      { href: "/vlans", label: "VLANs", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
+      { href: "/ip-addresses", label: "IP Addresses", icon: Globe, requiredPermission: PERMISSIONS.VIEW_IPADDRESS },
     ],
   },
   {
-    href: "/user-management", 
+    href: "/user-management", // Dummy href for group
     label: "User Management",
     icon: Users,
-    requiredRoles: ['Administrator'],
+    requiredPermission: PERMISSIONS.VIEW_USER, // Or VIEW_ROLE
     subItems: [
-      { href: "/users", label: "Users", icon: Users, requiredRoles: ['Administrator'] },
-      { href: "/roles", label: "Roles", icon: ShieldCheck, requiredRoles: ['Administrator'] },
+      { href: "/users", label: "Users", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
+      { href: "/roles", label: "Roles", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
     ],
   },
   {
-    href: "/tools", 
+    href: "/tools", // Dummy href for group
     label: "Tools",
     icon: Wrench,
-    requiredRoles: ['Administrator'],
+    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, // Or a general VIEW_TOOLS
     subItems: [
-      { href: "/tools/import-export", label: "Import/Export", icon: FileUp, requiredRoles: ['Administrator'] },
-      { href: "/tools/subnet-suggestion", label: "AI Subnet Suggestion", icon: BrainCircuit, requiredRoles: ['Administrator'] },
+      { href: "/tools/import-export", label: "Import/Export", icon: FileUp, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
+      { href: "/tools/subnet-suggestion", label: "AI Subnet Suggestion", icon: BrainCircuit, requiredPermission: PERMISSIONS.VIEW_TOOLS_SUBNET_SUGGESTION },
     ],
   },
-  { href: "/audit-logs", label: "Audit Logs", icon: ListChecks, requiredRoles: ['Administrator'] },
+  { href: "/audit-logs", label: "Audit Logs", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const currentUser = useCurrentUser();
-  const userRole = currentUser.roleName;
 
-  const filterNavItemsByRole = (items: NavItemConfig[], role: RoleName): NavItemConfig[] => {
+  const filterNavItemsByPermission = (items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
+    if (!user) return [];
     return items.filter(item => {
-      // If no specific roles are required, or the user's role is included, show the item.
-      const hasAccess = !item.requiredRoles || item.requiredRoles.includes(role);
+      const hasAccess = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true; // Default to true if no permission specified (should not happen for main items)
+      
       if (hasAccess && item.subItems) {
-        item.subItems = filterNavItemsByRole(item.subItems, role);
-        // If all sub-items are filtered out for this role, don't show the parent if it's just a container
-        if (item.href.includes("-management") || item.href.includes("/tools")) { // Heuristic for group items
-             return item.subItems.length > 0;
+        item.subItems = filterNavItemsByPermission(item.subItems, user);
+        // If it's a group item and all its subItems are filtered out, don't show the group.
+        if ((item.href.includes("-management") || item.href.includes("/tools") || item.href === "/ip-management") && item.subItems.length === 0) {
+             return false;
         }
       }
       return hasAccess;
-    }).map(item => ({ // Ensure subItems are correctly processed
-        ...item,
-        subItems: item.subItems ? filterNavItemsByRole(item.subItems, userRole) : undefined
-    })).filter(item => { // Final filter to remove empty parent groups
-        if ( (item.href.includes("-management") || item.href.includes("/tools")) && (!item.subItems || item.subItems.length === 0) ) {
-            return false;
-        }
-        return true;
     });
   };
   
-  const accessibleNavItems = React.useMemo(() => filterNavItemsByRole(navItemConfigs, userRole), [userRole]);
+  const accessibleNavItems = React.useMemo(() => filterNavItemsByPermission(navItemConfigs, currentUser), [currentUser]);
 
   const [openAccordion, setOpenAccordion] = React.useState<string[]>(() => {
     const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     return activeParent ? [activeParent.href] : [];
   });
+
+  React.useEffect(() => {
+    // Update open accordion state if path changes and belongs to a different parent
+    const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
+    if (activeParent && !openAccordion.includes(activeParent.href)) {
+        // Heuristic: if only one group should be open at a time, replace instead of add
+        // setOpenAccordion([activeParent.href]); 
+        // For multiple open accordions:
+        setOpenAccordion(prev => {
+            if (prev.includes(activeParent.href)) return prev;
+            // If you want only one accordion open, uncomment the line above this useEffect and remove this logic
+            return [...prev.filter(g => !navItemConfigs.find(i => i.href === g && i.subItems)), activeParent.href];
+        });
+    }
+  }, [pathname, accessibleNavItems, openAccordion]);
+
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
     const Icon = item.icon;
@@ -124,7 +133,9 @@ export function SidebarNav() {
             className={cn(
               linkClass,
               "justify-between hover:no-underline",
-              openAccordion.includes(item.href) && !item.subItems.some(sub => pathname.startsWith(sub.href)) && !isActive ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
+              // Ensure consistent active styling for accordion trigger
+               openAccordion.includes(item.href) && (isActive || item.subItems.some(sub => pathname.startsWith(sub.href))) ? "bg-sidebar-primary text-sidebar-primary-foreground" : 
+               (openAccordion.includes(item.href) ? "text-sidebar-primary-foreground bg-sidebar-accent" : "")
             )}
           >
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
@@ -153,7 +164,7 @@ export function SidebarNav() {
   };
 
   if (!currentUser) {
-    return null; // Or a loading state
+    return null; 
   }
 
   return (

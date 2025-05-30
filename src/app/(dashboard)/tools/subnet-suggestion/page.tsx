@@ -13,9 +13,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { BrainCircuit, Lightbulb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { suggestSubnetAIAction } from "@/lib/actions";
-import type { AISuggestionResponse } from "@/types"; // ExistingSubnetInput removed, direct string for AI
+import type { AISuggestionResponse, PermissionId } from "@/types"; 
+import { PERMISSIONS } from "@/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 
 const subnetSuggestionFormSchema = z.object({
   existingSubnetsText: z.string().min(1, "Existing subnets information is required.")
@@ -23,8 +25,6 @@ const subnetSuggestionFormSchema = z.object({
       try {
         const parsed = JSON.parse(data);
         if (!Array.isArray(parsed)) return false;
-        // Ensure structure matches what the AI flow expects (as a string)
-        // This basic check is sufficient, AI prompt handles more detail.
         return parsed.every(item => 
           typeof item.networkAddress === 'string' &&
           typeof item.utilization === 'number'
@@ -42,6 +42,10 @@ export default function SubnetSuggestionPage() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<AISuggestionResponse | null>(null);
   const { toast } = useToast();
+  const currentUser = useCurrentUser();
+
+  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_SUBNET_SUGGESTION);
+  const canUse = hasPermission(currentUser, PERMISSIONS.USE_TOOLS_SUBNET_SUGGESTION);
 
   const form = useForm<SubnetSuggestionFormValues>({
     resolver: zodResolver(subnetSuggestionFormSchema),
@@ -52,11 +56,15 @@ export default function SubnetSuggestionPage() {
   });
 
   async function onSubmit(data: SubnetSuggestionFormValues) {
+    if (!canUse) {
+        toast({ title: "Permission Denied", description: "You do not have permission to use this tool.", variant: "destructive" });
+        return;
+    }
     setIsLoading(true);
     setSuggestion(null);
     try {
       const result = await suggestSubnetAIAction({
-        existingSubnets: data.existingSubnetsText, // Pass the string directly as per AI flow
+        existingSubnets: data.existingSubnetsText, 
         newSegmentDescription: data.newSegmentDescription,
       });
       setSuggestion(result);
@@ -70,6 +78,16 @@ export default function SubnetSuggestionPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+  
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <BrainCircuit className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view AI Subnet Suggestion tool.</p>
+      </div>
+    );
   }
 
   return (
@@ -99,6 +117,7 @@ export default function SubnetSuggestionPage() {
                           placeholder='[{"networkAddress": "192.168.0.0/24", "utilization": 70}, ...]'
                           className="min-h-[150px] font-mono text-sm"
                           {...field}
+                          disabled={!canUse}
                         />
                       </FormControl>
                       <ShadFormDescription>
@@ -119,6 +138,7 @@ export default function SubnetSuggestionPage() {
                           placeholder="Describe the purpose, number of devices, growth expectations, etc."
                           className="min-h-[100px]"
                           {...field}
+                          disabled={!canUse}
                         />
                       </FormControl>
                       <FormMessage />
@@ -127,12 +147,13 @@ export default function SubnetSuggestionPage() {
                 />
               </CardContent>
               <CardFooter>
-                <Button type="submit" disabled={isLoading} className="w-full">
+                <Button type="submit" disabled={isLoading || !canUse} className="w-full">
                   {isLoading ? "Analyzing..." : <><Lightbulb className="mr-2 h-4 w-4" /> Get Suggestion</>}
                 </Button>
               </CardFooter>
             </form>
           </Form>
+           {!canUse && <p className="text-xs text-destructive p-4 text-center">You do not have permission to use this tool.</p>}
         </Card>
 
         <Card className="sticky top-20">
@@ -171,7 +192,9 @@ export default function SubnetSuggestionPage() {
               </Alert>
             )}
             {!isLoading && !suggestion && (
-              <p className="text-muted-foreground text-center py-10">Fill out the form and click "Get Suggestion" to see results.</p>
+              <p className="text-muted-foreground text-center py-10">
+                {canUse ? "Fill out the form and click \"Get Suggestion\" to see results." : "You do not have permission to use this tool."}
+              </p>
             )}
           </CardContent>
         </Card>

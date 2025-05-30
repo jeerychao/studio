@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import {
@@ -23,24 +23,27 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Edit } from "lucide-react"; // PlusCircle removed
+import { Checkbox } from "@/components/ui/checkbox";
+import { Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Role } from "@/types";
-import { updateRoleAction } from "@/lib/actions"; // createRoleAction removed
+import type { Role, Permission, PermissionId } from "@/types";
+import { updateRoleAction, getAllPermissionsAction } from "@/lib/actions";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Schema now only validates description for editing fixed roles
 const roleFormSchema = z.object({
   name: z.string(), // Name will be read-only
   description: z.string().max(200, "Description too long").optional(),
+  permissions: z.array(z.string()).optional(), // Array of permission IDs
 });
 
 type RoleFormValues = z.infer<typeof roleFormSchema>;
 
 interface RoleFormSheetProps {
-  role: Role; // Role is now required as we are only editing
+  role: Role; 
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
@@ -48,35 +51,54 @@ interface RoleFormSheetProps {
 export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
-  const isEditing = true; // This form is now only for editing
+  const isEditing = true; 
+
+  const [allPermissions, setAllPermissions] = React.useState<Permission[]>([]);
+  const [isLoadingPermissions, setIsLoadingPermissions] = React.useState(true);
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
     defaultValues: {
       name: role?.name || "",
       description: role?.description || "",
+      permissions: role?.permissions || [],
     },
   });
   
   React.useEffect(() => {
     if (isOpen) {
         form.reset({
-        name: role.name, // Always use the role prop's name
-        description: role.description || "",
+            name: role.name, 
+            description: role.description || "",
+            permissions: role.permissions || [],
         });
+        
+        async function fetchPermissions() {
+            setIsLoadingPermissions(true);
+            try {
+                const fetchedPermissions = await getAllPermissionsAction();
+                setAllPermissions(fetchedPermissions);
+            } catch (error) {
+                toast({ title: "Error fetching permissions", description: (error as Error).message, variant: "destructive" });
+            } finally {
+                setIsLoadingPermissions(false);
+            }
+        }
+        fetchPermissions();
     }
-  }, [isOpen, role, form]);
+  }, [isOpen, role, form, toast]);
 
   async function onSubmit(data: RoleFormValues) {
     try {
-      // We only update the description. The name comes from the role prop and is not submitted for change.
-      await updateRoleAction(role.id, { description: data.description });
-      toast({ title: "Role Updated", description: `Description for role ${role.name} has been successfully updated.` });
+      await updateRoleAction(role.id, { 
+        description: data.description,
+        permissions: data.permissions as PermissionId[], // Cast as PermissionId[]
+      });
+      toast({ title: "Role Updated", description: `Permissions and description for role ${role.name} have been successfully updated.` });
       setIsOpen(false);
-      // Form reset is handled by useEffect
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Error Updating Role",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
         variant: "destructive",
       });
@@ -86,25 +108,31 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
   const trigger = children ? (
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
-    // Default trigger is an edit icon button
     <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)} {...buttonProps}>
       <Edit className="h-4 w-4" />
-      <span className="sr-only">Edit Role Description</span>
+      <span className="sr-only">Edit Role</span>
     </Button>
   );
+
+  const groupedPermissions = React.useMemo(() => {
+    return allPermissions.reduce((acc, permission) => {
+      (acc[permission.group] = acc[permission.group] || []).push(permission);
+      return acc;
+    }, {} as Record<string, Permission[]>);
+  }, [allPermissions]);
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent className="sm:max-w-md">
+      <SheetContent className="sm:max-w-lg w-full">
         <SheetHeader>
-          <SheetTitle>Edit Role Description</SheetTitle>
+          <SheetTitle>Edit Role: {role.name}</SheetTitle>
           <SheetDescription>
-            Update the description for the role: <span className="font-semibold">{role.name}</span>. Role name cannot be changed.
+            Update the description and assign permissions for the role: <span className="font-semibold">{role.name}</span>. Role name cannot be changed.
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6 flex flex-col h-[calc(100%-4rem)]">
             <FormField
               control={form.control}
               name="name"
@@ -131,13 +159,71 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
                 </FormItem>
               )}
             />
-            <SheetFooter className="mt-8">
+            <FormItem className="flex-grow flex flex-col min-h-0">
+                <FormLabel>Permissions</FormLabel>
+                <FormDescription>Select the permissions this role should have.</FormDescription>
+                {isLoadingPermissions ? (
+                    <p>Loading permissions...</p>
+                ) : (
+                <ScrollArea className="flex-grow border rounded-md p-4 mt-2">
+                    <div className="space-y-4">
+                    {Object.entries(groupedPermissions).map(([groupName, permissionsInGroup]) => (
+                        <div key={groupName}>
+                        <h4 className="font-semibold text-md mb-2">{groupName}</h4>
+                        <FormField
+                            control={form.control}
+                            name="permissions"
+                            render={() => (
+                            <div className="space-y-2">
+                                {permissionsInGroup.map((permission) => (
+                                <FormField
+                                    key={permission.id}
+                                    control={form.control}
+                                    name="permissions"
+                                    render={({ field }) => {
+                                    return (
+                                        <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                        <FormControl>
+                                            <Checkbox
+                                            checked={field.value?.includes(permission.id)}
+                                            onCheckedChange={(checked) => {
+                                                return checked
+                                                ? field.onChange([...(field.value || []), permission.id])
+                                                : field.onChange(
+                                                    (field.value || []).filter(
+                                                        (value) => value !== permission.id
+                                                    )
+                                                    );
+                                            }}
+                                            />
+                                        </FormControl>
+                                        <FormLabel className="font-normal cursor-pointer">
+                                            {permission.name}
+                                        </FormLabel>
+                                        </FormItem>
+                                    );
+                                    }}
+                                />
+                                ))}
+                            </div>
+                            )}
+                        />
+                        </div>
+                    ))}
+                    </div>
+                </ScrollArea>
+                )}
+                 <FormMessage>{form.formState.errors.permissions?.message}</FormMessage>
+            </FormItem>
+
+
+            <SheetFooter className="mt-auto pt-6">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
                   Cancel
                 </Button>
               </SheetClose>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting || isLoadingPermissions}>
                 {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
             </SheetFooter>

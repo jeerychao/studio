@@ -8,10 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { getVLANsAction, deleteVLANAction } from "@/lib/actions";
-import type { VLAN } from "@/types";
+import type { VLAN, PermissionId } from "@/types";
+import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
-import { useCurrentUser, canEditIpResources } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 
 export default function VlansPage() {
@@ -28,10 +29,25 @@ export default function VlansPage() {
          toast({ title: "Error fetching VLANs", description: (error as Error).message, variant: "destructive" });
       }
     }
-    fetchVlans();
-  }, [toast]);
+    if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
+        fetchVlans();
+    }
+  }, [toast, currentUser]);
 
-  const canEdit = canEditIpResources(currentUser.roleName);
+  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_VLAN);
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
+
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Cable className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view VLANs.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -39,7 +55,7 @@ export default function VlansPage() {
         title="VLAN Management"
         description="Organize and manage your Virtual LANs."
         icon={Cable}
-        actionElement={canEdit ? <VlanFormSheet /> : null}
+        actionElement={canCreate ? <VlanFormSheet /> : null}
       />
 
       <Card>
@@ -54,8 +70,8 @@ export default function VlansPage() {
                 <TableRow>
                   <TableHead>VLAN Number</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead>Associated Resources</TableHead> {/* Changed from Subnets */}
-                  {canEdit && <TableHead className="text-right">Actions</TableHead>}
+                  <TableHead>Associated Resources</TableHead> 
+                  {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -63,24 +79,28 @@ export default function VlansPage() {
                   <TableRow key={vlan.id}>
                     <TableCell className="font-medium">{vlan.vlanNumber}</TableCell>
                     <TableCell className="max-w-md truncate">{vlan.description || "N/A"}</TableCell>
-                    <TableCell>{vlan.subnetCount ?? 0}</TableCell> {/* subnetCount now includes direct IP assignments */}
-                    {canEdit && (
+                    <TableCell>{vlan.subnetCount ?? 0}</TableCell> 
+                    {(canEdit || canDelete) && (
                       <TableCell className="text-right">
-                        <VlanFormSheet vlan={vlan}>
-                          <Button variant="ghost" size="icon" aria-label="Edit VLAN">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </VlanFormSheet>
-                        <DeleteConfirmationDialog
-                          itemId={vlan.id}
-                          itemName={`VLAN ${vlan.vlanNumber}`}
-                          deleteAction={deleteVLANAction}
-                          triggerButton={
-                            <Button variant="ghost" size="icon" aria-label="Delete VLAN">
-                              <Trash2 className="h-4 w-4" />
+                        {canEdit && (
+                            <VlanFormSheet vlan={vlan}>
+                            <Button variant="ghost" size="icon" aria-label="Edit VLAN">
+                                <Edit className="h-4 w-4" />
                             </Button>
-                          }
-                        />
+                            </VlanFormSheet>
+                        )}
+                        {canDelete && (
+                            <DeleteConfirmationDialog
+                            itemId={vlan.id}
+                            itemName={`VLAN ${vlan.vlanNumber}`}
+                            deleteAction={deleteVLANAction}
+                            triggerButton={
+                                <Button variant="ghost" size="icon" aria-label="Delete VLAN">
+                                <Trash2 className="h-4 w-4" />
+                                </Button>
+                            }
+                            />
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
@@ -90,7 +110,7 @@ export default function VlansPage() {
           ) : (
              <div className="text-center py-10">
               <p className="text-muted-foreground">No VLANs found.</p>
-              {canEdit && <VlanFormSheet buttonProps={{className: "mt-4"}} />}
+              {canCreate && <VlanFormSheet buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>

@@ -1,5 +1,5 @@
 
-"use client"; // Converted to client component for consistency if hooks were needed
+"use client"; 
 
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
@@ -7,13 +7,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getAuditLogsAction } from "@/lib/actions";
-import type { AuditLog } from "@/types";
+import type { AuditLog, PermissionId } from "@/types";
+import { PERMISSIONS } from "@/types";
 import { ListChecks } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const { toast } = useToast();
+  const currentUser = useCurrentUser();
 
   React.useEffect(() => {
     async function fetchLogs() {
@@ -24,12 +27,26 @@ export default function AuditLogsPage() {
         toast({ title: "Error fetching audit logs", description: (error as Error).message, variant: "destructive" });
       }
     }
-    fetchLogs();
-  }, [toast]);
+    if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
+        fetchLogs();
+    }
+  }, [toast, currentUser]);
+
+  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG);
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
+
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <ListChecks className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view audit logs.</p>
+      </div>
+    );
+  }
 
   return (
     <>

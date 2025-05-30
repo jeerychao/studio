@@ -9,17 +9,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction } from "@/lib/actions";
-import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
+import type { IPAddress, IPAddressStatus, Subnet, VLAN, PermissionId } from "@/types";
+import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
-import { useCurrentUser, canEditIpResources } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from 'next/navigation';
 
 
-export default function IPAddressesPage() { // Removed searchParams from props, will use hook
-  const searchParams = useSearchParams(); // Hook to get search params
+export default function IPAddressesPage() { 
+  const searchParams = useSearchParams(); 
   const selectedSubnetId = searchParams.get("subnetId") || undefined;
 
   const [ipAddresses, setIpAddresses] = React.useState<IPAddress[]>([]);
@@ -44,8 +45,15 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
         toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       }
     }
-    fetchData();
-  }, [selectedSubnetId, toast]);
+    if (hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
+        fetchData();
+    }
+  }, [selectedSubnetId, toast, currentUser]);
+
+  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS);
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
 
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
@@ -61,9 +69,9 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
 
   const getVlanDisplayForIp = (ip: IPAddress): string => {
     let vlanToDisplay: VLAN | undefined;
-    if (ip.vlanId) { // IP has direct VLAN override
+    if (ip.vlanId) { 
       vlanToDisplay = vlans.find(v => v.id === ip.vlanId);
-    } else if (ip.subnetId) { // Fallback to subnet's VLAN
+    } else if (ip.subnetId) { 
       const subnet = subnets.find(s => s.id === ip.subnetId);
       if (subnet?.vlanId) {
         vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
@@ -74,7 +82,15 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
     return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "N/A";
   };
 
-  const canEdit = canEditIpResources(currentUser.roleName);
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Globe className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view IP addresses.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -85,7 +101,7 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
-        {canEdit && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} />}
+        {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} />}
       </div>
 
       <Card>
@@ -108,7 +124,7 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
                   <TableHead>Subnet</TableHead>
                   <TableHead>VLAN</TableHead>
                   <TableHead>Description</TableHead>
-                  {canEdit && <TableHead className="text-right">Actions</TableHead>}
+                  {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -128,23 +144,27 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
                       <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{ip.description || "N/A"}</TableCell>
-                    {canEdit && (
+                    {(canEdit || canDelete) && (
                       <TableCell className="text-right">
-                        <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId}>
-                          <Button variant="ghost" size="icon" aria-label="Edit IP Address">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </IPAddressFormSheet>
-                        <DeleteConfirmationDialog
-                          itemId={ip.id}
-                          itemName={ip.ipAddress}
-                          deleteAction={deleteIPAddressAction}
-                          triggerButton={
-                            <Button variant="ghost" size="icon" aria-label="Delete IP Address">
-                              <Trash2 className="h-4 w-4" />
+                        {canEdit && (
+                            <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId}>
+                            <Button variant="ghost" size="icon" aria-label="Edit IP Address">
+                                <Edit className="h-4 w-4" />
                             </Button>
-                          }
-                        />
+                            </IPAddressFormSheet>
+                        )}
+                        {canDelete && (
+                            <DeleteConfirmationDialog
+                            itemId={ip.id}
+                            itemName={ip.ipAddress}
+                            deleteAction={deleteIPAddressAction}
+                            triggerButton={
+                                <Button variant="ghost" size="icon" aria-label="Delete IP Address">
+                                <Trash2 className="h-4 w-4" />
+                                </Button>
+                            }
+                            />
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
@@ -156,7 +176,7 @@ export default function IPAddressesPage() { // Removed searchParams from props, 
               <p className="text-muted-foreground">
                 {selectedSubnetId ? "No IP addresses found in this subnet." : "No IP addresses found. Select a subnet or add a new IP."}
               </p>
-              {canEdit && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} buttonProps={{className: "mt-4"}} />}
+              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>
