@@ -44,26 +44,34 @@ const userFormSchema = z.object({
   email: z.string().email("Invalid email address"),
   roleId: z.string().min(1, "Role is required"),
   password: z.preprocess(
-    (val) => (val === "" ? undefined : val), 
+    (val) => (val === "" ? undefined : val),
     z.string()
-      .min(8, "Password must be 8-16 characters long.")
-      .max(16, "Password must be 8-16 characters long.")
-      .refine(val => /[A-Z]/.test(val), "Must contain an uppercase letter.")
-      .refine(val => /[a-z]/.test(val), "Must contain a lowercase letter.")
-      .refine(val => /[0-9]/.test(val), "Must contain a number.")
-      .refine(val => /[^A-Za-z0-9]/.test(val), "Must contain a symbol.")
+      .min(8, "Password must be 8-16 characters.")
+      .max(16, "Password must be 8-16 characters.")
+      .refine(val => /[A-Z]/.test(val), "Must include uppercase letter.")
+      .refine(val => /[a-z]/.test(val), "Must include lowercase letter.")
+      .refine(val => /[0-9]/.test(val), "Must include number.")
+      .refine(val => /[^A-Za-z0-9]/.test(val), "Must include symbol.")
       .optional()
   ),
   confirmPassword: z.string().optional().transform(e => e === "" ? undefined : e),
 })
-.refine((data) => {
-  if (data.password || data.confirmPassword) {
-    return data.password === data.confirmPassword;
+.superRefine((data, ctx) => {
+  if (data.password && data.password !== "") { // If a new password is being set
+    if (!data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Please confirm your new password.",
+        path: ["confirmPassword"],
+      });
+    } else if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Passwords do not match.",
+        path: ["confirmPassword"],
+      });
+    }
   }
-  return true; 
-}, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"], 
 });
 
 
@@ -71,7 +79,7 @@ type UserFormValues = z.infer<typeof userFormSchema>;
 
 interface UserFormSheetProps {
   user?: User;
-  roles: Role[]; // Expects the fixed roles
+  roles: Role[];
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
@@ -86,7 +94,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
     defaultValues: {
       username: "",
       email: "",
-      roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "", // Default to Viewer or first available
+      roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "", 
       password: "",
       confirmPassword: "",
     },
@@ -130,9 +138,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         }
         toast({ title: "User Updated", description: toastDescription });
       } else {
-        // Ensure password is provided for new user action call
         if (!payload.password) {
-            // This case should ideally be caught by the initial check, but as a safeguard:
             toast({ title: "Password Error", description: "Password is unexpectedly missing for new user.", variant: "destructive" });
             return;
         }
@@ -140,7 +146,6 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
       }
       setIsOpen(false);
-      // form.reset(); // Reset is handled by useEffect on open
     } catch (error) {
       toast({
         title: "Error",

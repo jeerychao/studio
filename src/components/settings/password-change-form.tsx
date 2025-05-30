@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -23,13 +24,13 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 const passwordChangeSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required."),
   newPassword: z.string()
-    .min(8, "New password must be 8-16 characters long.")
-    .max(16, "New password must be 8-16 characters long.")
-    .refine(val => /[A-Z]/.test(val), "Must contain an uppercase letter.")
-    .refine(val => /[a-z]/.test(val), "Must contain a lowercase letter.")
-    .refine(val => /[0-9]/.test(val), "Must contain a number.")
-    .refine(val => /[^A-Za-z0-9]/.test(val), "Must contain a symbol."),
-  confirmNewPassword: z.string(),
+    .min(8, "New password must be 8-16 characters.")
+    .max(16, "New password must be 8-16 characters.")
+    .refine(val => /[A-Z]/.test(val), "Must include uppercase letter.")
+    .refine(val => /[a-z]/.test(val), "Must include lowercase letter.")
+    .refine(val => /[0-9]/.test(val), "Must include number.")
+    .refine(val => /[^A-Za-z0-9]/.test(val), "Must include symbol."),
+  confirmNewPassword: z.string().min(1, "Please confirm your new password."),
 }).refine(data => data.newPassword === data.confirmNewPassword, {
   message: "New passwords do not match.",
   path: ["confirmNewPassword"],
