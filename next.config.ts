@@ -4,10 +4,10 @@ const nextConfig: NextConfig = {
   /* config options here */
   output: 'standalone', // Add this line for standalone output
   typescript: {
-    ignoreBuildErrors: true,
+    // ignoreBuildErrors: true, // Temporarily remove to surface potential errors
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    // ignoreDuringBuilds: true, // Temporarily remove to surface potential errors
   },
   images: {
     remotePatterns: [
