@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud } from "lucide-react";
+import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; 
-import type { Subnet, VLAN, IPAddress } from "@/types"; // Added types for clarity
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import type { Subnet, VLAN, IPAddress } from "@/types";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function ImportExportPage() {
   const [importFile, setImportFile] = React.useState<File | null>(null);
@@ -80,7 +82,6 @@ export default function ImportExportPage() {
     const convertToCSV = (data: any[], headersToUse: string[]) => {
       let csv = headersToUse.join(",") + "\n";
       data.forEach(row => {
-        // Ensure consistent order based on headersToUse
         csv += headersToUse.map(header => JSON.stringify(row[header as keyof typeof row] || "")).join(",") + "\n";
       });
       return csv;
@@ -88,55 +89,51 @@ export default function ImportExportPage() {
 
     if (dataType === "subnets") {
       const subnetsForCsv = mockSubnets.map(subnet => {
-        const { vlanId, gateway, ...rest } = subnet; // gateway is not currently in export headers
         const vlan = mockVLANs.find(v => v.id === subnet.vlanId);
         return {
-          ...rest,
+          id: subnet.id,
+          cidr: subnet.cidr,
+          networkAddress: subnet.networkAddress,
+          subnetMask: subnet.subnetMask,
+          ipRange: subnet.ipRange || "",
           vlanNumber: vlan ? vlan.vlanNumber.toString() : "",
-          ipRange: subnet.ipRange || "", // Ensure ipRange is always a string for CSV
-          utilization: subnet.utilization || 0, // Ensure utilization is always a number or 0
           description: subnet.description || "",
+          utilization: subnet.utilization || 0,
         };
       });
       dataToExport = subnetsForCsv;
       csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "description", "utilization"];
       csvContent = convertToCSV(dataToExport, csvHeaders);
     } else if (dataType === "vlans") {
-      // VLAN export already uses vlanNumber, ensure subnetCount is present
       dataToExport = mockVLANs.map(vlan => ({
-        ...vlan,
-        subnetCount: vlan.subnetCount || 0, // Ensure subnetCount is always a number or 0
+        id: vlan.id,
+        vlanNumber: vlan.vlanNumber,
         description: vlan.description || "",
+        subnetCount: vlan.subnetCount || 0,
       }));
       csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
       csvContent = convertToCSV(dataToExport, csvHeaders);
     } else if (dataType === "ips") {
       const ipsForCsv = mockIPAddresses.map(ip => {
-        const { vlanId, ...rest } = ip;
         let effectiveVlanNumberStr = "";
-        
-        if (ip.vlanId) { // Direct assignment
+        if (ip.vlanId) {
           const directVlan = mockVLANs.find(v => v.id === ip.vlanId);
-          if (directVlan) {
-            effectiveVlanNumberStr = directVlan.vlanNumber.toString();
-          }
-        } else if (ip.subnetId) { // Inherited from subnet
+          if (directVlan) effectiveVlanNumberStr = directVlan.vlanNumber.toString();
+        } else if (ip.subnetId) {
           const parentSubnetForIp = mockSubnets.find(s => s.id === ip.subnetId);
           if (parentSubnetForIp?.vlanId) {
             const inheritedVlan = mockVLANs.find(v => v.id === parentSubnetForIp.vlanId);
-            if (inheritedVlan) {
-              effectiveVlanNumberStr = inheritedVlan.vlanNumber.toString();
-            }
+            if (inheritedVlan) effectiveVlanNumberStr = inheritedVlan.vlanNumber.toString();
           }
         }
-
         const parentSubnet = ip.subnetId ? mockSubnets.find(s => s.id === ip.subnetId) : undefined;
-
         return {
-          ...rest,
+          id: ip.id,
+          ipAddress: ip.ipAddress,
+          subnetId: ip.subnetId || "",
           subnetCidr: parentSubnet ? parentSubnet.cidr : "",
           vlanNumber: effectiveVlanNumberStr,
-          subnetId: ip.subnetId || "",
+          status: ip.status,
           allocatedTo: ip.allocatedTo || "",
           description: ip.description || "",
         };
@@ -146,7 +143,7 @@ export default function ImportExportPage() {
       csvContent = convertToCSV(dataToExport, csvHeaders);
     }
 
-    if(dataToExport.length === 0 && dataType !== "vlans" && dataType !== "ips" && dataType !== "subnets" ) { // Check if dataType was actually processed
+    if(dataToExport.length === 0 && dataType !== "vlans" && dataType !== "ips" && dataType !== "subnets" ) {
         toast({ title: "Export Error", description: `Unknown data type: ${dataType}.`, variant: "destructive"});
         return;
     }
@@ -154,7 +151,6 @@ export default function ImportExportPage() {
          toast({ title: "No Data", description: `No data available to export for ${dataType}.`});
         return;
     }
-
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -171,6 +167,23 @@ export default function ImportExportPage() {
         toast({ title: "Export Failed", description: "Browser does not support direct download.", variant: "destructive"});
     }
   };
+  
+  const subnetTemplate = `cidr,vlanNumber,description
+192.168.100.0/24,100,New Office Subnet
+10.20.0.0/16,,Server Farm DMZ (VLAN number is optional, matches existing VLAN)
+172.16.32.0/22,101,Development Lab`;
+
+  const vlanTemplate = `vlanNumber,description
+100,New Office VLAN (VLAN number must be unique)
+101,Development Lab VLAN
+200,Voice VLAN (Description is optional)`;
+
+  const ipAddressTemplate = `ipAddress,subnetCidr,vlanNumber,status,allocatedTo,description
+192.168.100.5,192.168.100.0/24,,allocated,Workstation-01,User PC (Subnet CIDR must exist)
+192.168.100.6,192.168.100.0/24,100,free,,(Optional VLAN number for direct assignment, must exist)
+10.20.0.10,,,reserved,,Future Web Server (IP in global pool if subnetCidr is empty)
+172.16.0.10,172.16.0.0/20,,allocated,Printer-Main, (Status is 'allocated', 'free', or 'reserved')`;
+
 
   if (!canView) {
     return (
@@ -189,11 +202,11 @@ export default function ImportExportPage() {
         description="Bulk manage your IPAM data using Excel or CSV files."
         icon={Wrench}
       />
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid lg:grid-cols-2 gap-8">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><UploadCloud className="h-6 w-6 text-primary" /> Import Data</CardTitle>
-            <CardDescription>Upload an Excel or CSV file to import subnets, VLANs, or IP addresses. Ensure data matches required format.</CardDescription>
+            <CardDescription>Upload an Excel or CSV file to import subnets, VLANs, or IP addresses. Ensure data matches the required format (see templates below).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -206,8 +219,8 @@ export default function ImportExportPage() {
             </Button>
             {!canImport && <p className="text-xs text-destructive">You do not have permission to import data.</p>}
             <p className="text-xs text-muted-foreground">
-              Note: Ensure columns match the expected schema. First row should be headers. 
-              Refer to documentation for template. All column data will be validated.
+              Note: First row should be headers. All column data will be validated during actual import.
+              The current import functionality is a placeholder and performs simulated validation.
             </p>
           </CardContent>
         </Card>
@@ -237,7 +250,55 @@ export default function ImportExportPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-8">
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2"><FileText className="h-6 w-6 text-primary"/>Import Templates (CSV Format)</CardTitle>
+            <CardDescription>Use these templates as a guide for your CSV import files. The first row must be the header row exactly as shown.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Tabs defaultValue="subnets">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="subnets">Subnets</TabsTrigger>
+                    <TabsTrigger value="vlans">VLANs</TabsTrigger>
+                    <TabsTrigger value="ipAddresses">IP Addresses</TabsTrigger>
+                </TabsList>
+                <TabsContent value="subnets">
+                    <Card>
+                        <CardHeader><CardTitle className="text-lg">Subnet Import Template</CardTitle></CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground mb-2">Required headers: <code>cidr,vlanNumber,description</code></p>
+                            <ScrollArea className="h-auto max-h-60 w-full rounded-md border p-4 bg-muted/50">
+                                <pre className="text-sm">{subnetTemplate}</pre>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="vlans">
+                    <Card>
+                        <CardHeader><CardTitle className="text-lg">VLAN Import Template</CardTitle></CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground mb-2">Required headers: <code>vlanNumber,description</code></p>
+                             <ScrollArea className="h-auto max-h-60 w-full rounded-md border p-4 bg-muted/50">
+                                <pre className="text-sm">{vlanTemplate}</pre>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="ipAddresses">
+                    <Card>
+                        <CardHeader><CardTitle className="text-lg">IP Address Import Template</CardTitle></CardHeader>
+                        <CardContent>
+                           <p className="text-sm text-muted-foreground mb-2">Required headers: <code>ipAddress,subnetCidr,vlanNumber,status,allocatedTo,description</code></p>
+                           <ScrollArea className="h-auto max-h-60 w-full rounded-md border p-4 bg-muted/50">
+                                <pre className="text-sm">{ipAddressTemplate}</pre>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+        </CardContent>
+      </Card>
     </>
   );
 }
-
