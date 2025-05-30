@@ -23,6 +23,7 @@ export interface IPAddress {
   id: string;
   ipAddress: string;
   subnetId?: string; // Made optional
+  vlanId?: string; // IP-specific VLAN override
   status: IPAddressStatus;
   allocatedTo?: string;
   description?: string;
@@ -70,4 +71,3 @@ export interface AuditLog {
   timestamp: string; // ISO date string
   details?: string; // e.g., "Created subnet 192.168.1.0/24"
 }
-

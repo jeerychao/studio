@@ -35,14 +35,15 @@ import {
 } from "@/components/ui/select";
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { IPAddress, Subnet, IPAddressStatus } from "@/types";
-import { createIPAddressAction, updateIPAddressAction } from "@/lib/actions";
+import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types"; // Added VLAN
+import { createIPAddressAction, updateIPAddressAction, getVLANsAction } from "@/lib/actions"; // Added getVLANsAction
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
-  subnetId: z.string().optional(), // Made optional
+  subnetId: z.string().optional(),
+  vlanId: z.string().optional(), // Added vlanId
   status: z.enum(ipAddressStatusOptions, { required_error: "Status is required"}),
   allocatedTo: z.string().max(100, "Allocated To too long").optional(),
   description: z.string().max(200, "Description too long").optional(),
@@ -53,12 +54,17 @@ type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
 interface IPAddressFormSheetProps {
   ipAddress?: IPAddress;
   subnets: Subnet[];
-  currentSubnetId?: string; 
+  vlans: VLAN[]; // Added vlans prop
+  currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
 
-export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, children, buttonProps }: IPAddressFormSheetProps) {
+const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
+const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
+
+
+export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId, children, buttonProps }: IPAddressFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!ipAddress;
@@ -68,6 +74,7 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
     defaultValues: {
       ipAddress: ipAddress?.ipAddress || "",
       subnetId: ipAddress?.subnetId || currentSubnetId || "",
+      vlanId: ipAddress?.vlanId || "", // Initialize vlanId
       status: ipAddress?.status || "free",
       allocatedTo: ipAddress?.allocatedTo || "",
       description: ipAddress?.description || "",
@@ -78,30 +85,37 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
     if (isOpen) {
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
-            subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""), // Default to first if creating and no currentSubnetId
+            subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""),
+            vlanId: ipAddress?.vlanId || "", // Reset vlanId
             status: ipAddress?.status || "free",
             allocatedTo: ipAddress?.allocatedTo || "",
             description: ipAddress?.description || "",
         });
     }
-  }, [isOpen, ipAddress, subnets, currentSubnetId, form]);
+  }, [isOpen, ipAddress, subnets, currentSubnetId, form, vlans]);
 
   async function onSubmit(data: IPAddressFormValues) {
     try {
-      // Ensure subnetId is provided if status is 'allocated' or 'reserved' or if it's a new IP being created in a specific subnet context
       if (!data.subnetId && (data.status !== 'free' || (!isEditing && currentSubnetId))) {
         toast({ title: "Subnet Required", description: "A subnet must be selected unless the IP is 'free' and not being added to a specific subnet.", variant: "destructive"});
         return;
       }
+
+      const payload = {
+        ...data,
+        subnetId: data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined),
+        vlanId: data.vlanId === INHERIT_VLAN_SENTINEL ? undefined : (data.vlanId || undefined),
+      };
+
       if (isEditing && ipAddress) {
-        await updateIPAddressAction(ipAddress.id, data);
+        await updateIPAddressAction(ipAddress.id, payload);
         toast({ title: "IP Address Updated", description: `IP ${data.ipAddress} has been successfully updated.` });
       } else {
-        if (!data.subnetId) { // Should be caught by above, but as a safeguard for create
-             toast({ title: "Subnet Required", description: "Please select a subnet to create the IP address.", variant: "destructive"});
+        if (!payload.subnetId && (payload.status === 'allocated' || payload.status === 'reserved')) {
+             toast({ title: "Subnet Required", description: "Please select a subnet to create an allocated or reserved IP address.", variant: "destructive"});
              return;
         }
-        await createIPAddressAction(data as Omit<IPAddress, "id">); // Cast as subnetId will be present
+        await createIPAddressAction(payload as Omit<IPAddress, "id">);
         toast({ title: "IP Address Created", description: `IP ${data.ipAddress} has been successfully created.` });
       }
       setIsOpen(false);
@@ -154,10 +168,10 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
               name="subnetId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subnet</FormLabel> {/* Label changed from "Subnet (Required)" to "Subnet" */}
-                  <Select 
-                    onValueChange={(value) => field.onChange(value === "NO_SUBNET_SELECTED" ? "" : value)} 
-                    value={field.value || "NO_SUBNET_SELECTED"}
+                  <FormLabel>Subnet</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === NO_SUBNET_SELECTED_SENTINEL ? "" : value)}
+                    value={field.value || NO_SUBNET_SELECTED_SENTINEL}
                     disabled={subnets.length === 0 && !field.value}
                   >
                     <FormControl>
@@ -166,10 +180,39 @@ export function IPAddressFormSheet({ ipAddress, subnets, currentSubnetId, childr
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                       <SelectItem value={"NO_SUBNET_SELECTED"}>No Subnet / Global Pool</SelectItem>
+                       <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>No Subnet / Global Pool</SelectItem>
                       {subnets.map((subnet) => (
                         <SelectItem key={subnet.id} value={subnet.id}>
                           {subnet.networkAddress} ({subnet.description || "No description"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="vlanId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>VLAN (Optional)</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === INHERIT_VLAN_SENTINEL ? "" : value)}
+                    value={field.value || INHERIT_VLAN_SENTINEL}
+                    disabled={vlans.length === 0 && !field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={vlans.length > 0 ? "Select a VLAN or Inherit" : "No VLANs available"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={INHERIT_VLAN_SENTINEL}>Inherit from Subnet</SelectItem>
+                      {vlans.map((vlan) => (
+                        <SelectItem key={vlan.id} value={vlan.id}>
+                          VLAN {vlan.vlanNumber} ({vlan.description || "No description"})
                         </SelectItem>
                       ))}
                     </SelectContent>
