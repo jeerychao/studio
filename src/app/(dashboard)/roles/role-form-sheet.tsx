@@ -26,20 +26,21 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Edit } from "lucide-react";
+import { Edit } from "lucide-react"; // PlusCircle removed
 import { useToast } from "@/hooks/use-toast";
 import type { Role } from "@/types";
-import { createRoleAction, updateRoleAction } from "@/lib/actions";
+import { updateRoleAction } from "@/lib/actions"; // createRoleAction removed
 
+// Schema now only validates description for editing fixed roles
 const roleFormSchema = z.object({
-  name: z.string().min(2, "Role name must be at least 2 characters").max(50, "Role name too long"),
+  name: z.string(), // Name will be read-only
   description: z.string().max(200, "Description too long").optional(),
 });
 
 type RoleFormValues = z.infer<typeof roleFormSchema>;
 
 interface RoleFormSheetProps {
-  role?: Role;
+  role: Role; // Role is now required as we are only editing
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
@@ -47,7 +48,7 @@ interface RoleFormSheetProps {
 export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
-  const isEditing = !!role;
+  const isEditing = true; // This form is now only for editing
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
@@ -60,23 +61,19 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
   React.useEffect(() => {
     if (isOpen) {
         form.reset({
-        name: role?.name || "",
-        description: role?.description || "",
+        name: role.name, // Always use the role prop's name
+        description: role.description || "",
         });
     }
   }, [isOpen, role, form]);
 
   async function onSubmit(data: RoleFormValues) {
     try {
-      if (isEditing && role) {
-        await updateRoleAction(role.id, data);
-        toast({ title: "Role Updated", description: `Role ${data.name} has been successfully updated.` });
-      } else {
-        await createRoleAction(data);
-        toast({ title: "Role Created", description: `Role ${data.name} has been successfully created.` });
-      }
+      // We only update the description. The name comes from the role prop and is not submitted for change.
+      await updateRoleAction(role.id, { description: data.description });
+      toast({ title: "Role Updated", description: `Description for role ${role.name} has been successfully updated.` });
       setIsOpen(false);
-      form.reset();
+      // Form reset is handled by useEffect
     } catch (error) {
       toast({
         title: "Error",
@@ -89,9 +86,10 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
   const trigger = children ? (
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
-    <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
-      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Add Role</>}
-      {isEditing && <span className="sr-only">Edit Role</span>}
+    // Default trigger is an edit icon button
+    <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)} {...buttonProps}>
+      <Edit className="h-4 w-4" />
+      <span className="sr-only">Edit Role Description</span>
     </Button>
   );
 
@@ -100,9 +98,9 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit Role" : "Add New Role"}</SheetTitle>
+          <SheetTitle>Edit Role Description</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the details of the existing role." : "Fill in the details for the new role."}
+            Update the description for the role: <span className="font-semibold">{role.name}</span>. Role name cannot be changed.
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -112,9 +110,9 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role Name</FormLabel>
+                  <FormLabel>Role Name (Read-only)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Administrator" {...field} />
+                    <Input placeholder="e.g., Administrator" {...field} readOnly disabled className="cursor-not-allowed bg-muted/50" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -133,7 +131,6 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
                 </FormItem>
               )}
             />
-            {/* Permissions assignment UI would go here in a full RBAC system */}
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
@@ -141,7 +138,7 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : (isEditing ? "Save Changes" : "Create Role")}
+                {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
             </SheetFooter>
           </form>

@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BrainCircuit, Lightbulb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { suggestSubnetAIAction } from "@/lib/actions";
-import type { AISuggestionResponse, ExistingSubnetInput } from "@/types";
+import type { AISuggestionResponse } from "@/types"; // ExistingSubnetInput removed, direct string for AI
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,15 +23,16 @@ const subnetSuggestionFormSchema = z.object({
       try {
         const parsed = JSON.parse(data);
         if (!Array.isArray(parsed)) return false;
+        // Ensure structure matches what the AI flow expects (as a string)
+        // This basic check is sufficient, AI prompt handles more detail.
         return parsed.every(item => 
           typeof item.networkAddress === 'string' &&
-          typeof item.utilization === 'number' &&
-          item.utilization >= 0 && item.utilization <= 100
+          typeof item.utilization === 'number'
         );
       } catch (e) {
         return false;
       }
-    }, "Must be a valid JSON array of {networkAddress: string, utilization: number} objects."),
+    }, "Must be a valid JSON array of objects, each with 'networkAddress' (string) and 'utilization' (number)."),
   newSegmentDescription: z.string().min(10, "Please provide a detailed description (min 10 characters).").max(500, "Description too long."),
 });
 
@@ -54,10 +55,8 @@ export default function SubnetSuggestionPage() {
     setIsLoading(true);
     setSuggestion(null);
     try {
-      // The schema validation ensures existingSubnetsText is valid JSON parsable to ExistingSubnetInput[]
-      // The AI flow itself expects a string for existingSubnets, so we pass data.existingSubnetsText directly
       const result = await suggestSubnetAIAction({
-        existingSubnets: data.existingSubnetsText,
+        existingSubnets: data.existingSubnetsText, // Pass the string directly as per AI flow
         newSegmentDescription: data.newSegmentDescription,
       });
       setSuggestion(result);
@@ -136,12 +135,12 @@ export default function SubnetSuggestionPage() {
           </Form>
         </Card>
 
-        <Card className="sticky top-20"> {/* Make suggestion card sticky */}
+        <Card className="sticky top-20">
           <CardHeader>
             <CardTitle>AI Recommendation</CardTitle>
             <CardDescription>The AI's suggestion will appear here.</CardDescription>
           </CardHeader>
-          <CardContent className="min-h-[200px]"> {/* Ensure minimum height */}
+          <CardContent className="min-h-[200px]"> 
             {isLoading && (
               <div className="space-y-4">
                 <Skeleton className="h-8 w-3/4" />

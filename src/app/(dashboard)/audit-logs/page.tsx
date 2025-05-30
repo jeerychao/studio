@@ -1,14 +1,31 @@
 
+"use client"; // Converted to client component for consistency if hooks were needed
+
+import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getAuditLogsAction } from "@/lib/actions";
 import type { AuditLog } from "@/types";
-import { ListChecks } from "lucide-react"; // Using ListChecks for audit logs
+import { ListChecks } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-export default async function AuditLogsPage() {
-  const logs = await getAuditLogsAction();
+export default function AuditLogsPage() {
+  const [logs, setLogs] = React.useState<AuditLog[]>([]);
+  const { toast } = useToast();
+
+  React.useEffect(() => {
+    async function fetchLogs() {
+      try {
+        const fetchedLogs = await getAuditLogsAction();
+        setLogs(fetchedLogs);
+      } catch (error) {
+        toast({ title: "Error fetching audit logs", description: (error as Error).message, variant: "destructive" });
+      }
+    }
+    fetchLogs();
+  }, [toast]);
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -57,10 +74,8 @@ export default async function AuditLogsPage() {
               <p className="text-muted-foreground">No audit logs found.</p>
             </div>
           )}
-          {/* Add pagination controls here if many logs */}
         </CardContent>
       </Card>
     </>
   );
 }
-

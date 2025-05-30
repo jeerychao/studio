@@ -1,29 +1,50 @@
 
-import { Edit, Trash2, ShieldCheck } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { Edit, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import { getRolesAction, deleteRoleAction } from "@/lib/actions"; // Import deleteRoleAction
-import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { getRolesAction } from "@/lib/actions"; 
+import type { Role } from "@/types";
 import { RoleFormSheet } from "./role-form-sheet";
+import { useCurrentUser, canManageUsers } from "@/hooks/use-current-user";
+import { useToast } from "@/hooks/use-toast";
 
-export default async function RolesPage() {
-  const roles = await getRolesAction();
+export default function RolesPage() {
+  const [roles, setRoles] = React.useState<Role[]>([]);
+  const currentUser = useCurrentUser();
+  const { toast } = useToast();
+
+  React.useEffect(() => {
+    async function fetchRoles() {
+      try {
+        const fetchedRoles = await getRolesAction();
+        setRoles(fetchedRoles);
+      } catch (error) {
+        toast({ title: "Error fetching roles", description: (error as Error).message, variant: "destructive" });
+      }
+    }
+    fetchRoles();
+  }, [toast]);
+
+  const canEditRoles = canManageUsers(currentUser.roleName);
 
   return (
     <>
       <PageHeader
         title="Role Management"
-        description="Define user roles and their permissions (permissions UI not implemented)."
+        description="View predefined system roles and their descriptions."
         icon={ShieldCheck}
-        actionElement={<RoleFormSheet />}
+        // "Add Role" button is removed as roles are fixed
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Role List</CardTitle>
-          <CardDescription>All defined roles in the system.</CardDescription>
+          <CardTitle>Fixed System Roles</CardTitle>
+          <CardDescription>These roles have predefined permissions.</CardDescription>
         </CardHeader>
         <CardContent>
           {roles.length > 0 ? (
@@ -33,7 +54,7 @@ export default async function RolesPage() {
                   <TableHead>Role Name</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Users</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {canEditRoles && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -42,31 +63,23 @@ export default async function RolesPage() {
                     <TableCell className="font-medium">{role.name}</TableCell>
                     <TableCell className="max-w-md truncate">{role.description || "N/A"}</TableCell>
                     <TableCell>{role.userCount ?? 0}</TableCell>
-                    <TableCell className="text-right">
-                      <RoleFormSheet role={role}>
-                        <Button variant="ghost" size="icon" aria-label="Edit Role">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </RoleFormSheet>
-                      <DeleteConfirmationDialog
-                        itemId={role.id}
-                        itemName={role.name}
-                        deleteAction={deleteRoleAction} // Pass the server action directly
-                        triggerButton={
-                          <Button variant="ghost" size="icon" aria-label="Delete Role">
-                            <Trash2 className="h-4 w-4" />
+                    {canEditRoles && (
+                      <TableCell className="text-right">
+                        <RoleFormSheet role={role}>
+                          <Button variant="ghost" size="icon" aria-label="Edit Role Description">
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        }
-                      />
-                    </TableCell>
+                        </RoleFormSheet>
+                        {/* Delete button for fixed roles is removed */}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           ) : (
             <div className="text-center py-10">
-              <p className="text-muted-foreground">No roles found.</p>
-              <RoleFormSheet buttonProps={{className: "mt-4"}} />
+              <p className="text-muted-foreground">No roles found or unable to load roles.</p>
             </div>
           )}
         </CardContent>

@@ -1,4 +1,6 @@
 
+export type RoleName = 'Administrator' | 'Operator' | 'Viewer';
+
 export interface Subnet {
   id: string;
   cidr: string; // e.g., "192.168.1.0/30" - Primary identifier
@@ -22,7 +24,7 @@ export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
 export interface IPAddress {
   id: string;
   ipAddress: string;
-  subnetId?: string; // Made optional
+  subnetId?: string; 
   vlanId?: string; // IP-specific VLAN override
   status: IPAddressStatus;
   allocatedTo?: string;
@@ -34,14 +36,15 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  roleId: string;
+  roleId: string; // Corresponds to Role.id
+  roleName?: RoleName; // Denormalized for convenience, corresponds to Role.name
   avatar?: string; // URL to avatar image
   lastLogin?: string; // Timestamp
 }
 
 export interface Role {
   id: string;
-  name: string;
+  name: RoleName; // Changed from string
   description?: string;
   userCount?: number; // Derived data for display
 }

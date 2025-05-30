@@ -1,5 +1,5 @@
 
-"use client"; // Mark as client component for interactivity
+"use client"; 
 
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
@@ -7,10 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; // For export example
+import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; 
 
 export default function ImportExportPage() {
   const [importFile, setImportFile] = React.useState<File | null>(null);
@@ -29,7 +28,7 @@ export default function ImportExportPage() {
           variant: "destructive",
         });
         setImportFile(null);
-        event.target.value = ""; // Reset file input
+        event.target.value = ""; 
       }
     }
   };
@@ -40,21 +39,15 @@ export default function ImportExportPage() {
       return;
     }
     setIsImporting(true);
-    // Simulate import process
     await new Promise(resolve => setTimeout(resolve, 2000));
-    // Placeholder: In a real app, parse the file and call server actions
-    // For example, for each row: validate data, then call createSubnetAction, etc.
-    // This requires a library like 'xlsx' or 'papaparse'.
     
-    // Simulate validation errors for some columns
-    const validationSuccess = Math.random() > 0.3; // Simulate random success/failure
+    const validationSuccess = Math.random() > 0.3; 
     if (validationSuccess) {
       toast({ title: "Import Successful", description: `${importFile.name} has been imported (simulated).` });
     } else {
        toast({ title: "Import Failed", description: `Validation errors in ${importFile.name}. Columns A, C have issues (simulated).`, variant: "destructive" });
     }
     setImportFile(null); 
-    // Reset file input visually - this is tricky without direct DOM manipulation or a key change on the input
     const fileInput = document.getElementById('import-file-input') as HTMLInputElement | null;
     if(fileInput) fileInput.value = "";
 
@@ -62,8 +55,6 @@ export default function ImportExportPage() {
   };
 
   const handleExport = (dataType: "subnets" | "vlans" | "ips") => {
-    // Placeholder: In a real app, fetch data and use 'xlsx' to generate Excel.
-    // For simulation, we'll generate a CSV string and trigger download.
     let dataToExport: any[] = [];
     let filename = `${dataType}_export.csv`;
     let csvContent = "";
@@ -71,20 +62,21 @@ export default function ImportExportPage() {
     const convertToCSV = (data: any[], headers: string[]) => {
       let csv = headers.join(",") + "\n";
       data.forEach(row => {
-        csv += headers.map(header => JSON.stringify(row[header] || "")).join(",") + "\n";
+        csv += headers.map(header => JSON.stringify(row[header as keyof typeof row] || "")).join(",") + "\n";
       });
       return csv;
     };
 
+    // Note: Using mock data directly. A real export would fetch fresh data via actions.
     if (dataType === "subnets") {
-      dataToExport = mockSubnets;
-      csvContent = convertToCSV(dataToExport, ["id", "networkAddress", "subnetMask", "gateway", "vlanId", "description", "utilization"]);
+      dataToExport = mockSubnets; 
+      csvContent = convertToCSV(dataToExport, ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "description", "utilization"]);
     } else if (dataType === "vlans") {
       dataToExport = mockVLANs;
       csvContent = convertToCSV(dataToExport, ["id", "vlanNumber", "description", "subnetCount"]);
     } else if (dataType === "ips") {
       dataToExport = mockIPAddresses;
-      csvContent = convertToCSV(dataToExport, ["id", "ipAddress", "subnetId", "status", "allocatedTo", "description"]);
+      csvContent = convertToCSV(dataToExport, ["id", "ipAddress", "subnetId", "vlanId", "status", "allocatedTo", "description"]);
     }
 
     if(dataToExport.length === 0) {

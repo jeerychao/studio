@@ -1,5 +1,8 @@
 
-import { Globe } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { Globe, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,18 +13,40 @@ import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
-import { Edit, Trash2 } from "lucide-react";
+import { useCurrentUser, canEditIpResources } from "@/hooks/use-current-user";
+import { useToast } from "@/hooks/use-toast";
+import { useSearchParams } from 'next/navigation';
 
-export default async function IPAddressesPage({
-  searchParams,
-}: {
-  searchParams?: { [key: string]: string | string[] | undefined };
-}) {
-  const selectedSubnetId = typeof searchParams?.subnetId === 'string' ? searchParams.subnetId : undefined;
 
-  const ipAddresses = await getIPAddressesAction(selectedSubnetId);
-  const subnets = await getSubnetsAction();
-  const vlans = await getVLANsAction();
+export default function IPAddressesPage() { // Removed searchParams from props, will use hook
+  const searchParams = useSearchParams(); // Hook to get search params
+  const selectedSubnetId = searchParams.get("subnetId") || undefined;
+
+  const [ipAddresses, setIpAddresses] = React.useState<IPAddress[]>([]);
+  const [subnets, setSubnets] = React.useState<Subnet[]>([]);
+  const [vlans, setVlans] = React.useState<VLAN[]>([]);
+  
+  const currentUser = useCurrentUser();
+  const { toast } = useToast();
+
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        const [fetchedIps, fetchedSubnets, fetchedVlans] = await Promise.all([
+          getIPAddressesAction(selectedSubnetId),
+          getSubnetsAction(),
+          getVLANsAction(),
+        ]);
+        setIpAddresses(fetchedIps);
+        setSubnets(fetchedSubnets);
+        setVlans(fetchedVlans);
+      } catch (error) {
+        toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      }
+    }
+    fetchData();
+  }, [selectedSubnetId, toast]);
+
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
     switch (status) {
@@ -36,26 +61,20 @@ export default async function IPAddressesPage({
 
   const getVlanDisplayForIp = (ip: IPAddress): string => {
     let vlanToDisplay: VLAN | undefined;
-
-    // 1. Check for IP-specific VLAN override
-    if (ip.vlanId) {
+    if (ip.vlanId) { // IP has direct VLAN override
       vlanToDisplay = vlans.find(v => v.id === ip.vlanId);
-    }
-    // 2. If no IP-specific override, check subnet's VLAN
-    else if (ip.subnetId) {
+    } else if (ip.subnetId) { // Fallback to subnet's VLAN
       const subnet = subnets.find(s => s.id === ip.subnetId);
       if (subnet?.vlanId) {
         vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
       } else if (subnet) {
-        return "No VLAN (Subnet)"; // Subnet exists but not assigned to a VLAN
+        return "No VLAN (Subnet)"; 
       }
     }
-
-    if (vlanToDisplay) {
-      return `${vlanToDisplay.vlanNumber}`;
-    }
-    return "N/A"; // No VLAN assigned directly or via subnet
+    return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "N/A";
   };
+
+  const canEdit = canEditIpResources(currentUser.roleName);
 
   return (
     <>
@@ -66,8 +85,7 @@ export default async function IPAddressesPage({
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
-        {/* Pass vlans to the IPAddressFormSheet for the Add IP Address button */}
-        <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} />
+        {canEdit && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} />}
       </div>
 
       <Card>
@@ -90,7 +108,7 @@ export default async function IPAddressesPage({
                   <TableHead>Subnet</TableHead>
                   <TableHead>VLAN</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {canEdit && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -110,24 +128,25 @@ export default async function IPAddressesPage({
                       <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{ip.description || "N/A"}</TableCell>
-                    <TableCell className="text-right">
-                      {/* Pass vlans to the IPAddressFormSheet for each row's Edit button */}
-                      <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId}>
-                        <Button variant="ghost" size="icon" aria-label="Edit IP Address">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </IPAddressFormSheet>
-                      <DeleteConfirmationDialog
-                        itemId={ip.id}
-                        itemName={ip.ipAddress}
-                        deleteAction={deleteIPAddressAction}
-                        triggerButton={
-                          <Button variant="ghost" size="icon" aria-label="Delete IP Address">
-                            <Trash2 className="h-4 w-4" />
+                    {canEdit && (
+                      <TableCell className="text-right">
+                        <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId}>
+                          <Button variant="ghost" size="icon" aria-label="Edit IP Address">
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        }
-                      />
-                    </TableCell>
+                        </IPAddressFormSheet>
+                        <DeleteConfirmationDialog
+                          itemId={ip.id}
+                          itemName={ip.ipAddress}
+                          deleteAction={deleteIPAddressAction}
+                          triggerButton={
+                            <Button variant="ghost" size="icon" aria-label="Delete IP Address">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -137,8 +156,7 @@ export default async function IPAddressesPage({
               <p className="text-muted-foreground">
                 {selectedSubnetId ? "No IP addresses found in this subnet." : "No IP addresses found. Select a subnet or add a new IP."}
               </p>
-              {/* Pass vlans to the IPAddressFormSheet for the "Add IP Address" button in empty state */}
-              <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} buttonProps={{className: "mt-4"}} />
+              {canEdit && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>

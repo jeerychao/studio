@@ -1,20 +1,43 @@
 
-import { NetworkIcon } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { NetworkIcon, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getSubnetsAction, getVLANsAction, deleteSubnetAction } from "@/lib/actions";
-import type { Subnet } from "@/types";
+import type { Subnet, VLAN } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2 } from "lucide-react";
+import { useCurrentUser, canEditIpResources } from "@/hooks/use-current-user";
+import { useToast } from "@/hooks/use-toast";
 
-export default async function SubnetsPage() {
-  const subnets = await getSubnetsAction();
-  const vlans = await getVLANsAction();
+export default function SubnetsPage() {
+  const [subnets, setSubnets] = React.useState<Subnet[]>([]);
+  const [vlans, setVlans] = React.useState<VLAN[]>([]);
+  const currentUser = useCurrentUser();
+  const { toast } = useToast();
+
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        const [fetchedSubnets, fetchedVlans] = await Promise.all([
+          getSubnetsAction(),
+          getVLANsAction(),
+        ]);
+        setSubnets(fetchedSubnets);
+        setVlans(fetchedVlans);
+      } catch (error) {
+        toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      }
+    }
+    fetchData();
+  }, [toast]);
+
 
   const getVlanNumber = (vlanId?: string) => {
     if (!vlanId) return "N/A";
@@ -22,13 +45,15 @@ export default async function SubnetsPage() {
     return vlan ? vlan.vlanNumber.toString() : "Unknown";
   };
 
+  const canEdit = canEditIpResources(currentUser.roleName);
+
   return (
     <>
       <PageHeader
         title="Subnet Management"
         description="View, create, and manage your network subnets."
         icon={NetworkIcon}
-        actionElement={<SubnetFormSheet vlans={vlans} />}
+        actionElement={canEdit ? <SubnetFormSheet vlans={vlans} /> : null}
       />
       
       <Card>
@@ -48,7 +73,7 @@ export default async function SubnetsPage() {
                   <TableHead>VLAN</TableHead>
                   <TableHead>Utilization</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {canEdit && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -71,23 +96,25 @@ export default async function SubnetsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{subnet.description || "N/A"}</TableCell>
-                    <TableCell className="text-right">
-                      <SubnetFormSheet subnet={subnet} vlans={vlans}>
-                        <Button variant="ghost" size="icon" aria-label="Edit subnet">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </SubnetFormSheet>
-                      <DeleteConfirmationDialog
-                        itemId={subnet.id}
-                        itemName={subnet.cidr}
-                        deleteAction={deleteSubnetAction}
-                        triggerButton={
-                          <Button variant="ghost" size="icon" aria-label="Delete subnet">
-                            <Trash2 className="h-4 w-4" />
+                    {canEdit && (
+                      <TableCell className="text-right">
+                        <SubnetFormSheet subnet={subnet} vlans={vlans}>
+                          <Button variant="ghost" size="icon" aria-label="Edit subnet">
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        }
-                      />
-                    </TableCell>
+                        </SubnetFormSheet>
+                        <DeleteConfirmationDialog
+                          itemId={subnet.id}
+                          itemName={subnet.cidr}
+                          deleteAction={deleteSubnetAction}
+                          triggerButton={
+                            <Button variant="ghost" size="icon" aria-label="Delete subnet">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -95,7 +122,7 @@ export default async function SubnetsPage() {
           ) : (
             <div className="text-center py-10">
               <p className="text-muted-foreground">No subnets found.</p>
-              <SubnetFormSheet vlans={vlans} buttonProps={{ className: "mt-4" }} />
+              {canEdit && <SubnetFormSheet vlans={vlans} buttonProps={{ className: "mt-4" }} />}
             </div>
           )}
         </CardContent>

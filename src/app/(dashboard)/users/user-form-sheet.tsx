@@ -37,38 +37,30 @@ import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Role } from "@/types";
 import { createUserAction, updateUserAction } from "@/lib/actions";
+import { ADMIN_ROLE_ID } from "@/lib/data"; // For role logic if needed
 
 const userFormSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username too long"),
   email: z.string().email("Invalid email address"),
   roleId: z.string().min(1, "Role is required"),
   password: z.preprocess(
-    (val) => (val === "" ? undefined : val), // Convert empty string to undefined before validation
+    (val) => (val === "" ? undefined : val), 
     z.string()
       .min(8, "Password must be 8-16 characters long.")
       .max(16, "Password must be 8-16 characters long.")
-      .refine(val => /[A-Z]/.test(val), {
-        message: "Password must contain at least one uppercase letter.",
-      })
-      .refine(val => /[a-z]/.test(val), {
-        message: "Password must contain at least one lowercase letter.",
-      })
-      .refine(val => /[0-9]/.test(val), {
-        message: "Password must contain at least one number.",
-      })
-      .refine(val => /[^A-Za-z0-9]/.test(val), {
-        message: "Password must contain at least one symbol.",
-      })
-      .optional() // Makes the whole chain optional; required for new users is handled in onSubmit
+      .refine(val => /[A-Z]/.test(val), "Must contain an uppercase letter.")
+      .refine(val => /[a-z]/.test(val), "Must contain a lowercase letter.")
+      .refine(val => /[0-9]/.test(val), "Must contain a number.")
+      .refine(val => /[^A-Za-z0-9]/.test(val), "Must contain a symbol.")
+      .optional()
   ),
   confirmPassword: z.string().optional().transform(e => e === "" ? undefined : e),
 })
 .refine((data) => {
-  // Passwords must match if a password is provided
   if (data.password || data.confirmPassword) {
     return data.password === data.confirmPassword;
   }
-  return true; // No password provided, so no mismatch
+  return true; 
 }, {
   message: "Passwords do not match",
   path: ["confirmPassword"], 
@@ -79,7 +71,7 @@ type UserFormValues = z.infer<typeof userFormSchema>;
 
 interface UserFormSheetProps {
   user?: User;
-  roles: Role[];
+  roles: Role[]; // Expects the fixed roles
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
 }
@@ -92,9 +84,9 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
-      username: user?.username || "",
-      email: user?.email || "",
-      roleId: user?.roleId || "",
+      username: "",
+      email: "",
+      roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "", // Default to Viewer or first available
       password: "",
       confirmPassword: "",
     },
@@ -105,7 +97,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         form.reset({
         username: user?.username || "",
         email: user?.email || "",
-        roleId: user?.roleId || (roles.length > 0 ? roles[0].id : ""),
+        roleId: user?.roleId || (roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || ""),
         password: "", 
         confirmPassword: "",
         });
@@ -113,7 +105,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
   }, [isOpen, user, roles, form]);
 
   async function onSubmit(data: UserFormValues) {
-    if (!isEditing && !data.password) { // Password is required for new users
+    if (!isEditing && !data.password) {
         form.setError("password", { type: "manual", message: "Password is required for new users." });
         toast({ title: "Password Required", description: "Password is required for new users.", variant: "destructive" });
         return;
@@ -134,11 +126,16 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         await updateUserAction(user.id, payload);
         toast({ title: "User Updated", description: `User ${data.username} has been successfully updated.` });
       } else {
+        // Ensure password is provided for new user action call
+        if (!payload.password) {
+            toast({ title: "Password Error", description: "Password is unexpectedly missing for new user.", variant: "destructive" });
+            return;
+        }
         await createUserAction(payload as Omit<User, "id" | "avatar" | "lastLogin"> & { password: string });
         toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
       }
       setIsOpen(false);
-      form.reset(); 
+      // form.reset(); // Reset is handled by useEffect on open
     } catch (error) {
       toast({
         title: "Error",
@@ -201,7 +198,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={roles.length === 0}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={roles.length === 0}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder={roles.length > 0 ? "Select a role" : "No roles available"} />
@@ -229,7 +226,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
                     <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
                   </FormControl>
                   <FormDescription>
-                    Password must be 8-16 characters long and include at least one uppercase letter, one lowercase letter, one number, and one symbol.
+                    8-16 characters. Must include uppercase, lowercase, number, and symbol.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -264,4 +261,3 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
     </Sheet>
   );
 }
-
