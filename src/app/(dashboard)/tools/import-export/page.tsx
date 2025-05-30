@@ -121,16 +121,20 @@ export default function ImportExportPage() {
             effectiveVlanNumberStr = directVlan.vlanNumber.toString();
           }
         } else if (ip.subnetId) { // Inherited from subnet
-          const parentSubnet = mockSubnets.find(s => s.id === ip.subnetId);
-          if (parentSubnet?.vlanId) {
-            const inheritedVlan = mockVLANs.find(v => v.id === parentSubnet.vlanId);
+          const parentSubnetForIp = mockSubnets.find(s => s.id === ip.subnetId);
+          if (parentSubnetForIp?.vlanId) {
+            const inheritedVlan = mockVLANs.find(v => v.id === parentSubnetForIp.vlanId);
             if (inheritedVlan) {
               effectiveVlanNumberStr = inheritedVlan.vlanNumber.toString();
             }
           }
         }
+
+        const parentSubnet = ip.subnetId ? mockSubnets.find(s => s.id === ip.subnetId) : undefined;
+
         return {
           ...rest,
+          subnetCidr: parentSubnet ? parentSubnet.cidr : "",
           vlanNumber: effectiveVlanNumberStr,
           subnetId: ip.subnetId || "",
           allocatedTo: ip.allocatedTo || "",
@@ -138,7 +142,7 @@ export default function ImportExportPage() {
         };
       });
       dataToExport = ipsForCsv;
-      csvHeaders = ["id", "ipAddress", "subnetId", "vlanNumber", "status", "allocatedTo", "description"];
+      csvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanNumber", "status", "allocatedTo", "description"];
       csvContent = convertToCSV(dataToExport, csvHeaders);
     }
 
@@ -236,3 +240,4 @@ export default function ImportExportPage() {
     </>
   );
 }
+
