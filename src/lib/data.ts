@@ -1,5 +1,5 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog } from '@/types'; // Added AuditLog
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog } from '@/types';
 import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils';
 import { PERMISSIONS } from '@/types';
 
@@ -43,7 +43,8 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, name: 'View Import/Export Tool', group: 'Tools' },
   { id: PERMISSIONS.PERFORM_TOOLS_IMPORT, name: 'Perform Data Import', group: 'Tools' },
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: 'Perform Data Export', group: 'Tools' },
-  // Removed AI Subnet Suggestion Permissions
+  // Settings
+  { id: PERMISSIONS.VIEW_SETTINGS, name: 'View Settings', group: 'System Settings' },
 ];
 
 // Helper to generate initial subnet data with calculated fields
@@ -81,11 +82,11 @@ export const mockVLANs: VLAN[] = [
 ];
 
 export const mockIPAddresses: IPAddress[] = [
-  { id: 'ip-1', ipAddress: '192.168.1.10', subnetId: 'subnet-1', status: 'allocated', allocatedTo: 'John Doe\'s PC', description: 'Marketing Department' },
-  { id: 'ip-2', ipAddress: '192.168.1.11', subnetId: 'subnet-1', status: 'free' },
-  { id: 'ip-3', ipAddress: '192.168.1.12', subnetId: 'subnet-1', status: 'reserved', description: 'Future Printer' },
-  { id: 'ip-4', ipAddress: '10.0.1.5', subnetId: 'subnet-2', status: 'allocated', allocatedTo: 'WebServer01' },
-  { id: 'ip-5', ipAddress: '10.0.1.6', subnetId: 'subnet-2', status: 'allocated', allocatedTo: 'DBServer01' },
+  { id: 'ip-1', ipAddress: '192.168.1.10', subnetId: 'subnet-1', vlanId: undefined, status: 'allocated', allocatedTo: 'John Doe\'s PC', description: 'Marketing Department' },
+  { id: 'ip-2', ipAddress: '192.168.1.11', subnetId: 'subnet-1', vlanId: undefined, status: 'free' },
+  { id: 'ip-3', ipAddress: '192.168.1.12', subnetId: 'subnet-1', vlanId: undefined, status: 'reserved', description: 'Future Printer' },
+  { id: 'ip-4', ipAddress: '10.0.1.5', subnetId: 'subnet-2', vlanId: undefined, status: 'allocated', allocatedTo: 'WebServer01' },
+  { id: 'ip-5', ipAddress: '10.0.1.6', subnetId: 'subnet-2', vlanId: 'vlan-2', status: 'allocated', allocatedTo: 'DBServer01' }, // Example of IP-specific VLAN
 ];
 
 export const mockRoles: Role[] = [
@@ -168,3 +169,4 @@ export const getAuditLogs = async (): Promise<AuditLog[]> => {
 export const getAllPermissions = async (): Promise<Permission[]> => {
   return new Promise(resolve => setTimeout(() => resolve(mockPermissions), 50));
 };
+

@@ -12,9 +12,9 @@ import {
   ShieldCheck,
   Wrench,
   FileUp,
-  // BrainCircuit, // Removed: No longer used
-  Settings2,
-  ListChecks
+  // Settings2, // Explicitly ensuring Settings2 icon is not imported here if not used
+  ListChecks,
+  BrainCircuit 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -33,17 +33,17 @@ interface NavItemConfig {
   href: string;
   label: string;
   icon: React.ElementType;
-  requiredPermission?: PermissionId; // Permission needed to see this top-level item or group
+  requiredPermission?: PermissionId;
   subItems?: NavItemConfig[];
 }
 
 const navItemConfigs: NavItemConfig[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, requiredPermission: PERMISSIONS.VIEW_DASHBOARD },
   {
-    href: "/ip-management", // Dummy href for group, not directly navigable
+    href: "/ip-management",
     label: "IP Management",
     icon: Network,
-    requiredPermission: PERMISSIONS.VIEW_SUBNET, // Or a more generic VIEW_IP_MANAGEMENT if defined
+    requiredPermission: PERMISSIONS.VIEW_SUBNET, 
     subItems: [
       { href: "/subnets", label: "Subnets", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
       { href: "/vlans", label: "VLANs", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
@@ -51,66 +51,74 @@ const navItemConfigs: NavItemConfig[] = [
     ],
   },
   {
-    href: "/user-management", // Dummy href for group
+    href: "/user-management",
     label: "User Management",
     icon: Users,
-    requiredPermission: PERMISSIONS.VIEW_USER, // Or VIEW_ROLE
+    requiredPermission: PERMISSIONS.VIEW_USER,
     subItems: [
       { href: "/users", label: "Users", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
       { href: "/roles", label: "Roles", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
     ],
   },
   {
-    href: "/tools", // Dummy href for group
+    href: "/tools",
     label: "Tools",
     icon: Wrench,
-    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, // Or a general VIEW_TOOLS
+    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, 
     subItems: [
       { href: "/tools/import-export", label: "Import/Export", icon: FileUp, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
-      // Removed AI Subnet Suggestion link
+      // AI Subnet Suggestion and its link were removed in a previous step.
     ],
   },
   { href: "/audit-logs", label: "Audit Logs", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
+  // The "/settings" link is intentionally REMOVED from this main navigation array.
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const currentUser = useCurrentUser();
 
-  const filterNavItemsByPermission = (items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
+  const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
     if (!user) return [];
-    return items.filter(item => {
-      const hasAccess = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true; 
-      
-      if (hasAccess && item.subItems) {
-        item.subItems = filterNavItemsByPermission(item.subItems, user);
-        // If it's a group item and all its subItems are filtered out, don't show the group.
-        // Ensure "Tools" group remains if "Import/Export" is still there.
-        if ((item.href.includes("-management") || item.href === "/tools") && item.subItems.length === 0 && item.label !== "Tools") {
-             return false;
-        }
-        // Specifically for "Tools", if it has no subitems, hide it.
-        if (item.label === "Tools" && item.subItems.length === 0) {
-            return false;
+    return items.map(item => {
+      const hasAccess = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
+
+      if (!hasAccess) return null;
+
+      let filteredSubItems: NavItemConfig[] | undefined = undefined;
+      if (item.subItems) {
+        filteredSubItems = filterNavItemsByPermission(item.subItems, user);
+        if (filteredSubItems.length === 0) {
+           // If it's a group and has no visible sub-items, don't show the group itself
+           if (item.href.includes("-management") || item.href === "/tools") {
+             return null;
+           }
         }
       }
-      return hasAccess;
-    }).filter(item => item !== null); // Ensure we filter out nulls if groups become empty
-  };
-  
-  const accessibleNavItems = React.useMemo(() => filterNavItemsByPermission(navItemConfigs, currentUser), [currentUser]);
+      return { ...item, subItems: filteredSubItems };
+    }).filter(item => item !== null) as NavItemConfig[];
+  }, []);
+
+  const accessibleNavItems = React.useMemo(() => {
+      if (!currentUser) return [];
+      return filterNavItemsByPermission(navItemConfigs, currentUser);
+  }, [currentUser, filterNavItemsByPermission]);
+
 
   const [openAccordion, setOpenAccordion] = React.useState<string[]>(() => {
+    if (!accessibleNavItems) return [];
     const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     return activeParent ? [activeParent.href] : [];
   });
 
   React.useEffect(() => {
+    if (!accessibleNavItems) return;
     const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     if (activeParent && !openAccordion.includes(activeParent.href)) {
         setOpenAccordion(prev => {
             if (prev.includes(activeParent.href)) return prev;
-            return [...prev.filter(g => !navItemConfigs.find(i => i.href === g && i.subItems)), activeParent.href];
+            const nonGroupItems = prev.filter(g => !navItemConfigs.find(i => i.href === g && i.subItems));
+            return [...nonGroupItems, activeParent.href];
         });
     }
   }, [pathname, accessibleNavItems, openAccordion]);
@@ -119,7 +127,7 @@ export function SidebarNav() {
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
     const Icon = item.icon;
     const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/" && item.href.length > 1 && !item.subItems);
-    
+
     const linkClass = cn(
       "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
       isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
@@ -133,7 +141,7 @@ export function SidebarNav() {
             className={cn(
               linkClass,
               "justify-between hover:no-underline",
-               openAccordion.includes(item.href) && (isActive || item.subItems.some(sub => pathname.startsWith(sub.href))) ? "bg-sidebar-primary text-sidebar-primary-foreground" : 
+               openAccordion.includes(item.href) && (isActive || item.subItems.some(sub => pathname.startsWith(sub.href))) ? "bg-sidebar-primary text-sidebar-primary-foreground" :
                (openAccordion.includes(item.href) ? "text-sidebar-primary-foreground bg-sidebar-accent" : "")
             )}
           >
@@ -163,7 +171,7 @@ export function SidebarNav() {
   };
 
   if (!currentUser) {
-    return null; 
+    return null;
   }
 
   return (

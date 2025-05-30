@@ -41,8 +41,10 @@ export const PERMISSIONS = {
   // Tools
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
   PERFORM_TOOLS_IMPORT: 'tools.import_export.import', 
-  PERFORM_TOOLS_EXPORT: 'tools.import_export.export', 
-  // Removed AI Subnet Suggestion Permissions
+  PERFORM_TOOLS_EXPORT: 'tools.import_export.export',
+  
+  // Settings
+  VIEW_SETTINGS: 'settings.view',
 
 } as const;
 
@@ -79,7 +81,7 @@ export interface IPAddress {
   id: string;
   ipAddress: string;
   subnetId?: string;
-  vlanId?: string;
+  vlanId?: string; // IP-specific VLAN override
   status: IPAddressStatus;
   allocatedTo?: string;
   description?: string;
@@ -105,9 +107,6 @@ export interface Role {
 }
 
 
-// Removed AI Subnet Suggestion related types (ExistingSubnetInput, AISuggestion, AISuggestionResponse)
-
-
 // For Audit Logs (simplified)
 export interface AuditLog {
   id: string;
@@ -117,3 +116,4 @@ export interface AuditLog {
   timestamp: string;
   details?: string;
 }
+

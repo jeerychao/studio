@@ -1,7 +1,9 @@
 
-import type { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
-import { Network, Settings2 } from "lucide-react"; // Added Settings2 import
+// import type { Metadata } from "next"; // Removed as this is a client component
+import { Network, Settings2 } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -14,11 +16,32 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
+import { PERMISSIONS } from "@/types";
+import { hasPermission, useCurrentUser } from "@/hooks/use-current-user";
 
-export const metadata: Metadata = {
-  title: "IPAM Lite Dashboard",
-  description: "Manage your IP Address space with ease.",
-};
+// Client component to conditionally render settings button
+function ConditionalSettingsButton() {
+  const currentUser = useCurrentUser();
+  const canViewSettings = hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
+
+  if (!canViewSettings) {
+    return null;
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary-foreground group-data-[collapsible=icon]:justify-center"
+      asChild
+    >
+      <Link href="/settings">
+        <Settings2 className="h-5 w-5" />
+        <span className="ml-3 group-data-[collapsible=icon]:hidden">Settings</span>
+      </Link>
+    </Button>
+  );
+}
+
 
 export default function DashboardLayout({
   children,
@@ -38,11 +61,7 @@ export default function DashboardLayout({
           <SidebarNav />
         </SidebarContent>
         <SidebarFooter className="p-2 border-t mt-auto">
-          {/* Placeholder for footer content like settings or logout more prominently */}
-           <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary-foreground group-data-[collapsible=icon]:justify-center">
-            <Settings2 className="h-5 w-5" />
-            <span className="ml-3 group-data-[collapsible=icon]:hidden">Settings</span>
-          </Button>
+           <ConditionalSettingsButton />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
