@@ -12,10 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user"; // Import the key
+import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user"; 
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
@@ -38,13 +38,15 @@ export function Header() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex flex-col p-0 bg-sidebar text-sidebar-foreground">
-            <div className="flex h-16 items-center border-b px-6">
-              <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground">
-                <Network className="h-6 w-6 text-sidebar-primary" />
-                <span>IPAM Lite</span>
-              </Link>
-            </div>
-            <nav className="flex-1 overflow-auto py-4">
+            <SheetHeader className="border-b h-16 flex items-center px-6">
+              <SheetTitle asChild>
+                <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground">
+                  <Network className="h-6 w-6 text-sidebar-primary" />
+                  <span className="text-lg">IPAM Lite</span>
+                </Link>
+              </SheetTitle>
+            </SheetHeader>
+            <nav className="flex-1 overflow-auto py-4 px-2"> {/* Added px-2 for consistent padding if items have their own */}
               <SidebarNav />
             </nav>
           </SheetContent>
