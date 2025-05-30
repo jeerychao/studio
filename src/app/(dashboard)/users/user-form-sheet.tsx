@@ -124,10 +124,15 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
     try {
       if (isEditing && user) {
         await updateUserAction(user.id, payload);
-        toast({ title: "User Updated", description: `User ${data.username} has been successfully updated.` });
+        let toastDescription = `User ${data.username} has been successfully updated.`;
+        if (payload.password) {
+          toastDescription += " Password has been changed.";
+        }
+        toast({ title: "User Updated", description: toastDescription });
       } else {
         // Ensure password is provided for new user action call
         if (!payload.password) {
+            // This case should ideally be caught by the initial check, but as a safeguard:
             toast({ title: "Password Error", description: "Password is unexpectedly missing for new user.", variant: "destructive" });
             return;
         }
