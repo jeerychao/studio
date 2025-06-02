@@ -14,7 +14,7 @@ import {
   FileUp,
   // Settings2, // Explicitly ensuring Settings2 icon is not imported here if not used
   ListChecks,
-  BrainCircuit 
+  // BrainCircuit icon removed as AI subnet suggestion is removed
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -67,7 +67,7 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, 
     subItems: [
       { href: "/tools/import-export", label: "Import/Export", icon: FileUp, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
-      // AI Subnet Suggestion and its link were removed in a previous step.
+      // AI Subnet Suggestion link is fully removed
     ],
   },
   { href: "/audit-logs", label: "Audit Logs", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
@@ -88,8 +88,11 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
+        // If it's a group and has no visible sub-items, AND the group itself requires a permission that is met,
+        // but all its children are not permitted OR there are no children left after filtering, then decide if the group itself should be shown.
+        // For "Tools", if "Import/Export" is the only item and it's permitted, show "Tools". If "Import/Export" is not permitted, "Tools" group will also be hidden.
         if (filteredSubItems.length === 0) {
-           // If it's a group and has no visible sub-items, don't show the group itself
+           // If it's a group like "IP Management", "User Management", or "Tools" and it has no visible sub-items, hide the group.
            if (item.href.includes("-management") || item.href === "/tools") {
              return null;
            }
@@ -101,7 +104,15 @@ export function SidebarNav() {
 
   const accessibleNavItems = React.useMemo(() => {
       if (!currentUser) return [];
-      return filterNavItemsByPermission(navItemConfigs, currentUser);
+      let items = filterNavItemsByPermission(navItemConfigs, currentUser);
+      // Further prune top-level items that are groups but ended up with no sub-items
+      items = items.filter(item => {
+        if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
+            return false;
+        }
+        return true;
+      });
+      return items;
   }, [currentUser, filterNavItemsByPermission]);
 
 

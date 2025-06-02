@@ -15,11 +15,13 @@ services:
     #   dockerfile: Dockerfile
     container_name: ipam_app_prod
     ports:
-      # Map host port 80 (or another preferred port) to container port 3000
-      # If using a reverse proxy like Nginx, it might listen on 80/443
-      # and forward to this container, so you might not expose directly to the internet here.
-      # Example: "127.0.0.1:8080:3000" to only be accessible from host for reverse proxy
-      - "3000:3000"
+      # Map host port (e.g., 80 or other for reverse proxy) to container port 3000
+      # Example for production: "80:3000" if Nginx on host listens on 443 and forwards to 80,
+      # or Nginx itself runs in a container and this app is on a shared Docker network.
+      # For direct access for testing (not recommended for prod without reverse proxy):
+      # - "3000:3000"
+      # For a reverse proxy setup where Nginx runs on the host and forwards to this container's port:
+      - "127.0.0.1:3001:3000" # Example: Nginx on host forwards to host's 3001, which maps to container's 3000
     env_file:
       - ./production.env # Load environment variables from this file
     restart: unless-stopped
