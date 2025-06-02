@@ -35,6 +35,7 @@ function LoadingIPAddresses() {
         </CardHeader>
         <CardContent>
           <div className="text-center py-10">
+             <Globe className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
             <p className="text-muted-foreground">Loading data...</p>
           </div>
         </CardContent>

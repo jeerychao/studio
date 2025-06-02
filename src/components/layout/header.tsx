@@ -16,8 +16,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
 import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user"; 
-// Removed useCurrentUser import from here as it's not directly used for display values in this simplified header.
-// User-specific info (like username in dropdown) would require it.
+// useCurrentUser is not directly used here anymore for user display,
+// as ConditionalSettingsButton and other components handle their own user data needs.
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
@@ -25,7 +25,7 @@ export function Header() {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login'; // Redirect to login after logout
+      window.location.href = '/login'; // Direct navigation to login
     }
   };
 

@@ -33,7 +33,9 @@ export default function VlansPage() {
          toast({ title: "Error fetching VLANs", description: (error as Error).message, variant: "destructive" });
       }
     }
-    fetchVlans();
+    if (!isAuthLoading && currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
+        fetchVlans();
+    }
   }, [toast, currentUser, isAuthLoading]);
 
   if (isAuthLoading) {

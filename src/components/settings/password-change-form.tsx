@@ -18,7 +18,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { updateOwnPasswordAction } from "@/lib/actions";
-// Removed User type import as we use currentUser from hook
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const passwordChangeSchema = z.object({

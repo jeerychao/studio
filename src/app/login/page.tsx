@@ -35,12 +35,15 @@ export default function LoginPage() {
     }
 
     if (currentUser && currentUser.id) { 
+      // Check if it's NOT the specific guest fallback user
       if (!(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setPageAuthStatus('authenticated');
       } else {
         setPageAuthStatus('unauthenticated');
       }
     } else {
+       // Should not happen if isAuthLoading is false and currentUser is null/undefined
+       // but treat as unauthenticated as a fallback.
        setPageAuthStatus('unauthenticated');
     }
   }, [currentUser, isAuthLoading]);
@@ -59,11 +62,12 @@ export default function LoginPage() {
 
     await new Promise(resolve => setTimeout(resolve, 1000)); 
 
-    if (foundUser && password) { 
+    if (foundUser && password) { // Simplified: just check if password is not empty
       if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
         (window as any).setCurrentMockUser(foundUser.id); 
         // setCurrentMockUser will trigger a reload, then the redirection logic will take over.
         toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
+        // No need to manually redirect here, as the reload will trigger the auth check.
       } else {
         toast({ title: "Login Error", description: "Unable to set user. Developer function missing.", variant: "destructive" });
       }

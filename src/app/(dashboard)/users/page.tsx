@@ -40,7 +40,9 @@ export default function UsersPage() {
         toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       }
     }
-   fetchData();
+    if (!isAuthLoading && currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
+        fetchData();
+    }
   }, [toast, currentUser, isAuthLoading]);
 
   const getRoleName = (roleId: string) => {

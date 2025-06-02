@@ -38,8 +38,6 @@ export function useCurrentUser(): UseCurrentUserReturn {
       const userExists = mockUsers.find(u => u.id === userId);
       if (userExists) {
         localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-        // Removed window.location.reload(); to allow for smoother SPA navigation if desired,
-        // but for this app's current login flow, reload is fine. Re-adding it if issues persist without it.
         window.location.reload(); 
       } else {
         console.error(`User with ID ${userId} not found in mockUsers. Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
@@ -68,7 +66,6 @@ export function useCurrentUser(): UseCurrentUserReturn {
 
   const currentUserValue = React.useMemo(() => {
     // If on server OR on client but not yet initialized by useEffect, return guest.
-    // This ensures SSR provides a guest, and client initially also sees guest until localStorage is checked.
     if (!isClient || !isInitialized) {
       const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return { 

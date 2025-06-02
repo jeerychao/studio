@@ -76,7 +76,7 @@ export function SidebarNav() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
-    if (!user) return [];
+    if (!user) return []; // If no user context, no items are accessible
     return items.map(item => {
       const hasAccessToItem = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
 
@@ -85,8 +85,6 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        // If it's a parent category like "IP Management" and all its sub-items are filtered out,
-        // then this parent category itself should not be rendered.
         if (filteredSubItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
            return null; 
         }
@@ -96,9 +94,8 @@ export function SidebarNav() {
   }, []);
 
   const accessibleNavItems = React.useMemo(() => {
-      if (isAuthLoading || !currentUser) return []; // Wait for auth to load
+      if (isAuthLoading || !currentUser) return []; // Wait for auth to load or if no currentUser
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
-      // Additional filter: if a top-level management/tools group has no visible sub-items, hide it.
       items = items.filter(item => {
         if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
             return false;
@@ -113,7 +110,6 @@ export function SidebarNav() {
 
   React.useEffect(() => {
     if (isAuthLoading || !accessibleNavItems || accessibleNavItems.length === 0) {
-        // If auth is loading or no items, ensure no accordions are programmatically opened
         setOpenAccordionItems(currentOpenItems => currentOpenItems.length > 0 ? [] : currentOpenItems);
         return;
     }
@@ -125,12 +121,9 @@ export function SidebarNav() {
             if (currentOpenItems.includes(activeParentGroup.href)) {
                 return currentOpenItems; 
             }
-            // Add the new active group. Consider if we want to keep others open or only the active one.
-            // For now, adding to existing manually opened ones.
             return [...currentOpenItems, activeParentGroup.href];
         });
     }
-    // If navigating to a non-accordion item, or an accordion item directly, existing open states are preserved.
   }, [pathname, accessibleNavItems, isAuthLoading]);
 
 
@@ -151,9 +144,9 @@ export function SidebarNav() {
       const triggerClass = cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
         isSubItem ? "text-sm" : "font-medium",
-        "justify-between hover:no-underline w-full", // Ensure trigger takes full width
+        "justify-between hover:no-underline w-full", 
          (isOpen && isActiveGroup) ? "bg-sidebar-primary text-sidebar-primary-foreground" :
-         (isOpen) ? "text-sidebar-primary-foreground bg-sidebar-accent" : "" // Style if open but not active group
+         (isOpen) ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
       );
 
       return (
@@ -188,10 +181,11 @@ export function SidebarNav() {
 
   if (isAuthLoading) {
     // Optionally, render a skeleton or loading state for the sidebar nav
-    return null; 
+    // For now, returning null to avoid rendering until auth is resolved.
+    return <div className="p-4 text-sm text-sidebar-foreground">Loading navigation...</div>;
   }
-  if (!currentUser) { // Should not happen if isAuthLoading is false
-    return null;
+  if (!currentUser) { // Should ideally not happen if isAuthLoading is false, but good for safety
+    return <div className="p-4 text-sm text-sidebar-foreground">Error loading user.</div>;
   }
 
 
