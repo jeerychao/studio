@@ -1,5 +1,5 @@
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma'; // Changed import
 import {
   mockPermissions as seedPermissionsData,
   mockRoles as seedRolesData,
@@ -14,7 +14,6 @@ import {
 } from '../src/lib/data';
 import type { PermissionId as AppPermissionId, RoleName as AppRoleName, IPAddressStatus as AppIPAddressStatus } from '../src/types';
 
-const prisma = new PrismaClient();
 
 async function main() {
   console.log('Start seeding ...');
@@ -71,7 +70,7 @@ async function main() {
       where: { email: userData.email },
       update: {
         username: userData.username,
-        password: `pass_${userData.username}`,
+        password: `pass_${userData.username}`, // In a real app, hash passwords
         roleId: userData.roleId,
         avatar: userData.avatar,
         lastLogin: userData.lastLogin ? new Date(userData.lastLogin) : new Date(),
@@ -80,7 +79,7 @@ async function main() {
         id: userData.id,
         username: userData.username,
         email: userData.email,
-        password: `pass_${userData.username}`,
+        password: `pass_${userData.username}`, // In a real app, hash passwords
         roleId: userData.roleId,
         avatar: userData.avatar,
         lastLogin: userData.lastLogin ? new Date(userData.lastLogin) : new Date(),

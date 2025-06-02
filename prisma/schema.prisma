@@ -1,36 +1,36 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-// Models for IPAM Lite
-
 model Subnet {
   id             String      @id @default(cuid())
-  cidr           String      @unique // e.g., 192.168.1.0/24
-  networkAddress String      // e.g., 192.168.1.0
-  subnetMask     String      // e.g., 255.255.255.0
-  ipRange        String?     // e.g., 192.168.1.1 - 192.168.1.254
+  cidr           String      @unique // e.g., "192.168.1.0/24"
+  networkAddress String // e.g., "192.168.1.0"
+  subnetMask     String // e.g., "255.255.255.0"
+  ipRange        String? // e.g., "192.168.1.1 - 192.168.1.254"
   description    String?
   vlanId         String?
-  vlan           VLAN?       @relation("SubnetVLAN", fields: [vlanId], references: [id], onDelete: SetNull)
-  ipAddresses    IPAddress[] @relation("IPSubnet")
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  ipAddresses    IPAddress[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model VLAN {
-  id                String      @id @default(cuid())
-  vlanNumber        Int         @unique // e.g., 10, 20
-  description       String?
-  subnets           Subnet[]    @relation("SubnetVLAN")
-  ipAddressesDirect IPAddress[] @relation("IPAddressVLAN") // Added opposite relation
+  id          String    @id @default(cuid())
+  vlanNumber  Int       @unique // e.g., 10, 20
+  description String?
+  subnets     Subnet[]
+  ipAddresses IPAddress[] // For IPs directly assigned to this VLAN without a subnet
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -38,22 +38,24 @@ model VLAN {
 
 model IPAddress {
   id           String  @id @default(cuid())
-  ipAddress    String  // e.g., 192.168.1.100
-  status       String  // Changed from IPAddressStatus enum
-  allocatedTo  String? // e.g., "John Doe's Laptop", "Server-01"
+  ipAddress    String // e.g., "192.168.1.100"
+  status       String // "allocated", "free", "reserved" (Prisma enum for DB, string for app type)
+  allocatedTo  String? // hostname, device name, or user
   description  String?
+  subnetId     String?
+  subnet       Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull)
+  vlanId       String? // IP-specific VLAN override
+  vlan         VLAN?   @relation(fields: [vlanId], references: [id], onDelete: SetNull) // Relation for direct VLAN assignment
   lastSeen     DateTime?
-
-  subnetId String?
-  subnet   Subnet? @relation("IPSubnet", fields: [subnetId], references: [id], onDelete: SetNull)
-
-  vlanId       String?         // IP-specific VLAN override
-  vlan         VLAN?           @relation("IPAddressVLAN", fields: [vlanId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Unique constraint for IP within a specific subnet, or globally if no subnet
+  // Unique constraint for IP within a specific subnet (if subnetId is present)
+  // For IPs not in a subnet (subnetId is null), ipAddress itself should be unique globally among those.
+  // Prisma doesn't directly support conditional unique constraints like "unique(ipAddress) where subnetId is null".
+  // This will be handled by application logic or a more complex DB setup if truly needed.
+  // For now, let's ensure ipAddress + subnetId is unique.
   @@unique([ipAddress, subnetId])
 }
 
@@ -61,36 +63,34 @@ model User {
   id        String   @id @default(cuid())
   username  String   @unique
   email     String   @unique
-  password  String   // In a real app, this should be hashed
+  password  String // Hashed password
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
   avatar    String?
   lastLogin DateTime?
 
-  roleId String
-  role   Role   @relation(fields: [roleId], references: [id])
-
-  auditLogs AuditLog[] // User can have many audit log entries
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  auditLogs AuditLog[]
 }
 
 model Role {
-  id          String       @id @default(cuid())
-  name        String       @unique // Changed from RoleName enum
+  id          String       @id @default(cuid()) // e.g., "admin", "operator", "viewer"
+  name        String       @unique // "Administrator", "Operator", "Viewer" (Prisma enum for DB, string for app type)
   description String?
-  users       User[]       // A role can be assigned to multiple users
-  permissions Permission[] // A role can have multiple permissions
+  permissions Permission[] @relation("RolePermissions")
+  users       User[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Permission {
-  id          String @id @unique // Changed from PermissionId enum
-  name        String // e.g., "View Dashboard", "Create Subnets"
-  group       String // e.g., "Dashboard", "Subnet Management"
+  id          String @id // e.g., "subnet.create", "user.delete" (Prisma enum for DB, string for app type)
+  name        String @unique // e.g., "Create Subnets"
+  group       String // e.g., "Subnet Management", "User Management"
   description String?
-  roles       Role[] // A permission can be part of multiple roles
+  roles       Role[] @relation("RolePermissions")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -98,14 +98,13 @@ model Permission {
 
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String?  // Can be null for system actions
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull) // If user is deleted, log remains but userId is nullified
-  username  String?  // Denormalized for easier display if user is deleted
+  userId    String? // User who performed the action, null for system actions
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String?  // Denormalized username for easier display, or "System"
   action    String   // e.g., "create_subnet", "login_user"
-  details   String?  // e.g., "Created subnet 192.168.1.0/24"
   timestamp DateTime @default(now())
-}
+  details   String?  // JSON string or plain text with more details
 
-// Native enums removed as SQLite connector does not support them.
-// String types will be used in Prisma, and validation/constraints
-// will be handled at the application/seed level using TypeScript types.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

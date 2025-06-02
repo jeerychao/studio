@@ -1,18 +1,20 @@
-// src/lib/prisma.ts
-import { PrismaClient } from '@prisma/client';
+
+import { PrismaClient } from '@prisma/client'
+
+const prismaClientSingleton = () => {
+  return new PrismaClient({
+    // You can add logging options here if needed during debugging
+    // log: ['query', 'info', 'warn', 'error'],
+  })
+}
 
 declare global {
-  // allow global `var` declarations
-  // eslint-disable-next-line no-unused-vars
-  var prisma: PrismaClient | undefined;
+  // eslint-disable-next-line no-var
+  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
-export const prisma =
-  global.prisma ||
-  new PrismaClient({
-    // log: ['query', 'info', 'warn', 'error'], // Uncomment for debugging
-  });
+const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
 
-if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
-}
+export default prisma
+
+if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma

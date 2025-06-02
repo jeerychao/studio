@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission } from '@/types';
 import { PERMISSIONS } from '@/types';
-import { prisma } from "./prisma";
+import prisma from "./prisma"; // Changed import
 import { parseAndValidateCIDR, getUsableIpCount, isIpInCidrRange } from "./ip-utils";
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
 import { Prisma } from '@prisma/client';
