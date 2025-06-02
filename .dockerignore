@@ -1,36 +1,37 @@
 
-# Git files
+# Git
 .git
 .gitignore
 
-# Node modules
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Node
 node_modules
+npm-debug.log
+yarn-error.log
 
-# Next.js build output (we build it inside Docker)
+# Next.js
 .next
+dist
+out
 
-# Development and debugging
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.DS_Store
-
-# VSCode specific
-.vscode
-
-# Firebase App Hosting config (not needed for generic Docker)
-apphosting.yaml
-
-# README and components.json (usually not needed in prod image)
-README.md
-components.json
-
-# Environment files (should be passed at runtime or build time)
+# Env files
 .env
 .env*.local
 .env.development
-.env.production
+.env.test
+# production.env should be managed on the server or via CI/CD, not in the image context directly if it contains secrets
+# However, if you have a template or non-sensitive production env, you might adjust.
+# For the docker-compose env_file method, this file is on the host.
+# For Dockerfile COPY .env method, ensure it's secure.
+# Add production.env here if you never want it in any build context.
+production.env
 
-# Local test files or documentation
-# docs
-# tests
+# Editor/OS
+.vscode
+.DS_Store
+*.pem
+*.key

@@ -1,0 +1,38 @@
+
+version: '3.8'
+
+services:
+  ipam-app:
+    # Replace with your actual image name and tag from your registry
+    # e.g., your-registry-username/ipam-app:latest
+    # If building locally and not pushing to a registry first,
+    # you can use the image name you built with (e.g., ipam-app:latest)
+    # and ensure the 'build' context is not used here if image already exists.
+    image: ipam-app:latest # Default to local build if not specified otherwise
+    # Or, if you want docker-compose to build the image:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: ipam_app_prod
+    ports:
+      # Map host port 80 (or another preferred port) to container port 3000
+      # If using a reverse proxy like Nginx, it might listen on 80/443
+      # and forward to this container, so you might not expose directly to the internet here.
+      # Example: "127.0.0.1:8080:3000" to only be accessible from host for reverse proxy
+      - "3000:3000"
+    env_file:
+      - ./production.env # Load environment variables from this file
+    restart: unless-stopped
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes: # Optional: Define volumes if your app needs persistent storage (not typical for Next.js standalone apps unless handling uploads directly)
+  # Example:
+  # next_data:
+# Then in service:
+#  volumes:
+#    - next_data:/app/.next/cache # Example for persisting Next.js cache if desired, usually not needed for standalone
