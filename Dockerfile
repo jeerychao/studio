@@ -1,71 +1,71 @@
-# Stage 1: Builder
-# Use a Node.js version that is Debian Bookworm based (e.g., Node 20) for OpenSSL 3.x
+# Dockerfile
+
+# ---- Builder Stage ----
+# Use Node.js 20 (Debian Bookworm base, includes OpenSSL 3.x)
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Install openssl CLI and curl (might be used by Prisma to download engines)
-# Also install python and make for node-gyp if any native modules need compilation
+# Install OS packages needed for Prisma (and potentially other native modules)
+# openssl (CLI tools), libssl-dev (headers, though Prisma might not need for precompiled), curl (Prisma uses for downloads)
 RUN apt-get update && \
-    apt-get install -y openssl curl python3 make g++ --no-install-recommends && \
+    apt-get install -y openssl curl --no-install-recommends && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and package-lock.json (or yarn.lock)
-COPY package*.json ./
-COPY prisma ./prisma/
-
-# Install dependencies (this will also run `prisma generate` due to postinstall script)
-# Using npm ci for cleaner installs in CI/CD or build environments
-RUN npm ci
+# Copy package files and install dependencies
+COPY package.json package-lock.json* ./
+RUN npm install --include=dev # Install all dependencies including dev for prisma generate
 
 # Copy the rest of the application code
 COPY . .
 
+# Generate Prisma Client (should pick up debian-openssl-3.0.x)
+RUN npx prisma generate
+
 # Build the Next.js application
-# The `prisma generate` should have already run, but it's harmless to run it again if needed.
-# However, `postinstall` in `npm ci` should cover it.
-# RUN npx prisma generate # Usually not needed here if postinstall is effective
 RUN npm run build
 
-# Stage 2: Runner
-# Use the same Node.js base image as the builder for consistency with OpenSSL versions
+# ---- Runner Stage ----
+# Use Node.js 20 slim (Debian Bookworm base, for OpenSSL 3.x compatibility)
 FROM node:20-slim AS runner
 WORKDIR /app
 
+# Set environment to production
 ENV NODE_ENV production
-# Set the default DATABASE_URL. This can be overridden at runtime if needed.
-ENV DATABASE_URL="file:/app/prisma/ipam.db"
+# Default DATABASE_URL, can be overridden
+ENV DATABASE_URL file:./prisma/ipam.db
 
 # Create a non-root user and group
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Install OpenSSL 3.x runtime dependencies and curl
-# For Debian Bookworm (node:20-slim), libssl3 is the package for OpenSSL 3.x libraries
+# Copy built application from builder stage (standalone output)
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+# Copy the Prisma schema and SQLite database file
+COPY --from=builder /app/prisma ./prisma
+
+# After copying the standalone output, explicitly copy the .prisma/client directory
+# to ensure the correct query engine and its dependencies are present.
+# This is critical for Prisma to find its engine, especially the one for OpenSSL 3.x
+COPY --from=builder /app/node_modules/.prisma/client ./node_modules/.prisma/client
+
+# Install necessary OpenSSL runtime libraries (libssl3 for OpenSSL 3.x) and curl
+# Also run ldconfig to update shared library cache
 RUN apt-get update && \
     apt-get install -y libssl3 curl --no-install-recommends && \
     ldconfig && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the standalone Next.js application output
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-# Copy the public folder
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-# Copy the .next/static folder for static assets
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copy the Prisma schema and the SQLite database file
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-# Ensure the .prisma/client directory with the correct query engine is copied
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma/client ./node_modules/.prisma/client
-
-# Set the user to the non-root user
+# Change ownership of the copied files to the non-root user
+# Ensure the user can write to the database directory if it's inside /app/prisma
+RUN chown -R nextjs:nodejs /app
 USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-
-# server.js is created by Next.js standalone output
+# Command to run the Next.js standalone server
 CMD ["node", "server.js"]
