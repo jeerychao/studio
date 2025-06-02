@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-// import type { Metadata } from "next"; // Removed as this is a client component
+import { useRouter } from 'next/navigation'; // For App Router
+import * as React from "react";
 import { Network, Settings2 } from "lucide-react";
 import {
   SidebarProvider,
@@ -17,9 +18,8 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { PERMISSIONS } from "@/types";
-import { hasPermission, useCurrentUser } from "@/hooks/use-current-user";
+import { hasPermission, useCurrentUser, MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
 
-// Client component to conditionally render settings button
 function ConditionalSettingsButton() {
   const currentUser = useCurrentUser();
   const canViewSettings = hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
@@ -42,12 +42,45 @@ function ConditionalSettingsButton() {
   );
 }
 
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const currentUser = useCurrentUser();
+  const router = useRouter();
+  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+
+  React.useEffect(() => {
+    // useCurrentUser hook has its own useEffect to sync with localStorage.
+    // We check currentUser properties once it's stable.
+    if (currentUser && currentUser.id) { // Ensure currentUser object and id exist
+      if (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest') {
+        setAuthStatus('unauthenticated');
+        router.replace('/login');
+      } else {
+        setAuthStatus('authenticated');
+      }
+    }
+    // If currentUser or currentUser.id is not yet available, it remains 'loading'
+    // This might happen if useCurrentUser is still initializing
+  }, [currentUser, router]);
+
+  if (authStatus === 'loading') {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Network className="h-12 w-12 animate-spin text-primary" /> 
+        <p className="ml-4 text-lg">Loading application...</p>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
+    // Should be redirected by the useEffect, but as a fallback, don't render children.
+    // Or, you can return a minimal message here too.
+    return null; 
+  }
+
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">

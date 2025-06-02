@@ -12,9 +12,7 @@ import {
   ShieldCheck,
   Wrench,
   FileUp,
-  // Settings2, // Explicitly ensuring Settings2 icon is not imported here if not used
   ListChecks,
-  // BrainCircuit icon removed as AI subnet suggestion is removed
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -67,11 +65,9 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, 
     subItems: [
       { href: "/tools/import-export", label: "Import/Export", icon: FileUp, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
-      // AI Subnet Suggestion link is fully removed
     ],
   },
   { href: "/audit-logs", label: "Audit Logs", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
-  // The "/settings" link is intentionally REMOVED from this main navigation array.
 ];
 
 export function SidebarNav() {
@@ -88,11 +84,7 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        // If it's a group and has no visible sub-items, AND the group itself requires a permission that is met,
-        // but all its children are not permitted OR there are no children left after filtering, then decide if the group itself should be shown.
-        // For "Tools", if "Import/Export" is the only item and it's permitted, show "Tools". If "Import/Export" is not permitted, "Tools" group will also be hidden.
         if (filteredSubItems.length === 0) {
-           // If it's a group like "IP Management", "User Management", or "Tools" and it has no visible sub-items, hide the group.
            if (item.href.includes("-management") || item.href === "/tools") {
              return null;
            }
@@ -105,7 +97,6 @@ export function SidebarNav() {
   const accessibleNavItems = React.useMemo(() => {
       if (!currentUser) return [];
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
-      // Further prune top-level items that are groups but ended up with no sub-items
       items = items.filter(item => {
         if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
             return false;
@@ -116,23 +107,27 @@ export function SidebarNav() {
   }, [currentUser, filterNavItemsByPermission]);
 
 
-  const [openAccordion, setOpenAccordion] = React.useState<string[]>(() => {
-    if (!accessibleNavItems) return [];
-    const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
-    return activeParent ? [activeParent.href] : [];
-  });
+  const [openAccordionItems, setOpenAccordionItems] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    if (!accessibleNavItems) return;
-    const activeParent = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
-    if (activeParent && !openAccordion.includes(activeParent.href)) {
-        setOpenAccordion(prev => {
-            if (prev.includes(activeParent.href)) return prev;
-            const nonGroupItems = prev.filter(g => !navItemConfigs.find(i => i.href === g && i.subItems));
-            return [...nonGroupItems, activeParent.href];
+    if (!accessibleNavItems || accessibleNavItems.length === 0) {
+        setOpenAccordionItems(currentOpenItems => currentOpenItems.length > 0 ? [] : currentOpenItems);
+        return;
+    }
+
+    const activeParentGroup = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
+
+    if (activeParentGroup) {
+        setOpenAccordionItems(currentOpenItems => {
+            if (currentOpenItems.includes(activeParentGroup.href)) {
+                return currentOpenItems; // Already open, no change needed
+            }
+            // Add the new active group, keeping others that were manually opened.
+            return [...currentOpenItems, activeParentGroup.href];
         });
     }
-  }, [pathname, accessibleNavItems, openAccordion]);
+    // If no active parent group, previously opened groups by the user remain open.
+  }, [pathname, accessibleNavItems]);
 
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
@@ -146,15 +141,21 @@ export function SidebarNav() {
     );
 
     if (item.subItems && item.subItems.length > 0) {
+      const isActiveGroup = item.subItems.some(sub => pathname.startsWith(sub.href));
+      const isOpen = openAccordionItems.includes(item.href);
+      
+      const triggerClass = cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center", // Base styles from linkClass
+        isSubItem ? "text-sm" : "font-medium", // Font size based on subItem or not
+        "justify-between hover:no-underline", // Accordion specific
+         isOpen && isActiveGroup ? "bg-sidebar-primary text-sidebar-primary-foreground" :
+         isOpen ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
+      );
+
       return (
         <AccordionItem key={item.href} value={item.href} className="border-none">
           <AccordionTrigger
-            className={cn(
-              linkClass,
-              "justify-between hover:no-underline",
-               openAccordion.includes(item.href) && (isActive || item.subItems.some(sub => pathname.startsWith(sub.href))) ? "bg-sidebar-primary text-sidebar-primary-foreground" :
-               (openAccordion.includes(item.href) ? "text-sidebar-primary-foreground bg-sidebar-accent" : "")
-            )}
+            className={triggerClass}
           >
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
               <Icon className="h-5 w-5" />
@@ -182,15 +183,15 @@ export function SidebarNav() {
   };
 
   if (!currentUser) {
-    return null;
+    return null; 
   }
 
   return (
     <Accordion
       type="multiple"
       className="w-full"
-      value={openAccordion}
-      onValueChange={setOpenAccordion}
+      value={openAccordionItems}
+      onValueChange={setOpenAccordionItems}
     >
       {accessibleNavItems.map((item) => renderNavItem(item))}
     </Accordion>
