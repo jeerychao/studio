@@ -20,7 +20,7 @@ export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma';
 export function useCurrentUser(): UseCurrentUserReturn {
   const [currentUserId, setCurrentUserId] = React.useState<string | undefined>();
   const [isClient, setIsClient] = React.useState(false);
-  const [isInitialized, setIsInitialized] = React.useState(false); // New state
+  const [isInitialized, setIsInitialized] = React.useState(false); // Tracks if useEffect has run once
 
   React.useEffect(() => {
     setIsClient(true);
@@ -112,6 +112,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
     return { ...userDataToUse, roleName: role.name, permissions: role.permissions || [] };
   }, [isClient, currentUserId, isInitialized]);
 
+  // Auth is considered loading if we are on the client but useEffect hasn't finished initializing currentUserId from localStorage.
   const isAuthLoading = isClient && !isInitialized;
 
   return { currentUser: currentUserValue, isAuthLoading };

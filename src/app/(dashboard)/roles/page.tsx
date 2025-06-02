@@ -23,9 +23,10 @@ export default function RolesPage() {
     async function fetchRoles() {
       if (isAuthLoading || !currentUser) return;
       try {
-        // Permission check for viewing roles is done before rendering the page content
-        const fetchedRoles = await getRolesAction();
-        setRoles(fetchedRoles);
+        if (hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
+            const fetchedRoles = await getRolesAction();
+            setRoles(fetchedRoles);
+        }
       } catch (error) {
         toast({ title: "Error fetching roles", description: (error as Error).message, variant: "destructive" });
       }

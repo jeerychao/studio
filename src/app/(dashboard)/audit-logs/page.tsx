@@ -21,7 +21,7 @@ export default function AuditLogsPage() {
 
   React.useEffect(() => {
     async function fetchLogs() {
-      if (isAuthLoading || !currentUser) return; // Wait for auth
+      if (isAuthLoading || !currentUser) return; 
       try {
         if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
             const fetchedLogs = await getAuditLogsAction();

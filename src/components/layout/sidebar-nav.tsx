@@ -76,7 +76,7 @@ export function SidebarNav() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
-    if (!user) return []; // If no user context, no items are accessible
+    if (!user) return []; 
     return items.map(item => {
       const hasAccessToItem = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
 
@@ -94,7 +94,7 @@ export function SidebarNav() {
   }, []);
 
   const accessibleNavItems = React.useMemo(() => {
-      if (isAuthLoading || !currentUser) return []; // Wait for auth to load or if no currentUser
+      if (isAuthLoading || !currentUser) return []; 
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
       items = items.filter(item => {
         if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
@@ -180,11 +180,9 @@ export function SidebarNav() {
   };
 
   if (isAuthLoading) {
-    // Optionally, render a skeleton or loading state for the sidebar nav
-    // For now, returning null to avoid rendering until auth is resolved.
     return <div className="p-4 text-sm text-sidebar-foreground">Loading navigation...</div>;
   }
-  if (!currentUser) { // Should ideally not happen if isAuthLoading is false, but good for safety
+  if (!currentUser) { 
     return <div className="p-4 text-sm text-sidebar-foreground">Error loading user.</div>;
   }
 

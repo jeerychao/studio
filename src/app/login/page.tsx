@@ -35,15 +35,12 @@ export default function LoginPage() {
     }
 
     if (currentUser && currentUser.id) { 
-      // Check if it's NOT the specific guest fallback user
       if (!(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setPageAuthStatus('authenticated');
       } else {
         setPageAuthStatus('unauthenticated');
       }
     } else {
-       // Should not happen if isAuthLoading is false and currentUser is null/undefined
-       // but treat as unauthenticated as a fallback.
        setPageAuthStatus('unauthenticated');
     }
   }, [currentUser, isAuthLoading]);
@@ -62,12 +59,10 @@ export default function LoginPage() {
 
     await new Promise(resolve => setTimeout(resolve, 1000)); 
 
-    if (foundUser && password) { // Simplified: just check if password is not empty
+    if (foundUser && password) { 
       if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
         (window as any).setCurrentMockUser(foundUser.id); 
-        // setCurrentMockUser will trigger a reload, then the redirection logic will take over.
         toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
-        // No need to manually redirect here, as the reload will trigger the auth check.
       } else {
         toast({ title: "Login Error", description: "Unable to set user. Developer function missing.", variant: "destructive" });
       }
@@ -78,7 +73,6 @@ export default function LoginPage() {
   };
   
   if (pageAuthStatus === 'loading' || (pageAuthStatus === 'authenticated' && !isAuthLoading)) {
-    // Show loading if auth is loading OR if authenticated and about to redirect
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
             <Network className="h-12 w-12 animate-spin text-primary" /> 
@@ -89,7 +83,6 @@ export default function LoginPage() {
     );
   }
 
-  // Render form only if pageAuthStatus is 'unauthenticated' and auth is not loading
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-xl">

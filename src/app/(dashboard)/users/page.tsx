@@ -137,7 +137,7 @@ export default function UsersPage() {
                             itemName={user.username}
                             deleteAction={deleteUserAction}
                             triggerButton={
-                                <Button variant="ghost" size="icon" aria-label="Delete User" disabled={user.id === currentUser?.id}>
+                                <Button variant="ghost" size="icon" aria-label="Delete User" disabled={currentUser?.id === user.id}>
                                 <Trash2 className="h-4 w-4" />
                                 </Button>
                             }

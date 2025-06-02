@@ -26,7 +26,7 @@ function ConditionalSettingsButton() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   if (isAuthLoading || !currentUser) {
-    return null; // Or a placeholder
+    return null; 
   }
 
   const canViewSettings = hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
@@ -72,8 +72,6 @@ export default function DashboardLayout({
         setAuthStatus('authenticated');
       }
     } else {
-      // Should not happen if isAuthLoading is false and currentUser is null/undefined
-      // but as a fallback, treat as unauthenticated.
       setAuthStatus('unauthenticated');
       router.replace('/login');
     }
@@ -89,8 +87,6 @@ export default function DashboardLayout({
   }
 
   if (authStatus === 'unauthenticated') {
-    // router.replace('/login') would have been called, so return null to avoid rendering children.
-    // This check is mostly a safeguard; the redirect should handle navigation.
     return null; 
   }
 
