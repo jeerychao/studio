@@ -14,32 +14,34 @@ import type { User, Role, PermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { UserFormSheet } from "./user-form-sheet";
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 
 export default function UsersPage() {
   const [users, setUsers] = React.useState<User[]>([]);
   const [roles, setRoles] = React.useState<Role[]>([]);
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
 
   React.useEffect(() => {
     async function fetchData() {
+      if (isAuthLoading || !currentUser) return;
       try {
-        const [fetchedUsers, fetchedRoles] = await Promise.all([
-          getUsersAction(),
-          getRolesAction(),
-        ]);
-        setUsers(fetchedUsers);
-        setRoles(fetchedRoles);
+        if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
+            const [fetchedUsers, fetchedRoles] = await Promise.all([
+            getUsersAction(),
+            getRolesAction(),
+            ]);
+            setUsers(fetchedUsers);
+            setRoles(fetchedRoles);
+        }
       } catch (error) {
         toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
-        fetchData();
-    }
-  }, [toast, currentUser]);
+   fetchData();
+  }, [toast, currentUser, isAuthLoading]);
 
   const getRoleName = (roleId: string) => {
     const role = roles.find(r => r.id === roleId);
@@ -50,12 +52,16 @@ export default function UsersPage() {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
   }
 
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_USER);
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_USER);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_USER);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_USER);
+  if (isAuthLoading) {
+     return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <UsersIcon className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Loading Users...</h2>
+      </div>
+    );
+  }
 
-  if (!canView) {
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <UsersIcon className="h-16 w-16 text-destructive mb-4" />
@@ -64,6 +70,10 @@ export default function UsersPage() {
       </div>
     );
   }
+
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_USER);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_USER);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_USER);
 
   return (
     <>
@@ -119,7 +129,6 @@ export default function UsersPage() {
                             </Button>
                             </UserFormSheet>
                         )}
-                        {/* Prevent deleting oneself or the last admin - handled in action */}
                         {canDelete && (
                             <DeleteConfirmationDialog
                             itemId={user.id}

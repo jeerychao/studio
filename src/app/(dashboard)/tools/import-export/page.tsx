@@ -20,12 +20,7 @@ export default function ImportExportPage() {
   const [importFile, setImportFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
   const { toast } = useToast();
-  const currentUser = useCurrentUser();
-
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT);
-  const canImport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT);
-  const canExport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT);
-
+  const { currentUser, isAuthLoading } = useCurrentUser();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -45,7 +40,7 @@ export default function ImportExportPage() {
   };
 
   const handleImport = async () => {
-    if (!canImport) {
+    if (isAuthLoading || !currentUser || !hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT)) {
         toast({ title: "Permission Denied", description: "You do not have permission to import data.", variant: "destructive" });
         return;
     }
@@ -70,7 +65,7 @@ export default function ImportExportPage() {
   };
 
   const handleExport = (dataType: "subnets" | "vlans" | "ips") => {
-    if (!canExport) {
+    if (isAuthLoading || !currentUser || !hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT)) {
         toast({ title: "Permission Denied", description: "You do not have permission to export data.", variant: "destructive" });
         return;
     }
@@ -184,8 +179,16 @@ export default function ImportExportPage() {
 10.20.0.10,,,reserved,,Future Web Server (IP in global pool if subnetCidr is empty)
 172.16.0.10,172.16.0.0/20,,allocated,Printer-Main, (Status is 'allocated', 'free', or 'reserved')`;
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Wrench className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Loading Tools...</h2>
+      </div>
+    );
+  }
 
-  if (!canView) {
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Wrench className="h-16 w-16 text-destructive mb-4" />
@@ -194,6 +197,9 @@ export default function ImportExportPage() {
       </div>
     );
   }
+  
+  const canImport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT);
+  const canExport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT);
 
   return (
     <>

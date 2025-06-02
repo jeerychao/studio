@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from 'next/navigation'; // For App Router
+import { useRouter } from 'next/navigation';
 import * as React from "react";
 import { Network, Settings2 } from "lucide-react";
 import {
@@ -18,10 +18,17 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { PERMISSIONS } from "@/types";
-import { hasPermission, useCurrentUser, MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+
 
 function ConditionalSettingsButton() {
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
+
+  if (isAuthLoading || !currentUser) {
+    return null; // Or a placeholder
+  }
+
   const canViewSettings = hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
 
   if (!canViewSettings) {
@@ -47,24 +54,29 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
-  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>(isAuthLoading ? 'loading' : 'unauthenticated');
 
   React.useEffect(() => {
-    // useCurrentUser hook has its own useEffect to sync with localStorage.
-    // We check currentUser properties once it's stable.
-    if (currentUser && currentUser.id) { // Ensure currentUser object and id exist
+    if (isAuthLoading) {
+      setAuthStatus('loading');
+      return;
+    }
+
+    if (currentUser && currentUser.id) {
       if (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest') {
         setAuthStatus('unauthenticated');
         router.replace('/login');
       } else {
         setAuthStatus('authenticated');
       }
+    } else {
+      // Should not happen if isAuthLoading is false and currentUser is null/undefined
+      setAuthStatus('unauthenticated');
+      router.replace('/login');
     }
-    // If currentUser or currentUser.id is not yet available, it remains 'loading'
-    // This might happen if useCurrentUser is still initializing
-  }, [currentUser, router]);
+  }, [currentUser, isAuthLoading, router]);
 
   if (authStatus === 'loading') {
     return (
@@ -76,8 +88,6 @@ export default function DashboardLayout({
   }
 
   if (authStatus === 'unauthenticated') {
-    // Should be redirected by the useEffect, but as a fallback, don't render children.
-    // Or, you can return a minimal message here too.
     return null; 
   }
 

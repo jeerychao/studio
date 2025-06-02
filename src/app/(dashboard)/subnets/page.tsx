@@ -14,37 +14,34 @@ import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialo
 import { SubnetFormSheet } from "./subnet-form-sheet";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SubnetsPage() {
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
 
   React.useEffect(() => {
     async function fetchData() {
+      if (isAuthLoading || !currentUser) return;
       try {
-        const [fetchedSubnets, fetchedVlans] = await Promise.all([
-          getSubnetsAction(),
-          getVLANsAction(),
-        ]);
-        setSubnets(fetchedSubnets);
-        setVlans(fetchedVlans);
+        if (hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
+            const [fetchedSubnets, fetchedVlans] = await Promise.all([
+            getSubnetsAction(),
+            getVLANsAction(),
+            ]);
+            setSubnets(fetchedSubnets);
+            setVlans(fetchedVlans);
+        }
       } catch (error) {
         toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
-        fetchData();
-    }
-  }, [toast, currentUser]);
-
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET);
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
+    fetchData();
+  }, [toast, currentUser, isAuthLoading]);
 
   const getVlanNumber = (vlanId?: string) => {
     if (!vlanId) return "N/A";
@@ -52,7 +49,16 @@ export default function SubnetsPage() {
     return vlan ? vlan.vlanNumber.toString() : "Unknown";
   };
   
-  if (!canView) {
+  if (isAuthLoading) {
+     return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <NetworkIcon className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Loading Subnets...</h2>
+      </div>
+    );
+  }
+  
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <NetworkIcon className="h-16 w-16 text-destructive mb-4" />
@@ -62,6 +68,9 @@ export default function SubnetsPage() {
     );
   }
 
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
 
   return (
     <>

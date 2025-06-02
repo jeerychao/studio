@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { updateOwnPasswordAction } from "@/lib/actions";
-import type { User } from "@/types";
+// Removed User type import as we use currentUser from hook
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const passwordChangeSchema = z.object({
@@ -40,7 +40,7 @@ type PasswordChangeFormValues = z.infer<typeof passwordChangeSchema>;
 
 export function PasswordChangeForm() {
   const { toast } = useToast();
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
 
   const form = useForm<PasswordChangeFormValues>({
     resolver: zodResolver(passwordChangeSchema),
@@ -52,8 +52,8 @@ export function PasswordChangeForm() {
   });
 
   async function onSubmit(data: PasswordChangeFormValues) {
-    if (!currentUser?.id) {
-        toast({ title: "Error", description: "User not found.", variant: "destructive" });
+    if (isAuthLoading || !currentUser || !currentUser.id || currentUser.id === 'guest-fallback-id') {
+        toast({ title: "Error", description: "User not properly authenticated.", variant: "destructive" });
         return;
     }
     try {
@@ -75,6 +75,10 @@ export function PasswordChangeForm() {
         variant: "destructive",
       });
     }
+  }
+  
+  if (isAuthLoading) {
+    return <p>Loading form...</p>;
   }
 
   return (
@@ -122,7 +126,7 @@ export function PasswordChangeForm() {
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={form.formState.isSubmitting}>
+        <Button type="submit" disabled={form.formState.isSubmitting || isAuthLoading}>
           {form.formState.isSubmitting ? "Updating..." : "Change Password"}
         </Button>
       </form>

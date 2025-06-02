@@ -10,16 +10,11 @@ import { PERMISSIONS } from "@/types";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import { PasswordChangeForm } from "@/components/settings/password-change-form";
 import { Label } from "@/components/ui/label";
-// Removed language-related imports: Languages icon, Select components for language
 
-// Removed translations object
 
 export default function SettingsPage() {
-  const currentUser = useCurrentUser();
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
-  // Removed selectedLanguage state and related 't' variable
-
-  // Hardcoding text to English as the language feature is removed
+  const { currentUser, isAuthLoading } = useCurrentUser();
+  
   const texts = {
     pageTitle: "System Settings",
     pageDescription: "Manage system-wide configurations and personal preferences.",
@@ -35,10 +30,19 @@ export default function SettingsPage() {
     passwordDescription: "Update your account password.",
     accessDeniedTitle: "Access Denied",
     accessDeniedMessage: "You do not have permission to view this page.",
+    loadingMessage: "Loading settings...",
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Settings className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">{texts.loadingMessage}</h2>
+      </div>
+    );
+  }
 
-  if (!canView) {
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Settings className="h-16 w-16 text-destructive mb-4" />
@@ -98,7 +102,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
         
-        {/* Language Card Removed */}
       </div>
     </>
   );

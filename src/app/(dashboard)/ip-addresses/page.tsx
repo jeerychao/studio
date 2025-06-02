@@ -15,7 +15,8 @@ import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from 'next/navigation';
 
@@ -50,11 +51,11 @@ function IPAddressesView() {
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
 
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
 
   const fetchData = React.useCallback(async () => {
-    if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
+    if (isAuthLoading || !currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
         setIpAddresses([]);
         setSubnets([]);
         setVlans([]);
@@ -72,13 +73,26 @@ function IPAddressesView() {
     } catch (error) {
       toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
     }
-  }, [selectedSubnetId, toast, currentUser]);
+  }, [selectedSubnetId, toast, currentUser, isAuthLoading]);
 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
+  
+  if (isAuthLoading) {
+    return <LoadingIPAddresses />;
+  }
 
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS);
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Globe className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view IP addresses.</p>
+      </div>
+    );
+  }
+
   const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
   const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
   const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
@@ -110,15 +124,6 @@ function IPAddressesView() {
     return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "N/A";
   };
 
-  if (!canView) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Globe className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view IP addresses.</p>
-      </div>
-    );
-  }
 
   return (
     <>

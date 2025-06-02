@@ -22,7 +22,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import * as React from "react";
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
 import type { PermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 
@@ -72,22 +73,22 @@ const navItemConfigs: NavItemConfig[] = [
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
     if (!user) return [];
     return items.map(item => {
-      const hasAccess = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
+      const hasAccessToItem = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
 
-      if (!hasAccess) return null;
+      if (!hasAccessToItem) return null;
 
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        if (filteredSubItems.length === 0) {
-           if (item.href.includes("-management") || item.href === "/tools") {
-             return null;
-           }
+        // If it's a parent category like "IP Management" and all its sub-items are filtered out,
+        // then this parent category itself should not be rendered.
+        if (filteredSubItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
+           return null; 
         }
       }
       return { ...item, subItems: filteredSubItems };
@@ -95,8 +96,9 @@ export function SidebarNav() {
   }, []);
 
   const accessibleNavItems = React.useMemo(() => {
-      if (!currentUser) return [];
+      if (isAuthLoading || !currentUser) return []; // Wait for auth to load
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
+      // Additional filter: if a top-level management/tools group has no visible sub-items, hide it.
       items = items.filter(item => {
         if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
             return false;
@@ -104,13 +106,14 @@ export function SidebarNav() {
         return true;
       });
       return items;
-  }, [currentUser, filterNavItemsByPermission]);
+  }, [currentUser, isAuthLoading, filterNavItemsByPermission]);
 
 
   const [openAccordionItems, setOpenAccordionItems] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    if (!accessibleNavItems || accessibleNavItems.length === 0) {
+    if (isAuthLoading || !accessibleNavItems || accessibleNavItems.length === 0) {
+        // If auth is loading or no items, ensure no accordions are programmatically opened
         setOpenAccordionItems(currentOpenItems => currentOpenItems.length > 0 ? [] : currentOpenItems);
         return;
     }
@@ -120,14 +123,15 @@ export function SidebarNav() {
     if (activeParentGroup) {
         setOpenAccordionItems(currentOpenItems => {
             if (currentOpenItems.includes(activeParentGroup.href)) {
-                return currentOpenItems; // Already open, no change needed
+                return currentOpenItems; 
             }
-            // Add the new active group, keeping others that were manually opened.
+            // Add the new active group. Consider if we want to keep others open or only the active one.
+            // For now, adding to existing manually opened ones.
             return [...currentOpenItems, activeParentGroup.href];
         });
     }
-    // If no active parent group, previously opened groups by the user remain open.
-  }, [pathname, accessibleNavItems]);
+    // If navigating to a non-accordion item, or an accordion item directly, existing open states are preserved.
+  }, [pathname, accessibleNavItems, isAuthLoading]);
 
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
@@ -145,11 +149,11 @@ export function SidebarNav() {
       const isOpen = openAccordionItems.includes(item.href);
       
       const triggerClass = cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center", // Base styles from linkClass
-        isSubItem ? "text-sm" : "font-medium", // Font size based on subItem or not
-        "justify-between hover:no-underline", // Accordion specific
-         isOpen && isActiveGroup ? "bg-sidebar-primary text-sidebar-primary-foreground" :
-         isOpen ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
+        isSubItem ? "text-sm" : "font-medium",
+        "justify-between hover:no-underline w-full", // Ensure trigger takes full width
+         (isOpen && isActiveGroup) ? "bg-sidebar-primary text-sidebar-primary-foreground" :
+         (isOpen) ? "text-sidebar-primary-foreground bg-sidebar-accent" : "" // Style if open but not active group
       );
 
       return (
@@ -182,9 +186,14 @@ export function SidebarNav() {
     );
   };
 
-  if (!currentUser) {
+  if (isAuthLoading) {
+    // Optionally, render a skeleton or loading state for the sidebar nav
     return null; 
   }
+  if (!currentUser) { // Should not happen if isAuthLoading is false
+    return null;
+  }
+
 
   return (
     <Accordion

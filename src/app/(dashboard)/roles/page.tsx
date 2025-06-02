@@ -16,11 +16,12 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function RolesPage() {
   const [roles, setRoles] = React.useState<Role[]>([]);
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
 
   React.useEffect(() => {
     async function fetchRoles() {
+      if (isAuthLoading || !currentUser) return;
       try {
         const fetchedRoles = await getRolesAction();
         setRoles(fetchedRoles);
@@ -29,13 +30,18 @@ export default function RolesPage() {
       }
     }
     fetchRoles();
-  }, [toast, currentUser]); // Re-fetch if currentUser changes, e.g. for re-evaluating permissions
+  }, [toast, currentUser, isAuthLoading]); 
 
-  const canViewRoles = hasPermission(currentUser, PERMISSIONS.VIEW_ROLE);
-  const canEditRolePermissions = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_PERMISSIONS);
-  const canEditRoleDescription = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_DESCRIPTION);
-
-  if (!canViewRoles) {
+  if (isAuthLoading) {
+     return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <ShieldCheck className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Loading Roles...</h2>
+      </div>
+    );
+  }
+  
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <ShieldCheck className="h-16 w-16 text-destructive mb-4" />
@@ -45,6 +51,8 @@ export default function RolesPage() {
     );
   }
   
+  const canEditRolePermissions = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_PERMISSIONS);
+  const canEditRoleDescription = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_DESCRIPTION);
   const canEditAnyPartOfRole = canEditRolePermissions || canEditRoleDescription;
 
 
@@ -54,7 +62,6 @@ export default function RolesPage() {
         title="Role Management"
         description="View system roles and manage their descriptions and permissions."
         icon={ShieldCheck}
-        // "Add Role" button is not present as roles are fixed
       />
 
       <Card>
@@ -90,7 +97,6 @@ export default function RolesPage() {
                             <Edit className="h-4 w-4" />
                           </Button>
                         </RoleFormSheet>
-                        {/* Delete button for fixed roles is removed */}
                       </TableCell>
                     )}
                   </TableRow>

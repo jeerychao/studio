@@ -12,34 +12,40 @@ import type { VLAN, PermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 
 export default function VlansPage() {
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
 
   React.useEffect(() => {
     async function fetchVlans() {
+      if (isAuthLoading || !currentUser) return;
       try {
-        const fetchedVlans = await getVLANsAction();
-        setVlans(fetchedVlans);
+        if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
+            const fetchedVlans = await getVLANsAction();
+            setVlans(fetchedVlans);
+        }
       } catch (error) {
          toast({ title: "Error fetching VLANs", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
-        fetchVlans();
-    }
-  }, [toast, currentUser]);
+    fetchVlans();
+  }, [toast, currentUser, isAuthLoading]);
 
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_VLAN);
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
+  if (isAuthLoading) {
+     return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Cable className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Loading VLANs...</h2>
+      </div>
+    );
+  }
 
-  if (!canView) {
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Cable className="h-16 w-16 text-destructive mb-4" />
@@ -48,6 +54,10 @@ export default function VlansPage() {
       </div>
     );
   }
+  
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
 
   return (
     <>

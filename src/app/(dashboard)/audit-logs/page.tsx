@@ -11,34 +11,43 @@ import type { AuditLog, PermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { ListChecks } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import type { CurrentUserContextValue } from "@/hooks/use-current-user";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const { toast } = useToast();
-  const currentUser = useCurrentUser();
+  const { currentUser, isAuthLoading } = useCurrentUser();
 
   React.useEffect(() => {
     async function fetchLogs() {
+      if (isAuthLoading || !currentUser) return; // Wait for auth
       try {
-        const fetchedLogs = await getAuditLogsAction();
-        setLogs(fetchedLogs);
+        if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
+            const fetchedLogs = await getAuditLogsAction();
+            setLogs(fetchedLogs);
+        }
       } catch (error) {
         toast({ title: "Error fetching audit logs", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
-        fetchLogs();
-    }
-  }, [toast, currentUser]);
-
-  const canView = hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG);
+    fetchLogs();
+  }, [toast, currentUser, isAuthLoading]);
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  if (!canView) {
+  if (isAuthLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <ListChecks className="h-16 w-16 animate-spin text-primary mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">Loading Audit Logs...</h2>
+      </div>
+    );
+  }
+  
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <ListChecks className="h-16 w-16 text-destructive mb-4" />

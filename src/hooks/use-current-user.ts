@@ -2,7 +2,7 @@
 "use client";
 
 import type { User, RoleName, PermissionId } from '@/types';
-import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockUsers, mockRoles } from '../lib/data'; // Adjusted path
+import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockUsers, mockRoles } from '../lib/data';
 import React from 'react';
 
 export interface CurrentUserContextValue extends User {
@@ -10,15 +10,17 @@ export interface CurrentUserContextValue extends User {
   permissions: PermissionId[];
 }
 
+export interface UseCurrentUserReturn {
+  currentUser: CurrentUserContextValue;
+  isAuthLoading: boolean; // True if client-side auth check is still pending
+}
+
 export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma';
 
-// This constant is still useful for development (e.g. `cycleMockUser`) but won't be used for initial pre-client state.
-const SERVER_AND_INITIAL_CLIENT_USER_ID = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID)?.id || mockUsers[0]?.id;
-
-
-export function useCurrentUser(): CurrentUserContextValue {
+export function useCurrentUser(): UseCurrentUserReturn {
   const [currentUserId, setCurrentUserId] = React.useState<string | undefined>();
   const [isClient, setIsClient] = React.useState(false);
+  const [isInitialized, setIsInitialized] = React.useState(false); // New state
 
   React.useEffect(() => {
     setIsClient(true);
@@ -30,14 +32,17 @@ export function useCurrentUser(): CurrentUserContextValue {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY); 
       setCurrentUserId(undefined); 
     }
+    setIsInitialized(true); // Mark client-side initialization as done
 
     (window as any).setCurrentMockUser = (userId: string) => {
       const userExists = mockUsers.find(u => u.id === userId);
       if (userExists) {
         localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-        window.location.reload();
+        // Removed window.location.reload(); to allow for smoother SPA navigation if desired,
+        // but for this app's current login flow, reload is fine. Re-adding it if issues persist without it.
+        window.location.reload(); 
       } else {
-        console.error(`User with ID ${userId} not found in mockUsers (used for dev switching). Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
+        console.error(`User with ID ${userId} not found in mockUsers. Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
       }
     };
 
@@ -52,7 +57,7 @@ export function useCurrentUser(): CurrentUserContextValue {
             return;
         }
         
-        const currentCycleIdInStorage = localStorage.getItem(MOCK_USER_STORAGE_KEY) || SERVER_AND_INITIAL_CLIENT_USER_ID || rolesCycle[0];
+        const currentCycleIdInStorage = localStorage.getItem(MOCK_USER_STORAGE_KEY) || mockUsers[0]?.id || rolesCycle[0];
         const currentIndex = rolesCycle.indexOf(currentCycleIdInStorage);
         const nextUserId = rolesCycle[(currentIndex + 1) % rolesCycle.length];
         
@@ -62,9 +67,9 @@ export function useCurrentUser(): CurrentUserContextValue {
   }, []); 
 
   const currentUserValue = React.useMemo(() => {
-    if (!isClient) {
-      // Before client-side hydration, or on server, return a guest user.
-      // This prevents the login page from redirecting away prematurely.
+    // If on server OR on client but not yet initialized by useEffect, return guest.
+    // This ensures SSR provides a guest, and client initially also sees guest until localStorage is checked.
+    if (!isClient || !isInitialized) {
       const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return { 
           id: 'guest-fallback-id', 
@@ -78,10 +83,10 @@ export function useCurrentUser(): CurrentUserContextValue {
       };
     }
 
-    // If isClient is true, rely on currentUserId derived from localStorage
+    // Client side, and initialization is done. Now, currentUserId reflects localStorage.
     let userDataToUse = mockUsers.find(u => u.id === currentUserId);
 
-    if (!userDataToUse) { // currentUserId was undefined or not found
+    if (!userDataToUse) { // No user in localStorage or ID is invalid
       const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return { 
           id: 'guest-fallback-id', 
@@ -108,9 +113,11 @@ export function useCurrentUser(): CurrentUserContextValue {
     }
 
     return { ...userDataToUse, roleName: role.name, permissions: role.permissions || [] };
-  }, [isClient, currentUserId]);
+  }, [isClient, currentUserId, isInitialized]);
 
-  return currentUserValue;
+  const isAuthLoading = isClient && !isInitialized;
+
+  return { currentUser: currentUserValue, isAuthLoading };
 }
 
 export const hasPermission = (currentUser: CurrentUserContextValue | null, permissionId: PermissionId): boolean => {

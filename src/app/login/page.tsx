@@ -16,31 +16,40 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Network, LogIn } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useCurrentUser, MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { mockUsers } from "@/lib/data";
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [isSubmitting, setIsSubmitting] = React.useState(false); // Renamed from isLoading for clarity
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const currentUser = useCurrentUser();
-  const [pageAuthStatus, setPageAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const { currentUser, isAuthLoading } = useCurrentUser();
+  const [pageAuthStatus, setPageAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>(isAuthLoading ? 'loading' : 'unauthenticated');
 
   React.useEffect(() => {
-    if (currentUser && currentUser.id) { // currentUser is resolved
+    if (isAuthLoading) {
+      setPageAuthStatus('loading');
+      return;
+    }
+
+    if (currentUser && currentUser.id) { 
       if (!(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-        // User is authenticated (not guest)
         setPageAuthStatus('authenticated');
-        router.replace("/dashboard");
       } else {
-        // User is guest, ready to show login form
         setPageAuthStatus('unauthenticated');
       }
+    } else {
+       setPageAuthStatus('unauthenticated');
     }
-    // If currentUser or currentUser.id is not yet available, pageAuthStatus remains 'loading'
-  }, [currentUser, router]);
+  }, [currentUser, isAuthLoading]);
+
+  React.useEffect(() => {
+    if (pageAuthStatus === 'authenticated') {
+      router.replace("/dashboard");
+    }
+  }, [pageAuthStatus, router]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -48,13 +57,13 @@ export default function LoginPage() {
 
     const foundUser = mockUsers.find(user => user.email === email);
 
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
 
     if (foundUser && password) { 
       if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
         (window as any).setCurrentMockUser(foundUser.id); 
+        // setCurrentMockUser will trigger a reload, then the redirection logic will take over.
         toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
-        // setCurrentMockUser reloads, DashboardLayout will handle the authenticated state
       } else {
         toast({ title: "Login Error", description: "Unable to set user. Developer function missing.", variant: "destructive" });
       }
@@ -64,25 +73,19 @@ export default function LoginPage() {
     setIsSubmitting(false);
   };
   
-  if (pageAuthStatus === 'loading') {
+  if (pageAuthStatus === 'loading' || (pageAuthStatus === 'authenticated' && !isAuthLoading)) {
+    // Show loading if auth is loading OR if authenticated and about to redirect
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
             <Network className="h-12 w-12 animate-spin text-primary" /> 
-            <p className="ml-4 text-lg">Loading login page...</p>
+            <p className="ml-4 text-lg">
+              {pageAuthStatus === 'authenticated' ? "Redirecting to dashboard..." : "Loading login page..."}
+            </p>
         </div>
     );
   }
 
-  if (pageAuthStatus === 'authenticated') {
-    // This state means useEffect is about to redirect. Show a message.
-     return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            <p>Redirecting to dashboard...</p>
-        </div>
-    );
-  }
-
-  // Only render form if pageAuthStatus is 'unauthenticated'
+  // Render form only if pageAuthStatus is 'unauthenticated' and auth is not loading
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-xl">

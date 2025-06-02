@@ -16,6 +16,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
 import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user"; 
+// Removed useCurrentUser import from here as it's not directly used for display values in this simplified header.
+// User-specific info (like username in dropdown) would require it.
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
@@ -23,7 +25,7 @@ export function Header() {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.reload();
+      window.location.href = '/login'; // Redirect to login after logout
     }
   };
 
@@ -46,7 +48,7 @@ export function Header() {
                 </Link>
               </SheetTitle>
             </SheetHeader>
-            <nav className="flex-1 overflow-auto py-4 px-2"> {/* Added px-2 for consistent padding if items have their own */}
+            <nav className="flex-1 overflow-auto py-4 px-2">
               <SidebarNav />
             </nav>
           </SheetContent>
