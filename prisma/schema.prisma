@@ -1,24 +1,21 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
+generator client {
+  provider = "prisma-client-js"
+}
+
 model Subnet {
   id             String      @id @default(cuid())
   cidr           String      @unique // e.g., "192.168.1.0/24"
-  networkAddress String // e.g., "192.168.1.0"
-  subnetMask     String // e.g., "255.255.255.0"
-  ipRange        String? // e.g., "192.168.1.1 - 192.168.1.254"
+  networkAddress String      // e.g., "192.168.1.0"
+  subnetMask     String      // e.g., "255.255.255.0"
+  ipRange        String?     // e.g., "192.168.1.1 - 192.168.1.254"
   description    String?
   vlanId         String?
-  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id])
   ipAddresses    IPAddress[]
 
   createdAt DateTime @default(now())
@@ -30,7 +27,7 @@ model VLAN {
   vlanNumber  Int       @unique // e.g., 10, 20
   description String?
   subnets     Subnet[]
-  ipAddresses IPAddress[] // For IPs directly assigned to this VLAN without a subnet
+  ipAddresses IPAddress[] // IPs that might be directly assigned to this VLAN, not via a subnet
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -38,24 +35,20 @@ model VLAN {
 
 model IPAddress {
   id           String  @id @default(cuid())
-  ipAddress    String // e.g., "192.168.1.100"
-  status       String // "allocated", "free", "reserved" (Prisma enum for DB, string for app type)
-  allocatedTo  String? // hostname, device name, or user
+  ipAddress    String  // e.g., "192.168.1.100"
+  status       String  // "allocated", "free", "reserved"
+  allocatedTo  String? // Device or service name
   description  String?
   subnetId     String?
   subnet       Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull)
-  vlanId       String? // IP-specific VLAN override
-  vlan         VLAN?   @relation(fields: [vlanId], references: [id], onDelete: SetNull) // Relation for direct VLAN assignment
+  vlanId       String? // Direct VLAN assignment for this IP (overrides subnet's VLAN if set)
+  vlan         VLAN?   @relation(fields: [vlanId], references: [id], onDelete: SetNull)
   lastSeen     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Unique constraint for IP within a specific subnet (if subnetId is present)
-  // For IPs not in a subnet (subnetId is null), ipAddress itself should be unique globally among those.
-  // Prisma doesn't directly support conditional unique constraints like "unique(ipAddress) where subnetId is null".
-  // This will be handled by application logic or a more complex DB setup if truly needed.
-  // For now, let's ensure ipAddress + subnetId is unique.
+  // Ensure IP is unique within a subnet, OR globally if not in a subnet
   @@unique([ipAddress, subnetId])
 }
 
@@ -69,26 +62,27 @@ model User {
   avatar    String?
   lastLogin DateTime?
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
   auditLogs AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Role {
-  id          String       @id @default(cuid()) // e.g., "admin", "operator", "viewer"
-  name        String       @unique // "Administrator", "Operator", "Viewer" (Prisma enum for DB, string for app type)
+  id          String       @id @default(cuid())
+  name        String       @unique // "Administrator", "Operator", "Viewer"
   description String?
-  permissions Permission[] @relation("RolePermissions")
   users       User[]
+  permissions Permission[] @relation("RolePermissions")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Permission {
-  id          String @id // e.g., "subnet.create", "user.delete" (Prisma enum for DB, string for app type)
+  id          String @id // e.g., "subnet.create", "user.view"
   name        String @unique // e.g., "Create Subnets"
-  group       String // e.g., "Subnet Management", "User Management"
+  group       String // e.g., "Subnet Management"
   description String?
   roles       Role[] @relation("RolePermissions")
 
@@ -98,13 +92,10 @@ model Permission {
 
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String? // User who performed the action, null for system actions
+  userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  username  String?  // Denormalized username for easier display, or "System"
+  username  String? // Denormalized username for logs where user might be deleted
   action    String   // e.g., "create_subnet", "login_user"
+  details   String?  // e.g., "Subnet 192.168.1.0/24 created"
   timestamp DateTime @default(now())
-  details   String?  // JSON string or plain text with more details
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
