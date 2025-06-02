@@ -1,7 +1,7 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog } from '@/types';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog } from '../types';
 import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils';
-import { PERMISSIONS } from '@/types';
+import { PERMISSIONS } from '../types';
 
 
 // Fixed Role IDs - these MUST match the IDs used in prisma/seed.ts and potentially in UI logic
@@ -139,3 +139,4 @@ export let mockAuditLogs: AuditLog[] = [ // For seeding
 // For now, I'll leave them commented out or remove them.
 // export const getSubnets = async (): Promise<Subnet[]> => { ... };
 // ... and so on for other getters.
+
