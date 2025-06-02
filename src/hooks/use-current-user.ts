@@ -2,7 +2,7 @@
 "use client";
 
 import type { User, RoleName, PermissionId } from '@/types';
-import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockUsers, mockRoles } from '@/lib/data';
+import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockUsers, mockRoles } from '../lib/data'; // Adjusted path
 import React from 'react';
 
 export interface CurrentUserContextValue extends User {
@@ -12,17 +12,12 @@ export interface CurrentUserContextValue extends User {
 
 export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma';
 
-const adminUserSeed = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
-const operatorUserSeed = mockUsers.find(u => u.roleId === OPERATOR_ROLE_ID);
-const viewerUserSeed = mockUsers.find(u => u.roleId === VIEWER_ROLE_ID);
-
-const SERVER_AND_INITIAL_CLIENT_USER_ID = adminUserSeed?.id || operatorUserSeed?.id || viewerUserSeed?.id || mockUsers[0]?.id;
+// This constant is still useful for development (e.g. `cycleMockUser`) but won't be used for initial pre-client state.
+const SERVER_AND_INITIAL_CLIENT_USER_ID = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID)?.id || mockUsers[0]?.id;
 
 
 export function useCurrentUser(): CurrentUserContextValue {
-  const [currentUserId, setCurrentUserId] = React.useState<string | undefined>(
-    SERVER_AND_INITIAL_CLIENT_USER_ID
-  );
+  const [currentUserId, setCurrentUserId] = React.useState<string | undefined>();
   const [isClient, setIsClient] = React.useState(false);
 
   React.useEffect(() => {
@@ -32,9 +27,6 @@ export function useCurrentUser(): CurrentUserContextValue {
     if (storedUserId && mockUsers.find(u => u.id === storedUserId)) {
       setCurrentUserId(storedUserId);
     } else {
-      // If no valid user ID is found in localStorage (e.g., after logout, or initial load with no stored ID)
-      // We ensure localStorage is clear for this key, and set the state to reflect no specific user is "logged in" via storage.
-      // The useMemo for currentUserValue will then correctly fallback to a guest user.
       localStorage.removeItem(MOCK_USER_STORAGE_KEY); 
       setCurrentUserId(undefined); 
     }
@@ -50,7 +42,11 @@ export function useCurrentUser(): CurrentUserContextValue {
     };
 
     (window as any).cycleMockUser = () => {
+        const adminUserSeed = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
+        const operatorUserSeed = mockUsers.find(u => u.roleId === OPERATOR_ROLE_ID);
+        const viewerUserSeed = mockUsers.find(u => u.roleId === VIEWER_ROLE_ID);
         const rolesCycle = [adminUserSeed?.id, operatorUserSeed?.id, viewerUserSeed?.id].filter(id => !!id) as string[];
+        
         if (rolesCycle.length === 0) {
             console.error("No mock users found for cycling.");
             return;
@@ -66,14 +62,9 @@ export function useCurrentUser(): CurrentUserContextValue {
   }, []); 
 
   const currentUserValue = React.useMemo(() => {
-    // On the client, userIdToLookup will be the state `currentUserId` (which can be undefined after logout).
-    // On initial server render or if not client yet, it uses SERVER_AND_INITIAL_CLIENT_USER_ID.
-    const userIdToLookup = isClient ? currentUserId : SERVER_AND_INITIAL_CLIENT_USER_ID;
-    let userDataToUse = mockUsers.find(u => u.id === userIdToLookup);
-
-    // If no specific user is found (e.g., currentUserId is undefined after logout, or initial ID is invalid)
-    if (!userDataToUse) {
-      // Construct and return a guest user object.
+    if (!isClient) {
+      // Before client-side hydration, or on server, return a guest user.
+      // This prevents the login page from redirecting away prematurely.
       const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return { 
           id: 'guest-fallback-id', 
@@ -87,10 +78,26 @@ export function useCurrentUser(): CurrentUserContextValue {
       };
     }
 
-    // If a valid user (userDataToUse) was found based on userIdToLookup
+    // If isClient is true, rely on currentUserId derived from localStorage
+    let userDataToUse = mockUsers.find(u => u.id === currentUserId);
+
+    if (!userDataToUse) { // currentUserId was undefined or not found
+      const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
+      return { 
+          id: 'guest-fallback-id', 
+          username: 'Guest', 
+          email: 'guest@example.com', 
+          roleId: guestRoleData?.id || VIEWER_ROLE_ID,
+          avatar: undefined, 
+          lastLogin: undefined,
+          roleName: guestRoleData?.name || ('Viewer' as RoleName), 
+          permissions: guestRoleData?.permissions || [] 
+      };
+    }
+
+    // Valid user found based on currentUserId from localStorage
     const role = mockRoles.find(r => r.id === userDataToUse.roleId);
     if (!role) {
-      // Fallback if role is somehow invalid for an existing user (should ideally not happen with seeded data)
       console.error(`User ${userDataToUse.username} has an invalid roleId: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
       const viewerRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return { 
@@ -110,4 +117,3 @@ export const hasPermission = (currentUser: CurrentUserContextValue | null, permi
   if (!currentUser) return false;
   return currentUser.permissions.includes(permissionId);
 };
-

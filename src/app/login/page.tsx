@@ -17,57 +17,72 @@ import { Label } from "@/components/ui/label";
 import { Network, LogIn } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
-import { mockUsers, ADMIN_ROLE_ID } from "@/lib/data"; // Using mockUsers for authentication
+import { mockUsers } from "@/lib/data";
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false); // Renamed from isLoading for clarity
   const router = useRouter();
   const { toast } = useToast();
-  const currentUser = useCurrentUser(); // To check if already logged in
+  const currentUser = useCurrentUser();
+  const [pageAuthStatus, setPageAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   React.useEffect(() => {
-    // If user is already authenticated (not the guest user), redirect to dashboard
-    if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-      router.replace("/dashboard");
+    if (currentUser && currentUser.id) { // currentUser is resolved
+      if (!(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
+        // User is authenticated (not guest)
+        setPageAuthStatus('authenticated');
+        router.replace("/dashboard");
+      } else {
+        // User is guest, ready to show login form
+        setPageAuthStatus('unauthenticated');
+      }
     }
+    // If currentUser or currentUser.id is not yet available, pageAuthStatus remains 'loading'
   }, [currentUser, router]);
-
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     const foundUser = mockUsers.find(user => user.email === email);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
 
-    if (foundUser && password) { // For mock, just check if password is not empty
+    if (foundUser && password) { 
       if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
-        (window as any).setCurrentMockUser(foundUser.id); // This function from useCurrentUser reloads the page
+        (window as any).setCurrentMockUser(foundUser.id); 
         toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
-        // setCurrentMockUser will handle localStorage and reload, which triggers redirection via DashboardLayout
+        // setCurrentMockUser reloads, DashboardLayout will handle the authenticated state
       } else {
         toast({ title: "Login Error", description: "Unable to set user. Developer function missing.", variant: "destructive" });
       }
     } else {
       toast({ title: "Login Failed", description: "Invalid email or password. Please try again.", variant: "destructive" });
     }
-    setIsLoading(false);
+    setIsSubmitting(false);
   };
   
-  // If already authenticated and redirecting, show minimal content or loader
-  if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
+  if (pageAuthStatus === 'loading') {
     return (
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+            <Network className="h-12 w-12 animate-spin text-primary" /> 
+            <p className="ml-4 text-lg">Loading login page...</p>
+        </div>
+    );
+  }
+
+  if (pageAuthStatus === 'authenticated') {
+    // This state means useEffect is about to redirect. Show a message.
+     return (
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
             <p>Redirecting to dashboard...</p>
         </div>
     );
   }
 
-
+  // Only render form if pageAuthStatus is 'unauthenticated'
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-xl">
@@ -92,7 +107,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -104,13 +119,13 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing In..." : <><LogIn className="mr-2 h-4 w-4" /> Sign In</>}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Signing In..." : <><LogIn className="mr-2 h-4 w-4" /> Sign In</>}
             </Button>
             <p className="mt-4 text-xs text-center text-muted-foreground">
               Don't have an account? This is a demo system. <br/>
