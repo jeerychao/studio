@@ -32,10 +32,11 @@ export function useCurrentUser(): CurrentUserContextValue {
     if (storedUserId && mockUsers.find(u => u.id === storedUserId)) {
       setCurrentUserId(storedUserId);
     } else {
-      if (SERVER_AND_INITIAL_CLIENT_USER_ID) {
-        localStorage.setItem(MOCK_USER_STORAGE_KEY, SERVER_AND_INITIAL_CLIENT_USER_ID);
-        setCurrentUserId(SERVER_AND_INITIAL_CLIENT_USER_ID);
-      }
+      // If no valid user ID is found in localStorage (e.g., after logout, or initial load with no stored ID)
+      // We ensure localStorage is clear for this key, and set the state to reflect no specific user is "logged in" via storage.
+      // The useMemo for currentUserValue will then correctly fallback to a guest user.
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY); 
+      setCurrentUserId(undefined); 
     }
 
     (window as any).setCurrentMockUser = (userId: string) => {
@@ -65,41 +66,42 @@ export function useCurrentUser(): CurrentUserContextValue {
   }, []); 
 
   const currentUserValue = React.useMemo(() => {
+    // On the client, userIdToLookup will be the state `currentUserId` (which can be undefined after logout).
+    // On initial server render or if not client yet, it uses SERVER_AND_INITIAL_CLIENT_USER_ID.
     const userIdToLookup = isClient ? currentUserId : SERVER_AND_INITIAL_CLIENT_USER_ID;
     let userDataToUse = mockUsers.find(u => u.id === userIdToLookup);
 
+    // If no specific user is found (e.g., currentUserId is undefined after logout, or initial ID is invalid)
     if (!userDataToUse) {
-      const fallbackUserFromSeed = adminUserSeed || operatorUserSeed || viewerUserSeed || mockUsers[0];
-      if (!fallbackUserFromSeed) { 
-          const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
-          return { 
-              id: 'guest-fallback-id', 
-              username: 'Guest', 
-              email: 'guest@example.com', 
-              roleId: guestRoleData?.id || VIEWER_ROLE_ID,
-              avatar: undefined, 
-              lastLogin: undefined,
-              roleName: guestRoleData?.name || ('Viewer' as RoleName), 
-              permissions: guestRoleData?.permissions || [] 
-          };
-      }
-      userDataToUse = fallbackUserFromSeed; // Use this as the base for the fallback
+      // Construct and return a guest user object.
+      const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
+      return { 
+          id: 'guest-fallback-id', 
+          username: 'Guest', 
+          email: 'guest@example.com', 
+          roleId: guestRoleData?.id || VIEWER_ROLE_ID,
+          avatar: undefined, 
+          lastLogin: undefined,
+          roleName: guestRoleData?.name || ('Viewer' as RoleName), 
+          permissions: guestRoleData?.permissions || [] 
+      };
     }
 
-    // userDataToUse is now guaranteed to be a User object (either found or a fallback from mockUsers)
-    const role = mockRoles.find(r => r.id === userDataToUse!.roleId);
+    // If a valid user (userDataToUse) was found based on userIdToLookup
+    const role = mockRoles.find(r => r.id === userDataToUse.roleId);
     if (!role) {
-      console.error(`User ${userDataToUse!.username} has an invalid roleId: ${userDataToUse!.roleId}. Falling back to Viewer permissions.`);
+      // Fallback if role is somehow invalid for an existing user (should ideally not happen with seeded data)
+      console.error(`User ${userDataToUse.username} has an invalid roleId: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
       const viewerRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return { 
-        ...userDataToUse!, 
+        ...userDataToUse, 
         roleName: ('Viewer' as RoleName), 
         permissions: viewerRoleData?.permissions || [] 
       };
     }
 
-    return { ...userDataToUse!, roleName: role.name, permissions: role.permissions || [] };
-  }, [isClient, currentUserId]); // Dependencies for the memoized value
+    return { ...userDataToUse, roleName: role.name, permissions: role.permissions || [] };
+  }, [isClient, currentUserId]);
 
   return currentUserValue;
 }
@@ -108,3 +110,4 @@ export const hasPermission = (currentUser: CurrentUserContextValue | null, permi
   if (!currentUser) return false;
   return currentUser.permissions.includes(permissionId);
 };
+
