@@ -1,25 +1,27 @@
 
 "use client";
 
-import type { User, Role, RoleName, PermissionId } from '@/types';
+import type { User, RoleName, PermissionId } from '@/types';
+// The mockUsers and mockRoles are now primarily for the dev switching mechanism.
+// The actual permissions and role names for a given user ID should ideally be fetched
+// from the DB in a real scenario, or the mock data here must be kept in sync with seed data.
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockUsers, mockRoles } from '@/lib/data';
 import React from 'react';
 
-// Ensure CurrentUserContextValue is correctly defined or imported
 export interface CurrentUserContextValue extends User {
   roleName: RoleName;
   permissions: PermissionId[];
 }
 
-export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3'; // Export the key
+export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma';
 
-const adminUser = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
-const operatorUser = mockUsers.find(u => u.roleId === OPERATOR_ROLE_ID);
-const viewerUser = mockUsers.find(u => u.roleId === VIEWER_ROLE_ID);
+// Attempt to find users from the (seed-representative) mockUsers array
+const adminUserSeed = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
+const operatorUserSeed = mockUsers.find(u => u.roleId === OPERATOR_ROLE_ID);
+const viewerUserSeed = mockUsers.find(u => u.roleId === VIEWER_ROLE_ID);
 
-// This value will be used for the initial render on the server,
-// and for the *very first render on the client before useEffect runs*.
-const SERVER_AND_INITIAL_CLIENT_USER_ID = adminUser?.id;
+const SERVER_AND_INITIAL_CLIENT_USER_ID = adminUserSeed?.id || operatorUserSeed?.id || viewerUserSeed?.id || mockUsers[0]?.id;
+
 
 export function useCurrentUser(): CurrentUserContextValue {
   const [currentUserId, setCurrentUserId] = React.useState<string | undefined>(
@@ -27,35 +29,31 @@ export function useCurrentUser(): CurrentUserContextValue {
   );
   const [isClient, setIsClient] = React.useState(false);
 
-
-  // This effect runs only on the client, after the initial render.
   React.useEffect(() => {
-    setIsClient(true); // Indicate that we are now on the client
+    setIsClient(true);
     const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
     
-    if (storedUserId) {
+    if (storedUserId && mockUsers.find(u => u.id === storedUserId)) {
       setCurrentUserId(storedUserId);
     } else {
-      // If nothing in localStorage, set it to the default (admin) for next time
       if (SERVER_AND_INITIAL_CLIENT_USER_ID) {
         localStorage.setItem(MOCK_USER_STORAGE_KEY, SERVER_AND_INITIAL_CLIENT_USER_ID);
         setCurrentUserId(SERVER_AND_INITIAL_CLIENT_USER_ID);
       }
     }
 
-    // Setup developer console tools
     (window as any).setCurrentMockUser = (userId: string) => {
       const userExists = mockUsers.find(u => u.id === userId);
       if (userExists) {
         localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
         window.location.reload();
       } else {
-        console.error(`User with ID ${userId} not found in mockUsers. Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
+        console.error(`User with ID ${userId} not found in mockUsers (used for dev switching). Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
       }
     };
 
     (window as any).cycleMockUser = () => {
-        const rolesCycle = [adminUser?.id, operatorUser?.id, viewerUser?.id].filter(id => !!id) as string[];
+        const rolesCycle = [adminUserSeed?.id, operatorUserSeed?.id, viewerUserSeed?.id].filter(id => !!id) as string[];
         if (rolesCycle.length === 0) {
             console.error("No mock users found for cycling.");
             return;
@@ -70,39 +68,38 @@ export function useCurrentUser(): CurrentUserContextValue {
     };
   }, []); 
 
-  // During server render or initial client render (before useEffect runs), use the default.
-  // Once isClient is true, use currentUserId (which might have been updated from localStorage).
   const userIdToLookup = isClient ? currentUserId : SERVER_AND_INITIAL_CLIENT_USER_ID;
+  // userDataToUse relies on mockUsers from data.ts which should reflect seeded data
   const userDataToUse = mockUsers.find(u => u.id === userIdToLookup);
 
   if (!userDataToUse) {
-    const fallbackUser = adminUser || mockUsers[0]; 
-    if (!fallbackUser) {
-        const guestRole = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
+    // Fallback logic if user somehow not found in mockUsers
+    const fallbackUser = adminUserSeed || mockUsers[0];
+    if (!fallbackUser) { // Should not happen if mockUsers is populated
+        const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
         return { 
-            id: 'guest-fallback', username: 'Guest', email: '', roleId: guestRole?.id || VIEWER_ROLE_ID,
-            roleName: guestRole?.name || 'Viewer', permissions: guestRole?.permissions || [] 
+            id: 'guest-fallback-id', username: 'Guest', email: 'guest@example.com', roleId: guestRoleData?.id || VIEWER_ROLE_ID,
+            roleName: guestRoleData?.name || 'Viewer', permissions: guestRoleData?.permissions || [] 
         } as CurrentUserContextValue;
     }
-    
     const fallbackRole = mockRoles.find(r => r.id === fallbackUser.roleId);
-    if(!fallbackRole) throw new Error("Fallback user has no valid role.");
-    
+    if (!fallbackRole) throw new Error("Fallback user has no valid role in mockRoles.");
     return { ...fallbackUser, roleName: fallbackRole.name, permissions: fallbackRole.permissions };
   }
 
+  // role relies on mockRoles from data.ts
   const role = mockRoles.find(r => r.id === userDataToUse.roleId);
   if (!role) {
-    console.error(`User ${userDataToUse.username} has an invalid roleId: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
-    const viewerRole = mockRoles.find(r => r.id === VIEWER_ROLE_ID);
-    return { ...userDataToUse, roleName: 'Viewer', permissions: viewerRole?.permissions || [] };
+    console.error(`User ${userDataToUse.username} has an invalid roleId in mockUsers: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
+    const viewerRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID);
+    return { ...userDataToUse, roleName: 'Viewer', permissions: viewerRoleData?.permissions || [] };
   }
 
   return { ...userDataToUse, roleName: role.name, permissions: role.permissions || [] };
 }
 
-// Helper to check if current user has a specific permission
 export const hasPermission = (currentUser: CurrentUserContextValue | null, permissionId: PermissionId): boolean => {
   if (!currentUser) return false;
+  // Permissions are sourced from the mockRoles array for the client-side context
   return currentUser.permissions.includes(permissionId);
 };

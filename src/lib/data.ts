@@ -4,12 +4,14 @@ import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPr
 import { PERMISSIONS } from '@/types';
 
 
-// Fixed Role IDs
+// Fixed Role IDs - these MUST match the IDs used in prisma/seed.ts and potentially in UI logic
 export const ADMIN_ROLE_ID = 'role-admin-fixed';
 export const OPERATOR_ROLE_ID = 'role-operator-fixed';
 export const VIEWER_ROLE_ID = 'role-viewer-fixed';
 
-// Define all system permissions
+// Define all system permissions - This list is the source of truth for permission definitions.
+// The `prisma/seed.ts` script will use this to populate the Permission table.
+// The `id` here uses '.' as a separator, while Prisma schema uses '_' for enums.
 export const mockPermissions: Permission[] = [
   // Dashboard
   { id: PERMISSIONS.VIEW_DASHBOARD, name: 'View Dashboard', group: 'Dashboard' },
@@ -47,8 +49,8 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.VIEW_SETTINGS, name: 'View Settings', group: 'System Settings' },
 ];
 
-// Helper to generate initial subnet data with calculated fields
-function createInitialSubnet(id: string, cidr: string, vlanId?: string, description?: string): Subnet {
+// Helper to generate initial subnet data with calculated fields for seeding
+function createInitialSubnetSeedData(id: string, cidr: string, vlanId?: string, description?: string): Omit<Subnet, 'utilization'> {
   const prefix = cidrToPrefix(cidr);
   const ipPart = cidr.split('/')[0];
   const networkAddress = calculateNetworkAddress(ipPart, prefix);
@@ -63,41 +65,40 @@ function createInitialSubnet(id: string, cidr: string, vlanId?: string, descript
     ipRange,
     vlanId,
     description,
-    // utilization is calculated dynamically by getSubnetsAction
   };
 }
 
-
-export const mockSubnets: Subnet[] = [
-  createInitialSubnet('subnet-1', '192.168.1.0/24', 'vlan-1', 'Main Office Network'),
-  createInitialSubnet('subnet-2', '10.0.0.0/16', 'vlan-2', 'Server Farm'),
-  createInitialSubnet('subnet-3', '172.16.0.0/20', undefined, 'Guest WiFi'),
+// This data is now PRIMARILY FOR SEEDING the database.
+// The `useCurrentUser` hook will still reference these for its mock user switching logic for simplicity.
+export const mockSubnets: Omit<Subnet, 'utilization'>[] = [
+  createInitialSubnetSeedData('subnet-1-seed', '192.168.1.0/24', 'vlan-1-seed', 'Main Office Network'),
+  createInitialSubnetSeedData('subnet-2-seed', '10.0.0.0/16', 'vlan-2-seed', 'Server Farm'),
+  createInitialSubnetSeedData('subnet-3-seed', '172.16.0.0/20', undefined, 'Guest WiFi'),
 ];
 
-
-export const mockVLANs: VLAN[] = [
-  { id: 'vlan-1', vlanNumber: 10, description: 'Office VLAN' },
-  { id: 'vlan-2', vlanNumber: 20, description: 'Servers VLAN' },
-  { id: 'vlan-3', vlanNumber: 30, description: 'Guest VLAN' },
+export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
+  { id: 'vlan-1-seed', vlanNumber: 10, description: 'Office VLAN' },
+  { id: 'vlan-2-seed', vlanNumber: 20, description: 'Servers VLAN' },
+  { id: 'vlan-3-seed', vlanNumber: 30, description: 'Guest VLAN' },
 ];
 
 export const mockIPAddresses: IPAddress[] = [
-  { id: 'ip-1', ipAddress: '192.168.1.10', subnetId: 'subnet-1', vlanId: undefined, status: 'allocated', allocatedTo: 'John Doe\'s PC', description: 'Marketing Department' },
-  { id: 'ip-2', ipAddress: '192.168.1.11', subnetId: 'subnet-1', vlanId: undefined, status: 'free' },
-  { id: 'ip-3', ipAddress: '192.168.1.12', subnetId: 'subnet-1', vlanId: undefined, status: 'reserved', description: 'Future Printer' },
-  { id: 'ip-4', ipAddress: '10.0.1.5', subnetId: 'subnet-2', vlanId: undefined, status: 'allocated', allocatedTo: 'WebServer01' },
-  { id: 'ip-5', ipAddress: '10.0.1.6', subnetId: 'subnet-2', vlanId: 'vlan-2', status: 'allocated', allocatedTo: 'DBServer01' }, // Example of IP-specific VLAN
+  { id: 'ip-1-seed', ipAddress: '192.168.1.10', subnetId: 'subnet-1-seed', status: 'allocated', allocatedTo: 'John Doe\'s PC', description: 'Marketing Department' },
+  { id: 'ip-2-seed', ipAddress: '192.168.1.11', subnetId: 'subnet-1-seed', status: 'free' },
+  { id: 'ip-3-seed', ipAddress: '192.168.1.12', subnetId: 'subnet-1-seed', status: 'reserved', description: 'Future Printer' },
+  { id: 'ip-4-seed', ipAddress: '10.0.1.5', subnetId: 'subnet-2-seed', status: 'allocated', allocatedTo: 'WebServer01' },
+  { id: 'ip-5-seed', ipAddress: '10.0.1.6', subnetId: 'subnet-2-seed', vlanId: 'vlan-2-seed', status: 'allocated', allocatedTo: 'DBServer01' },
 ];
 
-export const mockRoles: Role[] = [
+export const mockRoles: Role[] = [ // The `permissions` array here should use the string IDs from `types/index.ts`
   {
-    id: ADMIN_ROLE_ID,
+    id: ADMIN_ROLE_ID, // 'role-admin-fixed'
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: mockPermissions.map(p => p.id) // All permissions
+    permissions: mockPermissions.map(p => p.id as PermissionId) // All permissions
   },
   {
-    id: OPERATOR_ROLE_ID,
+    id: OPERATOR_ROLE_ID, // 'role-operator-fixed'
     name: 'Operator' as RoleName,
     description: 'Manages IP resources. Cannot manage users, roles, or most system settings.',
     permissions: [
@@ -105,10 +106,10 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_SUBNET, PERMISSIONS.CREATE_SUBNET, PERMISSIONS.EDIT_SUBNET, PERMISSIONS.DELETE_SUBNET,
       PERMISSIONS.VIEW_VLAN, PERMISSIONS.CREATE_VLAN, PERMISSIONS.EDIT_VLAN, PERMISSIONS.DELETE_VLAN,
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
-    ]
+    ] as PermissionId[]
   },
   {
-    id: VIEWER_ROLE_ID,
+    id: VIEWER_ROLE_ID, // 'role-viewer-fixed'
     name: 'Viewer' as RoleName,
     description: 'Read-only access to IP resources and dashboard.',
     permissions: [
@@ -116,57 +117,25 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_SUBNET,
       PERMISSIONS.VIEW_VLAN,
       PERMISSIONS.VIEW_IPADDRESS,
-    ]
+    ] as PermissionId[]
   },
 ];
 
-export const mockUsers: User[] = [
-  { id: 'user-1', username: 'admin_user', email: 'admin@example.com', roleId: ADMIN_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=A`, lastLogin: new Date(Date.now() - 86400000).toISOString() },
-  { id: 'user-2', username: 'operator_jane', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=O`, lastLogin: new Date(Date.now() - 3600000).toISOString() },
-  { id: 'user-3', username: 'viewer_john', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=V`, lastLogin: new Date().toISOString() },
+export const mockUsers: User[] = [ // These are used by useCurrentUser and for seeding
+  { id: 'user-admin-seed', username: 'admin_user', email: 'admin@example.com', roleId: ADMIN_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=A`, lastLogin: new Date(Date.now() - 86400000).toISOString() },
+  { id: 'user-operator-seed', username: 'operator_jane', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=O`, lastLogin: new Date(Date.now() - 3600000).toISOString() },
+  { id: 'user-viewer-seed', username: 'viewer_john', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=V`, lastLogin: new Date().toISOString() },
 ];
 
 
-export let mockAuditLogs: AuditLog[] = [
-  { id: 'log-1', userId: 'user-1', username: 'admin_user', action: 'create_subnet', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Created subnet 172.16.0.0/20' },
-  { id: 'log-2', userId: 'user-2', username: 'operator_jane', action: 'assign_ip', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Assigned IP 192.168.1.10 to John Doe\'s PC' },
-  { id: 'log-3', userId: 'user-1', username: 'admin_user', action: 'update_vlan', timestamp: new Date().toISOString(), details: 'Updated VLAN 10 description' },
+export let mockAuditLogs: AuditLog[] = [ // For seeding
+  { id: 'log-1-seed', userId: 'user-admin-seed', username: 'admin_user', action: 'create_subnet_seed', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Seeded subnet 172.16.0.0/20' },
+  { id: 'log-2-seed', userId: 'user-operator-seed', username: 'operator_jane', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
+  { id: 'log-3-seed', userId: 'user-admin-seed', username: 'admin_user', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 description update' },
 ];
 
-// These getter functions are kept for potential direct use if needed,
-// but server actions (get<Resource>Action) are preferred for components
-// as they can encapsulate more logic like dynamic calculations.
-export const getSubnets = async (): Promise<Subnet[]> => {
-  return new Promise(resolve => setTimeout(() => resolve(mockSubnets), 100));
-};
-
-export const getVLANs = async (): Promise<VLAN[]> => {
-  return new Promise(resolve => setTimeout(() => resolve(mockVLANs), 100));
-};
-
-export const getIPAddresses = async (subnetId?: string): Promise<IPAddress[]> => {
-  return new Promise(resolve => setTimeout(() => {
-    if (subnetId) {
-      resolve(mockIPAddresses.filter(ip => ip.subnetId === subnetId));
-    } else {
-      resolve(mockIPAddresses);
-    }
-  }, 100));
-};
-
-export const getUsers = async (): Promise<User[]> => {
-  return new Promise(resolve => setTimeout(() => resolve(mockUsers), 100));
-};
-
-export const getRoles = async (): Promise<Role[]> => {
-  return new Promise(resolve => setTimeout(() => resolve(mockRoles), 100));
-};
-
-export const getAuditLogs = async (): Promise<AuditLog[]> => {
-  return new Promise(resolve => setTimeout(() => resolve(mockAuditLogs), 100));
-};
-
-export const getAllPermissions = async (): Promise<Permission[]> => {
-  return new Promise(resolve => setTimeout(() => resolve(mockPermissions), 50));
-};
-
+// The old getter functions are no longer relevant as actions.ts will use Prisma.
+// They can be removed if not used by any other part of the app (e.g. tests not converted yet).
+// For now, I'll leave them commented out or remove them.
+// export const getSubnets = async (): Promise<Subnet[]> => { ... };
+// ... and so on for other getters.
