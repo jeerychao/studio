@@ -53,25 +53,30 @@ function IPAddressesView() {
   const currentUser = useCurrentUser();
   const { toast } = useToast();
 
-  React.useEffect(() => {
-    async function fetchData() {
-      try {
-        const [fetchedIps, fetchedSubnets, fetchedVlans] = await Promise.all([
-          getIPAddressesAction(selectedSubnetId),
-          getSubnetsAction(),
-          getVLANsAction(),
-        ]);
-        setIpAddresses(fetchedIps);
-        setSubnets(fetchedSubnets);
-        setVlans(fetchedVlans);
-      } catch (error) {
-        toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
-      }
+  const fetchData = React.useCallback(async () => {
+    if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
+        setIpAddresses([]);
+        setSubnets([]);
+        setVlans([]);
+        return;
     }
-    if (hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
-        fetchData();
+    try {
+      const [fetchedIps, fetchedSubnets, fetchedVlans] = await Promise.all([
+        getIPAddressesAction(selectedSubnetId),
+        getSubnetsAction(),
+        getVLANsAction(),
+      ]);
+      setIpAddresses(fetchedIps);
+      setSubnets(fetchedSubnets);
+      setVlans(fetchedVlans);
+    } catch (error) {
+      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
     }
   }, [selectedSubnetId, toast, currentUser]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const canView = hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS);
   const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
@@ -124,7 +129,7 @@ function IPAddressesView() {
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
-        {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} />}
+        {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} />}
       </div>
 
       <Card>
@@ -170,7 +175,7 @@ function IPAddressesView() {
                     {(canEdit || canDelete) && (
                       <TableCell className="text-right">
                         {canEdit && (
-                            <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId}>
+                            <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}>
                             <Button variant="ghost" size="icon" aria-label="Edit IP Address">
                                 <Edit className="h-4 w-4" />
                             </Button>
@@ -181,6 +186,7 @@ function IPAddressesView() {
                             itemId={ip.id}
                             itemName={ip.ipAddress}
                             deleteAction={deleteIPAddressAction}
+                            onDeleted={fetchData}
                             triggerButton={
                                 <Button variant="ghost" size="icon" aria-label="Delete IP Address">
                                 <Trash2 className="h-4 w-4" />
@@ -199,7 +205,7 @@ function IPAddressesView() {
               <p className="text-muted-foreground">
                 {selectedSubnetId ? "No IP addresses found in this subnet." : "No IP addresses found. Select a subnet or add a new IP."}
               </p>
-              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} buttonProps={{className: "mt-4"}} />}
+              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>

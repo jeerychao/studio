@@ -43,8 +43,8 @@ const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserve
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
   subnetId: z.string().optional(),
-  vlanId: z.string().optional(), // This will store the actual vlanId or "" for "Inherit"
-  status: z.enum(["allocated", "free", "reserved"], { required_error: "Status is required"}), // Changed this line
+  vlanId: z.string().optional(), 
+  status: z.enum(["allocated", "free", "reserved"], { required_error: "Status is required"}),
   allocatedTo: z.string().max(100, "Allocated To too long").optional(),
   description: z.string().max(200, "Description too long").optional(),
 });
@@ -58,24 +58,32 @@ interface IPAddressFormSheetProps {
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
+  onIpAddressChange?: () => void; // Added callback prop
 }
 
 const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
 const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
 
 
-export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId, children, buttonProps }: IPAddressFormSheetProps) {
+export function IPAddressFormSheet({ 
+    ipAddress, 
+    subnets, 
+    vlans, 
+    currentSubnetId, 
+    children, 
+    buttonProps,
+    onIpAddressChange 
+}: IPAddressFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!ipAddress;
 
   const form = useForm<IPAddressFormValues>({
     resolver: zodResolver(ipAddressFormSchema),
-    // Default values will be set more accurately in useEffect
     defaultValues: {
       ipAddress: "",
       subnetId: "",
-      vlanId: "", // Represents "Inherit/None" initially
+      vlanId: "", 
       status: "free",
       allocatedTo: "",
       description: "",
@@ -84,30 +92,22 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
 
   React.useEffect(() => {
     if (isOpen) {
-        let initialVlanIdForForm = ""; // Default to form value representing "Inherit/None"
+        let initialVlanIdForForm = ""; 
 
         if (ipAddress?.vlanId) {
-            // IP has a direct VLAN override
             initialVlanIdForForm = ipAddress.vlanId;
         } else if (ipAddress?.subnetId) {
-            // IP belongs to a subnet, try to use subnet's VLAN
             const parentSubnet = subnets.find(s => s.id === ipAddress.subnetId);
             if (parentSubnet?.vlanId) {
                 initialVlanIdForForm = parentSubnet.vlanId;
             }
         } else if (!ipAddress && currentSubnetId) {
-            // This is a new IP being added in the context of currentSubnetId
             const parentSubnetForNewIp = subnets.find(s => s.id === currentSubnetId);
             if (parentSubnetForNewIp?.vlanId) {
                 initialVlanIdForForm = parentSubnetForNewIp.vlanId;
             }
         }
-        // If initialVlanIdForForm is still "", it means either:
-        // - Editing an IP with no direct vlanId AND its subnet has no vlanId (or IP has no subnet)
-        // - Creating a new IP with no currentSubnetId context, or currentSubnetId's subnet has no VLAN.
-        // In these cases, the dropdown will default to showing "Inherit from Subnet" selected,
-        // because the form's vlanId field will be "" which maps to INHERIT_VLAN_SENTINEL in the Select value.
-
+        
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
             subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""),
@@ -129,8 +129,6 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
         return;
       }
       
-      // If data.vlanId is "", it means "Inherit from Subnet" was selected.
-      // In this case, the ipAddress.vlanId should be undefined/null in the database.
       const vlanIdToSave = data.vlanId === "" ? undefined : data.vlanId;
 
       const payload = {
@@ -147,9 +145,9 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
         toast({ title: "IP Address Created", description: `IP ${data.ipAddress} has been successfully created.` });
       }
       setIsOpen(false);
-      // Don't reset the form here if we want to keep its state for next open,
-      // as useEffect already handles resetting based on props.
-      // form.reset(); // Consider if this is needed or if useEffect covers it.
+      if (onIpAddressChange) {
+        onIpAddressChange(); // Call the callback to refresh data in parent
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -225,13 +223,11 @@ export function IPAddressFormSheet({ ipAddress, subnets, vlans, currentSubnetId,
             <FormField
               control={form.control}
               name="vlanId"
-              render={({ field }) => ( // field.value here is the actual vlanId string or ""
+              render={({ field }) => ( 
                 <FormItem>
                   <FormLabel>VLAN (Optional)</FormLabel>
                   <Select
                     onValueChange={(value) => field.onChange(value === INHERIT_VLAN_SENTINEL ? "" : value)}
-                    // If field.value is "", it means "Inherit", so Select should show INHERIT_VLAN_SENTINEL
-                    // If field.value is a vlanId, Select should show that vlanId
                     value={field.value === "" ? INHERIT_VLAN_SENTINEL : (field.value || INHERIT_VLAN_SENTINEL) }
                     disabled={vlans.length === 0 && !field.value}
                   >
