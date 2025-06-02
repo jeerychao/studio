@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
 import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
-import { Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight } from "lucide-react"; // Removed Cable
+import { Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -26,11 +26,12 @@ export default async function DashboardPage() {
           const prefix = cidrToPrefix(subnet.cidr);
           return acc + getUsableIpCount(prefix);
         } catch (e) {
-          console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}':`, e);
-          return acc; // Skip this subnet in sum if its CIDR is problematic
+          const error = e instanceof Error ? e : new Error(String(e));
+          console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}' during totalIPs calculation: ${error.message}`);
+          return acc; 
         }
       }
-      return acc; // Skip if subnet or subnet.cidr is invalid
+      return acc; 
     }, 0);
 
     const allocatedIPs = ips.filter(ip => ip && ip.status === 'allocated').length;
@@ -101,7 +102,7 @@ export default async function DashboardPage() {
                 </TableHeader>
                 <TableBody>
                   {logs.slice(0, 5).map((log) => {
-                    if (!log || !log.id) return null; // Defensive check
+                    if (!log || !log.id) return null; 
                     return (
                     <TableRow key={log.id}>
                       <TableCell>
@@ -141,11 +142,23 @@ export default async function DashboardPage() {
               {criticalSubnets.length > 0 ? (
                 <ul className="space-y-3">
                   {criticalSubnets.map(subnet => {
-                    if (!subnet || !subnet.id) return null; // Defensive check
+                    if (!subnet || !subnet.id) return null; 
+                    
+                    let prefixDisplay: string | number = 'N/A';
+                    if (subnet.cidr && typeof subnet.cidr === 'string') {
+                      try {
+                        prefixDisplay = cidrToPrefix(subnet.cidr);
+                      } catch (prefixErr) {
+                        const pError = prefixErr instanceof Error ? prefixErr : new Error(String(prefixErr));
+                        console.warn(`DashboardPage: Error parsing prefix for subnet CIDR '${subnet.cidr}' in Subnet Health card: ${pError.message}`);
+                        prefixDisplay = 'Invalid';
+                      }
+                    }
+
                     return (
                     <li key={subnet.id} className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">{subnet.networkAddress}/{subnet.cidr ? cidrToPrefix(subnet.cidr) : 'N/A'}</p>
+                        <p className="font-medium">{subnet.networkAddress}/{prefixDisplay}</p>
                         <p className="text-sm text-muted-foreground">{subnet.description || 'No description'}</p>
                       </div>
                       <div className="text-right">
@@ -169,10 +182,22 @@ export default async function DashboardPage() {
         </div>
       </div>
     );
-  } catch (error) {
-    console.error("INTERNAL SERVER ERROR on DashboardPage:", error);
-    // For now, re-throw the error to be caught by Next.js's default error handling.
-    // A custom error.js file in this route group could provide a better user-facing error page.
-    throw error;
+  } catch (e) {
+    let processedError: Error;
+    if (e instanceof Error) {
+      processedError = e;
+    } else if (typeof e === 'string') {
+      processedError = new Error(e);
+    } else if (e === null || e === undefined) {
+      processedError = new Error("An unknown null or undefined error occurred on DashboardPage.");
+    } else {
+      try {
+        processedError = new Error(JSON.stringify(e));
+      } catch (stringifyError) {
+        processedError = new Error("An unknown non-serializable error occurred on DashboardPage.");
+      }
+    }
+    console.error("INTERNAL SERVER ERROR on DashboardPage:", processedError.message, processedError.stack);
+    throw processedError;
   }
 }
