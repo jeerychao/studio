@@ -2,9 +2,6 @@
 "use client";
 
 import type { User, RoleName, PermissionId } from '@/types';
-// The mockUsers and mockRoles are now primarily for the dev switching mechanism.
-// The actual permissions and role names for a given user ID should ideally be fetched
-// from the DB in a real scenario, or the mock data here must be kept in sync with seed data.
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockUsers, mockRoles } from '@/lib/data';
 import React from 'react';
 
@@ -15,7 +12,6 @@ export interface CurrentUserContextValue extends User {
 
 export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma';
 
-// Attempt to find users from the (seed-representative) mockUsers array
 const adminUserSeed = mockUsers.find(u => u.roleId === ADMIN_ROLE_ID);
 const operatorUserSeed = mockUsers.find(u => u.roleId === OPERATOR_ROLE_ID);
 const viewerUserSeed = mockUsers.find(u => u.roleId === VIEWER_ROLE_ID);
@@ -68,38 +64,47 @@ export function useCurrentUser(): CurrentUserContextValue {
     };
   }, []); 
 
-  const userIdToLookup = isClient ? currentUserId : SERVER_AND_INITIAL_CLIENT_USER_ID;
-  // userDataToUse relies on mockUsers from data.ts which should reflect seeded data
-  const userDataToUse = mockUsers.find(u => u.id === userIdToLookup);
+  const currentUserValue = React.useMemo(() => {
+    const userIdToLookup = isClient ? currentUserId : SERVER_AND_INITIAL_CLIENT_USER_ID;
+    let userDataToUse = mockUsers.find(u => u.id === userIdToLookup);
 
-  if (!userDataToUse) {
-    // Fallback logic if user somehow not found in mockUsers
-    const fallbackUser = adminUserSeed || mockUsers[0];
-    if (!fallbackUser) { // Should not happen if mockUsers is populated
-        const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
-        return { 
-            id: 'guest-fallback-id', username: 'Guest', email: 'guest@example.com', roleId: guestRoleData?.id || VIEWER_ROLE_ID,
-            roleName: guestRoleData?.name || 'Viewer', permissions: guestRoleData?.permissions || [] 
-        } as CurrentUserContextValue;
+    if (!userDataToUse) {
+      const fallbackUserFromSeed = adminUserSeed || operatorUserSeed || viewerUserSeed || mockUsers[0];
+      if (!fallbackUserFromSeed) { 
+          const guestRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
+          return { 
+              id: 'guest-fallback-id', 
+              username: 'Guest', 
+              email: 'guest@example.com', 
+              roleId: guestRoleData?.id || VIEWER_ROLE_ID,
+              avatar: undefined, 
+              lastLogin: undefined,
+              roleName: guestRoleData?.name || ('Viewer' as RoleName), 
+              permissions: guestRoleData?.permissions || [] 
+          };
+      }
+      userDataToUse = fallbackUserFromSeed; // Use this as the base for the fallback
     }
-    const fallbackRole = mockRoles.find(r => r.id === fallbackUser.roleId);
-    if (!fallbackRole) throw new Error("Fallback user has no valid role in mockRoles.");
-    return { ...fallbackUser, roleName: fallbackRole.name, permissions: fallbackRole.permissions };
-  }
 
-  // role relies on mockRoles from data.ts
-  const role = mockRoles.find(r => r.id === userDataToUse.roleId);
-  if (!role) {
-    console.error(`User ${userDataToUse.username} has an invalid roleId in mockUsers: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
-    const viewerRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID);
-    return { ...userDataToUse, roleName: 'Viewer', permissions: viewerRoleData?.permissions || [] };
-  }
+    // userDataToUse is now guaranteed to be a User object (either found or a fallback from mockUsers)
+    const role = mockRoles.find(r => r.id === userDataToUse!.roleId);
+    if (!role) {
+      console.error(`User ${userDataToUse!.username} has an invalid roleId: ${userDataToUse!.roleId}. Falling back to Viewer permissions.`);
+      const viewerRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
+      return { 
+        ...userDataToUse!, 
+        roleName: ('Viewer' as RoleName), 
+        permissions: viewerRoleData?.permissions || [] 
+      };
+    }
 
-  return { ...userDataToUse, roleName: role.name, permissions: role.permissions || [] };
+    return { ...userDataToUse!, roleName: role.name, permissions: role.permissions || [] };
+  }, [isClient, currentUserId]); // Dependencies for the memoized value
+
+  return currentUserValue;
 }
 
 export const hasPermission = (currentUser: CurrentUserContextValue | null, permissionId: PermissionId): boolean => {
   if (!currentUser) return false;
-  // Permissions are sourced from the mockRoles array for the client-side context
   return currentUser.permissions.includes(permissionId);
 };
