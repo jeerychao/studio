@@ -64,9 +64,10 @@ async function main() {
   console.log('Roles seeded.');
 
   // Define initial users based on your new logic
-  const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar'> & { password?: string }> = [
+  // Corrected type: password is now 'string', not 'string | undefined'
+  const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar'> & { password: string }> = [
     {
-      id: 'user-admin-seed', // Keep consistent ID for potential localStorage use
+      id: 'user-admin-seed',
       username: 'admin',
       email: 'admin@example.com',
       roleId: SEED_ADMIN_ROLE_ID,
@@ -217,3 +218,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
