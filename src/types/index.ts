@@ -32,17 +32,18 @@ export const PERMISSIONS = {
 
   // Roles
   VIEW_ROLE: 'role.view',
-  EDIT_ROLE_DESCRIPTION: 'role.edit_description', 
-  EDIT_ROLE_PERMISSIONS: 'role.edit_permissions', 
+  EDIT_ROLE_DESCRIPTION: 'role.edit_description',
+  EDIT_ROLE_PERMISSIONS: 'role.edit_permissions',
 
   // Audit Logs
   VIEW_AUDIT_LOG: 'auditlog.view',
+  DELETE_AUDIT_LOG: 'auditlog.delete', // New permission
 
   // Tools
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
-  PERFORM_TOOLS_IMPORT: 'tools.import_export.import', 
+  PERFORM_TOOLS_IMPORT: 'tools.import_export.import',
   PERFORM_TOOLS_EXPORT: 'tools.import_export.export',
-  
+
   // Settings
   VIEW_SETTINGS: 'settings.view',
 
@@ -52,8 +53,8 @@ export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
 
 export interface Permission {
   id: PermissionId;
-  name: string; 
-  group: string; 
+  name: string;
+  group: string;
   description?: string;
 }
 
@@ -103,7 +104,7 @@ export interface Role {
   name: RoleName;
   description?: string;
   userCount?: number;
-  permissions: PermissionId[]; 
+  permissions: PermissionId[];
 }
 
 

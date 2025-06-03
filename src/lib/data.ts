@@ -41,6 +41,7 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.EDIT_ROLE_PERMISSIONS, name: 'Edit Role Permissions', group: 'Role Management' },
   // Audit Logs
   { id: PERMISSIONS.VIEW_AUDIT_LOG, name: 'View Audit Logs', group: 'System Logs' },
+  { id: PERMISSIONS.DELETE_AUDIT_LOG, name: 'Delete Audit Logs', group: 'System Logs' },
   // Tools
   { id: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, name: 'View Import/Export Tool', group: 'Tools' },
   { id: PERMISSIONS.PERFORM_TOOLS_IMPORT, name: 'Perform Data Import', group: 'Tools' },
@@ -106,6 +107,7 @@ export const mockRoles: Role[] = [ // The `permissions` array here should use th
       PERMISSIONS.VIEW_SUBNET, PERMISSIONS.CREATE_SUBNET, PERMISSIONS.EDIT_SUBNET, PERMISSIONS.DELETE_SUBNET,
       PERMISSIONS.VIEW_VLAN, PERMISSIONS.CREATE_VLAN, PERMISSIONS.EDIT_VLAN, PERMISSIONS.DELETE_VLAN,
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
+      PERMISSIONS.VIEW_AUDIT_LOG, // Operators can view logs
     ] as PermissionId[]
   },
   {
@@ -117,6 +119,7 @@ export const mockRoles: Role[] = [ // The `permissions` array here should use th
       PERMISSIONS.VIEW_SUBNET,
       PERMISSIONS.VIEW_VLAN,
       PERMISSIONS.VIEW_IPADDRESS,
+      PERMISSIONS.VIEW_AUDIT_LOG, // Viewers can also view logs
     ] as PermissionId[]
   },
 ];

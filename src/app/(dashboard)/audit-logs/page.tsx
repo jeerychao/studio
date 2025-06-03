@@ -1,39 +1,42 @@
 
-"use client"; 
+"use client";
 
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { getAuditLogsAction } from "@/lib/actions";
-import type { AuditLog, PermissionId } from "@/types";
+import { Button } from "@/components/ui/button";
+import { getAuditLogsAction, deleteAuditLogAction } from "@/lib/actions";
+import type { AuditLog } from "@/types";
 import { PERMISSIONS } from "@/types";
-import { ListChecks } from "lucide-react";
+import { ListChecks, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-// Removed unused CurrentUserContextValue import
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const { toast } = useToast();
   const { currentUser, isAuthLoading } = useCurrentUser();
 
-  React.useEffect(() => {
-    async function fetchLogs() {
-      if (isAuthLoading || !currentUser) return; // Wait for auth to complete
-      try {
-        // Ensure currentUser is available before checking permission
-        if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
-            const fetchedLogs = await getAuditLogsAction();
-            setLogs(fetchedLogs);
-        }
-      } catch (error) {
-        toast({ title: "Error fetching audit logs", description: (error as Error).message, variant: "destructive" });
+  const fetchLogs = React.useCallback(async () => {
+    if (isAuthLoading || !currentUser) return;
+    try {
+      if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
+        const fetchedLogs = await getAuditLogsAction();
+        setLogs(fetchedLogs);
+      } else {
+        setLogs([]); // Clear logs if no permission
       }
+    } catch (error) {
+      toast({ title: "Error fetching audit logs", description: (error as Error).message, variant: "destructive" });
     }
+  }, [toast, currentUser, isAuthLoading]);
+
+  React.useEffect(() => {
     fetchLogs();
-  }, [toast, currentUser, isAuthLoading]); // isAuthLoading added to dependency array
+  }, [fetchLogs]);
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -47,8 +50,7 @@ export default function AuditLogsPage() {
       </div>
     );
   }
-  
-  // Ensure currentUser is available before checking permission
+
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -58,6 +60,8 @@ export default function AuditLogsPage() {
       </div>
     );
   }
+
+  const canDeleteLog = currentUser && hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
 
   return (
     <>
@@ -80,6 +84,7 @@ export default function AuditLogsPage() {
                   <TableHead>User</TableHead>
                   <TableHead>Action</TableHead>
                   <TableHead>Details</TableHead>
+                  {canDeleteLog && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -92,7 +97,22 @@ export default function AuditLogsPage() {
                         {log.action.replace(/_/g, " ")}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-md truncate">{log.details || "N/A"}</TableCell>
+                    <TableCell className="max-w-xs truncate hover:max-w-none hover:whitespace-normal">{log.details || "N/A"}</TableCell>
+                    {canDeleteLog && (
+                      <TableCell className="text-right">
+                        <DeleteConfirmationDialog
+                          itemId={log.id}
+                          itemName={`audit log entry (Action: ${log.action}, User: ${log.username || 'System'})`}
+                          deleteAction={deleteAuditLogAction}
+                          onDeleted={fetchLogs}
+                          triggerButton={
+                            <Button variant="ghost" size="icon" aria-label="Delete audit log">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
