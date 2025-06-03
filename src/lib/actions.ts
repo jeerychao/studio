@@ -1,3 +1,4 @@
+
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -299,6 +300,10 @@ export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">
   const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: data.vlanNumber } });
   if (existingVLAN) throw new Error(`VLAN ${data.vlanNumber} already exists.`);
 
+  if (data.vlanNumber < 1 || data.vlanNumber > 4094) {
+    throw new Error("VLAN number must be between 1 and 4094.");
+  }
+
   const newVLAN = await prisma.vLAN.create({
     data: {
       vlanNumber: data.vlanNumber,
@@ -315,12 +320,91 @@ export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">
   return { ...newVLAN, description: newVLAN.description || undefined, subnetCount: 0 };
 }
 
+export interface BatchVlanCreationResult {
+  successCount: number;
+  failureDetails: Array<{
+    inputLine: string;
+    vlanNumber?: number;
+    error: string;
+  }>;
+}
+
+export async function batchCreateVLANsAction(
+  vlans: Array<{ vlanNumber: number; description?: string; originalLine?: string }>
+): Promise<BatchVlanCreationResult> {
+  const auditUser = await getAuditUserInfo();
+  let successCount = 0;
+  const failureDetails: BatchVlanCreationResult['failureDetails'] = [];
+  const createdVlanNumbersForAudit: number[] = [];
+
+  for (const vlanInput of vlans) {
+    const inputLine = vlanInput.originalLine || `${vlanInput.vlanNumber}${vlanInput.description ? ',' + vlanInput.description : ''}`;
+    try {
+      if (isNaN(vlanInput.vlanNumber) || vlanInput.vlanNumber < 1 || vlanInput.vlanNumber > 4094) {
+        throw new Error("VLAN number must be between 1 and 4094.");
+      }
+      const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } });
+      if (existingVLAN) {
+        throw new Error(`VLAN ${vlanInput.vlanNumber} already exists.`);
+      }
+
+      await prisma.vLAN.create({
+        data: {
+          vlanNumber: vlanInput.vlanNumber,
+          description: vlanInput.description || null,
+        },
+      });
+      createdVlanNumbersForAudit.push(vlanInput.vlanNumber);
+      successCount++;
+    } catch (e: any) {
+      failureDetails.push({
+        inputLine: inputLine,
+        vlanNumber: isNaN(vlanInput.vlanNumber) ? undefined : vlanInput.vlanNumber,
+        error: e.message || "Unknown error",
+      });
+    }
+  }
+
+  if (createdVlanNumbersForAudit.length > 0) {
+     await prisma.auditLog.create({
+        data: {
+            userId: auditUser.userId,
+            username: auditUser.username,
+            action: 'batch_create_vlan',
+            details: `Batch created ${createdVlanNumbersForAudit.length} VLANs: ${createdVlanNumbersForAudit.join(', ')}. Failures: ${failureDetails.length}.`
+        }
+    });
+  } else if (failureDetails.length > 0) {
+     await prisma.auditLog.create({
+        data: {
+            userId: auditUser.userId,
+            username: auditUser.username,
+            action: 'batch_create_vlan_failed',
+            details: `Batch VLAN creation attempt failed for all ${failureDetails.length} entries.`
+        }
+    });
+  }
+
+
+  if (successCount > 0) {
+    revalidatePath("/vlans");
+    revalidatePath("/subnets"); // In case VLANs are used by subnets form
+    revalidatePath("/ip-addresses"); // In case VLANs are used by IP form
+  }
+
+  return { successCount, failureDetails };
+}
+
+
 export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "id" | "subnetCount">>): Promise<AppVLAN | null> {
   const auditUser = await getAuditUserInfo();
   const vlanToUpdate = await prisma.vLAN.findUnique({ where: { id } });
   if (!vlanToUpdate) return null;
 
   if (data.vlanNumber && data.vlanNumber !== vlanToUpdate.vlanNumber) {
+    if (data.vlanNumber < 1 || data.vlanNumber > 4094) {
+        throw new Error("VLAN number must be between 1 and 4094.");
+    }
     const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: data.vlanNumber } });
     if (existingVLAN && existingVLAN.id !== id) {
       throw new Error(`Another VLAN with number ${data.vlanNumber} already exists.`);
@@ -597,7 +681,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
     data: {
       username: data.username,
       email: data.email,
-      password: data.password || "default_password_please_change",
+      password: data.password || "default_password_please_change", // Should be hashed
       roleId: data.roleId,
       avatar: `https://placehold.co/100x100.png?text=${data.username.substring(0,1).toUpperCase()}`,
       lastLogin: new Date(),
@@ -625,7 +709,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   if (data.hasOwnProperty('lastLogin')) updateData.lastLogin = data.lastLogin ? new Date(data.lastLogin) : undefined;
 
   if (data.password && data.password.length > 0) {
-    updateData.password = data.password;
+    updateData.password = data.password; // Should be hashed
   }
 
   if (data.email && data.email !== userToUpdate.email) {
@@ -659,6 +743,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { success: false, message: "User not found." };
 
+  // In a real app, compare hashed passwords
   if (payload.currentPassword && user.password && payload.currentPassword !== user.password) {
     return { success: false, message: "Current password does not match." };
   }
@@ -666,7 +751,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
 
   await prisma.user.update({
     where: { id: userId },
-    data: { password: payload.newPassword },
+    data: { password: payload.newPassword }, // Should be hashed
   });
   await prisma.auditLog.create({
     data: { userId: user.id, username: user.username, action: 'update_own_password', details: `User ${user.username} changed their password.` }
@@ -687,7 +772,7 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
 
   await prisma.auditLog.updateMany({
     where: { userId: id },
-    data: { userId: null }
+    data: { userId: null } // Dissociate logs from the user
   });
 
   await prisma.user.delete({ where: { id } });
@@ -785,6 +870,8 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
 }
 
 export async function createRoleAction(data: any): Promise<AppRole> {
+  // Roles are fixed (Admin, Operator, Viewer) and seeded.
+  // UI should not allow creating new roles.
   throw new Error("Creating new roles is not allowed. Roles are fixed (Administrator, Operator, Viewer).");
 }
 export async function deleteRoleAction(id: string): Promise<{ success: boolean; message?: string }>{
@@ -792,6 +879,7 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean; 
    if (role && (role.name === "Administrator" || role.name === "Operator" || role.name === "Viewer" )) {
      throw new Error("Deleting fixed roles (Administrator, Operator, Viewer) is not allowed.");
    }
+  // Potentially allow deleting custom roles if they were ever supported, but for now, this is defensive.
   throw new Error("Role not found or deletion not allowed.");
 }
 
@@ -847,6 +935,7 @@ export async function deleteAuditLogAction(id: string): Promise<{ success: boole
 
   await prisma.auditLog.delete({ where: { id } });
 
+  // Log the deletion itself
   await prisma.auditLog.create({
     data: {
       userId: auditUser.userId,

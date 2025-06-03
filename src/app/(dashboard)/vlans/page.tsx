@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Edit, Trash2, Cable } from "lucide-react";
+import { Edit, Trash2, Cable, PlusCircle } from "lucide-react"; // Added PlusCircle
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +14,7 @@ import type { VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
+import { VlanBatchFormSheet } from "./vlan-batch-form-sheet"; // New import
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -80,13 +81,24 @@ function VlansView() {
   const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
   const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
 
+  const actionButtons = canCreate ? (
+    <div className="flex gap-2">
+      <VlanBatchFormSheet onVlanChange={fetchData}>
+        <Button variant="outline">
+          <PlusCircle className="mr-2 h-4 w-4" /> Batch Add VLANs
+        </Button>
+      </VlanBatchFormSheet>
+      <VlanFormSheet onVlanChange={fetchData} />
+    </div>
+  ) : null;
+
   return (
     <>
       <PageHeader
         title="VLAN Management"
         description="Organize and manage your Virtual LANs."
         icon={Cable}
-        actionElement={canCreate ? <VlanFormSheet onVlanChange={fetchData}/> : null}
+        actionElement={actionButtons}
       />
 
       <Card>
@@ -140,12 +152,14 @@ function VlansView() {
                   ))}
                 </TableBody>
               </Table>
-              <PaginationControls
-                currentPage={vlansData.currentPage}
-                totalPages={vlansData.totalPages}
-                basePath={pathname}
-                currentQuery={searchParams}
-              />
+              {vlansData.totalPages > 1 && (
+                <PaginationControls
+                  currentPage={vlansData.currentPage}
+                  totalPages={vlansData.totalPages}
+                  basePath={pathname}
+                  currentQuery={searchParams}
+                />
+              )}
             </>
           ) : (
              <div className="text-center py-10">
@@ -166,3 +180,4 @@ export default function VlansPage() {
     </Suspense>
   );
 }
+
