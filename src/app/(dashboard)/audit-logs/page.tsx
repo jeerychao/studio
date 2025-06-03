@@ -12,7 +12,7 @@ import { PERMISSIONS } from "@/types";
 import { ListChecks } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+// Removed unused CurrentUserContextValue import
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
@@ -21,9 +21,10 @@ export default function AuditLogsPage() {
 
   React.useEffect(() => {
     async function fetchLogs() {
-      if (isAuthLoading || !currentUser) return; 
+      if (isAuthLoading || !currentUser) return; // Wait for auth to complete
       try {
-        if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
+        // Ensure currentUser is available before checking permission
+        if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
             const fetchedLogs = await getAuditLogsAction();
             setLogs(fetchedLogs);
         }
@@ -32,7 +33,7 @@ export default function AuditLogsPage() {
       }
     }
     fetchLogs();
-  }, [toast, currentUser, isAuthLoading]);
+  }, [toast, currentUser, isAuthLoading]); // isAuthLoading added to dependency array
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -47,6 +48,7 @@ export default function AuditLogsPage() {
     );
   }
   
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">

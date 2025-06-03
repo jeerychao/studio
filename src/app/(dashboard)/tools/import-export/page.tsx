@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; 
-import type { Subnet, VLAN, IPAddress } from "@/types";
+// Removed unused Subnet, VLAN, IPAddress type imports
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,7 +40,11 @@ export default function ImportExportPage() {
   };
 
   const handleImport = async () => {
-    if (isAuthLoading || !currentUser || !hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT)) {
+    if (isAuthLoading || !currentUser) { // Wait for auth
+        toast({ title: "Authentication Error", description: "Please wait or try logging in again.", variant: "destructive" });
+        return;
+    }
+    if (!hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT)) {
         toast({ title: "Permission Denied", description: "You do not have permission to import data.", variant: "destructive" });
         return;
     }
@@ -49,9 +53,9 @@ export default function ImportExportPage() {
       return;
     }
     setIsImporting(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate import
     
-    const validationSuccess = Math.random() > 0.3; 
+    const validationSuccess = Math.random() > 0.3; // Simulate validation
     if (validationSuccess) {
       toast({ title: "Import Successful", description: `${importFile.name} has been imported (simulated).` });
     } else {
@@ -65,7 +69,11 @@ export default function ImportExportPage() {
   };
 
   const handleExport = (dataType: "subnets" | "vlans" | "ips") => {
-    if (isAuthLoading || !currentUser || !hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT)) {
+    if (isAuthLoading || !currentUser) { // Wait for auth
+        toast({ title: "Authentication Error", description: "Please wait or try logging in again.", variant: "destructive" });
+        return;
+    }
+    if (!hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT)) {
         toast({ title: "Permission Denied", description: "You do not have permission to export data.", variant: "destructive" });
         return;
     }
@@ -93,7 +101,7 @@ export default function ImportExportPage() {
           ipRange: subnet.ipRange || "",
           vlanNumber: vlan ? vlan.vlanNumber.toString() : "",
           description: subnet.description || "",
-          utilization: subnet.utilization || 0,
+          utilization: subnet.utilization || 0, // Assuming mockSubnets has utilization
         };
       });
       dataToExport = subnetsForCsv;
@@ -104,7 +112,7 @@ export default function ImportExportPage() {
         id: vlan.id,
         vlanNumber: vlan.vlanNumber,
         description: vlan.description || "",
-        subnetCount: vlan.subnetCount || 0,
+        subnetCount: vlan.subnetCount || 0, // Assuming mockVLANs has subnetCount
       }));
       csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
       csvContent = convertToCSV(dataToExport, csvHeaders);
@@ -188,6 +196,7 @@ export default function ImportExportPage() {
     );
   }
 
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -198,8 +207,8 @@ export default function ImportExportPage() {
     );
   }
   
-  const canImport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT);
-  const canExport = hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT);
+  const canImport = currentUser && hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT);
+  const canExport = currentUser && hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT);
 
   return (
     <>

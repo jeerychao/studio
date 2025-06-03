@@ -8,14 +8,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getSubnetsAction, getVLANsAction, deleteSubnetAction } from "@/lib/actions";
-import type { Subnet, VLAN, PermissionId } from "@/types";
+import type { Subnet, VLAN } from "@/types"; // Removed unused PermissionId
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+// Removed unused CurrentUserContextValue
 import { useToast } from "@/hooks/use-toast";
 
 export default function SubnetsPage() {
@@ -26,9 +26,10 @@ export default function SubnetsPage() {
 
   React.useEffect(() => {
     async function fetchData() {
-      if (isAuthLoading || !currentUser) return;
+      if (isAuthLoading || !currentUser) return; // Wait for auth
       try {
-        if (hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
+        // Ensure currentUser is available before checking permission
+        if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
             const [fetchedSubnets, fetchedVlans] = await Promise.all([
             getSubnetsAction(),
             getVLANsAction(),
@@ -40,10 +41,9 @@ export default function SubnetsPage() {
         toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (!isAuthLoading && currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
-        fetchData();
-    }
-  }, [toast, currentUser, isAuthLoading]);
+    // Removed redundant !isAuthLoading && currentUser check
+    fetchData();
+  }, [toast, currentUser, isAuthLoading]); // isAuthLoading added
 
   const getVlanNumber = (vlanId?: string) => {
     if (!vlanId) return "N/A";
@@ -60,6 +60,7 @@ export default function SubnetsPage() {
     );
   }
   
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -70,9 +71,9 @@ export default function SubnetsPage() {
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
+  const canCreate = currentUser && hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
+  const canEdit = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
+  const canDelete = currentUser && hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
 
   return (
     <>

@@ -10,33 +10,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction } from "@/lib/actions";
-import type { IPAddress, IPAddressStatus, Subnet, VLAN, PermissionId } from "@/types";
+import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types"; // Removed unused PermissionId
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+// Removed unused CurrentUserContextValue
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from 'next/navigation';
 
-function LoadingIPAddresses() {
+function LoadingIPAddressesPageContent() { // Renamed to avoid conflict if exported
   return (
     <>
       <PageHeader
         title="IP Address Management"
-        description="Loading..."
+        description="Loading IP address data..."
         icon={Globe}
       />
       <Card>
         <CardHeader>
           <CardTitle>IP Address List</CardTitle>
-          <CardDescription>Fetching IP addresses...</CardDescription>
+          <CardDescription>Fetching IP addresses from the system...</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-10">
              <Globe className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading data...</p>
+            <p className="text-muted-foreground">Loading IP addresses, subnets, and VLANs...</p>
           </div>
         </CardContent>
       </Card>
@@ -56,7 +56,15 @@ function IPAddressesView() {
   const { toast } = useToast();
 
   const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
+    // Wait for auth to complete and ensure user is available
+    if (isAuthLoading || !currentUser) {
+        setIpAddresses([]);
+        setSubnets([]);
+        setVlans([]);
+        return;
+    }
+    // Check permission after ensuring currentUser is loaded
+    if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
         setIpAddresses([]);
         setSubnets([]);
         setVlans([]);
@@ -74,16 +82,17 @@ function IPAddressesView() {
     } catch (error) {
       toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
     }
-  }, [selectedSubnetId, toast, currentUser, isAuthLoading]);
+  }, [selectedSubnetId, toast, currentUser, isAuthLoading]); // isAuthLoading added
 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
   
   if (isAuthLoading) {
-    return <LoadingIPAddresses />;
+    return <LoadingIPAddressesPageContent />;
   }
 
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -94,9 +103,9 @@ function IPAddressesView() {
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
+  const canCreate = currentUser && hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
+  const canEdit = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
+  const canDelete = currentUser && hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
 
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
@@ -118,7 +127,7 @@ function IPAddressesView() {
       const subnet = subnets.find(s => s.id === ip.subnetId);
       if (subnet?.vlanId) {
         vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
-      } else if (subnet) {
+      } else if (subnet) { // Subnet exists but has no VLAN
         return "No VLAN (Subnet)";
       }
     }
@@ -222,7 +231,7 @@ function IPAddressesView() {
 
 export default function IPAddressesPage() {
   return (
-    <Suspense fallback={<LoadingIPAddresses />}>
+    <Suspense fallback={<LoadingIPAddressesPageContent />}>
       <IPAddressesView />
     </Suspense>
   );

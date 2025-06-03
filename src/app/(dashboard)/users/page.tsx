@@ -10,12 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getUsersAction, getRolesAction, deleteUserAction } from "@/lib/actions";
-import type { User, Role, PermissionId } from "@/types";
+import type { User, Role } from "@/types"; // Removed unused PermissionId
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { UserFormSheet } from "./user-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+// Removed unused CurrentUserContextValue
 import { useToast } from "@/hooks/use-toast";
 
 export default function UsersPage() {
@@ -26,9 +26,10 @@ export default function UsersPage() {
 
   React.useEffect(() => {
     async function fetchData() {
-      if (isAuthLoading || !currentUser) return;
+      if (isAuthLoading || !currentUser) return; // Wait for auth
       try {
-        if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
+        // Ensure currentUser is available before checking permission
+        if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
             const [fetchedUsers, fetchedRoles] = await Promise.all([
             getUsersAction(),
             getRolesAction(),
@@ -40,10 +41,9 @@ export default function UsersPage() {
         toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (!isAuthLoading && currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
-        fetchData();
-    }
-  }, [toast, currentUser, isAuthLoading]);
+    // Removed redundant !isAuthLoading && currentUser check
+    fetchData();
+  }, [toast, currentUser, isAuthLoading]); // isAuthLoading added
 
   const getRoleName = (roleId: string) => {
     const role = roles.find(r => r.id === roleId);
@@ -63,6 +63,7 @@ export default function UsersPage() {
     );
   }
 
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -73,9 +74,9 @@ export default function UsersPage() {
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_USER);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_USER);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_USER);
+  const canCreate = currentUser && hasPermission(currentUser, PERMISSIONS.CREATE_USER);
+  const canEdit = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_USER);
+  const canDelete = currentUser && hasPermission(currentUser, PERMISSIONS.DELETE_USER);
 
   return (
     <>

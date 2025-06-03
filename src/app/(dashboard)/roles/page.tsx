@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { getRolesAction } from "@/lib/actions"; 
-import type { Role, PermissionId } from "@/types";
+import type { Role } from "@/types"; // Removed unused PermissionId
 import { PERMISSIONS } from "@/types";
 import { RoleFormSheet } from "./role-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
@@ -21,9 +21,10 @@ export default function RolesPage() {
 
   React.useEffect(() => {
     async function fetchRoles() {
-      if (isAuthLoading || !currentUser) return;
+      if (isAuthLoading || !currentUser) return; // Wait for auth
       try {
-        if (hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
+        // Ensure currentUser is available before checking permission
+        if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
             const fetchedRoles = await getRolesAction();
             setRoles(fetchedRoles);
         }
@@ -31,10 +32,9 @@ export default function RolesPage() {
         toast({ title: "Error fetching roles", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (!isAuthLoading && currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
-        fetchRoles();
-    }
-  }, [toast, currentUser, isAuthLoading]); 
+    // Removed redundant !isAuthLoading && currentUser check as it's handled above
+    fetchRoles();
+  }, [toast, currentUser, isAuthLoading]); // isAuthLoading added
 
   if (isAuthLoading) {
      return (
@@ -45,6 +45,7 @@ export default function RolesPage() {
     );
   }
   
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -55,8 +56,8 @@ export default function RolesPage() {
     );
   }
   
-  const canEditRolePermissions = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_PERMISSIONS);
-  const canEditRoleDescription = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_DESCRIPTION);
+  const canEditRolePermissions = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_PERMISSIONS);
+  const canEditRoleDescription = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_DESCRIPTION);
   const canEditAnyPartOfRole = canEditRolePermissions || canEditRoleDescription;
 
 

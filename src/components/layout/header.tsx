@@ -15,17 +15,23 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user"; 
+import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"; 
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
+  const { currentUser, isAuthLoading } = useCurrentUser(); // Get currentUser for potential display
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login'; // Direct navigation to login
+      // Direct navigation to login page is often more reliable for auth state changes
+      window.location.href = '/login'; 
     }
   };
+
+  // You can use currentUser?.username or similar in the UI if needed,
+  // though it's often in the user menu itself.
+  // if (isAuthLoading) return null; // Or a skeleton header
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -91,7 +97,7 @@ export function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>{isAuthLoading ? 'Loading...' : (currentUser?.username || 'My Account')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/settings">Settings</Link>

@@ -42,6 +42,7 @@ export default function SettingsPage() {
     );
   }
 
+  // Ensure currentUser is not null before checking permissions
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">

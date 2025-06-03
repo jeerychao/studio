@@ -8,12 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { getVLANsAction, deleteVLANAction } from "@/lib/actions";
-import type { VLAN, PermissionId } from "@/types";
+import type { VLAN } from "@/types"; // Removed unused PermissionId
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+// Removed unused CurrentUserContextValue
 import { useToast } from "@/hooks/use-toast";
 
 export default function VlansPage() {
@@ -23,9 +23,10 @@ export default function VlansPage() {
 
   React.useEffect(() => {
     async function fetchVlans() {
-      if (isAuthLoading || !currentUser) return;
+      if (isAuthLoading || !currentUser) return; // Wait for auth
       try {
-        if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
+        // Ensure currentUser is available before checking permission
+        if (currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
             const fetchedVlans = await getVLANsAction();
             setVlans(fetchedVlans);
         }
@@ -33,10 +34,9 @@ export default function VlansPage() {
          toast({ title: "Error fetching VLANs", description: (error as Error).message, variant: "destructive" });
       }
     }
-    if (!isAuthLoading && currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
-        fetchVlans();
-    }
-  }, [toast, currentUser, isAuthLoading]);
+    // Removed redundant !isAuthLoading && currentUser check
+    fetchVlans();
+  }, [toast, currentUser, isAuthLoading]); // isAuthLoading added
 
   if (isAuthLoading) {
      return (
@@ -47,6 +47,7 @@ export default function VlansPage() {
     );
   }
 
+  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -57,9 +58,9 @@ export default function VlansPage() {
     );
   }
   
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
+  const canCreate = currentUser && hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
+  const canEdit = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
+  const canDelete = currentUser && hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
 
   return (
     <>

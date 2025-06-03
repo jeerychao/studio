@@ -71,7 +71,7 @@ export default function DashboardLayout({
       } else {
         setAuthStatus('authenticated');
       }
-    } else {
+    } else { // Should not happen if useCurrentUser always returns a user object
       setAuthStatus('unauthenticated');
       router.replace('/login');
     }
@@ -87,6 +87,8 @@ export default function DashboardLayout({
   }
 
   if (authStatus === 'unauthenticated') {
+    // router.replace should have already navigated. This is a fallback.
+    // Or, we can render null and let the router.replace in useEffect handle it.
     return null; 
   }
 

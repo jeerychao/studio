@@ -35,17 +35,20 @@ export default function LoginPage() {
     }
 
     if (currentUser && currentUser.id) { 
+      // Check if it's NOT the guest user
       if (!(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setPageAuthStatus('authenticated');
       } else {
         setPageAuthStatus('unauthenticated');
       }
     } else {
+       // Should ideally not happen as useCurrentUser always returns a user object
        setPageAuthStatus('unauthenticated');
     }
   }, [currentUser, isAuthLoading]);
 
   React.useEffect(() => {
+    // Only redirect if pageAuthStatus is 'authenticated'
     if (pageAuthStatus === 'authenticated') {
       router.replace("/dashboard");
     }
@@ -57,12 +60,16 @@ export default function LoginPage() {
 
     const foundUser = mockUsers.find(user => user.email === email);
 
+    // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000)); 
 
-    if (foundUser && password) { 
+    if (foundUser && password) { // Basic password check (non-empty) for mock
+      // Call the global function exposed by useCurrentUser to set the mock user
       if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
         (window as any).setCurrentMockUser(foundUser.id); 
+        // Toast is shown, but the page will reload and redirect via useEffect
         toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
+        // No direct router.push here, let the reload and subsequent useEffect handle redirection
       } else {
         toast({ title: "Login Error", description: "Unable to set user. Developer function missing.", variant: "destructive" });
       }
@@ -83,6 +90,7 @@ export default function LoginPage() {
     );
   }
 
+  // Only render login form if unauthenticated and not loading
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-xl">
