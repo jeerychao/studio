@@ -3,7 +3,7 @@ import prisma from '../src/lib/prisma'; // Changed import
 import {
   mockPermissions as seedPermissionsData,
   mockRoles as seedRolesData,
-  mockUsers as seedUsersData,
+  // mockUsers will now be defined inside main() based on roles for simplicity
   mockVLANs as seedVLANsData,
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
@@ -12,7 +12,7 @@ import {
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
-import type { PermissionId as AppPermissionId, RoleName as AppRoleName, IPAddressStatus as AppIPAddressStatus } from '../src/types';
+import type { PermissionId as AppPermissionId, RoleName as AppRoleName, IPAddressStatus as AppIPAddressStatus, User as AppUser } from '../src/types';
 
 
 async function main() {
@@ -63,26 +63,51 @@ async function main() {
   }
   console.log('Roles seeded.');
 
+  // Define initial users based on your new logic
+  const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar'> & { password?: string }> = [
+    {
+      id: 'user-admin-seed', // Keep consistent ID for potential localStorage use
+      username: 'admin',
+      email: 'admin@example.com',
+      roleId: SEED_ADMIN_ROLE_ID,
+      password: 'admin',
+    },
+    {
+      id: 'user-operator-seed',
+      username: 'operator',
+      email: 'operator@example.com',
+      roleId: SEED_OPERATOR_ROLE_ID,
+      password: 'operator',
+    },
+    {
+      id: 'user-viewer-seed',
+      username: 'viewer',
+      email: 'viewer@example.com',
+      roleId: SEED_VIEWER_ROLE_ID,
+      password: 'viewer',
+    },
+  ];
+
   // Seed Users
-  console.log('Seeding Users...');
-  for (const userData of seedUsersData) {
+  console.log('Seeding Users with new credentials...');
+  for (const userData of initialUsersToSeed) {
     await prisma.user.upsert({
       where: { email: userData.email },
       update: {
         username: userData.username,
-        password: `pass_${userData.username}`, // In a real app, hash passwords
+        password: userData.password, // Store the plain password
         roleId: userData.roleId,
-        avatar: userData.avatar,
-        lastLogin: userData.lastLogin ? new Date(userData.lastLogin) : new Date(),
+        avatar: `https://placehold.co/100x100.png?text=${userData.username.substring(0,1).toUpperCase()}`,
+        lastLogin: new Date(), // Set a recent login time
       },
       create: {
         id: userData.id,
         username: userData.username,
         email: userData.email,
-        password: `pass_${userData.username}`, // In a real app, hash passwords
+        password: userData.password, // Store the plain password
         roleId: userData.roleId,
-        avatar: userData.avatar,
-        lastLogin: userData.lastLogin ? new Date(userData.lastLogin) : new Date(),
+        avatar: `https://placehold.co/100x100.png?text=${userData.username.substring(0,1).toUpperCase()}`,
+        lastLogin: new Date(),
       },
     });
   }
@@ -158,19 +183,26 @@ async function main() {
   // Seed Audit Logs
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {
-    const userExists = logData.userId ? await prisma.user.findUnique({ where: { id: logData.userId } }) : null;
-    const validUserId = userExists ? logData.userId : undefined;
+    // Ensure userId from seed data corresponds to one of the newly defined users
+    const userToLink = initialUsersToSeed.find(u => u.username === logData.username);
+    const validUserId = userToLink ? userToLink.id : undefined;
+    const validUsername = userToLink ? userToLink.username : logData.username;
 
-    await prisma.auditLog.create({
-      data: {
-        id: logData.id,
-        userId: validUserId,
-        username: logData.username,
-        action: logData.action,
-        details: logData.details,
-        timestamp: logData.timestamp ? new Date(logData.timestamp) : new Date(),
-      },
-    });
+
+    // Check if log already exists to prevent duplicates if seed is run multiple times
+    const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id }});
+    if (!existingLog) {
+        await prisma.auditLog.create({
+        data: {
+            id: logData.id,
+            userId: validUserId,
+            username: validUsername,
+            action: logData.action,
+            details: logData.details,
+            timestamp: logData.timestamp ? new Date(logData.timestamp) : new Date(),
+        },
+        });
+    }
   }
   console.log('Audit Logs seeded.');
 

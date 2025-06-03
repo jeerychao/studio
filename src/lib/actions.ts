@@ -6,19 +6,28 @@ import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, U
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import { parseAndValidateCIDR, getUsableIpCount, isIpInCidrRange, ipToNumber, numberToIp } from "./ip-utils";
-import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
+import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions, mockUsers as appMockUsers, mockRoles as appMockRoles } from "./data"; // Keep mockUsers for loginAction reference
 import { Prisma } from '@prisma/client';
 
 // Helper to get current user for audit purposes.
-async function getAuditUserInfo(): Promise<{ userId?: string, username: string }> {
+// For actions NOT triggered by a specific logged-in user (e.g. system startup, or if auth is complex),
+// this attempts to find an admin or falls back to 'System'.
+// For actions triggered BY a user (like password change), the user's own ID/username should be used.
+async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: string, username: string }> {
+  if (performingUserId) {
+    const user = await prisma.user.findUnique({ where: { id: performingUserId } });
+    if (user) return { userId: user.id, username: user.username };
+  }
+  // Fallback if no specific user ID is provided for the audit
   const adminUser = await prisma.user.findFirst({
-    where: { role: { name: "Administrator" } },
+    where: { role: { name: "Administrator" } }, // Assumes RoleName is 'Administrator'
   });
   if (adminUser) {
     return { userId: adminUser.id, username: adminUser.username };
   }
-  return { userId: undefined, username: 'System' };
+  return { userId: undefined, username: 'System' }; // Fallback to system if no admin found
 }
+
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -35,6 +44,68 @@ export interface FetchParams {
   pageSize?: number;
   subnetId?: string; // For IP Addresses specifically
 }
+
+// --- Login Action ---
+interface LoginPayload {
+  email: string;
+  password?: string; // Password might be optional if using other auth methods in future
+}
+interface LoginResponse {
+  success: boolean;
+  user?: AppUser; // Return simplified AppUser on success
+  message?: string;
+}
+
+export async function loginAction(payload: LoginPayload): Promise<LoginResponse> {
+  const { email, password } = payload;
+
+  if (!email || !password) {
+    return { success: false, message: "Email and password are required." };
+  }
+
+  const userFromDb = await prisma.user.findUnique({
+    where: { email },
+    include: { role: { include: { permissions: true } } },
+  });
+
+  if (!userFromDb) {
+    return { success: false, message: "Invalid email or password." };
+  }
+
+  // Direct password comparison (ensure seed script stores passwords this way)
+  if (userFromDb.password !== password) {
+    return { success: false, message: "Invalid email or password." };
+  }
+
+  // If login is successful, update lastLogin
+  await prisma.user.update({
+    where: { id: userFromDb.id },
+    data: { lastLogin: new Date() },
+  });
+  
+  const appUser: AppUser = {
+    id: userFromDb.id,
+    username: userFromDb.username,
+    email: userFromDb.email,
+    roleId: userFromDb.roleId,
+    roleName: userFromDb.role.name as AppRoleNameType, // Prisma type might be string
+    avatar: userFromDb.avatar || undefined,
+    // Permissions are typically handled by useCurrentUser via role, not sent directly in login response
+  };
+
+  await prisma.auditLog.create({
+    data: {
+        userId: userFromDb.id,
+        username: userFromDb.username,
+        action: 'user_login',
+        details: `User ${userFromDb.username} logged in successfully.`
+    }
+  });
+
+
+  return { success: true, user: appUser };
+}
+
 
 // --- Subnet Actions ---
 export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedResponse<AppSubnet>> {
@@ -188,7 +259,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
     }
     if (ipsToDisassociateDetails.length > 0) {
       await prisma.auditLog.create({
-        data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_handle_ip_on_subnet_resize', details: `Subnet ${originalCidrForLog} resized to ${newCanonicalCidr}. Disassociated IPs: ${ipsToDisassociateDetails.join('; ')}.` }
+        data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_handle_ip_on_subnet_resize', details: `Subnet ${originalCidrForLog} resized to ${newCanonicalCidrForLog}. Disassociated IPs: ${ipsToDisassociateDetails.join('; ')}.` }
       });
     }
   }
@@ -822,12 +893,14 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   if (await prisma.user.findUnique({ where: { email: data.email } })) throw new Error(`Email ${data.email} already exists.`);
   if (await prisma.user.findUnique({ where: { username: data.username } })) throw new Error(`Username ${data.username} already exists.`);
   if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new Error(`Role ID ${data.roleId} does not exist.`);
+  if (!data.password) throw new Error("Password is required for new user creation.");
+
 
   const newUser = await prisma.user.create({
     data: {
       username: data.username,
       email: data.email,
-      password: data.password || "default_password_please_change", 
+      password: data.password, 
       roleId: data.roleId,
       avatar: `https://placehold.co/100x100.png?text=${data.username.substring(0,1).toUpperCase()}`,
       lastLogin: new Date(),
@@ -835,7 +908,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
     include: { role: true }
   });
   await prisma.auditLog.create({
-    data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `Created user ${newUser.username}${data.password ? ' (password set)' : ''}` }
+    data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `Created user ${newUser.username}` }
   });
   revalidatePath("/users");
   revalidatePath("/roles");
@@ -843,7 +916,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
 }
 
 export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<AppUser | null> {
-  const auditUser = await getAuditUserInfo();
+  const auditUser = await getAuditUserInfo(id); // Pass performing user's ID
   const userToUpdate = await prisma.user.findUnique({ where: { id } });
   if (!userToUpdate) return null;
 
@@ -852,7 +925,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   if (data.hasOwnProperty('email') && data.email !== undefined) updateData.email = data.email;
   if (data.hasOwnProperty('roleId') && data.roleId !== undefined) updateData.roleId = data.roleId;
   if (data.hasOwnProperty('avatar') && data.avatar !== undefined) updateData.avatar = data.avatar;
-  if (data.hasOwnProperty('lastLogin') && data.lastLogin !== undefined) updateData.lastLogin = data.lastLogin ? new Date(data.lastLogin) : undefined;
+  // lastLogin should not be updated directly here, it's updated on actual login
 
   if (data.password && data.password.length > 0) {
     updateData.password = data.password; 
@@ -873,10 +946,10 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     include: { role: true }
   });
 
-  let auditDetails = `Updated user ${updatedUser.username}`;
-  if (data.password && data.password.length > 0) auditDetails += ' (password changed)';
+  let auditDetails = `User ${updatedUser.username} details updated by ${auditUser.username}.`;
+  if (data.password && data.password.length > 0) auditDetails = `User ${updatedUser.username} password changed by ${auditUser.username}.`;
   await prisma.auditLog.create({
-    data: { userId: auditUser.userId, username: auditUser.username, action: 'update_user', details: auditDetails }
+    data: { userId: auditUser.userId, username: auditUser.username, action: 'update_user_details', details: auditDetails }
   });
 
   revalidatePath("/users");
@@ -889,6 +962,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { success: false, message: "User not found." };
 
+  // Compare with the actual password from the database
   if (payload.currentPassword && user.password && payload.currentPassword !== user.password) {
     return { success: false, message: "Current password does not match." };
   }
@@ -1001,7 +1075,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
   if (data.permissions) details += ` Permissions ${data.permissions.length > 0 ? 'changed' : 'cleared/unchanged'}.`;
 
   await prisma.auditLog.create({
-    data: { userId: auditUser.userId, username: auditUser.username, action: 'update_role', details }
+    data: { userId: auditUser.userId, username: auditUser.username, action: 'update_role', details: details }
   });
   revalidatePath("/roles");
   revalidatePath("/users");

@@ -69,8 +69,7 @@ function createInitialSubnetSeedData(id: string, cidr: string, vlanId?: string, 
   };
 }
 
-// This data is now PRIMARILY FOR SEEDING the database.
-// The `useCurrentUser` hook will still reference these for its mock user switching logic for simplicity.
+// This data is used by prisma/seed.ts AND by useCurrentUser.ts for client-side auth simulation
 export const mockSubnets: Omit<Subnet, 'utilization'>[] = [
   createInitialSubnetSeedData('subnet-1-seed', '192.168.1.0/24', 'vlan-1-seed', 'Main Office Network'),
   createInitialSubnetSeedData('subnet-2-seed', '10.0.0.0/16', 'vlan-2-seed', 'Server Farm'),
@@ -91,15 +90,16 @@ export const mockIPAddresses: IPAddress[] = [
   { id: 'ip-5-seed', ipAddress: '10.0.1.6', subnetId: 'subnet-2-seed', vlanId: 'vlan-2-seed', status: 'allocated', allocatedTo: 'DBServer01' },
 ];
 
-export const mockRoles: Role[] = [ // The `permissions` array here should use the string IDs from `types/index.ts`
+// mockRoles is used by prisma/seed.ts AND by useCurrentUser.ts
+export const mockRoles: Role[] = [
   {
-    id: ADMIN_ROLE_ID, // 'role-admin-fixed'
+    id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: mockPermissions.map(p => p.id as PermissionId) // All permissions
+    permissions: mockPermissions.map(p => p.id as PermissionId)
   },
   {
-    id: OPERATOR_ROLE_ID, // 'role-operator-fixed'
+    id: OPERATOR_ROLE_ID,
     name: 'Operator' as RoleName,
     description: 'Manages IP resources. Cannot manage users, roles, or most system settings.',
     permissions: [
@@ -107,11 +107,11 @@ export const mockRoles: Role[] = [ // The `permissions` array here should use th
       PERMISSIONS.VIEW_SUBNET, PERMISSIONS.CREATE_SUBNET, PERMISSIONS.EDIT_SUBNET, PERMISSIONS.DELETE_SUBNET,
       PERMISSIONS.VIEW_VLAN, PERMISSIONS.CREATE_VLAN, PERMISSIONS.EDIT_VLAN, PERMISSIONS.DELETE_VLAN,
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
-      PERMISSIONS.VIEW_AUDIT_LOG, // Operators can view logs
+      PERMISSIONS.VIEW_AUDIT_LOG,
     ] as PermissionId[]
   },
   {
-    id: VIEWER_ROLE_ID, // 'role-viewer-fixed'
+    id: VIEWER_ROLE_ID,
     name: 'Viewer' as RoleName,
     description: 'Read-only access to IP resources and dashboard.',
     permissions: [
@@ -119,27 +119,25 @@ export const mockRoles: Role[] = [ // The `permissions` array here should use th
       PERMISSIONS.VIEW_SUBNET,
       PERMISSIONS.VIEW_VLAN,
       PERMISSIONS.VIEW_IPADDRESS,
-      PERMISSIONS.VIEW_AUDIT_LOG, // Viewers can also view logs
+      PERMISSIONS.VIEW_AUDIT_LOG,
     ] as PermissionId[]
   },
 ];
 
-export const mockUsers: User[] = [ // These are used by useCurrentUser and for seeding
-  { id: 'user-admin-seed', username: 'admin_user', email: 'admin@example.com', roleId: ADMIN_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=A`, lastLogin: new Date(Date.now() - 86400000).toISOString() },
-  { id: 'user-operator-seed', username: 'operator_jane', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=O`, lastLogin: new Date(Date.now() - 3600000).toISOString() },
-  { id: 'user-viewer-seed', username: 'viewer_john', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID, avatar: `https://placehold.co/100x100.png?text=V`, lastLogin: new Date().toISOString() },
+// mockUsers is used by useCurrentUser.ts for client-side auth simulation.
+// It should now reflect the simplified credentials.
+// The 'password' field is not directly part of the User type for client-side,
+// but it's useful here to keep it aligned with seed data.
+// The actual password check happens against the database now via login action.
+export const mockUsers: Array<User & { password?: string }> = [
+  { id: 'user-admin-seed', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID, password: 'admin', avatar: `https://placehold.co/100x100.png?text=A`, lastLogin: new Date(Date.now() - 86400000).toISOString() },
+  { id: 'user-operator-seed', username: 'operator', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID, password: 'operator', avatar: `https://placehold.co/100x100.png?text=O`, lastLogin: new Date(Date.now() - 3600000).toISOString() },
+  { id: 'user-viewer-seed', username: 'viewer', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID, password: 'viewer', avatar: `https://placehold.co/100x100.png?text=V`, lastLogin: new Date().toISOString() },
 ];
 
 
 export let mockAuditLogs: AuditLog[] = [ // For seeding
-  { id: 'log-1-seed', userId: 'user-admin-seed', username: 'admin_user', action: 'create_subnet_seed', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Seeded subnet 172.16.0.0/20' },
-  { id: 'log-2-seed', userId: 'user-operator-seed', username: 'operator_jane', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
-  { id: 'log-3-seed', userId: 'user-admin-seed', username: 'admin_user', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 description update' },
+  { id: 'log-1-seed', userId: 'user-admin-seed', username: 'admin', action: 'create_subnet_seed', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Seeded subnet 172.16.0.0/20' },
+  { id: 'log-2-seed', userId: 'user-operator-seed', username: 'operator', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
+  { id: 'log-3-seed', userId: 'user-admin-seed', username: 'admin', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 description update' },
 ];
-
-// The old getter functions are no longer relevant as actions.ts will use Prisma.
-// They can be removed if not used by any other part of the app (e.g. tests not converted yet).
-// For now, I'll leave them commented out or remove them.
-// export const getSubnets = async (): Promise<Subnet[]> => { ... };
-// ... and so on for other getters.
-

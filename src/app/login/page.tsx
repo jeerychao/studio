@@ -17,7 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Network, LogIn } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { mockUsers } from "@/lib/data";
+// Import a new server action for login
+import { loginAction } from "@/lib/actions";
+
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
@@ -35,10 +37,9 @@ export default function LoginPage() {
       return;
     }
 
-    // isAuthLoading is false, currentUser is stable
     if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
       setPageAuthStatus('authenticated');
-      if (pathname === '/login') { // Only redirect if currently on the login page
+      if (pathname === '/login') {
         router.replace("/dashboard");
       }
     } else {
@@ -50,38 +51,27 @@ export default function LoginPage() {
     event.preventDefault();
     setIsSubmitting(true);
 
-    const foundUser = mockUsers.find(user => user.email === email);
-    await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API call
+    try {
+      const result = await loginAction({ email, password });
 
-    let loginSuccess = false;
-    if (foundUser) {
-      if (email.toLowerCase() === "admin@example.com") {
-        if (password === "password") {
-          loginSuccess = true;
+      if (result.success && result.user) {
+        if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
+          (window as any).setCurrentMockUser(result.user.id); // Simulate client-side session update
+          toast({ title: "Login Successful", description: `Welcome back, ${result.user.username}!` });
+          router.push("/dashboard");
+        } else {
+          toast({ title: "Login Error", description: "Client-side error: Unable to set user session.", variant: "destructive" });
         }
-      } else if (password) { // For other mock users, any non-empty password
-        loginSuccess = true;
-      }
-    }
-
-    if (loginSuccess && foundUser) {
-      if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
-        (window as any).setCurrentMockUser(foundUser.id);
-        // After setting user, state update in useCurrentUser will trigger useEffect above,
-        // which will then handle redirection if pathname is still '/login'.
-        // Or, we can be more direct if setCurrentMockUser itself doesn't trigger immediate state propagation visible to this component instance.
-        toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
-        router.push("/dashboard"); // Explicit navigation after successful login
       } else {
-        toast({ title: "Login Error", description: "Client-side error: Unable to set user.", variant: "destructive" });
+        toast({ title: "Login Failed", description: result.message || "Invalid email or password.", variant: "destructive" });
       }
-    } else {
-      toast({ title: "Login Failed", description: "Invalid email or password. Please try again.", variant: "destructive" });
+    } catch (error) {
+      toast({ title: "Login Error", description: (error as Error).message || "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
-  // Primary loading state based on useCurrentUser
   if (isAuthLoading) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -91,8 +81,6 @@ export default function LoginPage() {
     );
   }
 
-  // If authenticated and still on /login, show redirecting message
-  // This relies on the useEffect above to actually perform the redirect.
   if (pageAuthStatus === 'authenticated' && pathname === '/login') {
      return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -102,7 +90,6 @@ export default function LoginPage() {
     );
   }
 
-  // If unauthenticated (and not loading auth), show login form
   if (pageAuthStatus === 'unauthenticated') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -114,7 +101,7 @@ export default function LoginPage() {
             <CardTitle className="text-2xl">Welcome to IPAM Lite</CardTitle>
             <CardDescription>
               Enter your credentials to access the IP Address Management system. <br/>
-              Admin: admin@example.com / password
+              (e.g., admin/admin)
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
@@ -148,9 +135,7 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? "Signing In..." : <><LogIn className="mr-2 h-4 w-4" /> Sign In</>}
               </Button>
-              <p className="mt-4 text-xs text-center text-muted-foreground">
-                (Other mock users: any non-empty password)
-              </p>
+              {/* Removed the "Other mock users" hint as it's no longer relevant */}
             </CardFooter>
           </form>
         </Card>
@@ -158,7 +143,6 @@ export default function LoginPage() {
     );
   }
 
-  // Fallback loading state (e.g., if pageAuthStatus is 'loading' but isAuthLoading became false)
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <Network className="h-12 w-12 animate-spin text-primary" />
