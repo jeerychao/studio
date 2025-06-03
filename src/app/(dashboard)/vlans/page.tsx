@@ -161,4 +161,8 @@ function VlansView() {
 
 export default function VlansPage() {
   return (
-    <Suspense fallback={<LoadingVlansPage
+    <Suspense fallback={<LoadingVlansPage />}>
+      <VlansView />
+    </Suspense>
+  );
+}
