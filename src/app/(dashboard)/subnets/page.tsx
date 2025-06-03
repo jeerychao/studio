@@ -192,7 +192,7 @@ function SubnetsView() {
                               dialogTitle="Delete Subnet?"
                               dialogDescription={`Are you sure you want to delete subnet ${subnet.cidr}? This action cannot be undone.`}
                               triggerButton={
-                                <Button variant="ghost" size="icon" aria-label="Delete Subnet" className="text-destructive hover:text-destructive">
+                                <Button variant="ghost" size="icon" aria-label="Delete Subnet">
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               }
