@@ -78,7 +78,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
       };
     } catch (error) {
         // Use originalConsole if available, otherwise fallback to regular console.error
-        const logger = (console as any).originalError || console.error;
+        const logger = console.error; // Directly use console.error for client-side errors
         logger("Error during useCurrentUser initialization (localStorage or window function setup):", error);
     } finally {
         setIsInitialized(true); // Mark as initialized AFTER localStorage is processed
