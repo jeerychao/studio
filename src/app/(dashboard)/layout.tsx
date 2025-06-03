@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
 import * as React from "react";
 import { Network, Settings2 } from "lucide-react";
 import {
@@ -18,15 +18,14 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { PERMISSIONS } from "@/types";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import type { CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 
 
 function ConditionalSettingsButton() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   if (isAuthLoading || !currentUser) {
-    return null; 
+    return null;
   }
 
   const canViewSettings = hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
@@ -56,7 +55,8 @@ export default function DashboardLayout({
 }) {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
-  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>(isAuthLoading ? 'loading' : 'unauthenticated');
+  const pathname = usePathname(); // Get current path
+  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   React.useEffect(() => {
     if (isAuthLoading) {
@@ -64,34 +64,40 @@ export default function DashboardLayout({
       return;
     }
 
+    // isAuthLoading is false here, currentUser is stable from useCurrentUser
     if (currentUser && currentUser.id) {
       if (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest') {
         setAuthStatus('unauthenticated');
-        router.replace('/login');
+        // Only redirect if not already on login page and current path is protected by this layout
+        if (pathname !== '/login') {
+            router.replace('/login');
+        }
       } else {
         setAuthStatus('authenticated');
       }
-    } else { // Should not happen if useCurrentUser always returns a user object
+    } else { // Should be guest if currentUser is null/undefined after loading
       setAuthStatus('unauthenticated');
-      router.replace('/login');
+      if (pathname !== '/login') {
+        router.replace('/login');
+      }
     }
-  }, [currentUser, isAuthLoading, router]);
+  }, [currentUser, isAuthLoading, router, pathname]);
 
-  if (authStatus === 'loading') {
+  if (authStatus === 'loading' || isAuthLoading) { // Also check isAuthLoading directly
     return (
       <div className="flex items-center justify-center h-screen">
-        <Network className="h-12 w-12 animate-spin text-primary" /> 
+        <Network className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg">Loading application...</p>
       </div>
     );
   }
 
   if (authStatus === 'unauthenticated') {
-    // router.replace should have already navigated. This is a fallback.
-    // Or, we can render null and let the router.replace in useEffect handle it.
-    return null; 
+    // Redirect should have happened in useEffect. This is a fallback or to prevent rendering children.
+    return null;
   }
 
+  // authStatus === 'authenticated'
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
