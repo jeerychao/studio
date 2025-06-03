@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -43,84 +44,80 @@ function SubnetsView() {
 
   const page = Number(searchParams.get('page')) || 1;
 
-  React.useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const [subnetsResponse, vlansResponse] = await Promise.all([
-          getSubnetsAction({ page, pageSize: ITEMS_PER_PAGE }),
-          getVLANsAction(),
-        ]);
-        setSubnetsData(subnetsResponse);
-        setVlans(vlansResponse.data);
-      } catch (error: any) {
-        console.error("Error loading data:", error);
-        toast({
-          title: "Error loading subnets",
-          description: error.message || "Failed to load subnets.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+  const fetchData = React.useCallback(async () => {
+    if (isAuthLoading || !currentUser) {
+      if (!isAuthLoading && !currentUser) { // Auth loaded, but no user (guest)
+           setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+           setVlans([]);
+           setIsLoading(false);
+      } else {
+        setIsLoading(true); // Still loading auth or no user yet
       }
-    }
-    loadData();
-  }, [page, toast]);
-
-  const handleSubnetDelete = async (subnetId: string) => {
-    if (!currentUser || !hasPermission(currentUser, PERMISSIONS.SUBNET_DELETE)) {
-      toast({
-        title: "Unauthorized",
-        description: "You do not have permission to delete subnets.",
-        variant: "destructive",
-      });
       return;
     }
-
+    setIsLoading(true);
     try {
-      const result = await deleteSubnetAction(subnetId);
-      if (result.success) {
-        toast({
-          title: "Subnet deleted",
-          description: "Subnet deleted successfully.",
-        });
-        
-        // Refresh data.  Ideally, should update local state instead of full reload.
-        const subnetsResponse = await getSubnetsAction({ page, pageSize: ITEMS_PER_PAGE });
-        setSubnetsData(subnetsResponse);
-
-      } else {
-        toast({
-          title: "Error deleting subnet",
-          description: "Failed to delete the subnet.",
-          variant: "destructive",
-        });
+      if (!hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
+          setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+          setVlans([]);
+          // Toast for access denied handled by the main return block
+          setIsLoading(false);
+          return;
       }
+
+      const [subnetsResponse, vlansResponse] = await Promise.all([
+        getSubnetsAction({ page, pageSize: ITEMS_PER_PAGE }),
+        getVLANsAction(), 
+      ]);
+      setSubnetsData(subnetsResponse);
+      setVlans(vlansResponse.data || []); // Ensure vlansResponse.data is not undefined
     } catch (error: any) {
-      console.error("Error deleting subnet:", error);
+      console.error("Error loading subnet data:", error);
       toast({
-        title: "Error deleting subnet",
-        description: error.message || "Failed to delete the subnet.",
+        title: "Error Loading Subnets",
+        description: error.message || "Failed to load subnets and VLANs.",
         variant: "destructive",
       });
+      setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setVlans([]);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [page, toast, currentUser, isAuthLoading]);
 
-  if (isLoading || isAuthLoading) {
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+
+  if (isAuthLoading || isLoading) { // isLoading will be true if fetchData is running or auth is loading
     return <LoadingSubnetsPage />;
   }
 
-  if (!subnetsData) {
-    return <p>Error loading subnets.</p>;
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full">
+            <NetworkIcon className="h-16 w-16 text-destructive mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
+            <p className="text-muted-foreground">You do not have permission to view subnets.</p>
+        </div>
+    );
   }
+  
+  if (!subnetsData) {
+    // This case should ideally be covered by isLoading or the error toast from fetchData
+    return <p>Error preparing subnet data. Please try refreshing.</p>; 
+  }
+
   const { data: subnets, totalCount, currentPage, totalPages } = subnetsData;
-  const canEdit = currentUser && hasPermission(currentUser, PERMISSIONS.SUBNET_EDIT);
-  const canDelete = currentUser && hasPermission(currentUser, PERMISSIONS.SUBNET_DELETE);
-  const canCreate = currentUser && hasPermission(currentUser, PERMISSIONS.SUBNET_CREATE);
+  
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
 
   return (
     <>
-      <div className="md:hidden">
+      <div className="md:hidden"> {/* Mobile view placeholder, not focus of this fix */}
         <Card>
           <CardHeader>
             <CardTitle>Mobile View Not Supported</CardTitle>
@@ -129,83 +126,106 @@ function SubnetsView() {
         </Card>
       </div>
       <div className="hidden md:block">
-      <PageHeader
-        title="Subnets"
-        description="View, create, and manage your subnets."
-        itemsCount={totalCount}
-      >
-        {canCreate && <SubnetFormSheet vlans={vlans} />}
-      </PageHeader>
-      <Card>
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>CIDR</TableHead>
-                <TableHead>VLAN</TableHead>
-                <TableHead>Utilization</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {subnets.map((subnet) => (
-                <TableRow key={subnet.id}>
-                  <TableCell>
-                    <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline">
-                      {subnet.cidr}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId)?.vlanNumber : <Badge variant="outline">Global Pool</Badge>}</TableCell>
-                  <TableCell>{subnet.utilization}%</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {canEdit && (
-                      <SubnetFormSheet
-                        subnet={subnet}
-                        vlans={vlans}
-                        trigger={
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </Button>
-                        }
-                      />
-                    )}
-                    {canDelete && (
-                      <DeleteConfirmationDialog
-                        itemName={subnet.cidr}
-                        onConfirm={() => handleSubnetDelete(subnet.id)}
-                        dialogTitle="Delete Subnet?"
-                        dialogDescription={`Are you sure you want to delete subnet ${subnet.cidr}?`}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="text-red-500">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </Button>
-                        }
-                      />
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {subnets.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center">
-                    No subnets found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        <CardContent>
-          <PaginationControls
-            currentPage={currentPage}
-            totalPages={totalPages}
-            basePath={pathname}
-            currentQuery={searchParams}
-          />
-        </CardContent>
-      </Card>
+        <PageHeader
+          title="Subnets"
+          description="View, create, and manage your network subnets."
+          actionElement={canCreate ? <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} /> : null}
+        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Subnet List</CardTitle>
+            <CardDescription>
+              Displaying {subnets.length} of {totalCount} subnets.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>CIDR</TableHead>
+                    <TableHead>VLAN</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Utilization</TableHead>
+                    {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subnets.map((subnet) => {
+                    const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
+                    return (
+                      <TableRow key={subnet.id}>
+                        <TableCell>
+                          <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline font-medium">
+                            {subnet.cidr}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          {vlanInfo ? (
+                            <Badge variant="outline">VLAN {vlanInfo.vlanNumber}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">N/A</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{subnet.description || "N/A"}</TableCell>
+                        <TableCell>
+                          <Badge variant={ (subnet.utilization ?? 0) > 85 ? "destructive" : "secondary"}>
+                            {subnet.utilization ?? 0}%
+                          </Badge>
+                        </TableCell>
+                        {(canEdit || canDelete) && (
+                          <TableCell className="text-right">
+                            {canEdit && (
+                              <SubnetFormSheet
+                                subnet={subnet}
+                                vlans={vlans}
+                                onSubnetChange={fetchData}
+                              >
+                                <Button variant="ghost" size="icon" aria-label="Edit Subnet">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </SubnetFormSheet>
+                            )}
+                            {canDelete && (
+                              <DeleteConfirmationDialog
+                                itemId={subnet.id}
+                                itemName={subnet.cidr}
+                                deleteAction={deleteSubnetAction}
+                                onDeleted={fetchData}
+                                dialogTitle="Delete Subnet?"
+                                dialogDescription={`Are you sure you want to delete subnet ${subnet.cidr}? This action cannot be undone.`}
+                                triggerButton={
+                                  <Button variant="ghost" size="icon" aria-label="Delete Subnet" className="text-destructive hover:text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {subnets.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={(canEdit || canDelete) ? 5 : 4} className="text-center h-24 text-muted-foreground">
+                        No subnets found. {canCreate && "Try creating one!"}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            {totalPages > 1 && (
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                basePath={pathname}
+                currentQuery={searchParams}
+              />
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );
@@ -218,3 +238,4 @@ export default function SubnetsPage() {
     </Suspense>
   );
 }
+
