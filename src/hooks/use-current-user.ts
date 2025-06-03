@@ -52,7 +52,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
         const userExists = mockUsers.find(u => u.id === userId);
         if (userExists) {
           localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-          setCurrentUserId(userId); 
+          setCurrentUserId(userId);
         } else {
           console.error(`User with ID ${userId} not found in mockUsers. Available IDs: ${mockUsers.map(u => u.id).join(', ')}`);
         }
@@ -74,7 +74,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
           const nextUserId = rolesCycle[(currentIndex + 1) % rolesCycle.length];
 
           localStorage.setItem(MOCK_USER_STORAGE_KEY, nextUserId);
-          window.location.reload(); 
+          window.location.reload();
       };
     } catch (error) {
         // Use originalConsole if available, otherwise fallback to regular console.error
@@ -97,7 +97,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
     let userDataToUse = mockUsers.find(u => u.id === currentUserId);
     if (!userDataToUse) {
       // If no user ID is found (e.g., not logged in), return a guest user
-      return createGuestUser(); 
+      return createGuestUser();
     }
 
     const role = mockRoles.find(r => r.id === userDataToUse.roleId);
@@ -111,7 +111,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
       };
     }
     return { ...userDataToUse, roleName: role.name, permissions: role.permissions || [] };
-  }, [isAuthLoading, currentUserId]); 
+  }, [isAuthLoading, currentUserId]);
 
   return { currentUser: currentUserValue, isAuthLoading };
 }

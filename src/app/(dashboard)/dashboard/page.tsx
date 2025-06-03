@@ -4,47 +4,50 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
-import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
+// import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
+// import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
 import { Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
-  try {
+  // try {
     // Fetch all subnets and IPs by not passing pagination parameters
     // These actions are designed to return all data in PaginatedResponse.data if no page/pageSize is given.
-    const subnetsResponse = await getSubnetsAction();
-    const ipsResponse = await getIPAddressesAction();
+    // const subnetsResponse = await getSubnetsAction();
+    // const ipsResponse = await getIPAddressesAction();
     // For recent logs, explicitly fetch the first page with a small size
-    const auditLogsResponse = await getAuditLogsAction({ page: 1, pageSize: 5 });
+    // const auditLogsResponse = await getAuditLogsAction({ page: 1, pageSize: 5 });
 
-    const subnetsForProcessing = Array.isArray(subnetsResponse.data) ? subnetsResponse.data : [];
-    const allIpsForProcessing = Array.isArray(ipsResponse.data) ? ipsResponse.data : [];
-    const recentLogsForDisplay = Array.isArray(auditLogsResponse.data) ? auditLogsResponse.data : [];
+    // const subnetsForProcessing = Array.isArray(subnetsResponse.data) ? subnetsResponse.data : [];
+    // const allIpsForProcessing = Array.isArray(ipsResponse.data) ? ipsResponse.data : [];
+    // const recentLogsForDisplay = Array.isArray(auditLogsResponse.data) ? auditLogsResponse.data : [];
 
-    const totalSubnetCount = subnetsResponse.totalCount;
+    // const totalSubnetCount = subnetsResponse.totalCount;
 
-    const totalIPs = subnetsForProcessing.reduce((acc, subnet) => {
-      if (subnet && typeof subnet.cidr === 'string') {
-        try {
-          const prefix = cidrToPrefix(subnet.cidr);
-          return acc + getUsableIpCount(prefix);
-        } catch (e) {
-          const error = e instanceof Error ? e : new Error(String(e));
-          console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}' during totalIPs calculation: ${error.message}`);
-          return acc; 
-        }
-      }
-      return acc; 
-    }, 0);
+    // const totalIPs = subnetsForProcessing.reduce((acc, subnet) => {
+    //   if (subnet && typeof subnet.cidr === 'string') {
+    //     try {
+    //       const prefix = cidrToPrefix(subnet.cidr);
+    //       return acc + getUsableIpCount(prefix);
+    //     } catch (e) {
+    //       const error = e instanceof Error ? e : new Error(String(e));
+    //       console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}' during totalIPs calculation: ${error.message}`);
+    //       return acc;
+    //     }
+    //   }
+    //   return acc;
+    // }, 0);
 
-    const allocatedIPsCount = allIpsForProcessing.filter(ip => ip && ip.status === 'allocated').length;
-    const utilizationPercentage = totalIPs > 0 ? Math.round((allocatedIPsCount / totalIPs) * 100) : 0;
+    // const allocatedIPsCount = allIpsForProcessing.filter(ip => ip && ip.status === 'allocated').length;
+    // const utilizationPercentage = totalIPs > 0 ? Math.round((allocatedIPsCount / totalIPs) * 100) : 0;
 
-    const criticalSubnets = subnetsForProcessing.filter(s => s && (s.utilization ?? 0) > 85);
+    // const criticalSubnets = subnetsForProcessing.filter(s => s && (s.utilization ?? 0) > 85);
 
     return (
       <div className="flex flex-col gap-6">
+        <h1 className="text-2xl font-bold">Dashboard (Simplified for Testing)</h1>
+        <p>If you see this, the layout and auth initialization worked. The problem might be in the original dashboard's data fetching or rendering.</p>
+        {/*
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -106,13 +109,12 @@ export default async function DashboardPage() {
                 </TableHeader>
                 <TableBody>
                   {recentLogsForDisplay.map((log) => {
-                    if (!log || !log.id) return null; 
+                    if (!log || !log.id) return null;
                     return (
                     <TableRow key={log.id}>
                       <TableCell>
                         <div className="font-medium">{log.username || "System"}</div>
                         <div className="hidden text-sm text-muted-foreground md:inline">
-                          {/* Placeholder for user email or ID */}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -146,8 +148,8 @@ export default async function DashboardPage() {
               {criticalSubnets.length > 0 ? (
                 <ul className="space-y-3">
                   {criticalSubnets.map(subnet => {
-                    if (!subnet || !subnet.id) return null; 
-                    
+                    if (!subnet || !subnet.id) return null;
+
                     let prefixDisplay: string | number = 'N/A';
                     if (subnet.cidr && typeof subnet.cidr === 'string') {
                       try {
@@ -184,27 +186,25 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+        */}
       </div>
     );
-  } catch (e) {
-    let processedError: Error;
-    if (e instanceof Error) {
-      processedError = e;
-    } else if (typeof e === 'string') {
-      processedError = new Error(e);
-    } else if (e === null || e === undefined) {
-      processedError = new Error("An unknown null or undefined error occurred on DashboardPage.");
-    } else {
-      try {
-        processedError = new Error(JSON.stringify(e));
-      } catch (stringifyError) {
-        processedError = new Error("An unknown non-serializable error occurred on DashboardPage.");
-      }
-    }
-    console.error("INTERNAL SERVER ERROR on DashboardPage:", processedError.message, processedError.stack);
-    // For server components, re-throwing the error is often the standard way to let Next.js handle it (e.g., show an error boundary).
-    // However, you might want to render a fallback UI here instead if you have error.js/tsx files set up.
-    // For now, re-throwing.
-    throw processedError;
-  }
+  // } catch (e) {
+  //   let processedError: Error;
+  //   if (e instanceof Error) {
+  //     processedError = e;
+  //   } else if (typeof e === 'string') {
+  //     processedError = new Error(e);
+  //   } else if (e === null || e === undefined) {
+  //     processedError = new Error("An unknown null or undefined error occurred on DashboardPage.");
+  //   } else {
+  //     try {
+  //       processedError = new Error(JSON.stringify(e));
+  //     } catch (stringifyError) {
+  //       processedError = new Error("An unknown non-serializable error occurred on DashboardPage.");
+  //     }
+  //   }
+  //   console.error("INTERNAL SERVER ERROR on DashboardPage:", processedError.message, processedError.stack);
+  //   throw processedError;
+  // }
 }
