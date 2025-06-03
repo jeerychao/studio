@@ -1,9 +1,8 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, Bell, UserCircle, Network } from "lucide-react";
+import { Menu, UserCircle, Network } from "lucide-react"; // Removed Bell
 import { Button } from "@/components/ui/button";
-// Removed Input import as it's no longer used
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,22 +58,8 @@ export function Header() {
         </Button>
       )}
 
-      {/* Removed search form */}
-      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end"> {/* Added justify-end here */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Bell className="h-5 w-5" />
-              <span className="sr-only">Toggle notifications</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>You have a new subnet suggestion.</DropdownMenuItem>
-            <DropdownMenuItem>IP address 192.168.1.50 is nearing lease expiration.</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
+        {/* Notification Bell DropdownMenu Removed */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
