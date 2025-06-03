@@ -77,8 +77,9 @@ export function useCurrentUser(): UseCurrentUserReturn {
           window.location.reload(); 
       };
     } catch (error) {
-        console.error("Error during useCurrentUser initialization (useEffect):", error);
-        // Even if there's an error, we should mark as initialized to not block indefinitely
+        // Use originalConsole if available, otherwise fallback to regular console.error
+        const logger = (console as any).originalError || console.error;
+        logger("Error during useCurrentUser initialization (localStorage or window function setup):", error);
     } finally {
         setIsInitialized(true); // Mark as initialized AFTER localStorage is processed
     }
@@ -88,21 +89,24 @@ export function useCurrentUser(): UseCurrentUserReturn {
 
   const currentUserValue = React.useMemo(() => {
     if (isAuthLoading) {
+      // Return a temporary guest user or a minimal structure during loading phase
+      // This helps prevent components trying to access undefined currentUser properties too early
       return createGuestUser();
     }
 
     let userDataToUse = mockUsers.find(u => u.id === currentUserId);
     if (!userDataToUse) {
+      // If no user ID is found (e.g., not logged in), return a guest user
       return createGuestUser(); 
     }
 
     const role = mockRoles.find(r => r.id === userDataToUse.roleId);
     if (!role) {
-      console.error(`User ${userDataToUse.username} has an invalid roleId: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
+      console.warn(`User ${userDataToUse.username} has an invalid roleId: ${userDataToUse.roleId}. Falling back to Viewer permissions.`);
       const viewerRoleData = mockRoles.find(r => r.id === VIEWER_ROLE_ID || r.name === 'Viewer');
       return {
         ...userDataToUse,
-        roleName: ('Viewer' as RoleName),
+        roleName: ('Viewer' as RoleName), // Assert RoleName type
         permissions: viewerRoleData?.permissions || []
       };
     }
