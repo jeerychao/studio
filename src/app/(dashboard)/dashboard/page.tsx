@@ -11,16 +11,20 @@ import Link from "next/link";
 
 export default async function DashboardPage() {
   try {
-    const subnetsData = await getSubnetsAction();
-    const ipsData = await getIPAddressesAction();
-    const logsData = await getAuditLogsAction();
+    // Fetch all subnets and IPs by not passing pagination parameters
+    // These actions are designed to return all data in PaginatedResponse.data if no page/pageSize is given.
+    const subnetsResponse = await getSubnetsAction();
+    const ipsResponse = await getIPAddressesAction();
+    // For recent logs, explicitly fetch the first page with a small size
+    const auditLogsResponse = await getAuditLogsAction({ page: 1, pageSize: 5 });
 
-    // Ensure data is arrays before processing
-    const subnets = Array.isArray(subnetsData) ? subnetsData : [];
-    const ips = Array.isArray(ipsData) ? ipsData : [];
-    const logs = Array.isArray(logsData) ? logsData : [];
+    const subnetsForProcessing = Array.isArray(subnetsResponse.data) ? subnetsResponse.data : [];
+    const allIpsForProcessing = Array.isArray(ipsResponse.data) ? ipsResponse.data : [];
+    const recentLogsForDisplay = Array.isArray(auditLogsResponse.data) ? auditLogsResponse.data : [];
 
-    const totalIPs = subnets.reduce((acc, subnet) => {
+    const totalSubnetCount = subnetsResponse.totalCount;
+
+    const totalIPs = subnetsForProcessing.reduce((acc, subnet) => {
       if (subnet && typeof subnet.cidr === 'string') {
         try {
           const prefix = cidrToPrefix(subnet.cidr);
@@ -34,10 +38,10 @@ export default async function DashboardPage() {
       return acc; 
     }, 0);
 
-    const allocatedIPs = ips.filter(ip => ip && ip.status === 'allocated').length;
-    const utilizationPercentage = totalIPs > 0 ? Math.round((allocatedIPs / totalIPs) * 100) : 0;
+    const allocatedIPsCount = allIpsForProcessing.filter(ip => ip && ip.status === 'allocated').length;
+    const utilizationPercentage = totalIPs > 0 ? Math.round((allocatedIPsCount / totalIPs) * 100) : 0;
 
-    const criticalSubnets = subnets.filter(s => s && (s.utilization ?? 0) > 85);
+    const criticalSubnets = subnetsForProcessing.filter(s => s && (s.utilization ?? 0) > 85);
 
     return (
       <div className="flex flex-col gap-6">
@@ -48,7 +52,7 @@ export default async function DashboardPage() {
               <Network className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{subnets.length}</div>
+              <div className="text-2xl font-bold">{totalSubnetCount}</div>
               <p className="text-xs text-muted-foreground">Managed network segments</p>
             </CardContent>
           </Card>
@@ -68,7 +72,7 @@ export default async function DashboardPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{allocatedIPs}</div>
+              <div className="text-2xl font-bold">{allocatedIPsCount}</div>
               <p className="text-xs text-muted-foreground">Currently in use</p>
             </CardContent>
           </Card>
@@ -101,7 +105,7 @@ export default async function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.slice(0, 5).map((log) => {
+                  {recentLogsForDisplay.map((log) => {
                     if (!log || !log.id) return null; 
                     return (
                     <TableRow key={log.id}>
@@ -198,6 +202,9 @@ export default async function DashboardPage() {
       }
     }
     console.error("INTERNAL SERVER ERROR on DashboardPage:", processedError.message, processedError.stack);
+    // For server components, re-throwing the error is often the standard way to let Next.js handle it (e.g., show an error boundary).
+    // However, you might want to render a fallback UI here instead if you have error.js/tsx files set up.
+    // For now, re-throwing.
     throw processedError;
   }
 }
