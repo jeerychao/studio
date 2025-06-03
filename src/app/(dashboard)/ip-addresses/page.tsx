@@ -3,24 +3,26 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Globe, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction } from "@/lib/actions";
-import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types"; // Removed unused PermissionId
+import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction, type PaginatedResponse } from "@/lib/actions";
+import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-// Removed unused CurrentUserContextValue
 import { useToast } from "@/hooks/use-toast";
-import { useSearchParams } from 'next/navigation';
+import { PaginationControls } from "@/components/pagination-controls";
 
-function LoadingIPAddressesPageContent() { // Renamed to avoid conflict if exported
+const ITEMS_PER_PAGE = 10;
+
+function LoadingIPAddressesPageContent() {
   return (
     <>
       <PageHeader
@@ -46,53 +48,55 @@ function LoadingIPAddressesPageContent() { // Renamed to avoid conflict if expor
 
 function IPAddressesView() {
   const searchParams = useSearchParams();
-  const selectedSubnetId = searchParams.get("subnetId") || undefined;
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const [ipAddresses, setIpAddresses] = React.useState<IPAddress[]>([]);
-  const [subnets, setSubnets] = React.useState<Subnet[]>([]);
-  const [vlans, setVlans] = React.useState<VLAN[]>([]);
+  const selectedSubnetId = searchParams.get("subnetId") || undefined;
+  const currentPage = Number(searchParams.get('page')) || 1;
+
+  const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<IPAddress> | null>(null);
+  const [subnets, setSubnets] = React.useState<Subnet[]>([]); // For filter dropdown and display
+  const [vlans, setVlans] = React.useState<VLAN[]>([]); // For display and form
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
 
   const fetchData = React.useCallback(async () => {
-    // Wait for auth to complete and ensure user is available
-    if (isAuthLoading || !currentUser) {
-        setIpAddresses([]);
-        setSubnets([]);
-        setVlans([]);
-        return;
-    }
-    // Check permission after ensuring currentUser is loaded
-    if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
-        setIpAddresses([]);
-        setSubnets([]);
-        setVlans([]);
-        return;
-    }
+    if (isAuthLoading || !currentUser) return;
+    setIsLoading(true);
     try {
-      const [fetchedIps, fetchedSubnets, fetchedVlans] = await Promise.all([
-        getIPAddressesAction(selectedSubnetId),
-        getSubnetsAction(),
-        getVLANsAction(),
+      if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
+        setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+        setSubnets([]);
+        setVlans([]);
+        setIsLoading(false);
+        return;
+      }
+      const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
+        getIPAddressesAction({ subnetId: selectedSubnetId, page: currentPage, pageSize: ITEMS_PER_PAGE }),
+        getSubnetsAction(), // Fetch all subnets for the filter dropdown
+        getVLANsAction(),   // Fetch all VLANs for display and form
       ]);
-      setIpAddresses(fetchedIps);
-      setSubnets(fetchedSubnets);
-      setVlans(fetchedVlans);
+      setIpAddressesData(fetchedIpsResult);
+      setSubnets(fetchedSubnetsResult.data); // Assuming data contains the array
+      setVlans(fetchedVlansResult.data);     // Assuming data contains the array
     } catch (error) {
       toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+    } finally {
+      setIsLoading(false);
     }
-  }, [selectedSubnetId, toast, currentUser, isAuthLoading]); // isAuthLoading added
+  }, [currentUser, isAuthLoading, toast, selectedSubnetId, currentPage]);
 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
   
-  if (isAuthLoading) {
+  if (isAuthLoading || isLoading) {
     return <LoadingIPAddressesPageContent />;
   }
 
-  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -103,9 +107,9 @@ function IPAddressesView() {
     );
   }
 
-  const canCreate = currentUser && hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
-  const canEdit = currentUser && hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
-  const canDelete = currentUser && hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
 
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
@@ -127,7 +131,7 @@ function IPAddressesView() {
       const subnet = subnets.find(s => s.id === ip.subnetId);
       if (subnet?.vlanId) {
         vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
-      } else if (subnet) { // Subnet exists but has no VLAN
+      } else if (subnet) {
         return "No VLAN (Subnet)";
       }
     }
@@ -154,67 +158,76 @@ function IPAddressesView() {
             {selectedSubnetId
               ? `IP addresses within subnet ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''}`
               : "All managed IP addresses."}
+             Displaying {ipAddressesData?.data.length} of {ipAddressesData?.totalCount} IPs.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {ipAddresses.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Allocated To</TableHead>
-                  <TableHead>Subnet</TableHead>
-                  <TableHead>VLAN</TableHead>
-                  <TableHead>Description</TableHead>
-                  {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ipAddresses.map((ip) => (
-                  <TableRow key={ip.id}>
-                    <TableCell className="font-medium">{ip.ipAddress}</TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(ip.status)} className="capitalize">
-                        {ip.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{ip.allocatedTo || "N/A"}</TableCell>
-                    <TableCell>
-                      {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">{ip.description || "N/A"}</TableCell>
-                    {(canEdit || canDelete) && (
-                      <TableCell className="text-right">
-                        {canEdit && (
-                            <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}>
-                            <Button variant="ghost" size="icon" aria-label="Edit IP Address">
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                            </IPAddressFormSheet>
-                        )}
-                        {canDelete && (
-                            <DeleteConfirmationDialog
-                            itemId={ip.id}
-                            itemName={ip.ipAddress}
-                            deleteAction={deleteIPAddressAction}
-                            onDeleted={fetchData}
-                            triggerButton={
-                                <Button variant="ghost" size="icon" aria-label="Delete IP Address">
-                                <Trash2 className="h-4 w-4" />
-                                </Button>
-                            }
-                            />
-                        )}
-                      </TableCell>
-                    )}
+          {ipAddressesData && ipAddressesData.data.length > 0 ? (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>IP Address</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Allocated To</TableHead>
+                    <TableHead>Subnet</TableHead>
+                    <TableHead>VLAN</TableHead>
+                    <TableHead>Description</TableHead>
+                    {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {ipAddressesData.data.map((ip) => (
+                    <TableRow key={ip.id}>
+                      <TableCell className="font-medium">{ip.ipAddress}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(ip.status)} className="capitalize">
+                          {ip.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{ip.allocatedTo || "N/A"}</TableCell>
+                      <TableCell>
+                        {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate">{ip.description || "N/A"}</TableCell>
+                      {(canEdit || canDelete) && (
+                        <TableCell className="text-right">
+                          {canEdit && (
+                              <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}>
+                              <Button variant="ghost" size="icon" aria-label="Edit IP Address">
+                                  <Edit className="h-4 w-4" />
+                              </Button>
+                              </IPAddressFormSheet>
+                          )}
+                          {canDelete && (
+                              <DeleteConfirmationDialog
+                              itemId={ip.id}
+                              itemName={ip.ipAddress}
+                              deleteAction={deleteIPAddressAction}
+                              onDeleted={fetchData}
+                              triggerButton={
+                                  <Button variant="ghost" size="icon" aria-label="Delete IP Address">
+                                  <Trash2 className="h-4 w-4" />
+                                  </Button>
+                              }
+                              />
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <PaginationControls
+                currentPage={ipAddressesData.currentPage}
+                totalPages={ipAddressesData.totalPages}
+                basePath={pathname}
+                currentQuery={searchParams}
+              />
+            </>
           ) : (
             <div className="text-center py-10">
               <p className="text-muted-foreground">

@@ -43,8 +43,6 @@ const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR notation is too short (e.g., x.x.x.x/y)")
     .refine((val) => {
       const parsed = parseAndValidateCIDR(val);
-      // For the form, we just check if it's a structurally valid CIDR.
-      // The backend (actions.ts) will perform stricter checks like ensuring the IP part is the network address for CREATION.
       return parsed !== null; 
     }, "Invalid CIDR notation format (e.g., 192.168.1.0/24). Please ensure the IP address and prefix length are valid."),
   vlanId: z.string().optional(),
@@ -58,11 +56,12 @@ interface SubnetFormSheetProps {
   vlans: VLAN[];
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
+  onSubnetChange?: () => void; // Callback prop
 }
 
 const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
 
-export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: SubnetFormSheetProps) {
+export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnetChange }: SubnetFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!subnet;
@@ -90,13 +89,12 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
   async function onSubmit(data: SubnetFormValues) {
     try {
       const actionData = {
-        cidr: data.cidr, // The action will parse this again and use the canonical network address
+        cidr: data.cidr,
         vlanId: data.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : (data.vlanId || undefined),
         description: data.description || undefined,
       };
 
       if (isEditing && subnet) {
-        // Utilization is not part of the form data, it's calculated
         await updateSubnetAction(subnet.id, actionData );
         toast({ title: "Subnet Updated", description: `Subnet has been successfully updated.` });
       } else {
@@ -104,6 +102,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps }: Subnet
         toast({ title: "Subnet Created", description: `Subnet ${data.cidr} has been successfully created.` });
       }
       setIsOpen(false);
+      if (onSubnetChange) onSubnetChange(); // Call callback
       form.reset();
     } catch (error) {
       toast({

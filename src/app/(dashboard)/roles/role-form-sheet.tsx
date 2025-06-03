@@ -35,9 +35,9 @@ import { updateRoleAction, getAllPermissionsAction } from "@/lib/actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const roleFormSchema = z.object({
-  name: z.string(), // Name will be read-only
+  name: z.string(), 
   description: z.string().max(200, "Description too long").optional(),
-  permissions: z.array(z.string()).optional(), // Array of permission IDs
+  permissions: z.array(z.string()).optional(), 
 });
 
 type RoleFormValues = z.infer<typeof roleFormSchema>;
@@ -46,9 +46,10 @@ interface RoleFormSheetProps {
   role: Role;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
+  onRoleChange?: () => void;
 }
 
-export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProps) {
+export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: RoleFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = true;
@@ -58,7 +59,6 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
-    // Default values will be set in useEffect
     defaultValues: {
       name: "",
       description: "",
@@ -66,9 +66,8 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
     },
   });
 
-  // Effect to fetch all available system permissions
   React.useEffect(() => {
-    if (isOpen && allPermissions.length === 0) { // Only fetch if sheet is open and permissions aren't loaded
+    if (isOpen && allPermissions.length === 0) {
       setIsLoadingPermissions(true);
       getAllPermissionsAction()
         .then((fetchedPermissions) => {
@@ -83,13 +82,12 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
     }
   }, [isOpen, allPermissions.length, toast]);
 
-  // Effect to reset form fields when the sheet opens or the specific role prop changes
   React.useEffect(() => {
     if (isOpen) {
       form.reset({
         name: role.name,
         description: role.description || "",
-        permissions: role.permissions || [], // These are the *role's current* permissions
+        permissions: role.permissions || [],
       });
     }
   }, [isOpen, role.id, role.name, role.description, role.permissions, form]);
@@ -103,6 +101,7 @@ export function RoleFormSheet({ role, children, buttonProps }: RoleFormSheetProp
       });
       toast({ title: "Role Updated", description: `Permissions and description for role ${role.name} have been successfully updated.` });
       setIsOpen(false);
+      if (onRoleChange) onRoleChange();
     } catch (error) {
       toast({
         title: "Error Updating Role",

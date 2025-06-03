@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -40,11 +39,12 @@ type VlanFormValues = z.infer<typeof vlanFormSchema>;
 
 interface VlanFormSheetProps {
   vlan?: VLAN;
-  children?: React.ReactNode; // For custom trigger
+  children?: React.ReactNode; 
   buttonProps?: ButtonProps;
+  onVlanChange?: () => void; 
 }
 
-export function VlanFormSheet({ vlan, children, buttonProps }: VlanFormSheetProps) {
+export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: VlanFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!vlan;
@@ -76,7 +76,8 @@ export function VlanFormSheet({ vlan, children, buttonProps }: VlanFormSheetProp
         toast({ title: "VLAN Created", description: `VLAN ${data.vlanNumber} has been successfully created.` });
       }
       setIsOpen(false);
-      form.reset({ vlanNumber: undefined, description: "" }); // Reset to truly empty for next "Add"
+      if (onVlanChange) onVlanChange();
+      form.reset({ vlanNumber: undefined, description: "" });
     } catch (error) {
       toast({
         title: "Error",

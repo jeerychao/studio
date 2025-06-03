@@ -37,7 +37,7 @@ import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Role } from "@/types";
 import { createUserAction, updateUserAction } from "@/lib/actions";
-import { ADMIN_ROLE_ID } from "@/lib/data"; // For role logic if needed
+import { ADMIN_ROLE_ID } from "@/lib/data";
 
 const userFormSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username too long"),
@@ -57,7 +57,7 @@ const userFormSchema = z.object({
   confirmPassword: z.string().optional().transform(e => e === "" ? undefined : e),
 })
 .superRefine((data, ctx) => {
-  if (data.password && data.password !== "") { // If a new password is being set
+  if (data.password && data.password !== "") {
     if (!data.confirmPassword) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -82,9 +82,10 @@ interface UserFormSheetProps {
   roles: Role[];
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
+  onUserChange?: () => void;
 }
 
-export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSheetProps) {
+export function UserFormSheet({ user, roles, children, buttonProps, onUserChange }: UserFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!user;
@@ -146,6 +147,7 @@ export function UserFormSheet({ user, roles, children, buttonProps }: UserFormSh
         toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
       }
       setIsOpen(false);
+      if (onUserChange) onUserChange();
     } catch (error) {
       toast({
         title: "Error",
