@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, Edit, Trash2 } from "lucide-react";
+import { Globe, Edit, Trash2, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,6 +15,7 @@ import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
+import { IPBatchFormSheet } from "./ip-batch-form-sheet"; // Added for batch IP creation
 import { IPSubnetFilter } from "./ip-subnet-filter";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
@@ -55,8 +56,8 @@ function IPAddressesView() {
   const currentPage = Number(searchParams.get('page')) || 1;
 
   const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<IPAddress> | null>(null);
-  const [subnets, setSubnets] = React.useState<Subnet[]>([]); // For filter dropdown and display
-  const [vlans, setVlans] = React.useState<VLAN[]>([]); // For display and form
+  const [subnets, setSubnets] = React.useState<Subnet[]>([]);
+  const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const { currentUser, isAuthLoading } = useCurrentUser();
@@ -75,12 +76,12 @@ function IPAddressesView() {
       }
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getSubnetsAction(), // Fetch all subnets for the filter dropdown
-        getVLANsAction(),   // Fetch all VLANs for display and form
+        getSubnetsAction(), 
+        getVLANsAction(),   
       ]);
       setIpAddressesData(fetchedIpsResult);
-      setSubnets(fetchedSubnetsResult.data); // Assuming data contains the array
-      setVlans(fetchedVlansResult.data);     // Assuming data contains the array
+      setSubnets(fetchedSubnetsResult.data); 
+      setVlans(fetchedVlansResult.data);     
     } catch (error) {
       toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
       setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
@@ -138,6 +139,17 @@ function IPAddressesView() {
     return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "N/A";
   };
 
+  const actionButtons = canCreate ? (
+    <div className="flex flex-col sm:flex-row gap-2">
+      <IPBatchFormSheet subnets={subnets} vlans={vlans} onIpAddressChange={fetchData}>
+        <Button variant="outline" className="w-full sm:w-auto">
+          <PlusCircle className="mr-2 h-4 w-4" /> Batch Add IPs
+        </Button>
+      </IPBatchFormSheet>
+      <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "w-full sm:w-auto"}} />
+    </div>
+  ) : null;
+
 
   return (
     <>
@@ -148,7 +160,7 @@ function IPAddressesView() {
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
-        {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} />}
+        {actionButtons}
       </div>
 
       <Card>

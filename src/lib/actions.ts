@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
-import { parseAndValidateCIDR, getUsableIpCount, isIpInCidrRange } from "./ip-utils";
+import { parseAndValidateCIDR, getUsableIpCount, isIpInCidrRange, ipToNumber, numberToIp } from "./ip-utils";
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
 import { Prisma } from '@prisma/client';
 
@@ -42,7 +42,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
 
-  const whereClause = {}; // No specific filters for subnets list for now
+  const whereClause = {}; 
 
   const totalCount = await prisma.subnet.count({ where: whereClause });
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -55,7 +55,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         skip,
         take: pageSize,
     }) : 
-    await prisma.subnet.findMany({ // Fetch all if no pagination params
+    await prisma.subnet.findMany({ 
         where: whereClause,
         include: { vlan: true },
         orderBy: { cidr: 'asc' },
@@ -297,12 +297,13 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
 
 export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">): Promise<AppVLAN> {
   const auditUser = await getAuditUserInfo();
+  
+  if (isNaN(data.vlanNumber) || data.vlanNumber < 1 || data.vlanNumber > 4094) {
+    throw new Error("VLAN number must be an integer between 1 and 4094.");
+  }
   const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: data.vlanNumber } });
   if (existingVLAN) throw new Error(`VLAN ${data.vlanNumber} already exists.`);
 
-  if (data.vlanNumber < 1 || data.vlanNumber > 4094) {
-    throw new Error("VLAN number must be between 1 and 4094.");
-  }
 
   const newVLAN = await prisma.vLAN.create({
     data: {
@@ -323,25 +324,23 @@ export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">
 export interface BatchVlanCreationResult {
   successCount: number;
   failureDetails: Array<{
-    inputLine: string;
-    vlanNumber?: number;
+    vlanNumberAttempted: number;
     error: string;
   }>;
 }
 
 export async function batchCreateVLANsAction(
-  vlans: Array<{ vlanNumber: number; description?: string; originalLine?: string }>
+  vlansToCreateInput: Array<{ vlanNumber: number; description?: string; }>
 ): Promise<BatchVlanCreationResult> {
   const auditUser = await getAuditUserInfo();
   let successCount = 0;
   const failureDetails: BatchVlanCreationResult['failureDetails'] = [];
   const createdVlanNumbersForAudit: number[] = [];
 
-  for (const vlanInput of vlans) {
-    const inputLine = vlanInput.originalLine || `${vlanInput.vlanNumber}${vlanInput.description ? ',' + vlanInput.description : ''}`;
+  for (const vlanInput of vlansToCreateInput) {
     try {
       if (isNaN(vlanInput.vlanNumber) || vlanInput.vlanNumber < 1 || vlanInput.vlanNumber > 4094) {
-        throw new Error("VLAN number must be between 1 and 4094.");
+        throw new Error("VLAN number must be an integer between 1 and 4094.");
       }
       const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } });
       if (existingVLAN) {
@@ -358,8 +357,7 @@ export async function batchCreateVLANsAction(
       successCount++;
     } catch (e: any) {
       failureDetails.push({
-        inputLine: inputLine,
-        vlanNumber: isNaN(vlanInput.vlanNumber) ? undefined : vlanInput.vlanNumber,
+        vlanNumberAttempted: vlanInput.vlanNumber,
         error: e.message || "Unknown error",
       });
     }
@@ -374,13 +372,13 @@ export async function batchCreateVLANsAction(
             details: `Batch created ${createdVlanNumbersForAudit.length} VLANs: ${createdVlanNumbersForAudit.join(', ')}. Failures: ${failureDetails.length}.`
         }
     });
-  } else if (failureDetails.length > 0) {
+  } else if (failureDetails.length > 0 && vlansToCreateInput.length > 0) { // Log only if there was an attempt
      await prisma.auditLog.create({
         data: {
             userId: auditUser.userId,
             username: auditUser.username,
             action: 'batch_create_vlan_failed',
-            details: `Batch VLAN creation attempt failed for all ${failureDetails.length} entries.`
+            details: `Batch VLAN creation attempt for ${vlansToCreateInput.length} VLANs resulted in ${failureDetails.length} failures.`
         }
     });
   }
@@ -388,8 +386,8 @@ export async function batchCreateVLANsAction(
 
   if (successCount > 0) {
     revalidatePath("/vlans");
-    revalidatePath("/subnets"); // In case VLANs are used by subnets form
-    revalidatePath("/ip-addresses"); // In case VLANs are used by IP form
+    revalidatePath("/subnets");
+    revalidatePath("/ip-addresses");
   }
 
   return { successCount, failureDetails };
@@ -402,8 +400,8 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
   if (!vlanToUpdate) return null;
 
   if (data.vlanNumber && data.vlanNumber !== vlanToUpdate.vlanNumber) {
-    if (data.vlanNumber < 1 || data.vlanNumber > 4094) {
-        throw new Error("VLAN number must be between 1 and 4094.");
+    if (isNaN(data.vlanNumber) || data.vlanNumber < 1 || data.vlanNumber > 4094) {
+        throw new Error("VLAN number must be an integer between 1 and 4094.");
     }
     const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: data.vlanNumber } });
     if (existingVLAN && existingVLAN.id !== id) {
@@ -412,7 +410,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
   }
 
   const updatePayload: Prisma.VLANUpdateInput = {};
-  if (data.hasOwnProperty('vlanNumber')) updatePayload.vlanNumber = data.vlanNumber;
+  if (data.hasOwnProperty('vlanNumber') && data.vlanNumber !== undefined) updatePayload.vlanNumber = data.vlanNumber;
   if (data.hasOwnProperty('description')) updatePayload.description = data.description || null;
 
   const updatedVLAN = await prisma.vLAN.update({
@@ -476,7 +474,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     await prisma.iPAddress.findMany({
         where: whereClause,
         include: { subnet: { select: { cidr: true, networkAddress: true } }, vlan: { select: { vlanNumber: true }} },
-        orderBy: { ipAddress: 'asc' },
+        orderBy: { ipAddress: 'asc' }, // Consider a more robust sort if ipAddress is not numeric friendly
         skip,
         take: pageSize,
     }) :
@@ -508,6 +506,13 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">): Pro
   const auditUser = await getAuditUserInfo();
   const prismaStatus = data.status as string;
 
+  // Validate IP address format
+  const ipParts = data.ipAddress.split('.').map(Number);
+  if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) {
+    throw new Error(`Invalid IP address format: ${data.ipAddress}`);
+  }
+
+
   if (!data.subnetId && (prismaStatus === 'allocated' || prismaStatus === 'reserved')) {
     throw new Error("Subnet ID is required for 'allocated' or 'reserved' IP not in global pool.");
   }
@@ -516,15 +521,19 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">): Pro
     const targetSubnet = await prisma.subnet.findUnique({ where: { id: data.subnetId } });
     if (!targetSubnet) throw new Error("Target subnet not found.");
     const parsedTargetSubnetCidr = parseAndValidateCIDR(targetSubnet.cidr);
-    if (!parsedTargetSubnetCidr) throw new Error("Target subnet has invalid CIDR.");
+    if (!parsedTargetSubnetCidr) throw new Error(`Target subnet ${targetSubnet.cidr} has invalid CIDR.`);
     if (!isIpInCidrRange(data.ipAddress, parsedTargetSubnetCidr)) {
-      throw new Error(`IP ${data.ipAddress} is not in subnet ${targetSubnet.cidr}.`);
+      throw new Error(`IP ${data.ipAddress} is not in the range of subnet ${targetSubnet.cidr}.`);
     }
-    const existingIPInSubnet = await prisma.iPAddress.findUnique({ where: { ipAddress_subnetId: { ipAddress: data.ipAddress, subnetId: data.subnetId } } });
+    // Check for duplicate IP within the same subnet
+    const existingIPInSubnet = await prisma.iPAddress.findFirst({ 
+        where: { ipAddress: data.ipAddress, subnetId: data.subnetId } 
+    });
     if (existingIPInSubnet) throw new Error(`IP ${data.ipAddress} already exists in subnet ${targetSubnet.networkAddress}.`);
   } else {
+    // Check for duplicate IP in global pool (subnetId is null)
     const globallyExistingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } });
-    if (globallyExistingIP) throw new Error(`IP ${data.ipAddress} already exists in global pool.`);
+    if (globallyExistingIP) throw new Error(`IP ${data.ipAddress} already exists in global pool (not assigned to any subnet).`);
   }
 
   if (data.vlanId && data.vlanId !== "") {
@@ -558,6 +567,128 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">): Pro
   return { ...newIP, subnetId: newIP.subnetId || undefined, vlanId: newIP.vlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, description: newIP.description || undefined, lastSeen: newIP.lastSeen?.toISOString(), status: newIP.status as AppIPAddressStatusType };
 }
 
+export interface BatchIpCreationResult {
+  successCount: number;
+  failureDetails: Array<{
+    ipAttempted: string;
+    error: string;
+  }>;
+}
+
+export async function batchCreateIPAddressesAction(payload: {
+  startIp: string;
+  endIp: string;
+  subnetId: string;
+  vlanId?: string;
+  description?: string;
+  status: AppIPAddressStatusType;
+}): Promise<BatchIpCreationResult> {
+  const auditUser = await getAuditUserInfo();
+  let successCount = 0;
+  const failureDetails: BatchIpCreationResult['failureDetails'] = [];
+  const createdIpAddressesForAudit: string[] = [];
+
+  const { startIp, endIp, subnetId, vlanId, description, status } = payload;
+
+  // Validate selected subnet
+  const targetSubnet = await prisma.subnet.findUnique({ where: { id: subnetId } });
+  if (!targetSubnet) {
+    throw new Error("Target subnet for batch creation not found.");
+  }
+  const parsedTargetSubnetCidr = parseAndValidateCIDR(targetSubnet.cidr);
+  if (!parsedTargetSubnetCidr) {
+    throw new Error(`Target subnet ${targetSubnet.cidr} has invalid CIDR configuration.`);
+  }
+
+  // Validate selected VLAN (if any)
+  if (vlanId) {
+    const vlanExists = await prisma.vLAN.findUnique({ where: { id: vlanId } });
+    if (!vlanExists) {
+      throw new Error("Selected VLAN for batch IP creation does not exist.");
+    }
+  }
+  
+  let currentIpNum: number;
+  let endIpNum: number;
+  try {
+    currentIpNum = ipToNumber(startIp);
+    endIpNum = ipToNumber(endIp);
+  } catch (e) {
+     throw new Error("Invalid Start or End IP address format for batch creation.");
+  }
+
+
+  if (currentIpNum > endIpNum) {
+    throw new Error("Start IP must be less than or equal to End IP for batch creation.");
+  }
+
+  for (; currentIpNum <= endIpNum; currentIpNum++) {
+    const currentIpStr = numberToIp(currentIpNum);
+    try {
+      // Validate IP format (already done implicitly by ipToNumber/numberToIp)
+      // Validate IP is within target subnet
+      if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) {
+        throw new Error(`IP ${currentIpStr} is not in the range of subnet ${targetSubnet.cidr}.`);
+      }
+
+      // Check for duplicate IP within the same subnet
+      const existingIPInSubnet = await prisma.iPAddress.findFirst({ 
+          where: { ipAddress: currentIpStr, subnetId: subnetId } 
+      });
+      if (existingIPInSubnet) {
+        throw new Error(`IP ${currentIpStr} already exists in subnet ${targetSubnet.networkAddress}.`);
+      }
+
+      await prisma.iPAddress.create({
+        data: {
+          ipAddress: currentIpStr,
+          status: status,
+          allocatedTo: status === 'allocated' ? (description || 'Batch Allocated') : null, // Simple default for allocated
+          description: description || null,
+          subnetId: subnetId,
+          vlanId: vlanId || null,
+        },
+      });
+      createdIpAddressesForAudit.push(currentIpStr);
+      successCount++;
+    } catch (e: any) {
+      failureDetails.push({
+        ipAttempted: currentIpStr,
+        error: e.message || "Unknown error",
+      });
+    }
+  }
+
+  if (createdIpAddressesForAudit.length > 0) {
+     await prisma.auditLog.create({
+        data: {
+            userId: auditUser.userId,
+            username: auditUser.username,
+            action: 'batch_create_ip_address',
+            details: `Batch created ${createdIpAddressesForAudit.length} IPs in subnet ${targetSubnet.cidr}: ${createdIpAddressesForAudit.join(', ')}. Failures: ${failureDetails.length}.`
+        }
+    });
+  } else if (failureDetails.length > 0 && (endIpNum - ipToNumber(startIp) +1) > 0) {
+     await prisma.auditLog.create({
+        data: {
+            userId: auditUser.userId,
+            username: auditUser.username,
+            action: 'batch_create_ip_address_failed',
+            details: `Batch IP creation attempt in subnet ${targetSubnet.cidr} for ${endIpNum - ipToNumber(startIp) + 1} IPs resulted in ${failureDetails.length} failures.`
+        }
+    });
+  }
+
+  if (successCount > 0) {
+    revalidatePath("/ip-addresses");
+    revalidatePath("/dashboard");
+    revalidatePath("/subnets"); // Subnet utilization might change
+  }
+
+  return { successCount, failureDetails };
+}
+
+
 export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIPAddress, "id">>): Promise<AppIPAddress | null> {
   const auditUser = await getAuditUserInfo();
   const ipToUpdate = await prisma.iPAddress.findUnique({ where: { id } });
@@ -565,16 +696,24 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
 
   const updateData: Prisma.IPAddressUpdateInput = {};
 
-  if (data.hasOwnProperty('ipAddress')) updateData.ipAddress = data.ipAddress;
-  if (data.hasOwnProperty('status')) updateData.status = data.status as string;
+  if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined) {
+    const ipParts = data.ipAddress.split('.').map(Number);
+    if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) {
+        throw new Error(`Invalid IP address format for update: ${data.ipAddress}`);
+    }
+    updateData.ipAddress = data.ipAddress;
+  }
+  if (data.hasOwnProperty('status') && data.status !== undefined) updateData.status = data.status as string;
   if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = data.allocatedTo || null;
   if (data.hasOwnProperty('description')) updateData.description = data.description || null;
   if (data.hasOwnProperty('lastSeen')) updateData.lastSeen = data.lastSeen ? new Date(data.lastSeen) : null;
+  
   if (data.hasOwnProperty('vlanId')) {
-    if (data.vlanId && data.vlanId !== "" && !(await prisma.vLAN.findUnique({where: {id: data.vlanId}}))) {
+    const vlanIdToSet = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
+    if (vlanIdToSet && !(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
         throw new Error("Selected VLAN for IP does not exist.");
     }
-    updateData.vlanId = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
+    updateData.vlanId = vlanIdToSet;
   }
 
   const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || null) : ipToUpdate.subnetId;
@@ -585,20 +724,27 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
     if (!targetSubnet) throw new Error("Target subnet not found.");
     const parsedTargetSubnetCidr = parseAndValidateCIDR(targetSubnet.cidr);
-    if (!parsedTargetSubnetCidr) throw new Error("Target subnet has invalid CIDR.");
+    if (!parsedTargetSubnetCidr) throw new Error(`Target subnet ${targetSubnet.cidr} has invalid CIDR.`);
     if (!isIpInCidrRange(finalIpAddress, parsedTargetSubnetCidr)) {
-      throw new Error(`IP ${finalIpAddress} is not in subnet ${targetSubnet.cidr}.`);
+      throw new Error(`IP ${finalIpAddress} is not in the range of subnet ${targetSubnet.cidr}.`);
     }
-    const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
-    if (conflictingIP) throw new Error(`IP ${finalIpAddress} already exists in subnet ${targetSubnet.networkAddress}.`);
-  } else {
+    // Check for IP conflict if IP or subnet changes
+    if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
+        const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
+        if (conflictingIP) throw new Error(`IP ${finalIpAddress} already exists in subnet ${targetSubnet.networkAddress}.`);
+    }
+  } else { // Moving to global pool
      if (finalStatus === 'allocated' || finalStatus === 'reserved') {
         throw new Error("Subnet ID is required for 'allocated' or 'reserved' IP unless setting to 'free'.");
     }
-    const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
-    if (globallyConflictingIP) throw new Error(`IP ${finalIpAddress} already exists in global pool.`);
+    // Check for IP conflict if IP changes and moving to global pool
+    if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
+        const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
+        if (globallyConflictingIP) throw new Error(`IP ${finalIpAddress} already exists in global pool.`);
+    }
   }
   updateData.subnetId = newSubnetId;
+
 
   const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
   await prisma.auditLog.create({
@@ -681,7 +827,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
     data: {
       username: data.username,
       email: data.email,
-      password: data.password || "default_password_please_change", // Should be hashed
+      password: data.password || "default_password_please_change", 
       roleId: data.roleId,
       avatar: `https://placehold.co/100x100.png?text=${data.username.substring(0,1).toUpperCase()}`,
       lastLogin: new Date(),
@@ -702,14 +848,14 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   if (!userToUpdate) return null;
 
   const updateData: Prisma.UserUpdateInput = {};
-  if (data.hasOwnProperty('username')) updateData.username = data.username;
-  if (data.hasOwnProperty('email')) updateData.email = data.email;
-  if (data.hasOwnProperty('roleId')) updateData.roleId = data.roleId;
-  if (data.hasOwnProperty('avatar')) updateData.avatar = data.avatar;
-  if (data.hasOwnProperty('lastLogin')) updateData.lastLogin = data.lastLogin ? new Date(data.lastLogin) : undefined;
+  if (data.hasOwnProperty('username') && data.username !== undefined) updateData.username = data.username;
+  if (data.hasOwnProperty('email') && data.email !== undefined) updateData.email = data.email;
+  if (data.hasOwnProperty('roleId') && data.roleId !== undefined) updateData.roleId = data.roleId;
+  if (data.hasOwnProperty('avatar') && data.avatar !== undefined) updateData.avatar = data.avatar;
+  if (data.hasOwnProperty('lastLogin') && data.lastLogin !== undefined) updateData.lastLogin = data.lastLogin ? new Date(data.lastLogin) : undefined;
 
   if (data.password && data.password.length > 0) {
-    updateData.password = data.password; // Should be hashed
+    updateData.password = data.password; 
   }
 
   if (data.email && data.email !== userToUpdate.email) {
@@ -743,7 +889,6 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { success: false, message: "User not found." };
 
-  // In a real app, compare hashed passwords
   if (payload.currentPassword && user.password && payload.currentPassword !== user.password) {
     return { success: false, message: "Current password does not match." };
   }
@@ -751,7 +896,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
 
   await prisma.user.update({
     where: { id: userId },
-    data: { password: payload.newPassword }, // Should be hashed
+    data: { password: payload.newPassword }, 
   });
   await prisma.auditLog.create({
     data: { userId: user.id, username: user.username, action: 'update_own_password', details: `User ${user.username} changed their password.` }
@@ -772,7 +917,7 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
 
   await prisma.auditLog.updateMany({
     where: { userId: id },
-    data: { userId: null } // Dissociate logs from the user
+    data: { userId: null } 
   });
 
   await prisma.user.delete({ where: { id } });
@@ -870,8 +1015,6 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
 }
 
 export async function createRoleAction(data: any): Promise<AppRole> {
-  // Roles are fixed (Admin, Operator, Viewer) and seeded.
-  // UI should not allow creating new roles.
   throw new Error("Creating new roles is not allowed. Roles are fixed (Administrator, Operator, Viewer).");
 }
 export async function deleteRoleAction(id: string): Promise<{ success: boolean; message?: string }>{
@@ -879,7 +1022,6 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean; 
    if (role && (role.name === "Administrator" || role.name === "Operator" || role.name === "Viewer" )) {
      throw new Error("Deleting fixed roles (Administrator, Operator, Viewer) is not allowed.");
    }
-  // Potentially allow deleting custom roles if they were ever supported, but for now, this is defensive.
   throw new Error("Role not found or deletion not allowed.");
 }
 
@@ -935,7 +1077,6 @@ export async function deleteAuditLogAction(id: string): Promise<{ success: boole
 
   await prisma.auditLog.delete({ where: { id } });
 
-  // Log the deletion itself
   await prisma.auditLog.create({
     data: {
       userId: auditUser.userId,

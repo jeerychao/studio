@@ -23,30 +23,29 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea"; // Kept for description, but main input is now Input fields
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { batchCreateVLANsAction, type BatchVlanCreationResult } from "@/lib/actions";
 
 const vlanBatchFormSchema = z.object({
-  vlanData: z.string().min(1, "VLAN data cannot be empty."),
+  startVlanNumber: z.coerce.number().int().min(1, "Start VLAN number must be at least 1").max(4094, "Start VLAN number cannot exceed 4094"),
+  endVlanNumber: z.coerce.number().int().min(1, "End VLAN number must be at least 1").max(4094, "End VLAN number cannot exceed 4094"),
+  commonDescription: z.string().max(200, "Description too long").optional(),
+}).refine(data => data.startVlanNumber <= data.endVlanNumber, {
+  message: "Start VLAN number must be less than or equal to End VLAN number.",
+  path: ["endVlanNumber"],
 });
 
 type VlanBatchFormValues = z.infer<typeof vlanBatchFormSchema>;
 
 interface VlanBatchFormSheetProps {
-  children: React.ReactNode; // Trigger button
+  children?: React.ReactNode; // Optional trigger button
   onVlanChange?: () => void;
-}
-
-interface ProcessedVLANInput {
-  vlanNumber: number;
-  description?: string;
-  originalLine: string;
 }
 
 export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormSheetProps) {
@@ -57,50 +56,32 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
   const form = useForm<VlanBatchFormValues>({
     resolver: zodResolver(vlanBatchFormSchema),
     defaultValues: {
-      vlanData: "",
+      startVlanNumber: undefined,
+      endVlanNumber: undefined,
+      commonDescription: "",
     },
   });
 
-  const parseVlanData = (data: string): ProcessedVLANInput[] => {
-    return data
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .map((line) => {
-        const parts = line.split(",");
-        const vlanNumberStr = parts[0]?.trim();
-        const description = parts.slice(1).join(",").trim() || undefined;
-        const vlanNumber = parseInt(vlanNumberStr, 10);
-        return { vlanNumber, description, originalLine: line };
-      });
-  };
-
   async function onSubmit(data: VlanBatchFormValues) {
-    setSubmissionResult(null); // Clear previous results
-    const parsedVlans = parseVlanData(data.vlanData);
+    setSubmissionResult(null); 
 
-    if (parsedVlans.length === 0) {
-      form.setError("vlanData", { message: "No valid VLAN entries found to process." });
-      return;
-    }
-
-    // Preliminary client-side validation for VLAN number format
-    const invalidFormatEntries = parsedVlans.filter(v => isNaN(v.vlanNumber) || v.vlanNumber < 1 || v.vlanNumber > 4094);
-    if (invalidFormatEntries.length > 0) {
-      const errorMessages = invalidFormatEntries.map(v => `Invalid format or VLAN number out of range (1-4094) on line: "${v.originalLine}"`).join("\n");
-      setSubmissionResult({
-        successCount: 0,
-        failureDetails: invalidFormatEntries.map(v => ({
-            inputLine: v.originalLine,
-            vlanNumber: isNaN(v.vlanNumber) ? undefined : v.vlanNumber,
-            error: `Invalid VLAN number format or out of range (1-4094).`
-        })),
+    const vlansToCreate = [];
+    for (let i = data.startVlanNumber; i <= data.endVlanNumber; i++) {
+      vlansToCreate.push({ 
+        vlanNumber: i, 
+        description: data.commonDescription || undefined 
       });
-      toast({ title: "Validation Error", description: "Some entries have formatting issues.", variant: "destructive"});
+    }
+
+    if (vlansToCreate.length === 0) {
+      toast({ title: "No VLANs to Create", description: "The specified range is empty or invalid.", variant: "destructive" });
       return;
     }
-    
-    const vlansToCreate = parsedVlans.map(({ vlanNumber, description }) => ({ vlanNumber, description }));
+     if (vlansToCreate.length > 100) { // Arbitrary limit to prevent abuse / performance issues
+      toast({ title: "Range Too Large", description: "Please create VLANs in smaller batches (e.g., up to 100 at a time).", variant: "destructive" });
+      return;
+    }
+
 
     try {
       const result = await batchCreateVLANsAction(vlansToCreate);
@@ -120,10 +101,10 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         });
       }
 
-
       if (result.failureDetails.length === 0 && result.successCount > 0) {
-        setIsOpen(false); // Close sheet only if all were successful
-        form.reset(); // Reset form on full success
+        form.reset(); 
+        // Keep sheet open if there were failures, so user can see them.
+        // setIsOpen(false); // Only close if fully successful and desired.
       }
 
     } catch (error) {
@@ -132,30 +113,34 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         description: error instanceof Error ? error.message : "An unexpected error occurred during batch creation.",
         variant: "destructive",
       });
-      setSubmissionResult({ successCount: 0, failureDetails: [{ inputLine: "Batch Operation", error: (error as Error).message }] });
+      setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message }] });
     }
   }
   
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
-        // Reset form and results when sheet is closed manually
         form.reset();
         setSubmissionResult(null);
     }
   };
 
+  const triggerContent = children || (
+    <Button variant="outline">
+      <PlusCircle className="mr-2 h-4 w-4" /> Batch Add VLANs
+    </Button>
+  );
+
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-      <SheetTrigger asChild>{children}</SheetTrigger>
+      <SheetTrigger asChild>{triggerContent}</SheetTrigger>
       <SheetContent className="sm:max-w-md w-full flex flex-col">
         <SheetHeader>
-          <SheetTitle>Batch Add VLANs</SheetTitle>
+          <SheetTitle>Batch Add VLANs (Range)</SheetTitle>
           <SheetDescription>
-            Enter VLAN data, one entry per line. Format: <code>VLAN_NUMBER,Description</code>
-            <br />
-            Example: <code>100,Sales Department</code> or just <code>101</code> for a VLAN without a description.
+            Enter a start and end VLAN number to create a range of VLANs.
+            An optional common description can be applied to all.
             VLAN numbers must be between 1 and 4094.
           </SheetDescription>
         </SheetHeader>
@@ -163,16 +148,38 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 flex-grow flex flex-col">
             <FormField
               control={form.control}
-              name="vlanData"
+              name="startVlanNumber"
               render={({ field }) => (
-                <FormItem className="flex-grow flex flex-col">
-                  <FormLabel>VLAN Entries</FormLabel>
+                <FormItem>
+                  <FormLabel>Start VLAN Number</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="10,VLAN for Marketing\n11,VLAN for Engineering\n12"
-                      className="min-h-[150px] flex-grow resize-none"
-                      {...field}
-                    />
+                    <Input type="number" placeholder="e.g., 100" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="endVlanNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>End VLAN Number</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g., 110" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="commonDescription"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Common Description (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., User VLANs Floor 1" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -188,7 +195,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                   <AlertDescription>
                     Successfully created: {submissionResult.successCount} VLAN(s).
                     <br />
-                    Failed entries: {submissionResult.failureDetails.length}.
+                    Failed attempts: {submissionResult.failureDetails.length}.
                   </AlertDescription>
                 </Alert>
 
@@ -199,7 +206,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                       <ul className="space-y-1 text-sm">
                         {submissionResult.failureDetails.map((failure, index) => (
                           <li key={index} className="text-destructive">
-                            Line: "<code>{failure.inputLine}</code>" - Error: {failure.error}
+                            VLAN {failure.vlanNumberAttempted}: {failure.error}
                           </li>
                         ))}
                       </ul>
