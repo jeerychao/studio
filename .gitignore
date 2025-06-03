@@ -1,4 +1,3 @@
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -39,19 +38,25 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# तीर्थ Backend Logs
-/.logs
-*.log
+# prisma
+# Ignored by default, but good to have if you're not committing the dev db
+# dev.db
+# dev.db-journal
 
-# Prisma
-/prisma/dev.db
-/prisma/dev.db-journal
-# Add other Prisma-generated files if necessary, e.g., SQLite files if not using a separate DB server
-
-# User-specific files (VSCode, etc.)
+# Editor directories and files
 .vscode/*
 !.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.code-workspace
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Application Logs
+.logs/
+*.log
+
+# Next.js config files (if you don't want them versioned for some reason, though usually they are)
+# next.config.js
+next.config.mjs
