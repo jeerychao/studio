@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
+import { useRouter, usePathname } from 'next/navigation';
 import * as React from "react";
 import { Network, Settings2 } from "lucide-react";
 import {
@@ -55,7 +55,7 @@ export default function DashboardLayout({
 }) {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
-  const pathname = usePathname(); // Get current path
+  const pathname = usePathname(); 
   const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   React.useEffect(() => {
@@ -65,19 +65,11 @@ export default function DashboardLayout({
     }
 
     // isAuthLoading is false here, currentUser is stable from useCurrentUser
-    if (currentUser && currentUser.id) {
-      if (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest') {
-        setAuthStatus('unauthenticated');
-        // Only redirect if not already on login page and current path is protected by this layout
-        if (pathname !== '/login') {
-            router.replace('/login');
-        }
-      } else {
+    if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setAuthStatus('authenticated');
-      }
-    } else { // Should be guest if currentUser is null/undefined after loading
+    } else { // Should be guest if currentUser is null/undefined after loading OR explicitly guest
       setAuthStatus('unauthenticated');
-      if (pathname !== '/login') {
+      if (pathname !== '/login') { 
         router.replace('/login');
       }
     }
@@ -93,7 +85,7 @@ export default function DashboardLayout({
   }
 
   if (authStatus === 'unauthenticated') {
-    // Redirect should have happened in useEffect. This is a fallback or to prevent rendering children.
+    // Redirect should have happened in useEffect.
     return null;
   }
 
