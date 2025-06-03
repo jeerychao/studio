@@ -55,7 +55,7 @@ export default function DashboardLayout({
 }) {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
-  const pathname = usePathname(); 
+  const pathname = usePathname();
   const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   React.useEffect(() => {
@@ -69,7 +69,7 @@ export default function DashboardLayout({
         setAuthStatus('authenticated');
     } else { // Should be guest if currentUser is null/undefined after loading OR explicitly guest
       setAuthStatus('unauthenticated');
-      if (pathname !== '/login') { 
+      if (pathname !== '/login') {
         router.replace('/login');
       }
     }
@@ -111,6 +111,9 @@ export default function DashboardLayout({
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
           {children}
         </main>
+        <footer className="py-4 px-4 md:px-6 lg:px-8 text-center text-xs text-muted-foreground border-t">
+          <p>© {new Date().getFullYear()} IPAM Lite. All rights reserved. Contact: leejie2017@gmail.com</p>
+        </footer>
         <Toaster />
       </SidebarInset>
     </SidebarProvider>
