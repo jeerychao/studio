@@ -4,50 +4,48 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-// import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
-// import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
+import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
+import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
 import { Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
-  // try {
-    // Fetch all subnets and IPs by not passing pagination parameters
-    // These actions are designed to return all data in PaginatedResponse.data if no page/pageSize is given.
-    // const subnetsResponse = await getSubnetsAction();
-    // const ipsResponse = await getIPAddressesAction();
+  try {
+    // Fetch all subnets and IPs by not passing pagination parameters to get all data
+    const subnetsResponse = await getSubnetsAction(); // Gets all subnets
+    const ipsResponse = await getIPAddressesAction();   // Gets all IPs
+
     // For recent logs, explicitly fetch the first page with a small size
-    // const auditLogsResponse = await getAuditLogsAction({ page: 1, pageSize: 5 });
+    const auditLogsResponse = await getAuditLogsAction({ page: 1, pageSize: 5 });
 
-    // const subnetsForProcessing = Array.isArray(subnetsResponse.data) ? subnetsResponse.data : [];
-    // const allIpsForProcessing = Array.isArray(ipsResponse.data) ? ipsResponse.data : [];
-    // const recentLogsForDisplay = Array.isArray(auditLogsResponse.data) ? auditLogsResponse.data : [];
+    const subnetsForProcessing = Array.isArray(subnetsResponse.data) ? subnetsResponse.data : [];
+    const allIpsForProcessing = Array.isArray(ipsResponse.data) ? ipsResponse.data : [];
+    const recentLogsForDisplay = Array.isArray(auditLogsResponse.data) ? auditLogsResponse.data : [];
 
-    // const totalSubnetCount = subnetsResponse.totalCount;
+    const totalSubnetCount = subnetsResponse.totalCount;
 
-    // const totalIPs = subnetsForProcessing.reduce((acc, subnet) => {
-    //   if (subnet && typeof subnet.cidr === 'string') {
-    //     try {
-    //       const prefix = cidrToPrefix(subnet.cidr);
-    //       return acc + getUsableIpCount(prefix);
-    //     } catch (e) {
-    //       const error = e instanceof Error ? e : new Error(String(e));
-    //       console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}' during totalIPs calculation: ${error.message}`);
-    //       return acc;
-    //     }
-    //   }
-    //   return acc;
-    // }, 0);
+    const totalIPs = subnetsForProcessing.reduce((acc, subnet) => {
+      if (subnet && typeof subnet.cidr === 'string') {
+        try {
+          const prefix = cidrToPrefix(subnet.cidr);
+          return acc + getUsableIpCount(prefix);
+        } catch (e) {
+          const error = e instanceof Error ? e : new Error(String(e));
+          console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}' during totalIPs calculation: ${error.message}`);
+          return acc;
+        }
+      }
+      return acc;
+    }, 0);
 
-    // const allocatedIPsCount = allIpsForProcessing.filter(ip => ip && ip.status === 'allocated').length;
-    // const utilizationPercentage = totalIPs > 0 ? Math.round((allocatedIPsCount / totalIPs) * 100) : 0;
+    const allocatedIPsCount = allIpsForProcessing.filter(ip => ip && ip.status === 'allocated').length;
+    const utilizationPercentage = totalIPs > 0 ? Math.round((allocatedIPsCount / totalIPs) * 100) : 0;
 
-    // const criticalSubnets = subnetsForProcessing.filter(s => s && (s.utilization ?? 0) > 85);
+    // Subnet health relies on the 'utilization' field now calculated in getSubnetsAction
+    const criticalSubnets = subnetsForProcessing.filter(s => s && (s.utilization ?? 0) > 85);
 
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="text-2xl font-bold">Dashboard (Simplified for Testing)</h1>
-        <p>If you see this, the layout and auth initialization worked. The problem might be in the original dashboard's data fetching or rendering.</p>
-        {/*
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -114,8 +112,6 @@ export default async function DashboardPage() {
                     <TableRow key={log.id}>
                       <TableCell>
                         <div className="font-medium">{log.username || "System"}</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">{log.action.replace(/_/g, " ")}</Badge>
@@ -130,7 +126,7 @@ export default async function DashboardPage() {
                   })}
                 </TableBody>
               </Table>
-               <Button variant="outline" size="sm" className="mt-4 w-full asChild">
+               <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
                   <Link href="/audit-logs">View All Logs</Link>
               </Button>
             </CardContent>
@@ -180,31 +176,41 @@ export default async function DashboardPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No subnets are critically utilized.</p>
               )}
-               <Button variant="outline" size="sm" className="mt-4 w-full asChild">
+               <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
                   <Link href="/subnets">View All Subnets</Link>
               </Button>
             </CardContent>
           </Card>
         </div>
-        */}
       </div>
     );
-  // } catch (e) {
-  //   let processedError: Error;
-  //   if (e instanceof Error) {
-  //     processedError = e;
-  //   } else if (typeof e === 'string') {
-  //     processedError = new Error(e);
-  //   } else if (e === null || e === undefined) {
-  //     processedError = new Error("An unknown null or undefined error occurred on DashboardPage.");
-  //   } else {
-  //     try {
-  //       processedError = new Error(JSON.stringify(e));
-  //     } catch (stringifyError) {
-  //       processedError = new Error("An unknown non-serializable error occurred on DashboardPage.");
-  //     }
-  //   }
-  //   console.error("INTERNAL SERVER ERROR on DashboardPage:", processedError.message, processedError.stack);
-  //   throw processedError;
-  // }
+  } catch (e) {
+    let processedError: Error;
+    if (e instanceof Error) {
+      processedError = e;
+    } else if (typeof e === 'string') {
+      processedError = new Error(e);
+    } else if (e === null || e === undefined) {
+      processedError = new Error("An unknown null or undefined error occurred on DashboardPage.");
+    } else {
+      try {
+        processedError = new Error(JSON.stringify(e));
+      } catch (stringifyError) {
+        processedError = new Error("An unknown non-serializable error occurred on DashboardPage.");
+      }
+    }
+    console.error("INTERNAL SERVER ERROR on DashboardPage:", processedError.message, processedError.stack);
+    // It's generally better to render an error boundary or a user-friendly error message
+    // instead of re-throwing, which might crash the server-side render or bubble up.
+    // For now, let's render a simplified error message on the page.
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2 text-destructive">Dashboard Error</h2>
+        <p className="text-muted-foreground mb-2">An error occurred while loading dashboard data:</p>
+        <p className="text-sm text-destructive bg-destructive/10 p-2 rounded-md">{processedError.message}</p>
+        <p className="text-xs text-muted-foreground mt-4">Please check server logs for more details or try again later.</p>
+      </div>
+    );
+  }
 }
