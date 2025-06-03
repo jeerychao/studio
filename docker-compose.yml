@@ -3,38 +3,33 @@ version: '3.8'
 
 services:
   ipam-app:
-    # Replace with your actual image name and tag from your registry
-    # e.g., your-registry-username/ipam-app:latest
-    # If building locally and not pushing to a registry first,
-    # you can use the image name you built with (e.g., ipam-app:latest)
-    # and ensure the 'build' context is not used here if image already exists.
-    image: ipam-app:latest # Default to local build if not specified otherwise
-    # Or, if you want docker-compose to build the image:
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    container_name: ipam_app_prod
+    # Instead of pulling a pre-built image, we will build it from the Dockerfile
+    build:
+      context: . # Use the current directory as the build context
+      dockerfile: Dockerfile # Specify the Dockerfile name
+    image: ipam-app:prod-local # Optional: name the image that will be built
+    container_name: ipam_app_local_prod
     ports:
-      # Map host port (e.g., 80 or other for reverse proxy) to container port 3000
-      # Example for production: "80:3000" if Nginx on host listens on 443 and forwards to 80,
-      # or Nginx itself runs in a container and this app is on a shared Docker network.
-      # For direct access for testing (not recommended for prod without reverse proxy):
-      # - "3000:3000"
-      # For a reverse proxy setup where Nginx runs on the host and forwards to this container's port:
-      - "127.0.0.1:3001:3000" # Example: Nginx on host forwards to host's 3001, which maps to container's 3000
+      # Map host port 3001 to container port 3000
+      # Access via http://localhost:3001 or http://<your_ubuntu_ip>:3001
+      - "127.0.0.1:3001:3000"
     env_file:
       - ./production.env # Load environment variables from this file
     restart: unless-stopped
     networks:
       - app_network
+    # For data persistence of the SQLite database across container recreations,
+    # you would typically use a Docker volume like this:
+    # volumes:
+    #   - ipam_db_data:/app/prisma
+    # This Dockerfile bakes the seeded DB into the image. The volume is for if you
+    # want changes made *while the container is running* to persist if the container
+    # is removed and recreated (e.g. during an update, but not image rebuild).
 
 networks:
   app_network:
     driver: bridge
 
-volumes: # Optional: Define volumes if your app needs persistent storage (not typical for Next.js standalone apps unless handling uploads directly)
-  # Example:
-  # next_data:
-# Then in service:
-#  volumes:
-#    - next_data:/app/.next/cache # Example for persisting Next.js cache if desired, usually not needed for standalone
+# Define the volume if you uncomment the 'volumes' section in the service
+# volumes:
+#   ipam_db_data:

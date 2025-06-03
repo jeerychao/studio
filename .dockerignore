@@ -1,37 +1,30 @@
+# .dockerignore
+# Prevents unnecessary files and folders from being copied into the Docker image,
+# speeding up the build process and reducing image size.
 
-# Git
+# Git files
 .git
 .gitignore
 
-# Docker
-Dockerfile
-.dockerignore
-docker-compose.yml
-
-# Node
+# Node modules (will be installed within Docker)
 node_modules
-npm-debug.log
-yarn-error.log
 
-# Next.js
+# Next.js cache and build outputs (will be generated within Docker)
 .next
-dist
-out
 
-# Env files
-.env
-.env*.local
-.env.development
-.env.test
-# production.env should be managed on the server or via CI/CD, not in the image context directly if it contains secrets
-# However, if you have a template or non-sensitive production env, you might adjust.
-# For the docker-compose env_file method, this file is on the host.
-# For Dockerfile COPY .env method, ensure it's secure.
-# Add production.env here if you never want it in any build context.
-production.env
-
-# Editor/OS
+# IDE and OS-specific files
 .vscode
+*.env
+*.env.local
 .DS_Store
-*.pem
-*.key
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker files (if they are in the context but not needed inside the image itself)
+Dockerfile
+docker-compose.yml
+production.env
+README.md
+# Add any other files or directories that are not needed for the runtime application
+.logs

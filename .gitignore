@@ -1,4 +1,3 @@
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # Dependencies
@@ -7,9 +6,8 @@
 .pnp.js
 .yarn/install-state.gz
 
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
+# Testing
+/coverage
 
 # Next.js
 /.next/
@@ -18,29 +16,30 @@ next-env.d.ts
 # Production
 /build
 
-# Misc
-.DS_Store
-*.pem
-*.local
+# Prisma
+# SQLite database file - should not be versioned if it's dynamically generated/seeded
+# or if it contains sensitive/large data.
+# If your dev.db is small and only contains mock/seed data and you WANT to share it for dev setup,
+# you might consider versioning it, but it's generally not recommended for .db files.
+prisma/dev.db
+# You might also want to ignore .db-journal files if they appear
+prisma/dev.db-journal
 
-# Environment Variables
+# dotenv environment variables file
 .env
 .env*.local
-!.env.example
+# Environment file for production docker, might contain secrets
+production.env
 
-# Debugging
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-*.log
+.logs/
 
-# Local VSCode settings
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# Prisma
-prisma/dev.db
-prisma/dev.db-journal
+# Misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+*.idea
