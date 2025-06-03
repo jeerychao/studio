@@ -35,20 +35,17 @@ export default function LoginPage() {
     }
 
     if (currentUser && currentUser.id) { 
-      // Check if it's NOT the guest user
       if (!(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setPageAuthStatus('authenticated');
       } else {
         setPageAuthStatus('unauthenticated');
       }
     } else {
-       // Should ideally not happen as useCurrentUser always returns a user object
        setPageAuthStatus('unauthenticated');
     }
   }, [currentUser, isAuthLoading]);
 
   React.useEffect(() => {
-    // Only redirect if pageAuthStatus is 'authenticated'
     if (pageAuthStatus === 'authenticated') {
       router.replace("/dashboard");
     }
@@ -60,16 +57,24 @@ export default function LoginPage() {
 
     const foundUser = mockUsers.find(user => user.email === email);
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
+    await new Promise(resolve => setTimeout(resolve, 500)); 
 
-    if (foundUser && password) { // Basic password check (non-empty) for mock
-      // Call the global function exposed by useCurrentUser to set the mock user
+    let loginSuccess = false;
+    if (foundUser) {
+      if (email === "admin@example.com") {
+        if (password === "password") { // Specific password for admin
+          loginSuccess = true;
+        }
+      } else if (password) { // For other mock users, any non-empty password
+        loginSuccess = true;
+      }
+    }
+
+    if (loginSuccess && foundUser) {
       if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
         (window as any).setCurrentMockUser(foundUser.id); 
-        // Toast is shown, but the page will reload and redirect via useEffect
         toast({ title: "Login Successful", description: `Welcome back, ${foundUser.username}!` });
-        // No direct router.push here, let the reload and subsequent useEffect handle redirection
+        router.push("/dashboard"); // Navigate to dashboard after setting user
       } else {
         toast({ title: "Login Error", description: "Unable to set user. Developer function missing.", variant: "destructive" });
       }
@@ -90,7 +95,6 @@ export default function LoginPage() {
     );
   }
 
-  // Only render login form if unauthenticated and not loading
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-xl">
@@ -101,7 +105,7 @@ export default function LoginPage() {
           <CardTitle className="text-2xl">Welcome to IPAM Lite</CardTitle>
           <CardDescription>
             Enter your credentials to access the IP Address Management system. <br/>
-            (Use: admin@example.com / any password)
+            Admin: admin@example.com / password
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
@@ -136,8 +140,7 @@ export default function LoginPage() {
               {isSubmitting ? "Signing In..." : <><LogIn className="mr-2 h-4 w-4" /> Sign In</>}
             </Button>
             <p className="mt-4 text-xs text-center text-muted-foreground">
-              Don't have an account? This is a demo system. <br/>
-              Default admin: admin@example.com (any password)
+              (Other mock users: any non-empty password)
             </p>
           </CardFooter>
         </form>
