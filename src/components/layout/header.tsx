@@ -1,9 +1,9 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, Search, Bell, UserCircle, Network } from "lucide-react";
+import { Menu, Bell, UserCircle, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+// Removed Input import as it's no longer used
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,19 +19,14 @@ import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
-  const { currentUser, isAuthLoading } = useCurrentUser(); // Get currentUser for potential display
+  const { currentUser, isAuthLoading } = useCurrentUser(); 
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      // Direct navigation to login page is often more reliable for auth state changes
       window.location.href = '/login'; 
     }
   };
-
-  // You can use currentUser?.username or similar in the UI if needed,
-  // though it's often in the user menu itself.
-  // if (isAuthLoading) return null; // Or a skeleton header
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -64,17 +59,8 @@ export function Header() {
         </Button>
       )}
 
-      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
-        <form className="ml-auto flex-1 sm:flex-initial">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search..."
-              className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px] bg-background"
-            />
-          </div>
-        </form>
+      {/* Removed search form */}
+      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end"> {/* Added justify-end here */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
