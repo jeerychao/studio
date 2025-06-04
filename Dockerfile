@@ -1,12 +1,5 @@
-# Dockerfile for Next.js, Prisma, and SQLite Application
 
-<<<<<<< HEAD
-=======
-# Dockerfile for Next.js, Prisma, and SQLite Application
-
->>>>>>> fafb620f00375944b561657e9762f2af2ca41917
-# ---- Base Stage ----
-# Use a Node.js Alpine image as the base for a smaller footprint
+# Stage 1: Base image with Node.js and necessary OS packages
 FROM node:20-alpine AS base
 WORKDIR /app
 
@@ -15,109 +8,107 @@ WORKDIR /app
 # 例如，使用清华大学的源 (移除或添加 '#' 来启用/禁用):
 # RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
 
-# Install base dependencies including those needed for Prisma (openssl) and native extensions (python, make, g++)
-# dumb-init is a simple process manager
+# Install base dependencies including those needed for Prisma and native extensions
 RUN apk add --no-cache openssl dumb-init python3 make g++
 
-# Enable corepack to use pnpm/yarn if specified in package.json (though we'll use npm here)
+# Enable corepack to use pnpm/yarn if specified in package.json (though we'll use npm for this project)
 RUN corepack enable
 
-# ---- Dependencies Stage ----
-# Install all dependencies (including devDependencies for build tools like Prisma CLI)
+
+# Stage 2: Install all dependencies (including devDependencies for build and prisma)
 FROM base AS deps
 WORKDIR /app
 
-# Copy package.json and package-lock.json (or yarn.lock, pnpm-lock.yaml)
+# Copy package.json, lock file, and the prisma schema/directory
+# This ensures 'prisma generate' (often a postinstall script) can find the schema
 COPY package.json package-lock.json* ./
-
-# Copy Prisma schema and migrations early for 'prisma generate' during 'npm ci'
 COPY prisma ./prisma
 
-# Use 'npm ci' for cleaner, more reliable installs in CI/Docker environments.
-# '--include=dev' ensures devDependencies are also installed, needed for Prisma CLI, ts-node, etc.
+# Install all dependencies, including devDependencies needed for `prisma generate` and `next build`
+# 'npm ci' is generally preferred for CI/CD as it's faster and stricter than 'npm install'
+# Using --include=dev because 'prisma generate' and 'next build' might need devDependencies
 RUN npm ci --include=dev
+# Alternative if 'npm ci' causes issues, though 'ci' is better for reproducibility:
+# RUN npm install --include=dev
 
-# ---- Builder Stage ----
-# Build the Next.js application
+
+# Stage 3: Build the Next.js application
 FROM base AS builder
 WORKDIR /app
 
-# Copy dependencies from the 'deps' stage
+# Copy all dependencies (including devDependencies) from the 'deps' stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/package.json ./package.json
-COPY --from=deps /app/prisma ./prisma
-
-# Copy the rest of the application code
+# Copy application code
 COPY . .
 
-# Generate Prisma Client (should already be done by postinstall, but good to have explicitly if needed or postinstall is removed)
-# RUN npx prisma generate # This line is often redundant if 'prisma generate' is in postinstall
+# Generate Prisma Client (should ideally be done in 'deps' via postinstall, but as a fallback if needed)
+# RUN npx prisma generate # Usually not needed here if postinstall script in package.json works
 
 # Build the Next.js application
 RUN npm run build
 
-# Remove devDependencies after build to reduce node_modules size for the runner stage
+# Remove devDependencies after build to reduce image size for the next stage
+# Prisma client is a runtime dependency, so it should not be pruned if it's not in dependencies.
+# If prisma client is in devDependencies but needed at runtime, adjust package.json or this step.
 RUN npm prune --production
 
-# ---- Prisma Seeding Stage (Optional but good for consistent dev/test/demo data) ----
-# This stage is specifically for running the database seed.
-# It reuses the full dependencies from 'deps' stage because 'ts-node' is a devDependency.
-FROM deps AS prisma_seeding
+
+# Stage 4: Database Seeding (Optional, run if you need to seed the DB in the image)
+# This stage uses the full node_modules from 'deps' because seeding scripts might need devDependencies like ts-node
+FROM base AS prisma_seeding
 WORKDIR /app
 
-# We already have node_modules and package files from 'deps'
-# We already have the prisma schema from 'deps'
-
-# Copy application source files needed for the seed script (if seed imports from src)
+# Copy necessary files for seeding
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
 COPY src/lib ./src/lib
 COPY src/types ./src/types
-# Ensure the specific seed script file is copied if it wasn't part of the general COPY . . earlier
-# or if you want to ensure its latest version for seeding.
-COPY prisma/seed.ts ./prisma/seed.ts
+# Ensure your tsconfig is available if ts-node needs it, though it's often not directly read by ts-node for scripts
+COPY tsconfig.json ./tsconfig.json
+COPY package.json package-lock.json* ./ # For scripts and context
 
-# Push the schema to the database (creates the db file if it doesn't exist)
-# --skip-generate is used because Prisma Client should already be generated.
+# Ensure the DATABASE_URL is set for Prisma commands
+# The path here is relative to the WORKDIR /app
+ENV DATABASE_URL="file:./prisma/dev.db"
+
+# Push the schema to the database (creates the dev.db file if it doesn't exist)
+# --skip-generate because Prisma Client should have been generated in 'deps' or 'builder'
 RUN npx prisma db push --skip-generate
 
-# Run the database seed script
+# Run the seed script
 RUN npm run prisma:db:seed
 
 
-# ---- Runner Stage ----
-# Final stage for running the application
+# Stage 5: Final production image
 FROM base AS runner
 WORKDIR /app
 
-# Set environment to production
-ENV NODE_ENV production
+# Set environment variables for production
+ENV NODE_ENV=production
+# The DATABASE_URL for the running application inside the container
+ENV DATABASE_URL="file:/app/prisma/dev.db"
 
-# Create a non-root user for security
+# Create a non-root user and group
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nextjs -u 1001 -G nodejs
 
-# Copy necessary files from previous stages
+# Copy only necessary artifacts from previous stages
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+# Copy production node_modules from the 'builder' stage (after pruning)
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+# Copy the Prisma schema and the seeded database from the 'prisma_seeding' stage
+COPY --from=prisma_seeding /app/prisma ./prisma
+# Copy package.json for 'npm start' to work and potentially for runtime access to version, etc.
+COPY package.json ./
 
-# Copy the seeded database from the prisma_seeding stage
-COPY --from=prisma_seeding /app/prisma/dev.db ./prisma/dev.db
-
-# Ensure the prisma directory and its contents have correct permissions if needed,
-# though SQLite file in ./prisma/dev.db usually works fine with user ownership of .next
-RUN chown -R nextjs:nodejs /app/prisma
-
-# Change to the non-root user
+# Change ownership of the app files to the non-root user
+# This might need adjustment if other files/dirs are created at runtime by the app
+# RUN chown -R nextjs:nodejs /app/.next /app/node_modules /app/public /app/prisma /app/package.json
 USER nextjs
 
-# Expose the port the app runs on
 EXPOSE 3000
 
-# Set the default command to run the application using dumb-init
-# dumb-init handles signals properly, which is good for Docker containers
-<<<<<<< HEAD
+# Use dumb-init to handle signals properly
+# Start the Next.js production server
 CMD ["dumb-init", "npm", "run", "start"]
-=======
-CMD ["dumb-init", "npm", "run", "start"]
->>>>>>> fafb620f00375944b561657e9762f2af2ca41917
