@@ -10,8 +10,7 @@ import {
   Globe,
   Users,
   ShieldCheck,
-  Wrench,
-  FileUp,
+  FileDown, // Changed from Wrench/FileUp
   ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -43,31 +42,29 @@ const navItemConfigs: NavItemConfig[] = [
     href: "/ip-management",
     label: "IP 管理",
     icon: Network,
-    requiredPermission: PERMISSIONS.VIEW_SUBNET,
+    requiredPermission: PERMISSIONS.VIEW_SUBNET, // Broad permission for the group
     subItems: [
-      { href: "/subnets", label: "子网", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
-      { href: "/vlans", label: "VLAN", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
-      { href: "/ip-addresses", label: "IP 地址", icon: Globe, requiredPermission: PERMISSIONS.VIEW_IPADDRESS },
+      { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
+      { href: "/vlans", label: "VLAN 管理", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
+      { href: "/ip-addresses", label: "IP 地址管理", icon: Globe, requiredPermission: PERMISSIONS.VIEW_IPADDRESS },
     ],
   },
   {
     href: "/user-management",
-    label: "用户管理",
+    label: "用户和角色", // Changed label
     icon: Users,
-    requiredPermission: PERMISSIONS.VIEW_USER,
+    requiredPermission: PERMISSIONS.VIEW_USER, // Broad permission for the group
     subItems: [
-      { href: "/users", label: "用户", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
-      { href: "/roles", label: "角色", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
+      { href: "/users", label: "用户管理", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
+      { href: "/roles", label: "角色管理", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
     ],
   },
-  {
-    href: "/tools",
-    label: "工具",
-    icon: Wrench,
-    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT,
-    subItems: [
-      { href: "/tools/import-export", label: "导入/导出", icon: FileUp, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
-    ],
+  // Changed "工具" to a direct "数据导出" link
+  { 
+    href: "/tools/import-export", 
+    label: "数据导出", 
+    icon: FileDown, 
+    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT 
   },
   { href: "/audit-logs", label: "审计日志", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
 ];
@@ -85,7 +82,9 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        if (filteredSubItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
+        // If a group has no visible sub-items, and it's a "management" group or "tools", don't show the group itself.
+        // For "数据导出" which is now a direct link, this specific condition won't apply as it has no subItems.
+        if (filteredSubItems.length === 0 && (item.href.includes("-management") || item.href === "/tools" && item.label === "工具" /* old label check, not relevant now */)) {
            return null; 
         }
       }
@@ -96,8 +95,9 @@ export function SidebarNav() {
   const accessibleNavItems = React.useMemo(() => {
       if (isAuthLoading || !currentUser) return [];
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
+      // This secondary filter might be redundant now that "数据导出" is a direct link.
       items = items.filter(item => {
-        if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools")) {
+        if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools" && item.label === "工具")) {
             return false;
         }
         return true;
@@ -125,7 +125,9 @@ export function SidebarNav() {
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
     const Icon = item.icon;
-    const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/" && item.href.length > 1 && !item.subItems);
+    // For direct links, isActive check is straightforward.
+    // For parent accordion items, if any subItem is active, the parent group might also be styled as active/open.
+    const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/" && item.href.length > 1 && (!item.subItems || item.subItems.length === 0));
 
     const linkClass = cn(
       "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
@@ -165,6 +167,7 @@ export function SidebarNav() {
       );
     }
 
+    // Render direct link (no sub-items or sub-items are empty)
     return (
       <Link key={item.href} href={item.href} className={linkClass}>
         <Icon className="h-5 w-5" />
