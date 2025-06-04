@@ -129,7 +129,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     }) : 
     await prisma.subnet.findMany({ 
         where: whereClause,
-        include: { vlan: true },
+        include: { vlan: true }, // Include VLAN to get vlanNumber for export if needed
         orderBy: { cidr: 'asc' },
     });
 
@@ -157,7 +157,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       utilization = 0;
     }
     return {
-      ...subnet,
+      ...subnet, // Includes vlan object if joined
       networkAddress,
       subnetMask,
       ipRange: ipRange || undefined,
@@ -529,7 +529,7 @@ export async function deleteVLANAction(id: string): Promise<{ success: boolean; 
 }
 
 // --- IP Address Actions ---
-export async function getIPAddressesAction(params?: FetchParams): Promise<PaginatedResponse<AppIPAddress>> {
+export async function getIPAddressesAction(params?: FetchParams): Promise<PaginatedResponse<AppIPAddress & { subnet?: { cidr: string; networkAddress: string; vlan?: { vlanNumber: number } | null } | null; vlan?: { vlanNumber: number } | null }>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
@@ -548,17 +548,37 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   const ipsFromDb = params?.page && params?.pageSize ?
     await prisma.iPAddress.findMany({
         where: whereClause,
-        include: { subnet: { select: { cidr: true, networkAddress: true } }, vlan: { select: { vlanNumber: true }} },
+        include: { 
+            subnet: { 
+                select: { 
+                    cidr: true, 
+                    networkAddress: true,
+                    vlan: { select: { vlanNumber: true } } // Include subnet's VLAN
+                } 
+            }, 
+            vlan: { select: { vlanNumber: true }} // This is for IP's direct VLAN
+        },
         orderBy: { ipAddress: 'asc' }, 
         skip,
         take: pageSize,
     }) :
     await prisma.iPAddress.findMany({
         where: whereClause,
-        include: { subnet: { select: { cidr: true, networkAddress: true } }, vlan: { select: { vlanNumber: true }} },
+        include: { 
+            subnet: { 
+                select: { 
+                    cidr: true, 
+                    networkAddress: true,
+                    vlan: { select: { vlanNumber: true } } // Include subnet's VLAN
+                } 
+            }, 
+            vlan: { select: { vlanNumber: true }} // This is for IP's direct VLAN
+        },
         orderBy: { ipAddress: 'asc' }
     });
 
+  // The type of appIps elements will implicitly include the nested subnet and vlan structures
+  // due to the `...ip` spread and the `include` in the Prisma query.
   const appIps = ipsFromDb.map(ip => ({
     ...ip,
     subnetId: ip.subnetId || undefined,
@@ -567,6 +587,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     description: ip.description || undefined,
     lastSeen: ip.lastSeen?.toISOString() || undefined,
     status: ip.status as AppIPAddressStatusType,
+    // subnet and vlan objects are already part of `...ip`
   }));
   return { 
     data: appIps, 
@@ -1177,3 +1198,5 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
+
+    
