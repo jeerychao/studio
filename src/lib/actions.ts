@@ -60,7 +60,7 @@ interface LoginPayload {
 }
 interface LoginResponse {
   success: boolean;
-  user?: FetchedUserDetails; 
+  user?: FetchedUserDetails;
   message?: string;
 }
 
@@ -349,7 +349,7 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   for (const ip of ipsInSubnet) {
     await prisma.iPAddress.update({
       where: { id: ip.id },
-      data: { subnetId: null, status: "free", allocatedTo: null, vlanId: null }, // Also nullify vlanId if it was inherited from subnet
+      data: { subnetId: null, status: "free", allocatedTo: null, vlanId: null }, 
     });
     await prisma.auditLog.create({
       data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_ip_on_subnet_delete', details: `IP ${ip.ipAddress} 已从子网 ${subnetToDelete.cidr} 解除关联` }
@@ -849,7 +849,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
       }
       updateData.vlan = { connect: { id: vlanIdToSet } };
     } else {
-      if (ipToUpdate.vlanId) { // Only disconnect if there was a VLAN associated
+      if (ipToUpdate.vlanId) { 
          updateData.vlan = { disconnect: true };
       }
     }
@@ -859,32 +859,38 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
   const finalIpAddress = data.ipAddress || ipToUpdate.ipAddress;
   const finalStatus = data.status ? data.status as string : ipToUpdate.status;
 
-  if (newSubnetId) {
-    const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
-    if (!targetSubnet) throw new Error("未找到目标子网。");
-    const parsedTargetSubnetCidr = parseAndValidateCIDR(targetSubnet.cidr);
-    if (!parsedTargetSubnetCidr) throw new Error(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
-    if (!isIpInCidrRange(finalIpAddress, parsedTargetSubnetCidr)) {
-      throw new Error(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
-    }
-    if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
+  if (newSubnetId !== ipToUpdate.subnetId) {
+    if (newSubnetId) { // If newSubnetId is provided (i.e., not null or undefined)
+        const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
+        if (!targetSubnet) throw new Error("未找到目标子网。");
+        const parsedTargetSubnetCidr = parseAndValidateCIDR(targetSubnet.cidr);
+        if (!parsedTargetSubnetCidr) throw new Error(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
+        if (!isIpInCidrRange(finalIpAddress, parsedTargetSubnetCidr)) {
+        throw new Error(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
+        }
         const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
         if (conflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
-    }
-    if (newSubnetId !== ipToUpdate.subnetId) {
-      updateData.subnet = { connect: { id: newSubnetId } };
-    }
-  } else {
-     if (finalStatus === 'allocated' || finalStatus === 'reserved') {
-        throw new Error("对于“已分配”或“预留”的 IP，除非设置为空闲，否则子网 ID 是必需的。");
-    }
-    if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
+        updateData.subnet = { connect: { id: newSubnetId } };
+    } else { // If newSubnetId is explicitly null or undefined (meaning disassociate)
+        if (finalStatus === 'allocated' || finalStatus === 'reserved') {
+            throw new Error("对于“已分配”或“预留”的 IP，除非设置为空闲，否则子网 ID 是必需的。");
+        }
         const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
         if (globallyConflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于全局池中。`);
+        if (ipToUpdate.subnetId) { // Only disconnect if it was previously associated
+            updateData.subnet = { disconnect: true };
+        }
     }
-    if (ipToUpdate.subnetId && newSubnetId === null) { // Disconnecting from a subnet
-        updateData.subnet = { disconnect: true };
+  } else if (newSubnetId && finalIpAddress !== ipToUpdate.ipAddress) { // SubnetId is the same, but IP address changed
+    const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
+    if (!targetSubnet) throw new Error("未找到当前子网以验证IP更改。"); // Should not happen if subnetId didn't change
+    const parsedTargetSubnetCidr = parseAndValidateCIDR(targetSubnet.cidr);
+    if (!parsedTargetSubnetCidr) throw new Error(`当前子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
+    if (!isIpInCidrRange(finalIpAddress, parsedTargetSubnetCidr)) {
+      throw new Error(`IP ${finalIpAddress} 不在当前子网 ${targetSubnet.cidr} 的范围内。`);
     }
+    const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
+    if (conflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
   }
 
 
@@ -974,7 +980,6 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   };
 }
 
-// Ensure createUserAction returns FetchedUserDetails
 export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string, avatar?: string }): Promise<FetchedUserDetails> {
   const auditUser = await getAuditUserInfo();
   if (await prisma.user.findUnique({ where: { email: data.email } })) throw new Error(`邮箱 ${data.email} 已存在。`);
@@ -1018,7 +1023,6 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   };
 }
 
-// Ensure updateUserAction returns FetchedUserDetails | null
 export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<FetchedUserDetails | null> {
   const auditUser = await getAuditUserInfo(id);
   const userToUpdate = await prisma.user.findUnique({ where: { id } });
@@ -1033,7 +1037,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     if (!roleExists || !roleExists.name) {
       throw new Error(`角色 ID ${data.roleId} 不存在或角色名称无效。`);
     }
-    updateData.roleId = data.roleId;
+    updateData.role = { connect: { id: data.roleId } };
   }
 
   if (data.hasOwnProperty('avatar')) {
@@ -1314,4 +1318,6 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
+    
+
     
