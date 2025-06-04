@@ -50,7 +50,7 @@ export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}) {  
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
