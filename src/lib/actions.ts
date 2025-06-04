@@ -139,7 +139,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
     username: userFromDb.username,
     email: userFromDb.email,
     roleId: userFromDb.roleId,
-    roleName: userFromDb.role.name as AppRoleNameType, 
+    roleName: userFromDb.role.name as AppRoleNameType,
     avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
     permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
     lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
@@ -291,7 +291,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       if (!isIpInCidrRange(ip.ipAddress, newParsedCidrInfo)) {
         await prisma.iPAddress.update({
           where: { id: ip.id },
-          data: { status: "free", allocatedTo: null, subnetId: null, vlanId: null }, 
+          data: { status: "free", allocatedTo: null, subnetId: null, vlanId: null },
         });
         ipsToDisassociateDetails.push(`${ip.ipAddress} (原状态: ${ip.status})`);
       }
@@ -850,7 +850,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
       updateData.vlan = { connect: { id: vlanIdToSet } };
     } else {
       if (ipToUpdate.vlanId) {
-        updateData.vlan = { disconnect: true };
+         updateData.vlan = { disconnect: true };
       }
     }
   }
@@ -941,11 +941,11 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
             id: user.id,
             username: user.username,
             email: user.email,
-            roleId: user.roleId, 
-            roleName: 'Viewer' as AppRoleNameType, 
+            roleId: user.roleId,
+            roleName: 'Viewer' as AppRoleNameType,
             avatar: user.avatar || '/images/avatars/default_avatar.png',
             lastLogin: user.lastLogin?.toISOString() || undefined,
-            permissions: [], 
+            permissions: [],
         };
     }
     return {
@@ -989,7 +989,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
       avatar: data.avatar || '/images/avatars/default_avatar.png',
       lastLogin: new Date(),
     },
-    include: { role: { include: { permissions: true } } } 
+    include: { role: { include: { permissions: true } } }
   });
   await prisma.auditLog.create({
     data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` }
@@ -997,7 +997,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   revalidatePath("/users");
   revalidatePath("/roles");
 
-  if (!newUser.role || !newUser.role.name) { 
+  if (!newUser.role || !newUser.role.name) {
     throw new Error("新创建的用户角色信息不完整。");
   }
 
@@ -1006,7 +1006,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
     username: newUser.username,
     email: newUser.email,
     roleId: newUser.roleId,
-    roleName: newUser.role.name as AppRoleNameType, 
+    roleName: newUser.role.name as AppRoleNameType,
     avatar: newUser.avatar || '/images/avatars/default_avatar.png',
     lastLogin: newUser.lastLogin?.toISOString(),
     permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType)
@@ -1049,7 +1049,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   const updatedUser = await prisma.user.update({
     where: { id },
     data: updateData,
-    include: { role: { include: {permissions: true} } } 
+    include: { role: { include: {permissions: true} } }
   });
 
   if (!updatedUser.role || !updatedUser.role.name) {
@@ -1070,7 +1070,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     username: updatedUser.username,
     email: updatedUser.email,
     roleId: updatedUser.roleId,
-    roleName: updatedUser.role.name as AppRoleNameType, 
+    roleName: updatedUser.role.name as AppRoleNameType,
     avatar: updatedUser.avatar || '/images/avatars/default_avatar.png',
     lastLogin: updatedUser.lastLogin?.toISOString(),
     permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType)
@@ -1102,7 +1102,7 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
   const auditUser = await getAuditUserInfo();
   const userToDelete = await prisma.user.findUnique({ where: { id }, include: {role: true} });
   if (!userToDelete) return { success: false, message: "未找到用户。" };
-  if (!userToDelete.role || !userToDelete.role.name) { 
+  if (!userToDelete.role || !userToDelete.role.name) {
     throw new Error("无法删除用户：关联的角色信息无效。");
   }
 
@@ -1160,7 +1160,7 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
         console.error(`Role ${role.id} has a missing name in getRolesAction.`);
         return {
             id: role.id,
-            name: 'Viewer' as AppRoleNameType, 
+            name: 'Viewer' as AppRoleNameType,
             description: role.description || undefined,
             userCount: role._count.users,
             permissions: role.permissions.map(p => p.id as AppPermissionIdType),
@@ -1239,7 +1239,7 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean; 
 
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> {
   const page = params?.page || 1;
-  const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; 
+  const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
 
   const whereClause = {};
@@ -1309,6 +1309,4 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
-    
-
     
