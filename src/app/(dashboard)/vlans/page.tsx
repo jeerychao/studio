@@ -97,7 +97,7 @@ function VlansView() {
       <PageHeader
         title="VLAN 管理"
         description="组织和管理您的虚拟局域网。"
-        icon={Cable}
+        icon={<Cable className="h-6 w-6 text-primary" />}
         actionElement={actionButtons}
       />
 
@@ -180,4 +180,3 @@ export default function VlansPage() {
     </Suspense>
   );
 }
-

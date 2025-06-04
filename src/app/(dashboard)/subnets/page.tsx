@@ -127,6 +127,7 @@ function SubnetsView() {
         <PageHeader
           title="子网管理"
           description="查看、创建和管理您的网络子网。"
+          icon={<NetworkIcon className="h-6 w-6 text-primary" />}
           actionElement={canCreate ? <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} /> : null}
         />
         <Card>
@@ -234,4 +235,3 @@ export default function SubnetsPage() {
     </Suspense>
   );
 }
-

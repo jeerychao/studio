@@ -175,7 +175,7 @@ export default function ImportExportPage() {
       <PageHeader
         title="数据导出"
         description="将您当前的 IPAM 数据下载为 CSV 或 JSON 文件。导出的数据基于系统中的实时数据库。"
-        icon={() => <Image src="/images/tool_icons/file_down_icon.png" alt="Export Icon" width={32} height={32} className="text-primary" data-ai-hint="download file icon" />}
+        icon={<Image src="/images/tool_icons/file_down_icon.png" alt="Export Icon" width={32} height={32} data-ai-hint="download file icon" />}
       />
       <Card>
         <CardHeader>

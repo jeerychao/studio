@@ -104,7 +104,7 @@ function AuditLogsView() {
       <PageHeader
         title="审计日志"
         description="跟踪用户活动和系统事件。"
-        icon={ListChecks}
+        icon={<ListChecks className="h-6 w-6 text-primary" />}
       />
       <Card>
         <CardHeader>

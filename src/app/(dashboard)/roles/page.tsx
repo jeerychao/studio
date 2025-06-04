@@ -85,7 +85,7 @@ function RolesView() {
       <PageHeader
         title="角色管理"
         description="查看系统角色并管理其描述和权限。"
-        icon={ShieldCheck}
+        icon={<ShieldCheck className="h-6 w-6 text-primary" />}
       />
 
       <Card>

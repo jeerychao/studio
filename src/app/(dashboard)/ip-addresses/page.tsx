@@ -30,7 +30,7 @@ function LoadingIPAddressesPageContent() {
       <PageHeader
         title="IP 地址管理"
         description="加载IP地址数据中..."
-        icon={Globe}
+        icon={<Globe className="h-6 w-6 text-primary" />}
       />
       <Card>
         <CardHeader>
@@ -164,7 +164,7 @@ function IPAddressesView() {
       <PageHeader
         title="IP 地址管理"
         description={`管理IP地址。当前查看: ${currentSubnetName || '所有子网'}`}
-        icon={Globe}
+        icon={<Globe className="h-6 w-6 text-primary" />}
       />
       <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex flex-col sm:flex-row gap-4">

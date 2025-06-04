@@ -61,7 +61,7 @@ export default function SettingsPage() {
       <PageHeader
         title={texts.pageTitle}
         description={texts.pageDescription}
-        icon={Settings}
+        icon={<Settings className="h-6 w-6 text-primary" />}
       />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>

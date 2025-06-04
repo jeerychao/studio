@@ -109,7 +109,7 @@ function UsersView() {
       <PageHeader
         title="用户管理"
         description="管理用户账户及其角色。"
-        icon={UsersIcon}
+        icon={<UsersIcon className="h-6 w-6 text-primary" />}
         actionElement={canCreate ? <UserFormSheet roles={roles} onUserChange={fetchData}/> : null}
       />
 
