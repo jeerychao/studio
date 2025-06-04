@@ -36,7 +36,6 @@ import { mockPermissions } from "@/lib/data";
 import { updateRoleAction, getAllPermissionsAction } from "@/lib/actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Define the rules for permission integrity
 const permissionIntegrityRules = [
   { view: PERMISSIONS.VIEW_SUBNET, actions: [PERMISSIONS.CREATE_SUBNET, PERMISSIONS.EDIT_SUBNET, PERMISSIONS.DELETE_SUBNET], groupName: "子网管理" },
   { view: PERMISSIONS.VIEW_VLAN, actions: [PERMISSIONS.CREATE_VLAN, PERMISSIONS.EDIT_VLAN, PERMISSIONS.DELETE_VLAN], groupName: "VLAN 管理" },
