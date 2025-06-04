@@ -1,5 +1,10 @@
 # Dockerfile for Next.js, Prisma, and SQLite Application
 
+<<<<<<< HEAD
+=======
+# Dockerfile for Next.js, Prisma, and SQLite Application
+
+>>>>>>> fafb620f00375944b561657e9762f2af2ca41917
 # ---- Base Stage ----
 # Use a Node.js Alpine image as the base for a smaller footprint
 FROM node:20-alpine AS base
@@ -111,4 +116,8 @@ EXPOSE 3000
 
 # Set the default command to run the application using dumb-init
 # dumb-init handles signals properly, which is good for Docker containers
+<<<<<<< HEAD
 CMD ["dumb-init", "npm", "run", "start"]
+=======
+CMD ["dumb-init", "npm", "run", "start"]
+>>>>>>> fafb620f00375944b561657e9762f2af2ca41917
