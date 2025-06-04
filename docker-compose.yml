@@ -9,28 +9,26 @@ services:
     image: ipam-app-local:latest # Name the image that will be built
     container_name: ipam_app_local_prod
     ports:
-      # Map host port 3001 to container port 3000
-      # Access via http://localhost:3001 on the host machine
+      # Map host port 3010 to container port 3000
+      # Access via http://localhost:3010 on the host machine if WSL port forwarding is set up,
+      # or via WSL's IP:3010
       - "3010:3000"
     env_file:
       - ./production.env # Load environment variables from this file for runtime
     restart: unless-stopped
     networks:
       - app_network
-    # Optional: For data persistence of the SQLite database if you make changes
-    # *while the container is running* and want them to survive container removal.
-    # If you enable this, the first time you run with the volume, it might be empty
-    # or Docker might copy the content from the image's /app/prisma path.
-    # For development where the image is frequently rebuilt (re-seeding the DB),
-    # you might not need this. For data to persist across container restarts and
-    # removals (without image rebuilds), uncomment the following:
-    volumes:
-      - ipam_db_data:/app/prisma
+    # Removed specific DB file volume mount to ensure the image's /app/prisma/dev.db is used.
+    # If you need data persistence for dev.db across container removals,
+    # you can re-add a volume like:
+    # volumes:
+    #   - ipam_db_data:/app/prisma/dev.db
+    # Be mindful that this volume will then take precedence over the image's baked-in DB.
 
 networks:
   app_network:
     driver: bridge
 
-# Define the volume if you uncomment the 'volumes' section in the service
-volumes:
-  ipam_db_data:
+# Define the volume if you uncomment the 'volumes' section in the service for dev.db
+# volumes:
+#   ipam_db_data:
