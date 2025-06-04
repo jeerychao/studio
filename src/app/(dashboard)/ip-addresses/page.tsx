@@ -15,8 +15,9 @@ import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
-import { IPBatchFormSheet } from "./ip-batch-form-sheet"; // Added for batch IP creation
+import { IPBatchFormSheet } from "./ip-batch-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
+import { IPStatusFilter } from "./ip-status-filter"; // New Import
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -53,6 +54,7 @@ function IPAddressesView() {
   const pathname = usePathname();
 
   const selectedSubnetId = searchParams.get("subnetId") || undefined;
+  const selectedStatus = searchParams.get("status") as IPAddressStatus | 'all' || 'all';
   const currentPage = Number(searchParams.get('page')) || 1;
 
   const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<IPAddress> | null>(null);
@@ -75,7 +77,7 @@ function IPAddressesView() {
         return;
       }
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
-        getIPAddressesAction({ subnetId: selectedSubnetId, page: currentPage, pageSize: ITEMS_PER_PAGE }),
+        getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
         getSubnetsAction(), 
         getVLANsAction(),   
       ]);
@@ -88,7 +90,7 @@ function IPAddressesView() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, isAuthLoading, toast, selectedSubnetId, currentPage]);
+  }, [currentUser, isAuthLoading, toast, selectedSubnetId, selectedStatus, currentPage]);
 
   React.useEffect(() => {
     fetchData();
@@ -120,6 +122,12 @@ function IPAddressesView() {
       case "reserved": return "outline";
       default: return "secondary";
     }
+  };
+  
+  const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
+    allocated: "已分配",
+    free: "空闲",
+    reserved: "预留",
   };
 
   const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "所有子网";
@@ -158,8 +166,11 @@ function IPAddressesView() {
         description={`管理IP地址。当前查看: ${currentSubnetName || '所有子网'}`}
         icon={Globe}
       />
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-        <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
+      <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+            <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
+            <IPStatusFilter currentStatus={selectedStatus} />
+        </div>
         {actionButtons}
       </div>
 
@@ -170,6 +181,7 @@ function IPAddressesView() {
             {selectedSubnetId
               ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''} 内的IP地址`
               : "所有受管IP地址。"}
+            {selectedStatus !== 'all' && ` (状态: ${ipAddressStatusLabels[selectedStatus as IPAddressStatus]})`}
              显示 {ipAddressesData?.data.length} 条，共 {ipAddressesData?.totalCount} 条IP。
           </CardDescription>
         </CardHeader>
@@ -194,7 +206,7 @@ function IPAddressesView() {
                       <TableCell className="font-medium">{ip.ipAddress}</TableCell>
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(ip.status)} className="capitalize">
-                          {ip.status === "allocated" ? "已分配" : ip.status === "free" ? "空闲" : "预留"}
+                          {ipAddressStatusLabels[ip.status]}
                         </Badge>
                       </TableCell>
                       <TableCell>{ip.allocatedTo || "无"}</TableCell>
@@ -243,7 +255,7 @@ function IPAddressesView() {
           ) : (
             <div className="text-center py-10">
               <p className="text-muted-foreground">
-                {selectedSubnetId ? "此子网中未找到IP地址。" : "未找到IP地址。选择一个子网或添加新的IP。"}
+                {selectedSubnetId || selectedStatus !== 'all' ? "未找到符合当前筛选条件的IP地址。" : "未找到IP地址。选择一个子网或添加新的IP。"}
               </p>
               {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "mt-4"}} />}
             </div>
