@@ -43,6 +43,7 @@ const userFormSchema = z.object({
   username: z.string().min(3, "用户名必须至少3个字符").max(50, "用户名过长"),
   email: z.string().email("无效的邮箱地址"),
   roleId: z.string().min(1, "角色是必需的"),
+  avatar: z.string().optional(), // Added avatar field
   password: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.string()
@@ -96,6 +97,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
       username: "",
       email: "",
       roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "", 
+      avatar: "",
       password: "",
       confirmPassword: "",
     },
@@ -107,6 +109,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
         username: user?.username || "",
         email: user?.email || "",
         roleId: user?.roleId || (roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || ""),
+        avatar: user?.avatar || "/images/avatars/default_avatar.png", // Default local avatar
         password: "", 
         confirmPassword: "",
         });
@@ -124,6 +127,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
       username: data.username,
       email: data.email,
       roleId: data.roleId,
+      avatar: data.avatar || "/images/avatars/default_avatar.png", // Use provided or default
     };
 
     if (data.password) { 
@@ -143,7 +147,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
             toast({ title: "密码错误", description: "新用户密码意外丢失。", variant: "destructive" });
             return;
         }
-        await createUserAction(payload as Omit<User, "id" | "avatar" | "lastLogin"> & { password: string });
+        await createUserAction(payload as Omit<User, "id" | "lastLogin" | "roleName"> & { password: string });
         toast({ title: "用户已创建", description: `用户 ${data.username} 已成功创建。` });
       }
       setIsOpen(false);
@@ -228,6 +232,22 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
                 </FormItem>
               )}
             />
+             <FormField
+              control={form.control}
+              name="avatar"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>头像 URL (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="/images/avatars/custom.png" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    输入本地图片路径 (例如 /images/avatars/user.png) 或留空使用默认头像。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="password"
@@ -244,19 +264,21 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>确认密码</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder={isEditing && !form.getValues().password ? "留空以保留当前密码" : "确认新密码"} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {(form.watch("password") || !isEditing) && ( // Show confirm password if new password is being set or if creating user
+                <FormField
+                control={form.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>确认密码</FormLabel>
+                    <FormControl>
+                        <Input type="password" placeholder={isEditing && !form.getValues().password ? "留空以保留当前密码" : "确认新密码"} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            )}
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
@@ -273,3 +295,5 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     </Sheet>
   );
 }
+
+      

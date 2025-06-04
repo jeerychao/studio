@@ -33,7 +33,7 @@ function LoadingUsersPage() {
 
 function UsersView() {
   const [usersData, setUsersData] = React.useState<PaginatedResponse<User> | null>(null);
-  const [roles, setRoles] = React.useState<Role[]>([]); // For role name display and form
+  const [roles, setRoles] = React.useState<Role[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   
   const { currentUser, isAuthLoading } = useCurrentUser();
@@ -45,13 +45,13 @@ function UsersView() {
   const currentPage = Number(searchParams.get('page')) || 1;
 
   const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return;
+    if (isAuthLoading || !currentUser) return; // currentUser can be null now
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
         const [fetchedUsersResult, fetchedRolesResult] = await Promise.all([
           getUsersAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-          getRolesAction(), // Roles list is small, not paginating for dropdowns
+          getRolesAction(), 
         ]);
         setUsersData(fetchedUsersResult);
         setRoles(fetchedRolesResult.data);
@@ -68,8 +68,16 @@ function UsersView() {
   }, [currentUser, isAuthLoading, toast, currentPage]);
 
   React.useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    // Only fetch data if currentUser is resolved (not null and not loading)
+    if (!isAuthLoading && currentUser) {
+      fetchData();
+    } else if (!isAuthLoading && !currentUser) {
+      // Handle case where user is definitively not authenticated (e.g. guest)
+      setIsLoading(false);
+      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setRoles([]);
+    }
+  }, [fetchData, currentUser, isAuthLoading]);
 
   const getRoleName = (roleId: string) => {
     const role = roles.find(r => r.id === roleId);
@@ -80,7 +88,7 @@ function UsersView() {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
   }
 
-  if (isAuthLoading || isLoading) {
+  if (isAuthLoading || isLoading) { // isLoading check now covers the initial data fetch phase too
      return <LoadingUsersPage />;
   }
 
@@ -110,7 +118,7 @@ function UsersView() {
       <Card>
         <CardHeader>
           <CardTitle>用户列表</CardTitle>
-          <CardDescription>系统中所有已注册用户。显示 {usersData?.data.length} 条，共 {usersData?.totalCount} 条用户数据。</CardDescription>
+          <CardDescription>系统中所有已注册用户。显示 {usersData?.data.length || 0} 条，共 {usersData?.totalCount || 0} 条用户数据。</CardDescription>
         </CardHeader>
         <CardContent>
           {usersData && usersData.data.length > 0 ? (
@@ -131,7 +139,7 @@ function UsersView() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
-                            <AvatarImage src={user.avatar} alt={user.username} data-ai-hint="person portrait" />
+                            <AvatarImage src={user.avatar || '/images/avatars/default_avatar.png'} alt={user.username} />
                             <AvatarFallback>{getInitials(user.username)}</AvatarFallback>
                           </Avatar>
                           {user.username}
@@ -172,12 +180,14 @@ function UsersView() {
                   ))}
                 </TableBody>
               </Table>
-              <PaginationControls
-                currentPage={usersData.currentPage}
-                totalPages={usersData.totalPages}
-                basePath={pathname}
-                currentQuery={searchParams}
-              />
+              {usersData.totalPages > 1 && (
+                <PaginationControls
+                    currentPage={usersData.currentPage}
+                    totalPages={usersData.totalPages}
+                    basePath={pathname}
+                    currentQuery={searchParams}
+                />
+              )}
             </>
           ) : (
             <div className="text-center py-10">

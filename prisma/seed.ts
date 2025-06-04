@@ -1,9 +1,8 @@
 
-import prisma from '../src/lib/prisma'; // Changed import
+import prisma from '../src/lib/prisma'; 
 import {
   mockPermissions as seedPermissionsData,
   mockRoles as seedRolesData,
-  // mockUsers will now be defined inside main() based on roles for simplicity
   mockVLANs as seedVLANsData,
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
@@ -12,17 +11,16 @@ import {
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
-import type { PermissionId as AppPermissionId, RoleName as AppRoleName, IPAddressStatus as AppIPAddressStatus, User as AppUser } from '../src/types';
+import type { PermissionId as AppPermissionId, User as AppUser } from '../src/types';
 
 
 async function main() {
   console.log('Start seeding ...');
 
-  // Seed Permissions
   console.log('Seeding Permissions...');
   for (const p of seedPermissionsData) {
     await prisma.permission.upsert({
-      where: { id: p.id as string }, // p.id is AppPermissionId (string union)
+      where: { id: p.id as string },
       update: { name: p.name, group: p.group, description: p.description },
       create: {
         id: p.id as string,
@@ -34,12 +32,11 @@ async function main() {
   }
   console.log('Permissions seeded.');
 
-  // Seed Roles
   console.log('Seeding Roles...');
   for (const roleData of seedRolesData) {
-    const prismaRoleName = roleData.name as string; // AppRoleName is 'Administrator', 'Operator', 'Viewer'
+    const prismaRoleName = roleData.name as string; 
     const mappedPermissions = roleData.permissions.map(appPermId => ({
-      id: appPermId as string // appPermId is AppPermissionId
+      id: appPermId as string
     }));
 
     await prisma.role.upsert({
@@ -63,15 +60,14 @@ async function main() {
   }
   console.log('Roles seeded.');
 
-  // Define initial users based on your new logic
-  // Corrected type: password is now 'string', not 'string | undefined'
-  const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar'> & { password: string }> = [
+  const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar' | 'permissions'> & { password: string; avatarPath: string }> = [
     {
       id: 'user-admin-seed',
       username: 'admin',
       email: 'admin@example.com',
       roleId: SEED_ADMIN_ROLE_ID,
       password: 'admin',
+      avatarPath: '/images/avatars/admin_avatar.png',
     },
     {
       id: 'user-operator-seed',
@@ -79,6 +75,7 @@ async function main() {
       email: 'operator@example.com',
       roleId: SEED_OPERATOR_ROLE_ID,
       password: 'operator',
+      avatarPath: '/images/avatars/operator_avatar.png',
     },
     {
       id: 'user-viewer-seed',
@@ -86,35 +83,34 @@ async function main() {
       email: 'viewer@example.com',
       roleId: SEED_VIEWER_ROLE_ID,
       password: 'viewer',
+      avatarPath: '/images/avatars/viewer_avatar.png',
     },
   ];
 
-  // Seed Users
-  console.log('Seeding Users with new credentials...');
+  console.log('Seeding Users with new credentials and local avatars...');
   for (const userData of initialUsersToSeed) {
     await prisma.user.upsert({
       where: { email: userData.email },
       update: {
         username: userData.username,
-        password: userData.password, // Store the plain password
+        password: userData.password,
         roleId: userData.roleId,
-        avatar: `https://placehold.co/100x100.png?text=${userData.username.substring(0,1).toUpperCase()}`,
-        lastLogin: new Date(), // Set a recent login time
+        avatar: userData.avatarPath,
+        lastLogin: new Date(),
       },
       create: {
         id: userData.id,
         username: userData.username,
         email: userData.email,
-        password: userData.password, // Store the plain password
+        password: userData.password,
         roleId: userData.roleId,
-        avatar: `https://placehold.co/100x100.png?text=${userData.username.substring(0,1).toUpperCase()}`,
+        avatar: userData.avatarPath,
         lastLogin: new Date(),
       },
     });
   }
   console.log('Users seeded.');
 
-  // Seed VLANs
   console.log('Seeding VLANs...');
   for (const vlanData of seedVLANsData) {
     await prisma.vLAN.upsert({
@@ -129,7 +125,6 @@ async function main() {
   }
   console.log('VLANs seeded.');
 
-  // Seed Subnets
   console.log('Seeding Subnets...');
   for (const subnetData of seedSubnetsData) {
     await prisma.subnet.upsert({
@@ -155,14 +150,13 @@ async function main() {
   }
   console.log('Subnets seeded.');
 
-  // Seed IPAddresses
   console.log('Seeding IP Addresses...');
   for (const ipData of seedIPsData) {
     await prisma.iPAddress.upsert({
       where: { id: ipData.id },
       update: {
         ipAddress: ipData.ipAddress,
-        status: ipData.status as string, // AppIPAddressStatus to string
+        status: ipData.status as string,
         allocatedTo: ipData.allocatedTo,
         description: ipData.description,
         subnetId: ipData.subnetId,
@@ -181,16 +175,13 @@ async function main() {
   }
   console.log('IP Addresses seeded.');
   
-  // Seed Audit Logs
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {
-    // Ensure userId from seed data corresponds to one of the newly defined users
     const userToLink = initialUsersToSeed.find(u => u.username === logData.username);
     const validUserId = userToLink ? userToLink.id : undefined;
     const validUsername = userToLink ? userToLink.username : logData.username;
 
 
-    // Check if log already exists to prevent duplicates if seed is run multiple times
     const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id }});
     if (!existingLog) {
         await prisma.auditLog.create({
@@ -218,4 +209,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

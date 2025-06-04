@@ -6,26 +6,21 @@ import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, U
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import { parseAndValidateCIDR, getUsableIpCount, isIpInCidrRange, ipToNumber, numberToIp } from "./ip-utils";
-import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions, mockUsers as appMockUsers, mockRoles as appMockRoles } from "./data"; // Keep mockUsers for loginAction reference
+import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
 import { Prisma } from '@prisma/client';
 
-// Helper to get current user for audit purposes.
-// For actions NOT triggered by a specific logged-in user (e.g. system startup, or if auth is complex),
-// this attempts to find an admin or falls back to 'System'.
-// For actions triggered BY a user (like password change), the user's own ID/username should be used.
 async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: string, username: string }> {
   if (performingUserId) {
     const user = await prisma.user.findUnique({ where: { id: performingUserId } });
     if (user) return { userId: user.id, username: user.username };
   }
-  // Fallback if no specific user ID is provided for the audit
   const adminUser = await prisma.user.findFirst({
-    where: { role: { name: "Administrator" } }, // Assumes RoleName is 'Administrator'
+    where: { role: { name: "Administrator" } },
   });
   if (adminUser) {
     return { userId: adminUser.id, username: adminUser.username };
   }
-  return { userId: undefined, username: '系统' }; // Fallback to system if no admin found
+  return { userId: undefined, username: '系统' };
 }
 
 
@@ -42,18 +37,17 @@ export interface PaginatedResponse<T> {
 export interface FetchParams {
   page?: number;
   pageSize?: number;
-  subnetId?: string; // For IP Addresses specifically
-  status?: AppIPAddressStatusType | 'all'; // Added for status filtering
+  subnetId?: string;
+  status?: AppIPAddressStatusType | 'all';
 }
 
-// --- Login Action ---
 interface LoginPayload {
   email: string;
-  password?: string; // Password might be optional if using other auth methods in future
+  password?: string;
 }
 interface LoginResponse {
   success: boolean;
-  user?: AppUser; // Return simplified AppUser on success
+  user?: AppUser & { permissions: AppPermissionIdType[] }; // Ensure permissions are included
   message?: string;
 }
 
@@ -73,25 +67,24 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     return { success: false, message: "邮箱或密码无效。" };
   }
 
-  // Direct password comparison (ensure seed script stores passwords this way)
   if (userFromDb.password !== password) {
     return { success: false, message: "邮箱或密码无效。" };
   }
 
-  // If login is successful, update lastLogin
   await prisma.user.update({
     where: { id: userFromDb.id },
     data: { lastLogin: new Date() },
   });
   
-  const appUser: AppUser = {
+  const appUser: AppUser & { permissions: AppPermissionIdType[] } = {
     id: userFromDb.id,
     username: userFromDb.username,
     email: userFromDb.email,
     roleId: userFromDb.roleId,
-    roleName: userFromDb.role.name as AppRoleNameType, // Prisma type might be string
+    roleName: userFromDb.role.name as AppRoleNameType,
     avatar: userFromDb.avatar || undefined,
-    // Permissions are typically handled by useCurrentUser via role, not sent directly in login response
+    permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
+    lastLogin: userFromDb.lastLogin?.toISOString() // Include lastLogin from the updated record
   };
 
   await prisma.auditLog.create({
@@ -103,12 +96,34 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     }
   });
 
-
   return { success: true, user: appUser };
 }
 
+export async function fetchCurrentUserDetailsAction(userId: string): Promise<(AppUser & { permissions: AppPermissionIdType[] }) | null> {
+  if (!userId) return null;
 
-// --- Subnet Actions ---
+  const userFromDb = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { role: { include: { permissions: true } } },
+  });
+
+  if (!userFromDb) {
+    return null;
+  }
+
+  return {
+    id: userFromDb.id,
+    username: userFromDb.username,
+    email: userFromDb.email,
+    roleId: userFromDb.roleId,
+    roleName: userFromDb.role.name as AppRoleNameType,
+    avatar: userFromDb.avatar || undefined,
+    permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
+    lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
+  };
+}
+
+
 export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedResponse<AppSubnet>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -129,7 +144,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     }) : 
     await prisma.subnet.findMany({ 
         where: whereClause,
-        include: { vlan: true }, // Include VLAN to get vlanNumber for export if needed
+        include: { vlan: { select: { vlanNumber: true } } },
         orderBy: { cidr: 'asc' },
     });
 
@@ -157,7 +172,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       utilization = 0;
     }
     return {
-      ...subnet, // Includes vlan object if joined
+      ...subnet,
       networkAddress,
       subnetMask,
       ipRange: ipRange || undefined,
@@ -318,7 +333,6 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   return { success: true };
 }
 
-// --- VLAN Actions ---
 export async function getVLANsAction(params?: FetchParams): Promise<PaginatedResponse<AppVLAN>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -444,7 +458,7 @@ export async function batchCreateVLANsAction(
             details: `批量创建了 ${createdVlanNumbersForAudit.length} 个 VLAN：${createdVlanNumbersForAudit.join(', ')}。失败：${failureDetails.length} 个。`
         }
     });
-  } else if (failureDetails.length > 0 && vlansToCreateInput.length > 0) { // Log only if there was an attempt
+  } else if (failureDetails.length > 0 && vlansToCreateInput.length > 0) {
      await prisma.auditLog.create({
         data: {
             userId: auditUser.userId,
@@ -528,7 +542,6 @@ export async function deleteVLANAction(id: string): Promise<{ success: boolean; 
   return { success: true };
 }
 
-// --- IP Address Actions ---
 export async function getIPAddressesAction(params?: FetchParams): Promise<PaginatedResponse<AppIPAddress & { subnet?: { cidr: string; networkAddress: string; vlan?: { vlanNumber: number } | null } | null; vlan?: { vlanNumber: number } | null }>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -553,10 +566,10 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
                 select: { 
                     cidr: true, 
                     networkAddress: true,
-                    vlan: { select: { vlanNumber: true } } // Include subnet's VLAN
+                    vlan: { select: { vlanNumber: true } }
                 } 
             }, 
-            vlan: { select: { vlanNumber: true }} // This is for IP's direct VLAN
+            vlan: { select: { vlanNumber: true }}
         },
         orderBy: { ipAddress: 'asc' }, 
         skip,
@@ -569,16 +582,14 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
                 select: { 
                     cidr: true, 
                     networkAddress: true,
-                    vlan: { select: { vlanNumber: true } } // Include subnet's VLAN
+                    vlan: { select: { vlanNumber: true } }
                 } 
             }, 
-            vlan: { select: { vlanNumber: true }} // This is for IP's direct VLAN
+            vlan: { select: { vlanNumber: true }}
         },
         orderBy: { ipAddress: 'asc' }
     });
 
-  // The type of appIps elements will implicitly include the nested subnet and vlan structures
-  // due to the `...ip` spread and the `include` in the Prisma query.
   const appIps = ipsFromDb.map(ip => ({
     ...ip,
     subnetId: ip.subnetId || undefined,
@@ -587,7 +598,6 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     description: ip.description || undefined,
     lastSeen: ip.lastSeen?.toISOString() || undefined,
     status: ip.status as AppIPAddressStatusType,
-    // subnet and vlan objects are already part of `...ip`
   }));
   return { 
     data: appIps, 
@@ -602,7 +612,6 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">): Pro
   const auditUser = await getAuditUserInfo();
   const prismaStatus = data.status as string;
 
-  // Validate IP address format
   const ipParts = data.ipAddress.split('.').map(Number);
   if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) {
     throw new Error(`无效的 IP 地址格式: ${data.ipAddress}`);
@@ -621,13 +630,11 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">): Pro
     if (!isIpInCidrRange(data.ipAddress, parsedTargetSubnetCidr)) {
       throw new Error(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
     }
-    // Check for duplicate IP within the same subnet
     const existingIPInSubnet = await prisma.iPAddress.findFirst({ 
         where: { ipAddress: data.ipAddress, subnetId: data.subnetId } 
     });
     if (existingIPInSubnet) throw new Error(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
   } else {
-    // Check for duplicate IP in global pool (subnetId is null)
     const globallyExistingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } });
     if (globallyExistingIP) throw new Error(`IP ${data.ipAddress} 已存在于全局池中 (未分配给任何子网)。`);
   }
@@ -686,7 +693,6 @@ export async function batchCreateIPAddressesAction(payload: {
 
   const { startIp, endIp, subnetId, vlanId, description, status } = payload;
 
-  // Validate selected subnet
   const targetSubnet = await prisma.subnet.findUnique({ where: { id: subnetId } });
   if (!targetSubnet) {
     throw new Error("未找到批量创建的目标子网。");
@@ -696,7 +702,6 @@ export async function batchCreateIPAddressesAction(payload: {
     throw new Error(`目标子网 ${targetSubnet.cidr} 的 CIDR 配置无效。`);
   }
 
-  // Validate selected VLAN (if any)
   if (vlanId) {
     const vlanExists = await prisma.vLAN.findUnique({ where: { id: vlanId } });
     if (!vlanExists) {
@@ -721,13 +726,10 @@ export async function batchCreateIPAddressesAction(payload: {
   for (; currentIpNum <= endIpNum; currentIpNum++) {
     const currentIpStr = numberToIp(currentIpNum);
     try {
-      // Validate IP format (already done implicitly by ipToNumber/numberToIp)
-      // Validate IP is within target subnet
       if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) {
         throw new Error(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`);
       }
 
-      // Check for duplicate IP within the same subnet
       const existingIPInSubnet = await prisma.iPAddress.findFirst({ 
           where: { ipAddress: currentIpStr, subnetId: subnetId } 
       });
@@ -739,7 +741,7 @@ export async function batchCreateIPAddressesAction(payload: {
         data: {
           ipAddress: currentIpStr,
           status: status,
-          allocatedTo: status === 'allocated' ? (description || '批量分配') : null, // Simple default for allocated
+          allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
           description: description || null,
           subnetId: subnetId,
           vlanId: vlanId || null,
@@ -778,7 +780,7 @@ export async function batchCreateIPAddressesAction(payload: {
   if (successCount > 0) {
     revalidatePath("/ip-addresses");
     revalidatePath("/dashboard");
-    revalidatePath("/subnets"); // Subnet utilization might change
+    revalidatePath("/subnets");
   }
 
   return { successCount, failureDetails };
@@ -824,16 +826,14 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     if (!isIpInCidrRange(finalIpAddress, parsedTargetSubnetCidr)) {
       throw new Error(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
     }
-    // Check for IP conflict if IP or subnet changes
     if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
         const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
         if (conflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
     }
-  } else { // Moving to global pool
+  } else {
      if (finalStatus === 'allocated' || finalStatus === 'reserved') {
         throw new Error("对于“已分配”或“预留”的 IP，除非设置为空闲，否则子网 ID 是必需的。");
     }
-    // Check for IP conflict if IP changes and moving to global pool
     if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
         const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
         if (globallyConflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于全局池中。`);
@@ -869,8 +869,7 @@ export async function deleteIPAddressAction(id: string): Promise<{ success: bool
   return { success: true };
 }
 
-// --- User Actions ---
-export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<AppUser>> {
+export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<AppUser & { permissions?: AppPermissionIdType[] }>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
@@ -883,14 +882,14 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   const usersFromDb = params?.page && params?.pageSize ?
     await prisma.user.findMany({
         where: whereClause,
-        include: { role: true },
+        include: { role: { include: { permissions: true } } },
         orderBy: { username: 'asc'},
         skip,
         take: pageSize,
     }) :
     await prisma.user.findMany({
         where: whereClause,
-        include: { role: true },
+        include: { role: { include: { permissions: true } } },
         orderBy: { username: 'asc'}
     });
     
@@ -902,6 +901,7 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
     roleName: user.role.name as AppRoleNameType,
     avatar: user.avatar || undefined,
     lastLogin: user.lastLogin?.toISOString() || undefined,
+    permissions: user.role.permissions.map(p => p.id as AppPermissionIdType),
   }));
 
   return { 
@@ -913,12 +913,12 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   };
 }
 
-export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string }): Promise<AppUser> {
+export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string }): Promise<AppUser & { permissions: AppPermissionIdType[] }> {
   const auditUser = await getAuditUserInfo();
   if (await prisma.user.findUnique({ where: { email: data.email } })) throw new Error(`邮箱 ${data.email} 已存在。`);
   if (await prisma.user.findUnique({ where: { username: data.username } })) throw new Error(`用户名 ${data.username} 已存在。`);
-  if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new Error(`角色 ID ${data.roleId} 不存在。`);
-  // Password is now required by type
+  const roleExists = await prisma.role.findUnique({ where: { id: data.roleId }, include: {permissions: true} });
+  if (!roleExists) throw new Error(`角色 ID ${data.roleId} 不存在。`);
 
 
   const newUser = await prisma.user.create({
@@ -927,21 +927,27 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
       email: data.email,
       password: data.password, 
       roleId: data.roleId,
-      avatar: `https://placehold.co/100x100.png?text=${data.username.substring(0,1).toUpperCase()}`,
+      avatar: `/images/avatars/default_avatar.png`, // Default local avatar
       lastLogin: new Date(),
     },
-    include: { role: true }
+    include: { role: { include: { permissions: true } } }
   });
   await prisma.auditLog.create({
     data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` }
   });
   revalidatePath("/users");
   revalidatePath("/roles");
-  return { ...newUser, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, lastLogin: newUser.lastLogin?.toISOString() };
+  return { 
+    ...newUser, 
+    roleName: newUser.role.name as AppRoleNameType, 
+    avatar: newUser.avatar || undefined, 
+    lastLogin: newUser.lastLogin?.toISOString(),
+    permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType)
+  };
 }
 
-export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<AppUser | null> {
-  const auditUser = await getAuditUserInfo(id); // Pass performing user's ID
+export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<(AppUser & { permissions: AppPermissionIdType[] }) | null> {
+  const auditUser = await getAuditUserInfo(id);
   const userToUpdate = await prisma.user.findUnique({ where: { id } });
   if (!userToUpdate) return null;
 
@@ -949,8 +955,12 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   if (data.hasOwnProperty('username') && data.username !== undefined) updateData.username = data.username;
   if (data.hasOwnProperty('email') && data.email !== undefined) updateData.email = data.email;
   if (data.hasOwnProperty('roleId') && data.roleId !== undefined) updateData.roleId = data.roleId;
-  if (data.hasOwnProperty('avatar') && data.avatar !== undefined) updateData.avatar = data.avatar;
-  // lastLogin should not be updated directly here, it's updated on actual login
+  
+  // Ensure avatar is only updated if explicitly provided, otherwise keep existing
+  if (data.hasOwnProperty('avatar')) {
+    updateData.avatar = data.avatar || `/images/avatars/default_avatar.png`;
+  }
+
 
   if (data.password && data.password.length > 0) {
     updateData.password = data.password; 
@@ -968,7 +978,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   const updatedUser = await prisma.user.update({
     where: { id },
     data: updateData,
-    include: { role: true }
+    include: { role: { include: {permissions: true} } }
   });
 
   let auditDetails = `用户 ${updatedUser.username} 的详细信息已由 ${auditUser.username} 更新。`;
@@ -979,7 +989,13 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
 
   revalidatePath("/users");
   revalidatePath("/roles");
-  return { ...updatedUser, roleName: updatedUser.role.name as AppRoleNameType, avatar: updatedUser.avatar || undefined, lastLogin: updatedUser.lastLogin?.toISOString() };
+  return { 
+    ...updatedUser, 
+    roleName: updatedUser.role.name as AppRoleNameType, 
+    avatar: updatedUser.avatar || undefined, 
+    lastLogin: updatedUser.lastLogin?.toISOString(),
+    permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType)
+  };
 }
 
 interface UpdateOwnPasswordPayload { currentPassword?: string; newPassword?: string; }
@@ -987,7 +1003,6 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { success: false, message: "未找到用户。" };
 
-  // Compare with the actual password from the database
   if (payload.currentPassword && user.password && payload.currentPassword !== user.password) {
     return { success: false, message: "当前密码不匹配。" };
   }
@@ -1028,7 +1043,6 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
   return { success: true };
 }
 
-// --- Role Actions ---
 export async function getRolesAction(params?: FetchParams): Promise<PaginatedResponse<AppRole>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -1124,7 +1138,6 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean; 
   throw new Error("未找到角色或不允许删除。");
 }
 
-// --- Audit Log Actions ---
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -1189,7 +1202,6 @@ export async function deleteAuditLogAction(id: string): Promise<{ success: boole
   return { success: true };
 }
 
-// --- Permission Actions ---
 export async function getAllPermissionsAction(): Promise<AppPermission[]> {
     const permissionsFromDb = await prisma.permission.findMany({ orderBy: { id: 'asc' }});
     return permissionsFromDb.map(p => ({
@@ -1198,5 +1210,3 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
-
-    
