@@ -17,23 +17,23 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
-// PERMISSIONS and hasPermission are no longer needed for ConditionalSettingsButton's primary logic
+// PERMISSIONS import is no longer needed for ConditionalSettingsButton's primary logic
 // import { PERMISSIONS } from "@/types"; 
-// import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+// import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user"; // hasPermission no longer needed here
 import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user";
 
 
 function ConditionalSettingsButton() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
-  // Show settings button if user is loaded and authenticated, regardless of VIEW_SETTINGS permission
+  // Show settings button if user is loaded and authenticated (not guest), regardless of VIEW_SETTINGS permission
   // Theme and password changes are personal settings.
   if (isAuthLoading || !currentUser || (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
     return null;
   }
 
   // The check for PERMISSIONS.VIEW_SETTINGS has been removed here.
-  // All authenticated users should see the link to their personal settings.
+  // All authenticated users (not guest) should see the link to their personal settings.
 
   return (
     <Button

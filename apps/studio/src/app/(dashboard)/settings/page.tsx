@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Settings, Palette, Lock, UserCircle2 } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 // PERMISSIONS import is no longer needed for the primary page access check here
+// import { PERMISSIONS } from "@/types"; 
+// import { hasPermission } from "@/hooks/use-current-user"; // hasPermission no longer needed here
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import { PasswordChangeForm } from "@/components/settings/password-change-form";
 import { Label } from "@/components/ui/label";
@@ -41,13 +43,10 @@ export default function SettingsPage() {
     );
   }
 
-  // All authenticated users should be able to access their own settings (theme, password)
+  // All authenticated users (not guest) should be able to access their own settings (theme, password)
   // The PERMISSIONS.VIEW_SETTINGS check is removed for general page access.
-  // If there were specific admin-only settings on this page, they would need individual checks.
   if (!currentUser || (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-    // Redirect or show a message if not a properly authenticated user, 
-    // though DashboardLayout should handle unauthenticated access.
-    // For now, if a guest somehow reaches here, show a generic message.
+    // This message is for users who somehow bypass DashboardLayout's auth check or are guests.
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Settings className="h-16 w-16 text-destructive mb-4" />
