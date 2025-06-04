@@ -1,13 +1,3 @@
-前端 (Frontend):
-Next.js (v14+)+React (v18+)+ShadCN UI+Tailwind CSS+TypeScript
-后端 (Backend):
-Next.js+Node.js+Prisma ORM+SQLite+Lucide React+Zod+React Hook Form+useCurrentUser Hook+Mock Data & Seeding
-
-
-# Firebase Studio
-
-To get started, take a look at src/app/page.tsx.
-
 # 前端 (Frontend):
 Next.js (v14+)+React (v18+)+ShadCN UI+Tailwind CSS+TypeScript
 # 后端 (Backend):
@@ -30,10 +20,3 @@ docker-compose logs -f ipam-app
 按 Ctrl+C 停止查看日志。
 
 访问应用程序： 一旦容器成功启动，您应该可以通过浏览器访问 http://localhost:3001 来查看您的应用程序。这是因为 docker-compose.yml 中将主机的 3001 端口映射到了容器的 3000 端口。
-
-关于数据持久性 (SQLite dev.db)
-
-当前方案：Dockerfile 会在构建镜像时创建并填充 prisma/dev.db。这意味着每次您重新构建镜像 (docker-compose up --build)，数据库都会重置为种子数据。这对于开发和测试通常是可以的。
-运行时数据持久化：如果您希望在容器运行时对数据库所做的更改（例如，通过应用 UI 添加了新数据）在容器停止和重新创建后仍然保留，您需要使用 Docker Volume。docker-compose.yml 中已注释掉了相关部分。要启用它：
-取消注释 docker-compose.yml 中的 volumes: 部分 (在服务定义下和文件末尾的卷定义)。
-当您第一次使用 Volume 启动时，prisma/dev.db 可能不会自动从镜像复制到 Volume 中（这取决于 Docker 的行为）。您可能需要在第一次启动后，通过 docker-compose exec ipam-app npx prisma db push --skip-generate 和 docker-compose exec ipam-app npm run prisma:seed 来初始化 Volume 中的数据库。之后，数据将持久保存在 Volume (ipam_db_data) 中。
