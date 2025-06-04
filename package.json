@@ -12,10 +12,10 @@
     "postinstall": "prisma generate",
     "prisma:migrate:reset": "node ./node_modules/.bin/prisma migrate reset",
     "prisma:db:push": "node ./node_modules/.bin/prisma db push",
-    "prisma:db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "prisma:db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    "seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
     "binaryTargets": [
       "native",
       "debian-openssl-3.0.x"
