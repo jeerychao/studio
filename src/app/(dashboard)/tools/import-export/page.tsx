@@ -7,22 +7,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud, FileText } from "lucide-react";
+import { FileUp, FileDown, Wrench, UploadCloud, DownloadCloud, FileText, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { mockSubnets, mockVLANs, mockIPAddresses } from "@/lib/data"; 
-// Removed unused Subnet, VLAN, IPAddress type imports
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function ImportExportPage() {
   const [importFile, setImportFile] = React.useState<File | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
+  const [simulatedError, setSimulatedError] = React.useState<string | null>(null);
   const { toast } = useToast();
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSimulatedError(null); // Reset error on new file selection
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
       if (file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || file.type === "application/vnd.ms-excel" || file.name.endsWith('.csv')) {
@@ -40,7 +42,7 @@ export default function ImportExportPage() {
   };
 
   const handleImport = async () => {
-    if (isAuthLoading || !currentUser) { // Wait for auth
+    if (isAuthLoading || !currentUser) {
         toast({ title: "认证错误", description: "请稍候或尝试重新登录。", variant: "destructive" });
         return;
     }
@@ -52,24 +54,41 @@ export default function ImportExportPage() {
       toast({ title: "未选择文件", description: "请选择要导入的文件。", variant: "destructive" });
       return;
     }
+
     setIsImporting(true);
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate import
+    setSimulatedError(null);
+    // SIMULATE IMPORT AND VALIDATION
+    await new Promise(resolve => setTimeout(resolve, 1500)); 
     
-    const validationSuccess = Math.random() > 0.3; // Simulate validation
-    if (validationSuccess) {
-      toast({ title: "导入成功", description: `${importFile.name} 已导入 (模拟)。` });
-    } else {
-       toast({ title: "导入失败", description: `${importFile.name} 中存在验证错误。列 A, C 有问题 (模拟)。`, variant: "destructive" });
+    const successChance = Math.random();
+    if (successChance > 0.4) { // ~60% chance of simulated success
+      toast({ title: "模拟导入成功", description: `${importFile.name} 已处理 (模拟)。实际系统中，数据将被验证并导入。` });
+    } else { // ~40% chance of simulated error
+      const errorTypes = [
+        { type: "VLAN", message: `模拟错误：VLAN 100 已存在于数据库中。` },
+        { type: "Subnet", message: `模拟错误：子网 192.168.1.0/24 与现有子网重叠。` },
+        { type: "IP Address", message: `模拟错误：IP 地址 192.168.1.10 已在子网 192.168.1.0/24 中分配。`},
+        { type: "Format", message: `模拟错误：文件 ${importFile.name} 第 5 行的 CIDR 格式无效。`},
+        { type: "Dependency", message: `模拟错误：子网行引用了不存在的 VLAN 999。`}
+      ];
+      const randomError = errorTypes[Math.floor(Math.random() * errorTypes.length)];
+      setSimulatedError(randomError.message);
+      toast({ 
+        title: "模拟导入失败", 
+        description: `处理 ${importFile.name} 时发生模拟错误。详情见页面提示。`, 
+        variant: "destructive" 
+      });
     }
+    // END SIMULATION
+
     setImportFile(null); 
     const fileInput = document.getElementById('import-file-input') as HTMLInputElement | null;
     if(fileInput) fileInput.value = "";
-
     setIsImporting(false);
   };
 
   const handleExport = (dataType: "subnets" | "vlans" | "ips") => {
-    if (isAuthLoading || !currentUser) { // Wait for auth
+    if (isAuthLoading || !currentUser) { 
         toast({ title: "认证错误", description: "请稍候或尝试重新登录。", variant: "destructive" });
         return;
     }
@@ -101,7 +120,7 @@ export default function ImportExportPage() {
           ipRange: subnet.ipRange || "",
           vlanNumber: vlan ? vlan.vlanNumber.toString() : "",
           description: subnet.description || "",
-          utilization: subnet.utilization || 0, // Assuming mockSubnets has utilization
+          utilization: subnet.utilization || 0, 
         };
       });
       dataToExport = subnetsForCsv;
@@ -112,7 +131,7 @@ export default function ImportExportPage() {
         id: vlan.id,
         vlanNumber: vlan.vlanNumber,
         description: vlan.description || "",
-        subnetCount: vlan.subnetCount || 0, // Assuming mockVLANs has subnetCount
+        subnetCount: vlan.subnetCount || 0, 
       }));
       csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
       csvContent = convertToCSV(dataToExport, csvHeaders);
@@ -196,7 +215,6 @@ export default function ImportExportPage() {
     );
   }
 
-  // Ensure currentUser is available before checking permission
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
@@ -221,29 +239,60 @@ export default function ImportExportPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><UploadCloud className="h-6 w-6 text-primary" /> 导入数据</CardTitle>
-            <CardDescription>上传 Excel 或 CSV 文件以导入子网、VLAN 或 IP 地址。确保数据与所需格式匹配 (参见下面的模板)。</CardDescription>
+            <CardDescription>
+              上传 Excel 或 CSV 文件以导入子网、VLAN 或 IP 地址。确保数据与所需格式匹配 (参见下面的模板)。
+              <br/>
+              <strong className="text-amber-600 dark:text-amber-400">注意：当前的导入功能为演示模拟，不会实际更改数据库。</strong>
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
               <Label htmlFor="import-file-input">选择文件 (.xlsx, .csv)</Label>
-              <Input id="import-file-input" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" disabled={!canImport} />
+              <Input id="import-file-input" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" disabled={!canImport || isImporting} />
             </div>
             {importFile && <p className="text-sm text-muted-foreground">已选文件: {importFile.name}</p>}
+            {simulatedError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>模拟导入错误</AlertTitle>
+                <AlertDescription>{simulatedError}</AlertDescription>
+              </Alert>
+            )}
             <Button onClick={handleImport} disabled={!importFile || isImporting || !canImport} className="w-full">
-              {isImporting ? "导入中..." : <><FileUp className="mr-2 h-4 w-4" /> 处理导入</>}
+              {isImporting ? "处理中 (模拟)..." : <><FileUp className="mr-2 h-4 w-4" /> 处理导入</>}
             </Button>
             {!canImport && <p className="text-xs text-destructive">您没有权限导入数据。</p>}
-            <p className="text-xs text-muted-foreground">
-              注意: 首行应为表头。所有列数据将在实际导入过程中进行验证。
-              当前的导入功能是占位符，并执行模拟验证。
-            </p>
+            
+            <div className="text-xs text-muted-foreground space-y-2 pt-2">
+              <p className="font-semibold">在实际的导入系统中，将执行以下检查：</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li><strong>格式验证:</strong> 检查 CSV/Excel 列是否正确，数据类型是否有效 (例如 VLAN 号码是数字)。</li>
+                <li><strong>逻辑验证:</strong>
+                  <ul className="list-disc list-inside pl-4">
+                      <li>VLAN 号码在 1-4094 范围内。</li>
+                      <li>CIDR 表示法有效，且 IP 部分是规范的网络地址。</li>
+                      <li>IP 地址格式有效，且在其声明的子网范围内（如果提供了子网）。</li>
+                      <li>状态字段 (如 "allocated", "free") 是预定义的值。</li>
+                  </ul>
+                </li>
+                <li><strong>数据库冲突检查:</strong>
+                  <ul className="list-disc list-inside pl-4">
+                      <li>VLAN: 导入的 VLAN 号码是否已存在？</li>
+                      <li>子网: 导入的 CIDR 是否与现有子网完全相同或部分重叠？</li>
+                      <li>IP 地址: 导入的 IP 是否已在指定子网（或全局池）中存在？</li>
+                  </ul>
+                </li>
+                <li><strong>依赖关系检查 (高级):</strong> 例如，CSV 中的子网行引用的 VLAN 号码必须已存在于数据库中，或也包含在当前导入批次中。</li>
+              </ul>
+               <p>任何验证失败的行都将被跳过，并报告错误详情。</p>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><DownloadCloud className="h-6 w-6 text-primary" /> 导出数据</CardTitle>
-            <CardDescription>将您当前的 IPAM 数据下载为 CSV 文件。</CardDescription>
+            <CardDescription>将您当前的 IPAM 数据下载为 CSV 文件。导出的数据基于系统中的模拟数据。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm">选择要导出的数据类型:</p>
