@@ -7,7 +7,7 @@ WORKDIR /app
 # 可选：如果默认源下载缓慢或出错，可以尝试更换 Alpine 软件源
 # 找到一个适合您地区的镜像: https://alpinelinux.org/mirrors/
 # 例如，使用清华大学的源 (移除或添加 '#' 来启用/禁用):
-# RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
 
 # Install base dependencies including those needed for Prisma and native extensions
 # openssl for Prisma, dumb-init for proper signal handling, python3, make, g++ for native module builds
