@@ -52,7 +52,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  console.log("[DashboardLayout] Rendering - Start"); // Diagnostic log added
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
@@ -116,3 +115,5 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
+
+    
