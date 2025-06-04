@@ -30,12 +30,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Role, Permission, PermissionId as AppPermissionId } from "@/types";
+import type { Role, Permission, PermissionId as AppPermissionId } from "@/types"; // Renamed to avoid conflict
 import { PERMISSIONS } from "@/types";
-import { mockPermissions } from "@/lib/data";
+import { mockPermissions } from "@/lib/data"; // For user-friendly error messages
 import { updateRoleAction, getAllPermissionsAction } from "@/lib/actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Define the rules for permission integrity
 const permissionIntegrityRules = [
   { view: PERMISSIONS.VIEW_SUBNET, actions: [PERMISSIONS.CREATE_SUBNET, PERMISSIONS.EDIT_SUBNET, PERMISSIONS.DELETE_SUBNET], groupName: "子网管理" },
   { view: PERMISSIONS.VIEW_VLAN, actions: [PERMISSIONS.CREATE_VLAN, PERMISSIONS.EDIT_VLAN, PERMISSIONS.DELETE_VLAN], groupName: "VLAN 管理" },
@@ -298,5 +299,6 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
     </Sheet>
   );
 }
+    
 
     
