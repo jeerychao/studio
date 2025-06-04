@@ -5,8 +5,10 @@ import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Settings, Palette, Lock, UserCircle2 } from "lucide-react";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { PERMISSIONS } from "@/types";
+import { useCurrentUser } from "@/hooks/use-current-user";
+// PERMISSIONS import is no longer needed for the primary page access check here
+// import { PERMISSIONS } from "@/types"; 
+// import { hasPermission } from "@/hooks/use-current-user"; // hasPermission no longer needed here
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import { PasswordChangeForm } from "@/components/settings/password-change-form";
 import { Label } from "@/components/ui/label";
@@ -27,8 +29,8 @@ export default function SettingsPage() {
     roleLabel: "角色:",
     passwordTitle: "更改密码",
     passwordDescription: "更新您的账户密码。",
-    accessDeniedTitle: "访问被拒绝",
-    accessDeniedMessage: "您没有权限查看此页面。",
+    accessDeniedTitle: "访问被拒绝", // This might become unused or used differently
+    accessDeniedMessage: "您没有权限查看此页面。", // This might become unused
     loadingMessage: "加载设置中...",
   };
 
@@ -41,12 +43,15 @@ export default function SettingsPage() {
     );
   }
 
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS)) {
+  // All authenticated users (not guest) should be able to access their own settings (theme, password)
+  // The PERMISSIONS.VIEW_SETTINGS check is removed for general page access.
+  if (!currentUser || (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
+    // This message is for users who somehow bypass DashboardLayout's auth check or are guests.
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Settings className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">{texts.accessDeniedTitle}</h2>
-        <p className="text-muted-foreground">{texts.accessDeniedMessage}</p>
+        <h2 className="text-2xl font-semibold mb-2">请先登录</h2>
+        <p className="text-muted-foreground">您需要登录才能访问设置。</p>
       </div>
     );
   }
