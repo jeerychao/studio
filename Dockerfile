@@ -1,53 +1,61 @@
-# Dockerfile
 
-# ---- Base Stage ----
-FROM node:20-slim AS base
-LABEL authors="Firebase Studio"
+# Stage 1: Install dependencies and generate Prisma Client
+FROM node:18-slim AS dependencies
 WORKDIR /app
 
-# ---- Dependencies Stage ----
-# Install all dependencies, including devDependencies needed for Prisma CLI and Next.js build.
-FROM base AS deps
-COPY package.json package-lock.json* ./
-RUN npm install
+# Install node-gyp dependencies for native modules if any (Prisma might need this)
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-# ---- Source and Build Stage ----
-# Copy source code and build the application.
-# This stage will also prepare the Prisma client and the SQLite database.
-FROM deps AS source
-COPY . .
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Generate Prisma Client (postinstall script in package.json should also do this, but explicit is safer)
+COPY prisma ./prisma/
 RUN npx prisma generate
 
-# Ensure the database schema is applied (creates dev.db if not exists) and then seed it.
-RUN npx prisma db push --skip-generate
-RUN npm run prisma:seed # Assumes 'prisma:seed' script is defined in package.json
+# Stage 2: Build the application and prepare the database
+FROM node:18-slim AS builder
+WORKDIR /app
 
-# Build the Next.js application for production
+# Copy dependencies and Prisma Client from the 'dependencies' stage
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/prisma ./prisma
+
+# Copy the rest of the application source code
+COPY . .
+
+# Set DATABASE_URL for build-time Prisma commands (db push, db seed)
+# This path is relative to the WORKDIR /app
+ENV DATABASE_URL="file:./prisma/dev.db"
+
+# Create the database schema and the dev.db file
+# Using the npm script directly to avoid potential npx issues in some environments
+RUN npm run prisma:db:push -- --skip-generate
+
+# Seed the database using the npm script
+RUN npm run prisma:db:seed
+
+# Build the Next.js application
 RUN npm run build
 
-# ---- Production Runner Stage ----
-# Create a lean production image
-FROM node:20-slim AS runner
+# Stage 3: Production image - only production dependencies and run the app
+FROM node:18-slim AS runner
 WORKDIR /app
+
 ENV NODE_ENV production
+# DATABASE_URL will be set by docker-compose via env_file (production.env) pointing to /app/prisma/dev.db
 
 # Copy package.json and package-lock.json to install only production dependencies
-COPY --from=source /app/package.json ./package.json
-COPY --from=source /app/package-lock.json* ./package-lock.json*
-RUN npm install --omit=dev
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-# Copy built application artifacts from the 'source' stage
-COPY --from=source /app/.next ./.next
-COPY --from=source /app/public ./public
+# Copy built application from 'builder' stage
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
 
-# Copy the prisma directory which includes schema.prisma and the seeded dev.db
-COPY --from=source /app/prisma ./prisma
+# Copy the prisma directory which now includes the seeded dev.db and the schema
+COPY --from=builder /app/prisma ./prisma
 
-# Expose the port Next.js runs on (default 3000)
 EXPOSE 3000
 
-# Command to start the Next.js application
-# The "start" script in package.json is typically "next start"
+# Set the default command to start the Next.js application
 CMD ["npm", "start"]

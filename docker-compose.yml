@@ -3,28 +3,28 @@ version: '3.8'
 
 services:
   ipam-app:
-    # Instead of pulling a pre-built image, we will build it from the Dockerfile
     build:
       context: . # Use the current directory as the build context
       dockerfile: Dockerfile # Specify the Dockerfile name
-    image: ipam-app:prod-local # Optional: name the image that will be built
+    image: ipam-app-local:latest # Name the image that will be built
     container_name: ipam_app_local_prod
     ports:
       # Map host port 3001 to container port 3000
-      # Access via http://localhost:3001 or http://<your_ubuntu_ip>:3001
+      # Access via http://localhost:3001
       - "127.0.0.1:3001:3000"
     env_file:
       - ./production.env # Load environment variables from this file
     restart: unless-stopped
     networks:
       - app_network
-    # For data persistence of the SQLite database across container recreations,
-    # you would typically use a Docker volume like this:
+    # Optional: For data persistence of the SQLite database if you make changes
+    # *while the container is running* and want them to survive container removal
+    # (but not image rebuilds, as the image bakes in the initial seeded DB).
+    # If you enable this, the first time you run with the volume, it might be empty.
+    # You might need to manually copy the prisma/dev.db from a built image or re-seed.
+    # For local dev, often rebuilding the image (which re-seeds) is fine.
     # volumes:
-    #   - ipam_db_data:/app/prisma
-    # This Dockerfile bakes the seeded DB into the image. The volume is for if you
-    # want changes made *while the container is running* to persist if the container
-    # is removed and recreated (e.g. during an update, but not image rebuild).
+    #   - ipam_db_data:/app/prisma # Mounts the prisma directory to a named volume
 
 networks:
   app_network:

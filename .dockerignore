@@ -1,30 +1,32 @@
-# .dockerignore
-# Prevents unnecessary files and folders from being copied into the Docker image,
-# speeding up the build process and reducing image size.
 
-# Git files
+# Docker specific files
+Dockerfile
+.dockerignore
+docker-compose.yml
+production.env
+
+# Node.js
+node_modules
+npm-debug.log
+*.log
+.env
+.env.*
+!production.env 
+
+# Next.js build output
+.next/
+out/
+
+# Git
 .git
 .gitignore
 
-# Node modules (will be installed within Docker)
-node_modules
-
-# Next.js cache and build outputs (will be generated within Docker)
-.next
-
-# IDE and OS-specific files
+# VSCode
 .vscode
-*.env
-*.env.local
-.DS_Store
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Docker files (if they are in the context but not needed inside the image itself)
-Dockerfile
-docker-compose.yml
-production.env
-README.md
-# Add any other files or directories that are not needed for the runtime application
-.logs
+# SQLite database file (if you manage it outside Docker build,
+# but in our case, Dockerfile creates it)
+# prisma/dev.db
+
+# Test files
+coverage
