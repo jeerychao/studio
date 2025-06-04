@@ -1,61 +1,68 @@
 
-# Stage 1: Install dependencies and generate Prisma Client
-FROM node:18-slim AS dependencies
+# Install dependencies only when needed
+FROM node:20-alpine AS base
 WORKDIR /app
 
-# Install node-gyp dependencies for native modules if any (Prisma might need this)
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+# Install Prisma globally in this stage for db push/seed
+RUN npm install -g prisma typescript ts-node
 
-COPY package.json package-lock.json ./
-RUN npm ci
+# Install dependencies based on the preferred package manager
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
 
-COPY prisma ./prisma/
-RUN npx prisma generate
-
-# Stage 2: Build the application and prepare the database
-FROM node:18-slim AS builder
+# This stage is for generating Prisma Client
+FROM base AS prisma_generate
 WORKDIR /app
-
-# Copy dependencies and Prisma Client from the 'dependencies' stage
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=dependencies /app/prisma ./prisma
-
-# Copy the rest of the application source code
-COPY . .
-
-# Set DATABASE_URL for build-time Prisma commands (db push, db seed)
-# This path is relative to the WORKDIR /app
-ENV DATABASE_URL="file:./prisma/dev.db"
-
-# Create the database schema and the dev.db file
-# Using the npm script directly to avoid potential npx issues in some environments
-RUN npm run prisma:db:push -- --skip-generate
-
-# Seed the database using the npm script
+COPY --from=base /app/node_modules /app/node_modules
+COPY prisma ./prisma
+# Ensure dev.db is created by db push if it doesn't exist, then seed it.
+# This creates the DB structure based on schema.prisma.
+RUN npx prisma db push --skip-generate
+# This populates the DB with seed data.
 RUN npm run prisma:db:seed
 
-# Build the Next.js application
+
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=prisma_generate /app/node_modules /app/node_modules
+COPY --from=prisma_generate /app/prisma /app/prisma
+COPY . .
+# This will ensure that environment variables from production.env are available at build time if needed by next build
+# However, for runtime, docker-compose will provide them.
+# If you have build-time specific env vars, ensure they are in production.env or set via --build-arg
 RUN npm run build
 
-# Stage 3: Production image - only production dependencies and run the app
-FROM node:18-slim AS runner
+# Production image, copy all the files and run next
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
-# DATABASE_URL will be set by docker-compose via env_file (production.env) pointing to /app/prisma/dev.db
 
-# Copy package.json and package-lock.json to install only production dependencies
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Create a non-root user and group
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
 
-# Copy built application from 'builder' stage
-COPY --from=builder /app/.next ./.next
+# Copy built application from the builder stage
 COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy the prisma directory which now includes the seeded dev.db and the schema
-COPY --from=builder /app/prisma ./prisma
+# Copy Prisma schema and client for runtime use
+# The seeded dev.db will be part of this copy from prisma_generate stage
+COPY --from=prisma_generate --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=prisma_generate --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+
+
+# Set user to non-root
+USER nextjs
 
 EXPOSE 3000
+ENV PORT 3000
 
-# Set the default command to start the Next.js application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
