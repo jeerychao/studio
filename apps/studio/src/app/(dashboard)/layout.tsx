@@ -52,6 +52,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  console.log("[DashboardLayout] Update to try resolving ChunkLoadError - Checkpoint Alpha"); // New diagnostic log
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
