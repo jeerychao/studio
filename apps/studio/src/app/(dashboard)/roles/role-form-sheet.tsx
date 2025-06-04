@@ -83,7 +83,6 @@ interface RoleFormSheetProps {
 export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: RoleFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
-  const isEditing = true;
 
   const [allPermissions, setAllPermissions] = React.useState<Permission[]>([]);
   const [isLoadingPermissions, setIsLoadingPermissions] = React.useState(false);
@@ -277,6 +276,4 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
     </Sheet>
   );
 }
-    
-
     

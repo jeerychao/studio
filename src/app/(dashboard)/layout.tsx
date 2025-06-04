@@ -51,8 +51,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  console.log("[DashboardLayout] Rendering - Start");
-  console.log("Test rebuild");
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
