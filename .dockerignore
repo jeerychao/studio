@@ -1,33 +1,37 @@
 
-# Node
-node_modules
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.env
-*.env.local
-*.env.*.local
-
-# Next.js
-.next
-out
-
 # Docker
 Dockerfile
-docker-compose.yml
 .dockerignore
 
 # Git
 .git
 .gitignore
 
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Next.js
+.next
+out
+
+# Prisma (schema is needed, local DB state typically not for image build)
+# prisma/dev.db
+# prisma/dev.db-journal
+
+# Env files (managed by Docker Compose or other means for runtime)
+# .env
+# .env*.local
+# production.env # If you want to ensure it's NEVER copied, but env_file in compose is fine
+
 # VSCode
 .vscode
 
-# Turborepo
-.turbo
+# TypeScript cache
+*.tsbuildinfo
 
-# Other
+# OS specific
 .DS_Store
-*.pem
-*.key
+Thumbs.db

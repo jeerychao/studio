@@ -1,68 +1,61 @@
 
-# Install dependencies only when needed
+# Dockerfile
+
+# ---- Base Node ----
 FROM node:20-alpine AS base
 WORKDIR /app
+RUN apk add --no-cache openssl dumb-init python3 make g++
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
-# Install Prisma globally in this stage for db push/seed
-RUN npm install -g prisma typescript ts-node
+# ---- Dependencies ----
+FROM base AS deps
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile --prod=false
 
-# Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
-
-# This stage is for generating Prisma Client
-FROM base AS prisma_generate
-WORKDIR /app
-COPY --from=base /app/node_modules /app/node_modules
-COPY prisma ./prisma
-# Ensure dev.db is created by db push if it doesn't exist, then seed it.
-# This creates the DB structure based on schema.prisma.
-RUN npx prisma db push --skip-generate
-# This populates the DB with seed data.
-RUN npm run prisma:db:seed
-
-
-# Rebuild the source code only when needed
+# ---- Builder ----
 FROM base AS builder
-WORKDIR /app
-COPY --from=prisma_generate /app/node_modules /app/node_modules
-COPY --from=prisma_generate /app/prisma /app/prisma
+COPY --from=deps /app/node_modules /app/node_modules
 COPY . .
-# This will ensure that environment variables from production.env are available at build time if needed by next build
-# However, for runtime, docker-compose will provide them.
-# If you have build-time specific env vars, ensure they are in production.env or set via --build-arg
+# Prisma Client Generation
+# Ensure DATABASE_URL is set for Prisma generate, even if it's just for the schema path
+ENV DATABASE_URL="file:/app/prisma/dev.db"
+RUN npx prisma generate
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM node:20-alpine AS runner
+# ---- Prisma DB Push and Seed ----
+# This stage specifically handles database creation and seeding.
+# It uses the schema from the builder stage and dependencies.
+FROM base AS prisma_generate
+COPY --from=deps /app/node_modules /app/node_modules
+COPY prisma ./prisma
+# Set DATABASE_URL for Prisma db push and seed operations
+ENV DATABASE_URL="file:./dev.db"
+WORKDIR /app/prisma
+RUN npx prisma db push --skip-generate
+# Ensure ts-node and Prisma client are available for seeding
+COPY package.json tsconfig.json ./../
+RUN cd .. && npm install --prod=false ts-node typescript @prisma/client dotenv
 WORKDIR /app
+RUN npm run prisma:db:seed
 
-ENV NODE_ENV production
-
-# Create a non-root user and group
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy built application from the builder stage
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copy Prisma schema and client for runtime use
-# The seeded dev.db will be part of this copy from prisma_generate stage
-COPY --from=prisma_generate --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=prisma_generate --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-
-
-# Set user to non-root
+# ---- Runner ----
+FROM base AS runner
 USER nextjs
+ENV NODE_ENV production
+# Set DATABASE_URL for the running application
+ENV DATABASE_URL="file:/app/prisma/dev.db"
 
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/package.json .
+# Copy the seeded database from the prisma_generate stage
+COPY --from=prisma_generate --chown=nextjs:nodejs /app/prisma ./prisma
+
+# Expose the port the app runs on
 EXPOSE 3000
-ENV PORT 3000
 
-CMD ["node", "server.js"]
+# Start the app
+CMD ["dumb-init", "npm", "start"]
