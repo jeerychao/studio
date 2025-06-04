@@ -70,7 +70,7 @@ COPY tsconfig.json ./tsconfig.json
 COPY package.json ./package.json
 COPY package-lock.json ./package-lock.json
 # Make sure your seed script path is correct
-COPY prisma/seed.ts ./prisma/seed.ts
+# COPY prisma/seed.ts ./prisma/seed.ts # This line is slightly redundant if 'COPY prisma ./prisma' is already done, but harmless.
 
 # Run Prisma DB push (creates DB file if not exists and applies schema)
 # --skip-generate is used because Prisma Client should already be generated
