@@ -96,8 +96,8 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     defaultValues: {
       username: "",
       email: "",
-      roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "", 
-      avatar: "",
+      roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "",
+      avatar: "/images/avatars/default_avatar.png", // Default local avatar
       password: "",
       confirmPassword: "",
     },
@@ -110,7 +110,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
         email: user?.email || "",
         roleId: user?.roleId || (roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || ""),
         avatar: user?.avatar || "/images/avatars/default_avatar.png", // Default local avatar
-        password: "", 
+        password: "",
         confirmPassword: "",
         });
     }
@@ -130,7 +130,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
       avatar: data.avatar || "/images/avatars/default_avatar.png", // Use provided or default
     };
 
-    if (data.password) { 
+    if (data.password) {
       payload.password = data.password;
     }
 
@@ -239,7 +239,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
                 <FormItem>
                   <FormLabel>头像 URL (可选)</FormLabel>
                   <FormControl>
-                    <Input placeholder="/images/avatars/custom.png" {...field} />
+                    <Input placeholder="/images/avatars/default_avatar.png" {...field} />
                   </FormControl>
                   <FormDescription>
                     输入本地图片路径 (例如 /images/avatars/user.png) 或留空使用默认头像。
@@ -295,5 +295,3 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     </Sheet>
   );
 }
-
-      

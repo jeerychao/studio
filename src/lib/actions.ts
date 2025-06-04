@@ -47,7 +47,7 @@ interface LoginPayload {
 }
 interface LoginResponse {
   success: boolean;
-  user?: AppUser & { permissions: AppPermissionIdType[] }; // Ensure permissions are included
+  user?: AppUser & { permissions: AppPermissionIdType[] };
   message?: string;
 }
 
@@ -75,16 +75,16 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     where: { id: userFromDb.id },
     data: { lastLogin: new Date() },
   });
-  
+
   const appUser: AppUser & { permissions: AppPermissionIdType[] } = {
     id: userFromDb.id,
     username: userFromDb.username,
     email: userFromDb.email,
     roleId: userFromDb.roleId,
     roleName: userFromDb.role.name as AppRoleNameType,
-    avatar: userFromDb.avatar || undefined,
+    avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', // Fallback to local default
     permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
-    lastLogin: userFromDb.lastLogin?.toISOString() // Include lastLogin from the updated record
+    lastLogin: userFromDb.lastLogin?.toISOString()
   };
 
   await prisma.auditLog.create({
@@ -117,7 +117,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<(Ap
     email: userFromDb.email,
     roleId: userFromDb.roleId,
     roleName: userFromDb.role.name as AppRoleNameType,
-    avatar: userFromDb.avatar || undefined,
+    avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', // Fallback to local default
     permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
     lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
   };
@@ -129,20 +129,20 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
 
-  const whereClause = {}; 
+  const whereClause = {};
 
   const totalCount = await prisma.subnet.count({ where: whereClause });
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const subnetsFromDb = params?.page && params?.pageSize ? 
+  const subnetsFromDb = params?.page && params?.pageSize ?
     await prisma.subnet.findMany({
         where: whereClause,
-        include: { vlan: true },
+        include: { vlan: { select: { vlanNumber: true } } },
         orderBy: { cidr: 'asc' },
         skip,
         take: pageSize,
-    }) : 
-    await prisma.subnet.findMany({ 
+    }) :
+    await prisma.subnet.findMany({
         where: whereClause,
         include: { vlan: { select: { vlanNumber: true } } },
         orderBy: { cidr: 'asc' },
@@ -181,12 +181,12 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       utilization: utilization,
     };
   }));
-  return { 
-    data: appSubnets, 
-    totalCount: params?.page && params?.pageSize ? totalCount : appSubnets.length, 
-    currentPage: page, 
+  return {
+    data: appSubnets,
+    totalCount: params?.page && params?.pageSize ? totalCount : appSubnets.length,
+    currentPage: page,
     totalPages: params?.page && params?.pageSize ? totalPages : 1,
-    pageSize 
+    pageSize
   };
 }
 
@@ -337,14 +337,14 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
-  
+
   const whereClause = {};
 
   const totalCount = await prisma.vLAN.count({ where: whereClause });
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const vlansFromDb = params?.page && params?.pageSize ?
-    await prisma.vLAN.findMany({ 
+    await prisma.vLAN.findMany({
         where: whereClause,
         orderBy: { vlanNumber: 'asc' },
         skip,
@@ -354,7 +354,7 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
         where: whereClause,
         orderBy: { vlanNumber: 'asc' }
     });
-    
+
   const appVlans: AppVLAN[] = await Promise.all(vlansFromDb.map(async (vlan) => {
     const subnetCount = await prisma.subnet.count({ where: { vlanId: vlan.id } });
     const directIpCount = await prisma.iPAddress.count({
@@ -372,10 +372,10 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
       subnetCount: subnetCount + directIpCount,
     };
   }));
-  return { 
-    data: appVlans, 
-    totalCount: params?.page && params?.pageSize ? totalCount : appVlans.length, 
-    currentPage: page, 
+  return {
+    data: appVlans,
+    totalCount: params?.page && params?.pageSize ? totalCount : appVlans.length,
+    currentPage: page,
     totalPages: params?.page && params?.pageSize ? totalPages : 1,
     pageSize
   };
@@ -383,7 +383,7 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
 
 export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">): Promise<AppVLAN> {
   const auditUser = await getAuditUserInfo();
-  
+
   if (isNaN(data.vlanNumber) || data.vlanNumber < 1 || data.vlanNumber > 4094) {
     throw new Error("VLAN 号码必须是 1 到 4094 之间的整数。");
   }
@@ -557,34 +557,34 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
 
   const totalCount = await prisma.iPAddress.count({ where: whereClause });
   const totalPages = Math.ceil(totalCount / pageSize);
-  
+
   const ipsFromDb = params?.page && params?.pageSize ?
     await prisma.iPAddress.findMany({
         where: whereClause,
-        include: { 
-            subnet: { 
-                select: { 
-                    cidr: true, 
+        include: {
+            subnet: {
+                select: {
+                    cidr: true,
                     networkAddress: true,
                     vlan: { select: { vlanNumber: true } }
-                } 
-            }, 
+                }
+            },
             vlan: { select: { vlanNumber: true }}
         },
-        orderBy: { ipAddress: 'asc' }, 
+        orderBy: { ipAddress: 'asc' },
         skip,
         take: pageSize,
     }) :
     await prisma.iPAddress.findMany({
         where: whereClause,
-        include: { 
-            subnet: { 
-                select: { 
-                    cidr: true, 
+        include: {
+            subnet: {
+                select: {
+                    cidr: true,
                     networkAddress: true,
                     vlan: { select: { vlanNumber: true } }
-                } 
-            }, 
+                }
+            },
             vlan: { select: { vlanNumber: true }}
         },
         orderBy: { ipAddress: 'asc' }
@@ -599,10 +599,10 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     lastSeen: ip.lastSeen?.toISOString() || undefined,
     status: ip.status as AppIPAddressStatusType,
   }));
-  return { 
-    data: appIps, 
-    totalCount: params?.page && params?.pageSize ? totalCount : appIps.length, 
-    currentPage: page, 
+  return {
+    data: appIps,
+    totalCount: params?.page && params?.pageSize ? totalCount : appIps.length,
+    currentPage: page,
     totalPages: params?.page && params?.pageSize ? totalPages : 1,
     pageSize
   };
@@ -630,8 +630,8 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">): Pro
     if (!isIpInCidrRange(data.ipAddress, parsedTargetSubnetCidr)) {
       throw new Error(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
     }
-    const existingIPInSubnet = await prisma.iPAddress.findFirst({ 
-        where: { ipAddress: data.ipAddress, subnetId: data.subnetId } 
+    const existingIPInSubnet = await prisma.iPAddress.findFirst({
+        where: { ipAddress: data.ipAddress, subnetId: data.subnetId }
     });
     if (existingIPInSubnet) throw new Error(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
   } else {
@@ -708,7 +708,7 @@ export async function batchCreateIPAddressesAction(payload: {
       throw new Error("为批量 IP 创建选择的 VLAN 不存在。");
     }
   }
-  
+
   let currentIpNum: number;
   let endIpNum: number;
   try {
@@ -730,8 +730,8 @@ export async function batchCreateIPAddressesAction(payload: {
         throw new Error(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`);
       }
 
-      const existingIPInSubnet = await prisma.iPAddress.findFirst({ 
-          where: { ipAddress: currentIpStr, subnetId: subnetId } 
+      const existingIPInSubnet = await prisma.iPAddress.findFirst({
+          where: { ipAddress: currentIpStr, subnetId: subnetId }
       });
       if (existingIPInSubnet) {
         throw new Error(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
@@ -805,7 +805,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
   if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = data.allocatedTo || null;
   if (data.hasOwnProperty('description')) updateData.description = data.description || null;
   if (data.hasOwnProperty('lastSeen')) updateData.lastSeen = data.lastSeen ? new Date(data.lastSeen) : null;
-  
+
   if (data.hasOwnProperty('vlanId')) {
     const vlanIdToSet = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
     if (vlanIdToSet && !(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
@@ -873,12 +873,12 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
-  
+
   const whereClause = {};
 
   const totalCount = await prisma.user.count({ where: whereClause });
   const totalPages = Math.ceil(totalCount / pageSize);
-  
+
   const usersFromDb = params?.page && params?.pageSize ?
     await prisma.user.findMany({
         where: whereClause,
@@ -892,28 +892,28 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
         include: { role: { include: { permissions: true } } },
         orderBy: { username: 'asc'}
     });
-    
+
   const appUsers = usersFromDb.map(user => ({
     id: user.id,
     username: user.username,
     email: user.email,
     roleId: user.roleId,
     roleName: user.role.name as AppRoleNameType,
-    avatar: user.avatar || undefined,
+    avatar: user.avatar || '/images/avatars/default_avatar.png', // Fallback
     lastLogin: user.lastLogin?.toISOString() || undefined,
     permissions: user.role.permissions.map(p => p.id as AppPermissionIdType),
   }));
 
-  return { 
-    data: appUsers, 
-    totalCount: params?.page && params?.pageSize ? totalCount : appUsers.length, 
-    currentPage: page, 
+  return {
+    data: appUsers,
+    totalCount: params?.page && params?.pageSize ? totalCount : appUsers.length,
+    currentPage: page,
     totalPages: params?.page && params?.pageSize ? totalPages : 1,
     pageSize
   };
 }
 
-export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string }): Promise<AppUser & { permissions: AppPermissionIdType[] }> {
+export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string, avatar?: string }): Promise<AppUser & { permissions: AppPermissionIdType[] }> {
   const auditUser = await getAuditUserInfo();
   if (await prisma.user.findUnique({ where: { email: data.email } })) throw new Error(`邮箱 ${data.email} 已存在。`);
   if (await prisma.user.findUnique({ where: { username: data.username } })) throw new Error(`用户名 ${data.username} 已存在。`);
@@ -925,9 +925,9 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
     data: {
       username: data.username,
       email: data.email,
-      password: data.password, 
+      password: data.password,
       roleId: data.roleId,
-      avatar: `/images/avatars/default_avatar.png`, // Default local avatar
+      avatar: data.avatar || '/images/avatars/default_avatar.png',
       lastLogin: new Date(),
     },
     include: { role: { include: { permissions: true } } }
@@ -937,17 +937,17 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   });
   revalidatePath("/users");
   revalidatePath("/roles");
-  return { 
-    ...newUser, 
-    roleName: newUser.role.name as AppRoleNameType, 
-    avatar: newUser.avatar || undefined, 
+  return {
+    ...newUser,
+    roleName: newUser.role.name as AppRoleNameType,
+    avatar: newUser.avatar || undefined,
     lastLogin: newUser.lastLogin?.toISOString(),
     permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType)
   };
 }
 
 export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<(AppUser & { permissions: AppPermissionIdType[] }) | null> {
-  const auditUser = await getAuditUserInfo(id);
+  const auditUser = await getAuditUserInfo(id); // Pass current user ID if self-update, else it defaults to admin/system
   const userToUpdate = await prisma.user.findUnique({ where: { id } });
   if (!userToUpdate) return null;
 
@@ -955,15 +955,14 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   if (data.hasOwnProperty('username') && data.username !== undefined) updateData.username = data.username;
   if (data.hasOwnProperty('email') && data.email !== undefined) updateData.email = data.email;
   if (data.hasOwnProperty('roleId') && data.roleId !== undefined) updateData.roleId = data.roleId;
-  
-  // Ensure avatar is only updated if explicitly provided, otherwise keep existing
+
   if (data.hasOwnProperty('avatar')) {
-    updateData.avatar = data.avatar || `/images/avatars/default_avatar.png`;
+    updateData.avatar = data.avatar || '/images/avatars/default_avatar.png';
   }
 
 
   if (data.password && data.password.length > 0) {
-    updateData.password = data.password; 
+    updateData.password = data.password;
   }
 
   if (data.email && data.email !== userToUpdate.email) {
@@ -989,10 +988,10 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
 
   revalidatePath("/users");
   revalidatePath("/roles");
-  return { 
-    ...updatedUser, 
-    roleName: updatedUser.role.name as AppRoleNameType, 
-    avatar: updatedUser.avatar || undefined, 
+  return {
+    ...updatedUser,
+    roleName: updatedUser.role.name as AppRoleNameType,
+    avatar: updatedUser.avatar || undefined,
     lastLogin: updatedUser.lastLogin?.toISOString(),
     permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType)
   };
@@ -1010,7 +1009,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
 
   await prisma.user.update({
     where: { id: userId },
-    data: { password: payload.newPassword }, 
+    data: { password: payload.newPassword },
   });
   await prisma.auditLog.create({
     data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了他们的密码。` }
@@ -1031,7 +1030,7 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
 
   await prisma.auditLog.updateMany({
     where: { userId: id },
-    data: { userId: null } 
+    data: { userId: null }
   });
 
   await prisma.user.delete({ where: { id } });
@@ -1072,7 +1071,7 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
         },
         orderBy: { name: 'asc'}
     });
-    
+
   const appRoles = rolesFromDb.map(role => ({
     id: role.id,
     name: role.name as AppRoleNameType,
@@ -1081,10 +1080,10 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
     permissions: role.permissions.map(p => p.id as AppPermissionIdType),
   }));
 
-  return { 
-    data: appRoles, 
-    totalCount: params?.page && params?.pageSize ? totalCount : appRoles.length, 
-    currentPage: page, 
+  return {
+    data: appRoles,
+    totalCount: params?.page && params?.pageSize ? totalCount : appRoles.length,
+    currentPage: page,
     totalPages: params?.page && params?.pageSize ? totalPages : 1,
     pageSize
   };
@@ -1140,7 +1139,7 @@ export async function deleteRoleAction(id: string): Promise<{ success: boolean; 
 
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> {
   const page = params?.page || 1;
-  const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+  const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; // Use a default if not provided
   const skip = (page - 1) * pageSize;
 
   const whereClause = {};
@@ -1155,7 +1154,7 @@ export async function getAuditLogsAction(params?: FetchParams): Promise<Paginate
         include: { user: { select: { username: true } } },
         skip,
         take: pageSize,
-    }) : 
+    }) :
     await prisma.auditLog.findMany({
         where: whereClause,
         orderBy: { timestamp: 'desc' },
@@ -1170,12 +1169,12 @@ export async function getAuditLogsAction(params?: FetchParams): Promise<Paginate
     timestamp: log.timestamp.toISOString(),
     details: log.details || undefined,
   }));
-  return { 
-    data: appLogs, 
-    totalCount: params?.page && params?.pageSize ? totalCount : appLogs.length, 
-    currentPage: page, 
+  return {
+    data: appLogs,
+    totalCount: params?.page && params?.pageSize ? totalCount : appLogs.length,
+    currentPage: page,
     totalPages: params?.page && params?.pageSize ? totalPages : 1,
-    pageSize 
+    pageSize
   };
 }
 

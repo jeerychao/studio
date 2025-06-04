@@ -1,5 +1,5 @@
 
-import prisma from '../src/lib/prisma'; 
+import prisma from '../src/lib/prisma';
 import {
   mockPermissions as seedPermissionsData,
   mockRoles as seedRolesData,
@@ -34,7 +34,7 @@ async function main() {
 
   console.log('Seeding Roles...');
   for (const roleData of seedRolesData) {
-    const prismaRoleName = roleData.name as string; 
+    const prismaRoleName = roleData.name as string;
     const mappedPermissions = roleData.permissions.map(appPermId => ({
       id: appPermId as string
     }));
@@ -67,7 +67,7 @@ async function main() {
       email: 'admin@example.com',
       roleId: SEED_ADMIN_ROLE_ID,
       password: 'admin',
-      avatarPath: '/images/avatars/admin_avatar.png',
+      avatarPath: '/images/avatars/admin_avatar.png', // Updated path
     },
     {
       id: 'user-operator-seed',
@@ -75,7 +75,7 @@ async function main() {
       email: 'operator@example.com',
       roleId: SEED_OPERATOR_ROLE_ID,
       password: 'operator',
-      avatarPath: '/images/avatars/operator_avatar.png',
+      avatarPath: '/images/avatars/operator_avatar.png', // Updated path
     },
     {
       id: 'user-viewer-seed',
@@ -83,7 +83,7 @@ async function main() {
       email: 'viewer@example.com',
       roleId: SEED_VIEWER_ROLE_ID,
       password: 'viewer',
-      avatarPath: '/images/avatars/viewer_avatar.png',
+      avatarPath: '/images/avatars/viewer_avatar.png', // Updated path
     },
   ];
 
@@ -174,7 +174,7 @@ async function main() {
     });
   }
   console.log('IP Addresses seeded.');
-  
+
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {
     const userToLink = initialUsersToSeed.find(u => u.username === logData.username);

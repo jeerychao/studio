@@ -35,7 +35,7 @@ function UsersView() {
   const [usersData, setUsersData] = React.useState<PaginatedResponse<User> | null>(null);
   const [roles, setRoles] = React.useState<Role[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  
+
   const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
   const searchParams = useSearchParams();
@@ -45,13 +45,13 @@ function UsersView() {
   const currentPage = Number(searchParams.get('page')) || 1;
 
   const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return; // currentUser can be null now
+    if (isAuthLoading || !currentUser) return;
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
         const [fetchedUsersResult, fetchedRolesResult] = await Promise.all([
           getUsersAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-          getRolesAction(), 
+          getRolesAction(),
         ]);
         setUsersData(fetchedUsersResult);
         setRoles(fetchedRolesResult.data);
@@ -68,11 +68,9 @@ function UsersView() {
   }, [currentUser, isAuthLoading, toast, currentPage]);
 
   React.useEffect(() => {
-    // Only fetch data if currentUser is resolved (not null and not loading)
     if (!isAuthLoading && currentUser) {
       fetchData();
     } else if (!isAuthLoading && !currentUser) {
-      // Handle case where user is definitively not authenticated (e.g. guest)
       setIsLoading(false);
       setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       setRoles([]);
@@ -83,12 +81,12 @@ function UsersView() {
     const role = roles.find(r => r.id === roleId);
     return role ? role.name : "无";
   };
-  
+
   const getInitials = (name: string = "") => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
   }
 
-  if (isAuthLoading || isLoading) { // isLoading check now covers the initial data fetch phase too
+  if (isAuthLoading || isLoading) {
      return <LoadingUsersPage />;
   }
 
