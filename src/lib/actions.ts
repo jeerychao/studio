@@ -131,6 +131,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
   
   if (!userFromDb.role || !userFromDb.role.name) {
       console.error(`User ${userId} is missing valid role or role name in database.`);
+      // If role or role name is missing, we cannot satisfy FetchedUserDetails which requires a valid roleName.
       return null; 
   }
 
@@ -139,7 +140,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
     username: userFromDb.username,
     email: userFromDb.email,
     roleId: userFromDb.roleId,
-    roleName: userFromDb.role.name as AppRoleNameType,
+    roleName: userFromDb.role.name as AppRoleNameType, // Safe due to check above
     avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
     permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
     lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
@@ -291,7 +292,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       if (!isIpInCidrRange(ip.ipAddress, newParsedCidrInfo)) {
         await prisma.iPAddress.update({
           where: { id: ip.id },
-          data: { status: "free", allocatedTo: null, subnetId: null, vlanId: null },
+          data: { status: "free", allocatedTo: null, subnetId: null, vlanId: null }, // Also clear vlanId if IP is disassociated
         });
         ipsToDisassociateDetails.push(`${ip.ipAddress} (原状态: ${ip.status})`);
       }
@@ -304,7 +305,21 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
   }
 
   if (data.hasOwnProperty('vlanId')) {
-    updateData.vlanId = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
+    const newVlanId = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
+    if (newVlanId) {
+      // Ensure the VLAN exists before trying to connect
+      const vlanExists = await prisma.vLAN.findUnique({ where: { id: newVlanId } });
+      if (!vlanExists) {
+        throw new Error(`VLAN with ID ${newVlanId} not found.`);
+      }
+      updateData.vlan = { connect: { id: newVlanId } };
+    } else {
+      // Only disconnect if there's currently a VLAN associated
+      if (subnetToUpdate.vlanId) {
+        updateData.vlan = { disconnect: true };
+      }
+      // If newVlanId is null and subnetToUpdate.vlanId was already null, Prisma will ignore {disconnect: true} or we can just skip setting updateData.vlan
+    }
   }
   if (data.hasOwnProperty('description')) {
     updateData.description = data.description || null;
@@ -919,6 +934,9 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   const appUsers: FetchedUserDetails[] = usersFromDb.map(user => {
     if (!user.role || !user.role.name) {
         console.error(`User ${user.id} has missing role or role name in getUsersAction. Assigning fallback.`);
+        // This scenario implies data inconsistency. Returning a "valid" FetchedUserDetails might hide it.
+        // Throwing an error or returning a more distinct "error" object could be alternatives.
+        // For now, adhering to FetchedUserDetails with fallbacks:
         return {
             id: user.id,
             username: user.username,
@@ -959,6 +977,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   
   const roleExists = await prisma.role.findUnique({ where: { id: data.roleId }, include: {permissions: true} });
   if (!roleExists || !roleExists.name) {
+      // This check is crucial for type safety of FetchedUserDetails
       throw new Error(`角色 ID ${data.roleId} 不存在或角色名称无效。`);
   }
 
@@ -971,7 +990,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
       avatar: data.avatar || '/images/avatars/default_avatar.png',
       lastLogin: new Date(),
     },
-    include: { role: { include: { permissions: true } } }
+    include: { role: { include: { permissions: true } } } // Role is included
   });
   await prisma.auditLog.create({
     data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` }
@@ -979,7 +998,8 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   revalidatePath("/users");
   revalidatePath("/roles");
   
-  if (!newUser.role || !newUser.role.name) { // Should not happen due to earlier check
+  // newUser.role and newUser.role.name should be present due to include and earlier check
+  if (!newUser.role || !newUser.role.name) { // Defensive check, should ideally not be hit
     throw new Error("新创建的用户角色信息不完整。");
   }
 
@@ -988,7 +1008,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
     username: newUser.username,
     email: newUser.email,
     roleId: newUser.roleId,
-    roleName: newUser.role.name as AppRoleNameType,
+    roleName: newUser.role.name as AppRoleNameType, // Safe due to checks
     avatar: newUser.avatar || '/images/avatars/default_avatar.png',
     lastLogin: newUser.lastLogin?.toISOString(),
     permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType)
@@ -1008,6 +1028,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   if (data.hasOwnProperty('roleId') && data.roleId !== undefined) {
     const roleExists = await prisma.role.findUnique({ where: { id: data.roleId } });
     if (!roleExists || !roleExists.name) {
+      // This check is crucial for type safety if roleId is being updated
       throw new Error(`角色 ID ${data.roleId} 不存在或角色名称无效。`);
     }
     updateData.roleId = data.roleId;
@@ -1031,9 +1052,10 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   const updatedUser = await prisma.user.update({
     where: { id },
     data: updateData,
-    include: { role: { include: {permissions: true} } }
+    include: { role: { include: {permissions: true} } } // Ensure role is included for FetchedUserDetails
   });
   
+  // updatedUser.role and updatedUser.role.name should be present
   if (!updatedUser.role || !updatedUser.role.name) {
       console.error(`User ${updatedUser.id} updated but resulting role or role name is missing.`);
       throw new Error("更新用户后，角色信息无效。");
@@ -1052,7 +1074,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     username: updatedUser.username,
     email: updatedUser.email,
     roleId: updatedUser.roleId,
-    roleName: updatedUser.role.name as AppRoleNameType,
+    roleName: updatedUser.role.name as AppRoleNameType, // Safe due to checks
     avatar: updatedUser.avatar || '/images/avatars/default_avatar.png',
     lastLogin: updatedUser.lastLogin?.toISOString(),
     permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType)
@@ -1084,7 +1106,7 @@ export async function deleteUserAction(id: string): Promise<{ success: boolean; 
   const auditUser = await getAuditUserInfo();
   const userToDelete = await prisma.user.findUnique({ where: { id }, include: {role: true} });
   if (!userToDelete) return { success: false, message: "未找到用户。" };
-  if (!userToDelete.role || !userToDelete.role.name) {
+  if (!userToDelete.role || !userToDelete.role.name) { // Check if role and role.name exist
     throw new Error("无法删除用户：关联的角色信息无效。");
   }
 
