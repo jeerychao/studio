@@ -34,14 +34,14 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, PlusCircle } from "lucide-react"; 
+import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN, IPAddressStatus } from "@/types";
 import { batchCreateIPAddressesAction, type BatchIpCreationResult } from "@/lib/actions";
-import { ipToNumber } from "@/lib/ip-utils"; 
+import { ipToNumber } from "@/lib/ip-utils";
 
 const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
-const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const; // MODIFIED LINE
+const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const;
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
   allocated: "已分配",
   free: "空闲",
@@ -53,14 +53,14 @@ const ipBatchFormSchema = z.object({
   startIp: z.string().ip({ version: "v4", message: "无效的起始 IPv4 地址" }),
   endIp: z.string().ip({ version: "v4", message: "无效的结束 IPv4 地址" }),
   subnetId: z.string().min(1, "子网是必需的"),
-  vlanId: z.string().optional(), 
+  vlanId: z.string().optional(),
   commonDescription: z.string().max(200, "描述过长").optional(),
   status: z.enum(ipAddressStatusOptions, { required_error: "状态是必需的"}),
 }).refine(data => {
     try {
         return ipToNumber(data.startIp) <= ipToNumber(data.endIp);
     } catch (e) {
-        return false; 
+        return false;
     }
 }, {
   message: "起始IP必须小于或等于结束IP。",
@@ -72,7 +72,7 @@ type IpBatchFormValues = z.infer<typeof ipBatchFormSchema>;
 interface IPBatchFormSheetProps {
   subnets: Subnet[];
   vlans: VLAN[];
-  children?: React.ReactNode; 
+  children?: React.ReactNode;
   onIpAddressChange?: () => void;
 }
 
@@ -92,7 +92,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
       status: "free",
     },
   });
-  
+
   React.useEffect(() => {
     if (isOpen) {
         form.reset({
@@ -121,10 +121,10 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
         description: data.commonDescription || undefined,
         status: data.status,
     };
-    
+
     const startNum = ipToNumber(data.startIp);
     const endNum = ipToNumber(data.endIp);
-    if (endNum - startNum + 1 > 256) { 
+    if (endNum - startNum + 1 > 256) {
         toast({ title: "范围过大", description: "请分批创建IP地址 (例如，每次最多256个)。", variant: "destructive" });
         return;
     }
@@ -147,9 +147,9 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
           variant: "destructive",
         });
       }
-      
+
       if (result.failureDetails.length === 0 && result.successCount > 0) {
-         form.reset(); 
+         form.reset();
       }
 
     } catch (error) {
@@ -161,7 +161,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
       setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp, error: (error as Error).message }] });
     }
   }
-  
+
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -188,8 +188,8 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
-          <form 
-            onSubmit={form.handleSubmit(onSubmit)} 
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
             className="flex flex-col flex-grow overflow-hidden" /* Form takes remaining space and allows internal scrolling */
           >
             <ScrollArea className="flex-1 px-6 pt-4"> {/* Scrollable area for form fields and results */}
@@ -251,7 +251,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                 <FormField
                   control={form.control}
                   name="vlanId"
-                  render={({ field }) => ( 
+                  render={({ field }) => (
                     <FormItem>
                       <FormLabel>VLAN (可选)</FormLabel>
                       <Select
@@ -314,7 +314,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                     </FormItem>
                   )}
                 />
-                
+
                 {submissionResult && (
                   <div className="mt-4 space-y-3">
                     <h3 className="font-semibold">处理结果:</h3>
