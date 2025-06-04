@@ -60,7 +60,7 @@ interface LoginPayload {
 }
 interface LoginResponse {
   success: boolean;
-  user?: FetchedUserDetails; // Use FetchedUserDetails for consistency
+  user?: FetchedUserDetails; 
   message?: string;
 }
 
@@ -312,7 +312,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       }
       updateData.vlan = { connect: { id: newVlanId } };
     } else {
-      if (subnetToUpdate.vlanId) {
+      if (subnetToUpdate.vlanId) { // Only disconnect if there was a VLAN associated
         updateData.vlan = { disconnect: true };
       }
     }
@@ -349,7 +349,7 @@ export async function deleteSubnetAction(id: string): Promise<{ success: boolean
   for (const ip of ipsInSubnet) {
     await prisma.iPAddress.update({
       where: { id: ip.id },
-      data: { subnetId: null, status: "free", allocatedTo: null, vlanId: null },
+      data: { subnetId: null, status: "free", allocatedTo: null, vlanId: null }, // Also nullify vlanId if it was inherited from subnet
     });
     await prisma.auditLog.create({
       data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_ip_on_subnet_delete', details: `IP ${ip.ipAddress} 已从子网 ${subnetToDelete.cidr} 解除关联` }
@@ -849,7 +849,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
       }
       updateData.vlan = { connect: { id: vlanIdToSet } };
     } else {
-      if (ipToUpdate.vlanId) {
+      if (ipToUpdate.vlanId) { // Only disconnect if there was a VLAN associated
          updateData.vlan = { disconnect: true };
       }
     }
@@ -871,6 +871,9 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
         const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
         if (conflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`);
     }
+    if (newSubnetId !== ipToUpdate.subnetId) {
+      updateData.subnet = { connect: { id: newSubnetId } };
+    }
   } else {
      if (finalStatus === 'allocated' || finalStatus === 'reserved') {
         throw new Error("对于“已分配”或“预留”的 IP，除非设置为空闲，否则子网 ID 是必需的。");
@@ -879,8 +882,10 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
         const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
         if (globallyConflictingIP) throw new Error(`IP ${finalIpAddress} 已存在于全局池中。`);
     }
+    if (ipToUpdate.subnetId && newSubnetId === null) { // Disconnecting from a subnet
+        updateData.subnet = { disconnect: true };
+    }
   }
-  updateData.subnetId = newSubnetId;
 
 
   const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
