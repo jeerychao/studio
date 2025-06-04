@@ -2,13 +2,21 @@
 "use client";
 
 import type { User, RoleName, PermissionId } from '@/types';
-import { PERMISSIONS } from '@/types'; // Import PERMISSIONS for guest user
+import { PERMISSIONS } from '@/types';
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID } from '../lib/data';
-import { fetchCurrentUserDetailsAction } from '@/lib/actions';
+import { fetchCurrentUserDetailsAction, type FetchedUserDetails } from '@/lib/actions'; // Import FetchedUserDetails
 import React from 'react';
 
-export interface CurrentUserContextValue extends User {
-  roleName: RoleName;
+// Redefined CurrentUserContextValue to be explicit and not extend User directly
+// to avoid confusion with User's optional roleName.
+export interface CurrentUserContextValue {
+  id: string;
+  username: string;
+  email: string;
+  roleId: string;
+  avatar?: string;
+  lastLogin?: string | undefined;
+  roleName: RoleName; // Explicitly non-optional
   permissions: PermissionId[];
 }
 
@@ -45,10 +53,9 @@ const createGuestUser = async (): Promise<CurrentUserContextValue> => {
 export function useCurrentUser(): UseCurrentUserReturn {
   const [currentUser, setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
-  const [isInitialized, setIsInitialized] = React.useState(false); // Initialization flag
+  const [isInitialized, setIsInitialized] = React.useState(false);
 
   React.useEffect(() => {
-    // Prevent re-running if already initialized, unless a specific external trigger is added later.
     if (isInitialized) {
       return;
     }
@@ -59,9 +66,11 @@ export function useCurrentUser(): UseCurrentUserReturn {
         const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
         if (storedUserId) {
           console.log(`useCurrentUser: Found storedUserId: ${storedUserId}. Fetching details...`);
+          // userDetails will be of type FetchedUserDetails | null
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
-          if (userDetails) {
+          if (userDetails) { // userDetails is now FetchedUserDetails (which has non-optional roleName)
             console.log(`useCurrentUser: User details fetched for ${storedUserId}:`, userDetails.username);
+            // This assignment should now be type-compatible
             setCurrentUser(userDetails);
           } else {
             console.warn(`useCurrentUser: User details not found for stored ID ${storedUserId}. Clearing and using guest.`);
@@ -77,19 +86,17 @@ export function useCurrentUser(): UseCurrentUserReturn {
         setCurrentUser(await createGuestUser());
       } finally {
         setIsAuthLoading(false);
-        setIsInitialized(true); // Set initialized to true after the first run
+        setIsInitialized(true);
         console.log("useCurrentUser: Initialization complete.");
       }
     };
 
     initializeUser();
 
-    // Developer helper functions (should ideally not be part of the core hook in production)
-    // These now rely on page reload to re-trigger the hook from scratch.
     (window as any).setCurrentMockUser = (userId: string) => {
       console.log(`Setting current user to ID: ${userId} (will fetch from DB and reload)`);
       localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-      setIsInitialized(false); // Allow re-initialization on next load
+      setIsInitialized(false);
       window.location.reload();
     };
 
@@ -110,17 +117,11 @@ export function useCurrentUser(): UseCurrentUserReturn {
         }
         console.log(`Cycling mock user to ID: ${nextUserId} (will fetch from DB and reload)`);
         localStorage.setItem(MOCK_USER_STORAGE_KEY, nextUserId);
-        setIsInitialized(false); // Allow re-initialization on next load
+        setIsInitialized(false);
         window.location.reload();
     };
-
-  // The empty dependency array [] means this useEffect runs once after initial render.
-  // The isInitialized flag inside ensures the core logic only runs once.
   }, [isInitialized]);
 
-
-  // Return loading state based on whether initialization has completed
-  // and the auth loading flag.
   return {
     currentUser: isInitialized ? currentUser : null,
     isAuthLoading: !isInitialized || isAuthLoading

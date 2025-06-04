@@ -41,13 +41,26 @@ export interface FetchParams {
   status?: AppIPAddressStatusType | 'all';
 }
 
+// Define a specific interface for the return type of user detail fetching actions
+// to ensure roleName is not optional and aligns with CurrentUserContextValue.
+export interface FetchedUserDetails {
+  id: string;
+  username: string;
+  email: string;
+  roleId: string;
+  roleName: AppRoleNameType; // Non-optional
+  avatar?: string;
+  permissions: AppPermissionIdType[];
+  lastLogin?: string | undefined;
+}
+
 interface LoginPayload {
   email: string;
   password?: string;
 }
 interface LoginResponse {
   success: boolean;
-  user?: AppUser & { permissions: AppPermissionIdType[], roleName: AppRoleNameType };
+  user?: FetchedUserDetails; // Use FetchedUserDetails for consistency
   message?: string;
 }
 
@@ -71,7 +84,6 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     return { success: false, message: "邮箱或密码无效。" };
   }
 
-  // Ensure role and role.name exist
   if (!userFromDb.role || !userFromDb.role.name) {
       console.error(`User ${userFromDb.id} is missing role or role name in database during login.`);
       return { success: false, message: "用户角色信息不完整。" };
@@ -82,7 +94,7 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     data: { lastLogin: new Date() },
   });
 
-  const loggedInUser: AppUser & { permissions: AppPermissionIdType[], roleName: AppRoleNameType } = {
+  const loggedInUser: FetchedUserDetails = {
     id: userFromDb.id,
     username: userFromDb.username,
     email: userFromDb.email,
@@ -105,19 +117,6 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
   return { success: true, user: loggedInUser };
 }
 
-// Define a specific interface for the return type of fetchCurrentUserDetailsAction
-// to ensure roleName is not optional.
-export interface FetchedUserDetails {
-  id: string;
-  username: string;
-  email: string;
-  roleId: string;
-  roleName: AppRoleNameType; // Non-optional
-  avatar?: string;
-  permissions: AppPermissionIdType[];
-  lastLogin?: string;
-}
-
 export async function fetchCurrentUserDetailsAction(userId: string): Promise<FetchedUserDetails | null> {
   if (!userId) return null;
 
@@ -130,9 +129,8 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
     return null;
   }
   
-  // Ensure role and role.name exist, critical for AppRoleNameType
   if (!userFromDb.role || !userFromDb.role.name) {
-      console.error(`User ${userId} is missing role or role name in database.`);
+      console.error(`User ${userId} is missing valid role or role name in database.`);
       return null; 
   }
 
@@ -141,7 +139,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
     username: userFromDb.username,
     email: userFromDb.email,
     roleId: userFromDb.roleId,
-    roleName: userFromDb.role.name as AppRoleNameType, // Explicitly assign and cast
+    roleName: userFromDb.role.name as AppRoleNameType,
     avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
     permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
     lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
@@ -894,7 +892,7 @@ export async function deleteIPAddressAction(id: string): Promise<{ success: bool
   return { success: true };
 }
 
-export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<AppUser & { permissions?: AppPermissionIdType[], roleName: AppRoleNameType }>> {
+export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
@@ -918,19 +916,18 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
         orderBy: { username: 'asc'}
     });
 
-  const appUsers = usersFromDb.map(user => {
+  const appUsers: FetchedUserDetails[] = usersFromDb.map(user => {
     if (!user.role || !user.role.name) {
-        console.error(`User ${user.id} has missing role or role name in getUsersAction.`);
-        // This fallback might hide underlying data issues. Consider if throwing an error or a more distinct fallback is better.
+        console.error(`User ${user.id} has missing role or role name in getUsersAction. Assigning fallback.`);
         return {
             id: user.id,
             username: user.username,
             email: user.email,
-            roleId: user.roleId,
-            roleName: 'Viewer' as AppRoleNameType, // Default fallback
+            roleId: user.roleId, // Keep original roleId
+            roleName: 'Viewer' as AppRoleNameType, // Fallback role name
             avatar: user.avatar || '/images/avatars/default_avatar.png',
             lastLogin: user.lastLogin?.toISOString() || undefined,
-            permissions: [],
+            permissions: [], // Fallback empty permissions
         };
     }
     return {
@@ -954,16 +951,16 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   };
 }
 
-export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string, avatar?: string }): Promise<AppUser & { permissions: AppPermissionIdType[], roleName: AppRoleNameType }> {
+// Ensure createUserAction returns FetchedUserDetails
+export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string, avatar?: string }): Promise<FetchedUserDetails> {
   const auditUser = await getAuditUserInfo();
   if (await prisma.user.findUnique({ where: { email: data.email } })) throw new Error(`邮箱 ${data.email} 已存在。`);
   if (await prisma.user.findUnique({ where: { username: data.username } })) throw new Error(`用户名 ${data.username} 已存在。`);
   
   const roleExists = await prisma.role.findUnique({ where: { id: data.roleId }, include: {permissions: true} });
-  if (!roleExists || !roleExists.name) { // Added check for roleExists.name
+  if (!roleExists || !roleExists.name) {
       throw new Error(`角色 ID ${data.roleId} 不存在或角色名称无效。`);
   }
-
 
   const newUser = await prisma.user.create({
     data: {
@@ -982,21 +979,24 @@ export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "la
   revalidatePath("/users");
   revalidatePath("/roles");
   
-  // Ensure newUser.role.name is present for the return type
-  if (!newUser.role || !newUser.role.name) {
+  if (!newUser.role || !newUser.role.name) { // Should not happen due to earlier check
     throw new Error("新创建的用户角色信息不完整。");
   }
 
   return {
-    ...newUser,
+    id: newUser.id,
+    username: newUser.username,
+    email: newUser.email,
+    roleId: newUser.roleId,
     roleName: newUser.role.name as AppRoleNameType,
-    avatar: newUser.avatar || undefined, // Keep consistent with AppUser
+    avatar: newUser.avatar || '/images/avatars/default_avatar.png',
     lastLogin: newUser.lastLogin?.toISOString(),
     permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType)
   };
 }
 
-export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<(AppUser & { permissions: AppPermissionIdType[], roleName: AppRoleNameType }) | null> {
+// Ensure updateUserAction returns FetchedUserDetails | null
+export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }): Promise<FetchedUserDetails | null> {
   const auditUser = await getAuditUserInfo(id);
   const userToUpdate = await prisma.user.findUnique({ where: { id } });
   if (!userToUpdate) return null;
@@ -1007,17 +1007,15 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   
   if (data.hasOwnProperty('roleId') && data.roleId !== undefined) {
     const roleExists = await prisma.role.findUnique({ where: { id: data.roleId } });
-    if (!roleExists || !roleExists.name) { // Added check for roleExists.name
+    if (!roleExists || !roleExists.name) {
       throw new Error(`角色 ID ${data.roleId} 不存在或角色名称无效。`);
     }
     updateData.roleId = data.roleId;
   }
 
-
   if (data.hasOwnProperty('avatar')) {
     updateData.avatar = data.avatar || '/images/avatars/default_avatar.png';
   }
-
 
   if (data.password && data.password.length > 0) {
     updateData.password = data.password;
@@ -1041,7 +1039,6 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
       throw new Error("更新用户后，角色信息无效。");
   }
 
-
   let auditDetails = `用户 ${updatedUser.username} 的详细信息已由 ${auditUser.username} 更新。`;
   if (data.password && data.password.length > 0) auditDetails = `用户 ${updatedUser.username} 的密码已由 ${auditUser.username} 更改。`;
   await prisma.auditLog.create({
@@ -1051,9 +1048,12 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
   revalidatePath("/users");
   revalidatePath("/roles");
   return {
-    ...updatedUser,
+    id: updatedUser.id,
+    username: updatedUser.username,
+    email: updatedUser.email,
+    roleId: updatedUser.roleId,
     roleName: updatedUser.role.name as AppRoleNameType,
-    avatar: updatedUser.avatar || undefined, // Keep consistent
+    avatar: updatedUser.avatar || '/images/avatars/default_avatar.png',
     lastLogin: updatedUser.lastLogin?.toISOString(),
     permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType)
   };
@@ -1189,7 +1189,6 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
       console.error(`Role ${updatedRole.id} updated but resulting name is missing.`);
       throw new Error("更新角色后，角色名称信息无效。");
   }
-
 
   let details = `更新了角色 ${updatedRole.name}。`;
   if (data.hasOwnProperty('description')) details += ` 描述 ${data.description ? '已更改' : '已清除/未更改'}。`;
