@@ -19,14 +19,12 @@ import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialo
 import { PaginationControls } from "@/components/pagination-controls";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 
 const ITEMS_PER_PAGE = 10; // 分页阈值调整为10
@@ -40,36 +38,6 @@ function LoadingAuditLogsPage() {
   );
 }
 
-interface DetailsDialogProps {
-  log: AuditLog;
-  triggerText: string | React.ReactNode;
-}
-
-function DetailsDialog({ log, triggerText }: DetailsDialogProps) {
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <span className="cursor-pointer hover:underline text-primary">{triggerText}</span>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>日志详情</AlertDialogTitle>
-          <AlertDialogDescription>
-            以下是关于操作 <Badge variant="secondary" className="capitalize">{log.action.replace(/_/g, " ")}</Badge> (用户: {log.username || "系统"}) 的完整详情。
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <div className="my-4 max-h-[60vh] overflow-y-auto rounded-md border bg-muted p-4 text-sm">
-          <pre className="whitespace-pre-wrap break-all">{log.details || "无可用详情。"}</pre>
-        </div>
-        <AlertDialogFooter>
-          <AlertDialogCancel>关闭</AlertDialogCancel>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
-
 function AuditLogsView() {
   const [logsData, setLogsData] = React.useState<PaginatedResponse<AuditLog> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -78,6 +46,9 @@ function AuditLogsView() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+
+  const [selectedLogForDetails, setSelectedLogForDetails] = React.useState<AuditLog | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = React.useState(false);
 
   const currentPage = Number(searchParams.get('page')) || 1;
 
@@ -105,6 +76,11 @@ function AuditLogsView() {
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
+  };
+
+  const handleRowClick = (log: AuditLog) => {
+    setSelectedLogForDetails(log);
+    setIsDetailsDialogOpen(true);
   };
 
   if (isAuthLoading || isLoading) {
@@ -147,13 +123,17 @@ function AuditLogsView() {
                     <TableHead>时间戳</TableHead>
                     <TableHead>用户</TableHead>
                     <TableHead>操作</TableHead>
-                    <TableHead>详情 (点击查看)</TableHead>
+                    <TableHead>详情 (点击行查看)</TableHead>
                     {canDeleteLog && <TableHead className="text-right">管理操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logsData.data.map((log) => (
-                    <TableRow key={log.id}>
+                    <TableRow 
+                      key={log.id} 
+                      onClick={() => handleRowClick(log)}
+                      className="cursor-pointer hover:bg-muted/50"
+                    >
                       <TableCell className="text-sm text-muted-foreground">{formatDate(log.timestamp)}</TableCell>
                       <TableCell className="font-medium">{log.username || "系统"}</TableCell>
                       <TableCell>
@@ -162,21 +142,10 @@ function AuditLogsView() {
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-xs truncate">
-                        {log.details && log.details.length > 50 ? ( // 截断长度可调整
-                          <DetailsDialog 
-                            log={log} 
-                            triggerText={
-                              <>
-                                {log.details.substring(0, 50)}... <Eye className="inline h-3 w-3 ml-1" />
-                              </>
-                            }
-                          />
-                        ) : (
-                          log.details || "无"
-                        )}
+                        {log.details || "无"}
                       </TableCell>
                       {canDeleteLog && (
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <DeleteConfirmationDialog
                             itemId={log.id}
                             itemName={`审计日志条目 (操作: ${log.action}, 用户: ${log.username || '系统'})`}
@@ -210,6 +179,25 @@ function AuditLogsView() {
           )}
         </CardContent>
       </Card>
+
+      {selectedLogForDetails && (
+        <AlertDialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>日志详情</AlertDialogTitle>
+              <AlertDialogDescription>
+                以下是关于操作 <Badge variant="secondary" className="capitalize">{selectedLogForDetails.action.replace(/_/g, " ")}</Badge> (用户: {selectedLogForDetails.username || "系统"}) 的完整详情。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="my-4 max-h-[60vh] overflow-y-auto rounded-md border bg-muted p-4 text-sm">
+              <pre className="whitespace-pre-wrap break-all">{selectedLogForDetails.details || "无可用详情。"}</pre>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setIsDetailsDialogOpen(false)}>关闭</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }
