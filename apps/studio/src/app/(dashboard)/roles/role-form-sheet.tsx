@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Role, Permission, PermissionId as AppPermissionId } from "@/types"; // Renamed to AppPermissionId to avoid conflict
+import type { Role, Permission, PermissionId as AppPermissionId } from "@/types"; // Renamed to AppPermissionId
 import { PERMISSIONS } from "@/types";
 import { mockPermissions } from "@/lib/data"; // For getting permission names
 import { updateRoleAction, getAllPermissionsAction } from "@/lib/actions";
@@ -55,8 +55,8 @@ const roleFormSchema = z.object({
   const selectedPermissions = (data.permissions || []) as AppPermissionId[];
 
   for (const group of permissionIntegrityRules) {
-    const hasActionPermission = group.actions.some(action => selectedPermissions.includes(action));
-    const hasViewPermission = selectedPermissions.includes(group.view);
+    const hasActionPermission = group.actions.some(action => selectedPermissions.includes(action as AppPermissionId));
+    const hasViewPermission = selectedPermissions.includes(group.view as AppPermissionId);
 
     if (hasActionPermission && !hasViewPermission) {
       const viewPermissionDetails = mockPermissions.find(p => p.id === group.view);
@@ -64,7 +64,7 @@ const roleFormSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: `若要授予 "${group.groupName}" 中的操作权限，您必须同时授予 ${viewPermissionName}。`,
-        path: ["permissions"], // This will show the error message associated with the permissions field
+        path: ["permissions"], 
       });
     }
   }
@@ -269,4 +269,3 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
     </Sheet>
   );
 }
-
