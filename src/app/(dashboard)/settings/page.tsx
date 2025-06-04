@@ -11,26 +11,25 @@ import { ThemeToggle } from "@/components/settings/theme-toggle";
 import { PasswordChangeForm } from "@/components/settings/password-change-form";
 import { Label } from "@/components/ui/label";
 
-
 export default function SettingsPage() {
   const { currentUser, isAuthLoading } = useCurrentUser();
   
   const texts = {
-    pageTitle: "System Settings",
-    pageDescription: "Manage system-wide configurations and personal preferences.",
-    themeTitle: "Theme Customization",
-    themeDescription: "Choose your preferred application theme.",
-    selectThemeLabel: "Select Theme",
-    profileTitle: "User Profile",
-    profileDescription: "Your current account details.",
-    usernameLabel: "Username:",
-    emailLabel: "Email:",
-    roleLabel: "Role:",
-    passwordTitle: "Change Password",
-    passwordDescription: "Update your account password.",
-    accessDeniedTitle: "Access Denied",
-    accessDeniedMessage: "You do not have permission to view this page.",
-    loadingMessage: "Loading settings...",
+    pageTitle: "系统设置",
+    pageDescription: "管理系统范围的配置和个人偏好。",
+    themeTitle: "主题定制",
+    themeDescription: "选择您偏好的应用主题。",
+    selectThemeLabel: "选择主题",
+    profileTitle: "用户资料",
+    profileDescription: "您当前的账户详情。",
+    usernameLabel: "用户名:",
+    emailLabel: "邮箱:",
+    roleLabel: "角色:",
+    passwordTitle: "更改密码",
+    passwordDescription: "更新您的账户密码。",
+    accessDeniedTitle: "访问被拒绝",
+    accessDeniedMessage: "您没有权限查看此页面。",
+    loadingMessage: "加载设置中...",
   };
 
   if (isAuthLoading) {
@@ -42,7 +41,6 @@ export default function SettingsPage() {
     );
   }
 
-  // Ensure currentUser is not null before checking permissions
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">

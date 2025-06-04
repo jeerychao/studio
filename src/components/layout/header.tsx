@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network } from "lucide-react"; // Removed Bell
+import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide } from "lucide-react"; // Renamed Settings to avoid conflict
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,7 +34,7 @@ export function Header() {
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="shrink-0 md:hidden">
               <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle navigation menu</span>
+              <span className="sr-only">切换导航菜单</span>
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex flex-col p-0 bg-sidebar text-sidebar-foreground">
@@ -54,27 +54,29 @@ export function Header() {
       ) : (
         <Button variant="outline" size="icon" className="shrink-0" onClick={toggleSidebar}>
             <Menu className="h-5 w-5" />
-            <span className="sr-only">Toggle sidebar</span>
+            <span className="sr-only">切换侧边栏</span>
         </Button>
       )}
 
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
-        {/* Notification Bell DropdownMenu Removed */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <UserCircle className="h-6 w-6" />
-              <span className="sr-only">Toggle user menu</span>
+              <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{isAuthLoading ? 'Loading...' : (currentUser?.username || 'My Account')}</DropdownMenuLabel>
+            <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/settings">Settings</Link>
+              <Link href="/settings" className="flex items-center">
+                <SettingsIconLucide className="mr-2 h-4 w-4" />
+                设置
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

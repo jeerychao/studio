@@ -17,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Network, LogIn } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
-// Import a new server action for login
 import { loginAction } from "@/lib/actions";
 
 
@@ -56,17 +55,17 @@ export default function LoginPage() {
 
       if (result.success && result.user) {
         if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
-          (window as any).setCurrentMockUser(result.user.id); // Simulate client-side session update
-          toast({ title: "Login Successful", description: `Welcome back, ${result.user.username}!` });
+          (window as any).setCurrentMockUser(result.user.id); 
+          toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
           router.push("/dashboard");
         } else {
-          toast({ title: "Login Error", description: "Client-side error: Unable to set user session.", variant: "destructive" });
+          toast({ title: "登录错误", description: "客户端错误: 无法设置用户会话。", variant: "destructive" });
         }
       } else {
-        toast({ title: "Login Failed", description: result.message || "Invalid email or password.", variant: "destructive" });
+        toast({ title: "登录失败", description: result.message || "邮箱或密码无效。", variant: "destructive" });
       }
     } catch (error) {
-      toast({ title: "Login Error", description: (error as Error).message || "An unexpected error occurred.", variant: "destructive" });
+      toast({ title: "登录错误", description: (error as Error).message || "发生意外错误。", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -76,7 +75,7 @@ export default function LoginPage() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
             <Network className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg">Initializing authentication...</p>
+            <p className="ml-4 text-lg">初始化认证...</p>
         </div>
     );
   }
@@ -85,7 +84,7 @@ export default function LoginPage() {
      return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
             <Network className="h-12 w-12 animate-spin text-primary" />
-            <p className="ml-4 text-lg">Redirecting to dashboard...</p>
+            <p className="ml-4 text-lg">正在重定向到仪表盘...</p>
         </div>
     );
   }
@@ -98,16 +97,16 @@ export default function LoginPage() {
             <div className="flex justify-center mb-4">
               <Network className="h-12 w-12 text-primary" />
             </div>
-            <CardTitle className="text-2xl">Welcome to IPAM Lite</CardTitle>
+            <CardTitle className="text-2xl">欢迎使用 IPAM Lite</CardTitle>
             <CardDescription>
-              Enter your credentials to access the IP Address Management system. <br/>
-              (e.g., admin/admin)
+              输入您的凭据以访问 IP 地址管理系统。 <br/>
+              (例如: admin/admin)
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">邮箱</Label>
                 <Input
                   id="email"
                   type="email"
@@ -119,7 +118,7 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">密码</Label>
                 <Input
                   id="password"
                   type="password"
@@ -133,9 +132,8 @@ export default function LoginPage() {
             </CardContent>
             <CardFooter className="flex flex-col">
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Signing In..." : <><LogIn className="mr-2 h-4 w-4" /> Sign In</>}
+                {isSubmitting ? "登录中..." : <><LogIn className="mr-2 h-4 w-4" /> 登录</>}
               </Button>
-              {/* Removed the "Other mock users" hint as it's no longer relevant */}
             </CardFooter>
           </form>
         </Card>
@@ -146,7 +144,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <Network className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">Loading...</p>
+        <p className="ml-4 text-lg">加载中...</p>
     </div>
   );
 }

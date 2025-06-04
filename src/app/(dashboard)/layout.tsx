@@ -20,7 +20,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { PERMISSIONS } from "@/types";
 import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
 
-
 function ConditionalSettingsButton() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
@@ -42,7 +41,7 @@ function ConditionalSettingsButton() {
     >
       <Link href="/settings">
         <Settings2 className="h-5 w-5" />
-        <span className="ml-3 group-data-[collapsible=icon]:hidden">Settings</span>
+        <span className="ml-3 group-data-[collapsible=icon]:hidden">设置</span>
       </Link>
     </Button>
   );
@@ -64,10 +63,9 @@ export default function DashboardLayout({
       return;
     }
 
-    // isAuthLoading is false here, currentUser is stable from useCurrentUser
     if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setAuthStatus('authenticated');
-    } else { // Should be guest if currentUser is null/undefined after loading OR explicitly guest
+    } else { 
       setAuthStatus('unauthenticated');
       if (pathname !== '/login') {
         router.replace('/login');
@@ -75,21 +73,19 @@ export default function DashboardLayout({
     }
   }, [currentUser, isAuthLoading, router, pathname]);
 
-  if (authStatus === 'loading' || isAuthLoading) { // Also check isAuthLoading directly
+  if (authStatus === 'loading' || isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Network className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">Loading application...</p>
+        <p className="ml-4 text-lg">加载应用中...</p>
       </div>
     );
   }
 
   if (authStatus === 'unauthenticated') {
-    // Redirect should have happened in useEffect.
     return null;
   }
 
-  // authStatus === 'authenticated'
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
@@ -112,7 +108,7 @@ export default function DashboardLayout({
           {children}
         </main>
         <footer className="py-4 px-4 md:px-6 lg:px-8 text-center text-xs text-muted-foreground border-t">
-          <p>© {new Date().getFullYear()} IPAM Lite. All rights reserved. Contact: leejie2017@gmail.com</p>
+          <p>© {new Date().getFullYear()} IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com</p>
         </footer>
         <Toaster />
       </SidebarInset>
