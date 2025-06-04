@@ -25,7 +25,7 @@ function LoadingVlansPage() {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <Cable className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">Loading VLANs...</h2>
+      <h2 className="text-2xl font-semibold mb-2">加载VLAN中...</h2>
     </div>
   );
 }
@@ -52,7 +52,7 @@ function VlansView() {
         setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       }
     } catch (error) {
-       toast({ title: "Error fetching VLANs", description: (error as Error).message, variant: "destructive" });
+       toast({ title: "获取VLAN错误", description: (error as Error).message, variant: "destructive" });
        setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
@@ -71,8 +71,8 @@ function VlansView() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Cable className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view VLANs.</p>
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看VLAN。</p>
       </div>
     );
   }
@@ -85,7 +85,7 @@ function VlansView() {
     <div className="flex gap-2">
       <VlanBatchFormSheet onVlanChange={fetchData}>
         <Button variant="outline">
-          <PlusCircle className="mr-2 h-4 w-4" /> Batch Add VLANs
+          <PlusCircle className="mr-2 h-4 w-4" /> 批量添加VLAN
         </Button>
       </VlanBatchFormSheet>
       <VlanFormSheet onVlanChange={fetchData} />
@@ -95,16 +95,16 @@ function VlansView() {
   return (
     <>
       <PageHeader
-        title="VLAN Management"
-        description="Organize and manage your Virtual LANs."
+        title="VLAN 管理"
+        description="组织和管理您的虚拟局域网。"
         icon={Cable}
         actionElement={actionButtons}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>VLAN List</CardTitle>
-          <CardDescription>All configured VLANs in your network. Displaying {vlansData?.data.length} of {vlansData?.totalCount} VLANs.</CardDescription>
+          <CardTitle>VLAN 列表</CardTitle>
+          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansData?.data.length} 条，共 {vlansData?.totalCount} 条VLAN。</CardDescription>
         </CardHeader>
         <CardContent>
           {vlansData && vlansData.data.length > 0 ? (
@@ -112,23 +112,23 @@ function VlansView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>VLAN Number</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Associated Resources</TableHead> 
-                    {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>VLAN 号码</TableHead>
+                    <TableHead>描述</TableHead>
+                    <TableHead>关联资源数</TableHead> 
+                    {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {vlansData.data.map((vlan) => (
                     <TableRow key={vlan.id}>
                       <TableCell className="font-medium">{vlan.vlanNumber}</TableCell>
-                      <TableCell className="max-w-md truncate">{vlan.description || "N/A"}</TableCell>
+                      <TableCell className="max-w-md truncate">{vlan.description || "无"}</TableCell>
                       <TableCell>{vlan.subnetCount ?? 0}</TableCell> 
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (
                               <VlanFormSheet vlan={vlan} onVlanChange={fetchData}>
-                              <Button variant="ghost" size="icon" aria-label="Edit VLAN">
+                              <Button variant="ghost" size="icon" aria-label="编辑VLAN">
                                   <Edit className="h-4 w-4" />
                               </Button>
                               </VlanFormSheet>
@@ -140,7 +140,7 @@ function VlansView() {
                               deleteAction={deleteVLANAction}
                               onDeleted={fetchData}
                               triggerButton={
-                                  <Button variant="ghost" size="icon" aria-label="Delete VLAN">
+                                  <Button variant="ghost" size="icon" aria-label="删除VLAN">
                                   <Trash2 className="h-4 w-4" />
                                   </Button>
                               }
@@ -163,7 +163,7 @@ function VlansView() {
             </>
           ) : (
              <div className="text-center py-10">
-              <p className="text-muted-foreground">No VLANs found.</p>
+              <p className="text-muted-foreground">未找到VLAN。</p>
               {canCreate && <VlanFormSheet onVlanChange={fetchData} buttonProps={{className: "mt-4"}} />}
             </div>
           )}

@@ -29,8 +29,8 @@ export default function ImportExportPage() {
         setImportFile(file);
       } else {
         toast({
-          title: "Invalid File Type",
-          description: "Please upload an Excel (.xlsx, .xls) or CSV (.csv) file.",
+          title: "文件类型无效",
+          description: "请上传 Excel (.xlsx, .xls) 或 CSV (.csv) 文件。",
           variant: "destructive",
         });
         setImportFile(null);
@@ -41,15 +41,15 @@ export default function ImportExportPage() {
 
   const handleImport = async () => {
     if (isAuthLoading || !currentUser) { // Wait for auth
-        toast({ title: "Authentication Error", description: "Please wait or try logging in again.", variant: "destructive" });
+        toast({ title: "认证错误", description: "请稍候或尝试重新登录。", variant: "destructive" });
         return;
     }
     if (!hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_IMPORT)) {
-        toast({ title: "Permission Denied", description: "You do not have permission to import data.", variant: "destructive" });
+        toast({ title: "权限被拒绝", description: "您没有权限导入数据。", variant: "destructive" });
         return;
     }
     if (!importFile) {
-      toast({ title: "No File Selected", description: "Please select a file to import.", variant: "destructive" });
+      toast({ title: "未选择文件", description: "请选择要导入的文件。", variant: "destructive" });
       return;
     }
     setIsImporting(true);
@@ -57,9 +57,9 @@ export default function ImportExportPage() {
     
     const validationSuccess = Math.random() > 0.3; // Simulate validation
     if (validationSuccess) {
-      toast({ title: "Import Successful", description: `${importFile.name} has been imported (simulated).` });
+      toast({ title: "导入成功", description: `${importFile.name} 已导入 (模拟)。` });
     } else {
-       toast({ title: "Import Failed", description: `Validation errors in ${importFile.name}. Columns A, C have issues (simulated).`, variant: "destructive" });
+       toast({ title: "导入失败", description: `${importFile.name} 中存在验证错误。列 A, C 有问题 (模拟)。`, variant: "destructive" });
     }
     setImportFile(null); 
     const fileInput = document.getElementById('import-file-input') as HTMLInputElement | null;
@@ -70,11 +70,11 @@ export default function ImportExportPage() {
 
   const handleExport = (dataType: "subnets" | "vlans" | "ips") => {
     if (isAuthLoading || !currentUser) { // Wait for auth
-        toast({ title: "Authentication Error", description: "Please wait or try logging in again.", variant: "destructive" });
+        toast({ title: "认证错误", description: "请稍候或尝试重新登录。", variant: "destructive" });
         return;
     }
     if (!hasPermission(currentUser, PERMISSIONS.PERFORM_TOOLS_EXPORT)) {
-        toast({ title: "Permission Denied", description: "You do not have permission to export data.", variant: "destructive" });
+        toast({ title: "权限被拒绝", description: "您没有权限导出数据。", variant: "destructive" });
         return;
     }
     let dataToExport: any[] = [];
@@ -147,11 +147,11 @@ export default function ImportExportPage() {
     }
 
     if(dataToExport.length === 0 && dataType !== "vlans" && dataType !== "ips" && dataType !== "subnets" ) {
-        toast({ title: "Export Error", description: `Unknown data type: ${dataType}.`, variant: "destructive"});
+        toast({ title: "导出错误", description: `未知数据类型: ${dataType}。`, variant: "destructive"});
         return;
     }
     if (dataToExport.length === 0) {
-         toast({ title: "No Data", description: `No data available to export for ${dataType}.`});
+         toast({ title: "无数据", description: `没有可用于导出的 ${dataType} 数据。`});
         return;
     }
 
@@ -165,33 +165,33 @@ export default function ImportExportPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast({ title: "Export Started", description: `${filename} is being downloaded.` });
+      toast({ title: "导出已开始", description: `${filename} 正在下载。` });
     } else {
-        toast({ title: "Export Failed", description: "Browser does not support direct download.", variant: "destructive"});
+        toast({ title: "导出失败", description: "浏览器不支持直接下载。", variant: "destructive"});
     }
   };
   
   const subnetTemplate = `cidr,vlanNumber,description
-192.168.100.0/24,100,New Office Subnet
-10.20.0.0/16,,Server Farm DMZ (VLAN number is optional, matches existing VLAN)
-172.16.32.0/22,101,Development Lab`;
+192.168.100.0/24,100,新办公室子网
+10.20.0.0/16,,服务器DMZ区 (VLAN号可选, 匹配现有VLAN)
+172.16.32.0/22,101,开发实验室`;
 
   const vlanTemplate = `vlanNumber,description
-100,New Office VLAN (VLAN number must be unique)
-101,Development Lab VLAN
-200,Voice VLAN (Description is optional)`;
+100,新办公室VLAN (VLAN号必须唯一)
+101,开发实验室VLAN
+200,语音VLAN (描述可选)`;
 
   const ipAddressTemplate = `ipAddress,subnetCidr,vlanNumber,status,allocatedTo,description
-192.168.100.5,192.168.100.0/24,,allocated,Workstation-01,User PC (Subnet CIDR must exist)
-192.168.100.6,192.168.100.0/24,100,free,,(Optional VLAN number for direct assignment, must exist)
-10.20.0.10,,,reserved,,Future Web Server (IP in global pool if subnetCidr is empty)
-172.16.0.10,172.16.0.0/20,,allocated,Printer-Main, (Status is 'allocated', 'free', or 'reserved')`;
+192.168.100.5,192.168.100.0/24,,allocated,工作站-01,用户PC (子网CIDR必须存在)
+192.168.100.6,192.168.100.0/24,100,free,,(可选VLAN号用于直接分配, 必须存在)
+10.20.0.10,,,reserved,,未来Web服务器 (如果subnetCidr为空, IP在全局池中)
+172.16.0.10,172.16.0.0/20,,allocated,打印机-主楼, (状态为 'allocated', 'free', 或 'reserved')`;
 
   if (isAuthLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Wrench className="h-16 w-16 animate-spin text-primary mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Loading Tools...</h2>
+        <h2 className="text-2xl font-semibold mb-2">加载工具中...</h2>
       </div>
     );
   }
@@ -201,8 +201,8 @@ export default function ImportExportPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Wrench className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view Import/Export tools.</p>
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看导入/导出工具。</p>
       </div>
     );
   }
@@ -213,76 +213,76 @@ export default function ImportExportPage() {
   return (
     <>
       <PageHeader
-        title="Data Import & Export"
-        description="Bulk manage your IPAM data using Excel or CSV files."
+        title="数据导入与导出"
+        description="使用 Excel 或 CSV 文件批量管理您的 IPAM 数据。"
         icon={Wrench}
       />
       <div className="grid lg:grid-cols-2 gap-8">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><UploadCloud className="h-6 w-6 text-primary" /> Import Data</CardTitle>
-            <CardDescription>Upload an Excel or CSV file to import subnets, VLANs, or IP addresses. Ensure data matches the required format (see templates below).</CardDescription>
+            <CardTitle className="flex items-center gap-2"><UploadCloud className="h-6 w-6 text-primary" /> 导入数据</CardTitle>
+            <CardDescription>上传 Excel 或 CSV 文件以导入子网、VLAN 或 IP 地址。确保数据与所需格式匹配 (参见下面的模板)。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="import-file-input">Select File (.xlsx, .csv)</Label>
+              <Label htmlFor="import-file-input">选择文件 (.xlsx, .csv)</Label>
               <Input id="import-file-input" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" disabled={!canImport} />
             </div>
-            {importFile && <p className="text-sm text-muted-foreground">Selected file: {importFile.name}</p>}
+            {importFile && <p className="text-sm text-muted-foreground">已选文件: {importFile.name}</p>}
             <Button onClick={handleImport} disabled={!importFile || isImporting || !canImport} className="w-full">
-              {isImporting ? "Importing..." : <><FileUp className="mr-2 h-4 w-4" /> Process Import</>}
+              {isImporting ? "导入中..." : <><FileUp className="mr-2 h-4 w-4" /> 处理导入</>}
             </Button>
-            {!canImport && <p className="text-xs text-destructive">You do not have permission to import data.</p>}
+            {!canImport && <p className="text-xs text-destructive">您没有权限导入数据。</p>}
             <p className="text-xs text-muted-foreground">
-              Note: First row should be headers. All column data will be validated during actual import.
-              The current import functionality is a placeholder and performs simulated validation.
+              注意: 首行应为表头。所有列数据将在实际导入过程中进行验证。
+              当前的导入功能是占位符，并执行模拟验证。
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><DownloadCloud className="h-6 w-6 text-primary" /> Export Data</CardTitle>
-            <CardDescription>Download your current IPAM data as CSV files.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><DownloadCloud className="h-6 w-6 text-primary" /> 导出数据</CardTitle>
+            <CardDescription>将您当前的 IPAM 数据下载为 CSV 文件。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm">Select data type to export:</p>
+            <p className="text-sm">选择要导出的数据类型:</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button variant="outline" onClick={() => handleExport("subnets")} className="w-full" disabled={!canExport}>
-                <FileDown className="mr-2 h-4 w-4" /> Export Subnets
+                <FileDown className="mr-2 h-4 w-4" /> 导出子网
                 </Button>
                 <Button variant="outline" onClick={() => handleExport("vlans")} className="w-full" disabled={!canExport}>
-                <FileDown className="mr-2 h-4 w-4" /> Export VLANs
+                <FileDown className="mr-2 h-4 w-4" /> 导出VLAN
                 </Button>
                 <Button variant="outline" onClick={() => handleExport("ips")} className="w-full" disabled={!canExport}>
-                <FileDown className="mr-2 h-4 w-4" /> Export IP Addresses
+                <FileDown className="mr-2 h-4 w-4" /> 导出IP地址
                 </Button>
-                 <Button variant="outline" onClick={() => toast({title: "Coming Soon", description:"Full system backup export is planned."})} className="w-full sm:col-span-2" disabled={!canExport}>
-                <FileDown className="mr-2 h-4 w-4" /> Export All Data (Backup)
+                 <Button variant="outline" onClick={() => toast({title: "即将推出", description:"完整系统备份导出功能正在计划中。"})} className="w-full sm:col-span-2" disabled={!canExport}>
+                <FileDown className="mr-2 h-4 w-4" /> 导出所有数据 (备份)
                 </Button>
             </div>
-            {!canExport && <p className="text-xs text-destructive mt-2">You do not have permission to export data.</p>}
+            {!canExport && <p className="text-xs text-destructive mt-2">您没有权限导出数据。</p>}
           </CardContent>
         </Card>
       </div>
 
       <Card className="mt-8">
         <CardHeader>
-            <CardTitle className="flex items-center gap-2"><FileText className="h-6 w-6 text-primary"/>Import Templates (CSV Format)</CardTitle>
-            <CardDescription>Use these templates as a guide for your CSV import files. The first row must be the header row exactly as shown.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><FileText className="h-6 w-6 text-primary"/>导入模板 (CSV 格式)</CardTitle>
+            <CardDescription>使用这些模板作为您的 CSV 导入文件的指南。第一行必须是与所示完全相同的表头行。</CardDescription>
         </CardHeader>
         <CardContent>
             <Tabs defaultValue="subnets">
                 <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="subnets">Subnets</TabsTrigger>
-                    <TabsTrigger value="vlans">VLANs</TabsTrigger>
-                    <TabsTrigger value="ipAddresses">IP Addresses</TabsTrigger>
+                    <TabsTrigger value="subnets">子网</TabsTrigger>
+                    <TabsTrigger value="vlans">VLAN</TabsTrigger>
+                    <TabsTrigger value="ipAddresses">IP 地址</TabsTrigger>
                 </TabsList>
                 <TabsContent value="subnets">
                     <Card>
-                        <CardHeader><CardTitle className="text-lg">Subnet Import Template</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">子网导入模板</CardTitle></CardHeader>
                         <CardContent>
-                            <p className="text-sm text-muted-foreground mb-2">Required headers: <code>cidr,vlanNumber,description</code></p>
+                            <p className="text-sm text-muted-foreground mb-2">必需表头: <code>cidr,vlanNumber,description</code></p>
                             <ScrollArea className="h-auto max-h-60 w-full rounded-md border p-4 bg-muted/50">
                                 <pre className="text-sm">{subnetTemplate}</pre>
                             </ScrollArea>
@@ -291,9 +291,9 @@ export default function ImportExportPage() {
                 </TabsContent>
                 <TabsContent value="vlans">
                     <Card>
-                        <CardHeader><CardTitle className="text-lg">VLAN Import Template</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">VLAN导入模板</CardTitle></CardHeader>
                         <CardContent>
-                            <p className="text-sm text-muted-foreground mb-2">Required headers: <code>vlanNumber,description</code></p>
+                            <p className="text-sm text-muted-foreground mb-2">必需表头: <code>vlanNumber,description</code></p>
                              <ScrollArea className="h-auto max-h-60 w-full rounded-md border p-4 bg-muted/50">
                                 <pre className="text-sm">{vlanTemplate}</pre>
                             </ScrollArea>
@@ -302,9 +302,9 @@ export default function ImportExportPage() {
                 </TabsContent>
                 <TabsContent value="ipAddresses">
                     <Card>
-                        <CardHeader><CardTitle className="text-lg">IP Address Import Template</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">IP 地址导入模板</CardTitle></CardHeader>
                         <CardContent>
-                           <p className="text-sm text-muted-foreground mb-2">Required headers: <code>ipAddress,subnetCidr,vlanNumber,status,allocatedTo,description</code></p>
+                           <p className="text-sm text-muted-foreground mb-2">必需表头: <code>ipAddress,subnetCidr,vlanNumber,status,allocatedTo,description</code></p>
                            <ScrollArea className="h-auto max-h-60 w-full rounded-md border p-4 bg-muted/50">
                                 <pre className="text-sm">{ipAddressTemplate}</pre>
                             </ScrollArea>

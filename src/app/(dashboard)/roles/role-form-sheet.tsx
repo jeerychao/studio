@@ -36,7 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 const roleFormSchema = z.object({
   name: z.string(), 
-  description: z.string().max(200, "Description too long").optional(),
+  description: z.string().max(200, "描述过长").optional(),
   permissions: z.array(z.string()).optional(), 
 });
 
@@ -74,7 +74,7 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
           setAllPermissions(fetchedPermissions);
         })
         .catch((error) => {
-          toast({ title: "Error fetching permissions", description: (error as Error).message, variant: "destructive" });
+          toast({ title: "获取权限错误", description: (error as Error).message, variant: "destructive" });
         })
         .finally(() => {
           setIsLoadingPermissions(false);
@@ -99,13 +99,13 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
         description: data.description,
         permissions: data.permissions as PermissionId[],
       });
-      toast({ title: "Role Updated", description: `Permissions and description for role ${role.name} have been successfully updated.` });
+      toast({ title: "角色已更新", description: `角色 ${role.name} 的权限和描述已成功更新。` });
       setIsOpen(false);
       if (onRoleChange) onRoleChange();
     } catch (error) {
       toast({
-        title: "Error Updating Role",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        title: "更新角色错误",
+        description: error instanceof Error ? error.message : "发生意外错误。",
         variant: "destructive",
       });
     }
@@ -116,7 +116,7 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
   ) : (
     <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)} {...buttonProps}>
       <Edit className="h-4 w-4" />
-      <span className="sr-only">Edit Role</span>
+      <span className="sr-only">编辑角色</span>
     </Button>
   );
 
@@ -132,9 +132,9 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-lg w-full">
         <SheetHeader>
-          <SheetTitle>Edit Role: {role.name}</SheetTitle>
+          <SheetTitle>编辑角色：{role.name}</SheetTitle>
           <SheetDescription>
-            Update the description and assign permissions for the role: <span className="font-semibold">{role.name}</span>. Role name cannot be changed.
+            更新角色 <span className="font-semibold">{role.name}</span> 的描述和分配的权限。角色名称不能更改。
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -144,9 +144,9 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role Name (Read-only)</FormLabel>
+                  <FormLabel>角色名称 (只读)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Administrator" {...field} readOnly disabled className="cursor-not-allowed bg-muted/50" />
+                    <Input placeholder="例如 管理员" {...field} readOnly disabled className="cursor-not-allowed bg-muted/50" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -157,19 +157,19 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>描述 (可选)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief description of the role" {...field} />
+                    <Textarea placeholder="角色的简要描述" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormItem className="flex-grow flex flex-col min-h-0">
-                <FormLabel>Permissions</FormLabel>
-                <FormDescription>Select the permissions this role should have.</FormDescription>
+                <FormLabel>权限</FormLabel>
+                <FormDescription>选择此角色应具有的权限。</FormDescription>
                 {isLoadingPermissions && allPermissions.length === 0 ? (
-                    <p>Loading permissions...</p>
+                    <p>加载权限中...</p>
                 ) : (
                 <ScrollArea className="flex-grow border rounded-md p-4 mt-2">
                     <div className="space-y-4">
@@ -226,11 +226,11 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
             <SheetFooter className="mt-auto pt-6">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting || (isLoadingPermissions && allPermissions.length === 0) }>
-                {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
+                {form.formState.isSubmitting ? "保存中..." : "保存更改"}
               </Button>
             </SheetFooter>
           </form>

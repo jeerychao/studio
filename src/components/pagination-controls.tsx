@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -40,10 +41,10 @@ export function PaginationControls({
         disabled={currentPage <= 1}
       >
         <ChevronLeft className="mr-2 h-4 w-4" />
-        Previous
+        上一页
       </Button>
       <span className="text-sm text-muted-foreground">
-        Page {currentPage} of {totalPages}
+        第 {currentPage} 页 / 共 {totalPages} 页
       </span>
       <Button
         variant="outline"
@@ -51,7 +52,7 @@ export function PaginationControls({
         onClick={() => handlePageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
       >
-        Next
+        下一页
         <ChevronRight className="ml-2 h-4 w-4" />
       </Button>
     </div>

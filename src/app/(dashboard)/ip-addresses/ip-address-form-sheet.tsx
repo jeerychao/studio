@@ -39,14 +39,19 @@ import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types";
 import { createIPAddressAction, updateIPAddressAction } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
+const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
+  allocated: "已分配",
+  free: "空闲",
+  reserved: "预留",
+};
 
 const ipAddressFormSchema = z.object({
-  ipAddress: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
+  ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
   subnetId: z.string().optional(),
   vlanId: z.string().optional(), 
-  status: z.enum(["allocated", "free", "reserved"], { required_error: "Status is required"}),
-  allocatedTo: z.string().max(100, "Allocated To too long").optional(),
-  description: z.string().max(200, "Description too long").optional(),
+  status: z.enum(["allocated", "free", "reserved"], { required_error: "状态是必需的"}),
+  allocatedTo: z.string().max(100, "分配给对象过长").optional(),
+  description: z.string().max(200, "描述过长").optional(),
 });
 
 type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
@@ -125,7 +130,7 @@ export function IPAddressFormSheet({
       const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
 
       if (!effectiveSubnetId && (data.status !== 'free' || isAddingToSpecificSubnet)) {
-        toast({ title: "Subnet Required", description: "A subnet must be selected unless the IP is 'free' and not being added to a specific subnet context.", variant: "destructive"});
+        toast({ title: "需要子网", description: "除非IP为“空闲”且未添加到特定子网上下文中，否则必须选择子网。", variant: "destructive"});
         return;
       }
       
@@ -139,10 +144,10 @@ export function IPAddressFormSheet({
 
       if (isEditing && ipAddress) {
         await updateIPAddressAction(ipAddress.id, payload);
-        toast({ title: "IP Address Updated", description: `IP ${data.ipAddress} has been successfully updated.` });
+        toast({ title: "IP 地址已更新", description: `IP ${data.ipAddress} 已成功更新。` });
       } else {
         await createIPAddressAction(payload as Omit<IPAddress, "id">);
-        toast({ title: "IP Address Created", description: `IP ${data.ipAddress} has been successfully created.` });
+        toast({ title: "IP 地址已创建", description: `IP ${data.ipAddress} 已成功创建。` });
       }
       setIsOpen(false);
       if (onIpAddressChange) {
@@ -150,8 +155,8 @@ export function IPAddressFormSheet({
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        title: "错误",
+        description: error instanceof Error ? error.message : "发生意外错误。",
         variant: "destructive",
       });
     }
@@ -161,8 +166,8 @@ export function IPAddressFormSheet({
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
     <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
-      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Add IP Address</>}
-      {isEditing && <span className="sr-only">Edit IP Address</span>}
+      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加IP地址</>}
+      {isEditing && <span className="sr-only">编辑IP地址</span>}
     </Button>
   );
 
@@ -171,9 +176,9 @@ export function IPAddressFormSheet({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit IP Address" : "Add New IP Address"}</SheetTitle>
+          <SheetTitle>{isEditing ? "编辑IP地址" : "添加新IP地址"}</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the details of the existing IP address." : "Fill in the details for the new IP address."}
+            {isEditing ? "更新现有IP地址的详细信息。" : "填写新IP地址的详细信息。"}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -183,9 +188,9 @@ export function IPAddressFormSheet({
               name="ipAddress"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>IP Address</FormLabel>
+                  <FormLabel>IP 地址</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., 192.168.1.100" {...field} />
+                    <Input placeholder="例如 192.168.1.100" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -196,7 +201,7 @@ export function IPAddressFormSheet({
               name="subnetId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subnet</FormLabel>
+                  <FormLabel>子网</FormLabel>
                   <Select
                     onValueChange={(value) => field.onChange(value === NO_SUBNET_SELECTED_SENTINEL ? "" : value)}
                     value={field.value || NO_SUBNET_SELECTED_SENTINEL}
@@ -204,14 +209,14 @@ export function IPAddressFormSheet({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={subnets.length > 0 ? "Select a subnet" : "No subnets available"} />
+                        <SelectValue placeholder={subnets.length > 0 ? "选择一个子网" : "无可用子网"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                       <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>No Subnet / Global Pool</SelectItem>
+                       <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>无子网 / 全局池</SelectItem>
                       {subnets.map((subnet) => (
                         <SelectItem key={subnet.id} value={subnet.id}>
-                          {subnet.networkAddress} ({subnet.description || "No description"})
+                          {subnet.networkAddress} ({subnet.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -225,7 +230,7 @@ export function IPAddressFormSheet({
               name="vlanId"
               render={({ field }) => ( 
                 <FormItem>
-                  <FormLabel>VLAN (Optional)</FormLabel>
+                  <FormLabel>VLAN (可选)</FormLabel>
                   <Select
                     onValueChange={(value) => field.onChange(value === INHERIT_VLAN_SENTINEL ? "" : value)}
                     value={field.value === "" ? INHERIT_VLAN_SENTINEL : (field.value || INHERIT_VLAN_SENTINEL) }
@@ -233,14 +238,14 @@ export function IPAddressFormSheet({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={vlans.length > 0 ? "Select a VLAN or Inherit" : "No VLANs available"} />
+                        <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或继承" : "无可用VLAN"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={INHERIT_VLAN_SENTINEL}>Inherit from Subnet</SelectItem>
+                      <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承</SelectItem>
                       {vlans.map((vlan) => (
                         <SelectItem key={vlan.id} value={vlan.id}>
-                          VLAN {vlan.vlanNumber} ({vlan.description || "No description"})
+                          VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -254,17 +259,17 @@ export function IPAddressFormSheet({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel>状态</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
+                        <SelectValue placeholder="选择状态" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {ipAddressStatusOptions.map((status) => (
                         <SelectItem key={status} value={status} className="capitalize">
-                          {status}
+                          {ipAddressStatusLabels[status]}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -278,9 +283,9 @@ export function IPAddressFormSheet({
               name="allocatedTo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Allocated To (Optional)</FormLabel>
+                  <FormLabel>分配给 (可选)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe's Laptop, Server-01" {...field} />
+                    <Input placeholder="例如 张三的笔记本, 服务器-01" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -291,9 +296,9 @@ export function IPAddressFormSheet({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>描述 (可选)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief description or note" {...field} />
+                    <Textarea placeholder="简要描述或备注" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -302,11 +307,11 @@ export function IPAddressFormSheet({
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : (isEditing ? "Save Changes" : "Create IP Address")}
+                {form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建IP地址")}
               </Button>
             </SheetFooter>
           </form>

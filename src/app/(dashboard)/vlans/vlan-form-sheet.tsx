@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -31,8 +32,8 @@ import type { VLAN } from "@/types";
 import { createVLANAction, updateVLANAction } from "@/lib/actions";
 
 const vlanFormSchema = z.object({
-  vlanNumber: z.coerce.number().int().min(1, "VLAN number must be at least 1").max(4094, "VLAN number cannot exceed 4094"),
-  description: z.string().max(200, "Description too long").optional(),
+  vlanNumber: z.coerce.number().int().min(1, "VLAN 号码必须至少为 1").max(4094, "VLAN 号码不能超过 4094"),
+  description: z.string().max(200, "描述过长").optional(),
 });
 
 type VlanFormValues = z.infer<typeof vlanFormSchema>;
@@ -70,18 +71,18 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
     try {
       if (isEditing && vlan) {
         await updateVLANAction(vlan.id, data);
-        toast({ title: "VLAN Updated", description: `VLAN ${data.vlanNumber} has been successfully updated.` });
+        toast({ title: "VLAN 已更新", description: `VLAN ${data.vlanNumber} 已成功更新。` });
       } else {
         await createVLANAction(data);
-        toast({ title: "VLAN Created", description: `VLAN ${data.vlanNumber} has been successfully created.` });
+        toast({ title: "VLAN 已创建", description: `VLAN ${data.vlanNumber} 已成功创建。` });
       }
       setIsOpen(false);
       if (onVlanChange) onVlanChange();
       form.reset({ vlanNumber: undefined, description: "" });
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        title: "错误",
+        description: error instanceof Error ? error.message : "发生意外错误。",
         variant: "destructive",
       });
     }
@@ -91,8 +92,8 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
     <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
-      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Add VLAN</>}
-      {isEditing && <span className="sr-only">Edit VLAN</span>}
+      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加VLAN</>}
+      {isEditing && <span className="sr-only">编辑VLAN</span>}
     </Button>
   );
 
@@ -102,9 +103,9 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit VLAN" : "Add New VLAN"}</SheetTitle>
+          <SheetTitle>{isEditing ? "编辑VLAN" : "添加新VLAN"}</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the details of the existing VLAN." : "Fill in the details for the new VLAN."}
+            {isEditing ? "更新现有VLAN的详细信息。" : "填写新VLAN的详细信息。"}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -114,9 +115,9 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
               name="vlanNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>VLAN Number</FormLabel>
+                  <FormLabel>VLAN 号码</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="e.g., 10" {...field} />
+                    <Input type="number" placeholder="例如 10" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -127,9 +128,9 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>描述 (可选)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief description of the VLAN" {...field} />
+                    <Textarea placeholder="VLAN的简要描述" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -138,11 +139,11 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : (isEditing ? "Save Changes" : "Create VLAN")}
+                {form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建VLAN")}
               </Button>
             </SheetFooter>
           </form>

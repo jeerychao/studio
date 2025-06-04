@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -22,7 +23,7 @@ function LoadingRolesPage() {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <ShieldCheck className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">Loading Roles...</h2>
+      <h2 className="text-2xl font-semibold mb-2">加载角色中...</h2>
     </div>
   );
 }
@@ -49,7 +50,7 @@ function RolesView() {
         setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       }
     } catch (error) {
-      toast({ title: "Error fetching roles", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "获取角色错误", description: (error as Error).message, variant: "destructive" });
       setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
@@ -68,8 +69,8 @@ function RolesView() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <ShieldCheck className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view this page.</p>
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看此页面。</p>
       </div>
     );
   }
@@ -82,17 +83,17 @@ function RolesView() {
   return (
     <>
       <PageHeader
-        title="Role Management"
-        description="View system roles and manage their descriptions and permissions."
+        title="角色管理"
+        description="查看系统角色并管理其描述和权限。"
         icon={ShieldCheck}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>System Roles</CardTitle>
+          <CardTitle>系统角色</CardTitle>
           <CardDescription>
-            These roles have predefined names. Administrators can edit their descriptions and granular permissions.
-            Displaying {rolesData?.data.length} of {rolesData?.totalCount} roles.
+            这些角色具有预定义的名称。管理员可以编辑它们的描述和细粒度权限。
+            显示 {rolesData?.data.length} 条，共 {rolesData?.totalCount} 条角色数据。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -101,24 +102,24 @@ function RolesView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Role Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Permissions Assigned</TableHead>
-                    <TableHead>Users</TableHead>
-                    {canEditAnyPartOfRole && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>角色名称</TableHead>
+                    <TableHead>描述</TableHead>
+                    <TableHead>已分配权限数</TableHead>
+                    <TableHead>用户数</TableHead>
+                    {canEditAnyPartOfRole && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rolesData.data.map((role) => (
                     <TableRow key={role.id}>
                       <TableCell className="font-medium">{role.name}</TableCell>
-                      <TableCell className="max-w-md truncate">{role.description || "N/A"}</TableCell>
+                      <TableCell className="max-w-md truncate">{role.description || "无"}</TableCell>
                       <TableCell>{role.permissions.length}</TableCell>
                       <TableCell>{role.userCount ?? 0}</TableCell>
                       {canEditAnyPartOfRole && (
                         <TableCell className="text-right">
                           <RoleFormSheet role={role} onRoleChange={fetchData}>
-                            <Button variant="ghost" size="icon" aria-label="Edit Role">
+                            <Button variant="ghost" size="icon" aria-label="编辑角色">
                               <Edit className="h-4 w-4" />
                             </Button>
                           </RoleFormSheet>
@@ -137,7 +138,7 @@ function RolesView() {
             </>
           ) : (
             <div className="text-center py-10">
-              <p className="text-muted-foreground">No roles found or unable to load roles.</p>
+              <p className="text-muted-foreground">未找到角色或无法加载角色。</p>
             </div>
           )}
         </CardContent>

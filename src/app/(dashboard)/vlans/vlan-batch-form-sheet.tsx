@@ -33,11 +33,11 @@ import { useToast } from "@/hooks/use-toast";
 import { batchCreateVLANsAction, type BatchVlanCreationResult } from "@/lib/actions";
 
 const vlanBatchFormSchema = z.object({
-  startVlanNumber: z.coerce.number().int().min(1, "Start VLAN number must be at least 1").max(4094, "Start VLAN number cannot exceed 4094"),
-  endVlanNumber: z.coerce.number().int().min(1, "End VLAN number must be at least 1").max(4094, "End VLAN number cannot exceed 4094"),
-  commonDescription: z.string().max(200, "Description too long").optional(),
+  startVlanNumber: z.coerce.number().int().min(1, "起始VLAN号码必须至少为1").max(4094, "起始VLAN号码不能超过4094"),
+  endVlanNumber: z.coerce.number().int().min(1, "结束VLAN号码必须至少为1").max(4094, "结束VLAN号码不能超过4094"),
+  commonDescription: z.string().max(200, "描述过长").optional(),
 }).refine(data => data.startVlanNumber <= data.endVlanNumber, {
-  message: "Start VLAN number must be less than or equal to End VLAN number.",
+  message: "起始VLAN号码必须小于或等于结束VLAN号码。",
   path: ["endVlanNumber"],
 });
 
@@ -74,11 +74,11 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     }
 
     if (vlansToCreate.length === 0) {
-      toast({ title: "No VLANs to Create", description: "The specified range is empty or invalid.", variant: "destructive" });
+      toast({ title: "无VLAN可创建", description: "指定的范围为空或无效。", variant: "destructive" });
       return;
     }
      if (vlansToCreate.length > 100) { // Arbitrary limit to prevent abuse / performance issues
-      toast({ title: "Range Too Large", description: "Please create VLANs in smaller batches (e.g., up to 100 at a time).", variant: "destructive" });
+      toast({ title: "范围过大", description: "请分批创建VLAN (例如，每次最多100个)。", variant: "destructive" });
       return;
     }
 
@@ -89,14 +89,14 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
       if (result.successCount > 0) {
         toast({
-          title: "Batch Processing Complete",
-          description: `${result.successCount} VLAN(s) created successfully. ${result.failureDetails.length > 0 ? `${result.failureDetails.length} failed.` : ''}`,
+          title: "批量处理完成",
+          description: `${result.successCount} 个VLAN创建成功。${result.failureDetails.length > 0 ? `${result.failureDetails.length} 个失败。` : ''}`,
         });
         if (onVlanChange) onVlanChange();
       } else if (result.failureDetails.length > 0) {
          toast({
-          title: "Batch Creation Failed",
-          description: "All entries failed. Check details below.",
+          title: "批量创建失败",
+          description: "所有条目均失败。请检查下面的详细信息。",
           variant: "destructive",
         });
       }
@@ -109,8 +109,8 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred during batch creation.",
+        title: "错误",
+        description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。",
         variant: "destructive",
       });
       setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message }] });
@@ -127,7 +127,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
   const triggerContent = children || (
     <Button variant="outline">
-      <PlusCircle className="mr-2 h-4 w-4" /> Batch Add VLANs
+      <PlusCircle className="mr-2 h-4 w-4" /> 批量添加VLAN
     </Button>
   );
 
@@ -137,11 +137,11 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       <SheetTrigger asChild>{triggerContent}</SheetTrigger>
       <SheetContent className="sm:max-w-md w-full flex flex-col">
         <SheetHeader>
-          <SheetTitle>Batch Add VLANs (Range)</SheetTitle>
+          <SheetTitle>批量添加VLAN (范围)</SheetTitle>
           <SheetDescription>
-            Enter a start and end VLAN number to create a range of VLANs.
-            An optional common description can be applied to all.
-            VLAN numbers must be between 1 and 4094.
+            输入起始和结束VLAN号码以创建VLAN范围。
+            可以为所有VLAN应用一个可选的通用描述。
+            VLAN号码必须在1到4094之间。
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -151,9 +151,9 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
               name="startVlanNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Start VLAN Number</FormLabel>
+                  <FormLabel>起始VLAN号码</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="e.g., 100" {...field} />
+                    <Input type="number" placeholder="例如 100" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -164,9 +164,9 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
               name="endVlanNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>End VLAN Number</FormLabel>
+                  <FormLabel>结束VLAN号码</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="e.g., 110" {...field} />
+                    <Input type="number" placeholder="例如 110" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -177,9 +177,9 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
               name="commonDescription"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Common Description (Optional)</FormLabel>
+                  <FormLabel>通用描述 (可选)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., User VLANs Floor 1" {...field} />
+                    <Input placeholder="例如 一楼用户VLAN" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -188,20 +188,20 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             
             {submissionResult && (
               <div className="mt-4 space-y-3">
-                <h3 className="font-semibold">Processing Results:</h3>
+                <h3 className="font-semibold">处理结果:</h3>
                 <Alert variant={submissionResult.failureDetails.length > 0 ? "destructive" : "default"}>
                    <AlertCircle className="h-4 w-4"/>
-                  <AlertTitle>Summary</AlertTitle>
+                  <AlertTitle>概要</AlertTitle>
                   <AlertDescription>
-                    Successfully created: {submissionResult.successCount} VLAN(s).
+                    成功创建: {submissionResult.successCount} 个VLAN。
                     <br />
-                    Failed attempts: {submissionResult.failureDetails.length}.
+                    失败尝试: {submissionResult.failureDetails.length} 个。
                   </AlertDescription>
                 </Alert>
 
                 {submissionResult.failureDetails.length > 0 && (
                   <div>
-                    <h4 className="font-medium">Failure Details:</h4>
+                    <h4 className="font-medium">失败详情:</h4>
                     <ScrollArea className="h-[120px] mt-1 rounded-md border p-2">
                       <ul className="space-y-1 text-sm">
                         {submissionResult.failureDetails.map((failure, index) => (
@@ -219,11 +219,11 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             <SheetFooter className="mt-auto pt-4">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Processing..." : "Create VLANs"}
+                {form.formState.isSubmitting ? "处理中..." : "创建VLAN"}
               </Button>
             </SheetFooter>
           </form>

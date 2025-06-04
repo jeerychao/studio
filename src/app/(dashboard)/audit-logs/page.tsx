@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -23,7 +24,7 @@ function LoadingAuditLogsPage() {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <ListChecks className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">Loading Audit Logs...</h2>
+      <h2 className="text-2xl font-semibold mb-2">加载审计日志中...</h2>
     </div>
   );
 }
@@ -50,7 +51,7 @@ function AuditLogsView() {
         setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       }
     } catch (error) {
-      toast({ title: "Error fetching audit logs", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "获取审计日志错误", description: (error as Error).message, variant: "destructive" });
       setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
@@ -73,8 +74,8 @@ function AuditLogsView() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <ListChecks className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view audit logs.</p>
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看审计日志。</p>
       </div>
     );
   }
@@ -84,16 +85,16 @@ function AuditLogsView() {
   return (
     <>
       <PageHeader
-        title="Audit Logs"
-        description="Track user activities and system events."
+        title="审计日志"
+        description="跟踪用户活动和系统事件。"
         icon={ListChecks}
       />
       <Card>
         <CardHeader>
-          <CardTitle>System Activity Log</CardTitle>
+          <CardTitle>系统活动日志</CardTitle>
           <CardDescription>
-            A chronological record of actions performed within the IPAM system.
-            Displaying {logsData?.data.length} of {logsData?.totalCount} logs.
+            IPAM 系统中执行操作的时间顺序记录。
+            显示 {logsData?.data.length} 条，共 {logsData?.totalCount} 条日志。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -102,33 +103,33 @@ function AuditLogsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Details</TableHead>
-                    {canDeleteLog && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>时间戳</TableHead>
+                    <TableHead>用户</TableHead>
+                    <TableHead>操作</TableHead>
+                    <TableHead>详情</TableHead>
+                    {canDeleteLog && <TableHead className="text-right">管理操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logsData.data.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="text-sm text-muted-foreground">{formatDate(log.timestamp)}</TableCell>
-                      <TableCell className="font-medium">{log.username || "System"}</TableCell>
+                      <TableCell className="font-medium">{log.username || "系统"}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="capitalize">
                           {log.action.replace(/_/g, " ")}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-xs truncate hover:max-w-none hover:whitespace-normal">{log.details || "N/A"}</TableCell>
+                      <TableCell className="max-w-xs truncate hover:max-w-none hover:whitespace-normal">{log.details || "无"}</TableCell>
                       {canDeleteLog && (
                         <TableCell className="text-right">
                           <DeleteConfirmationDialog
                             itemId={log.id}
-                            itemName={`audit log entry (Action: ${log.action}, User: ${log.username || 'System'})`}
+                            itemName={`审计日志条目 (操作: ${log.action}, 用户: ${log.username || '系统'})`}
                             deleteAction={deleteAuditLogAction}
                             onDeleted={fetchData}
                             triggerButton={
-                              <Button variant="ghost" size="icon" aria-label="Delete audit log">
+                              <Button variant="ghost" size="icon" aria-label="删除审计日志">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             }
@@ -148,7 +149,7 @@ function AuditLogsView() {
             </>
           ) : (
             <div className="text-center py-10">
-              <p className="text-muted-foreground">No audit logs found.</p>
+              <p className="text-muted-foreground">未找到审计日志。</p>
             </div>
           )}
         </CardContent>

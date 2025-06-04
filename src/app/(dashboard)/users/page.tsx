@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -25,7 +26,7 @@ function LoadingUsersPage() {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <UsersIcon className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">Loading Users...</h2>
+      <h2 className="text-2xl font-semibold mb-2">加载用户中...</h2>
     </div>
   );
 }
@@ -59,7 +60,7 @@ function UsersView() {
         setRoles([]);
       }
     } catch (error) {
-      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
       setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
@@ -72,7 +73,7 @@ function UsersView() {
 
   const getRoleName = (roleId: string) => {
     const role = roles.find(r => r.id === roleId);
-    return role ? role.name : "N/A";
+    return role ? role.name : "无";
   };
   
   const getInitials = (name: string = "") => {
@@ -87,8 +88,8 @@ function UsersView() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <UsersIcon className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view users.</p>
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看用户。</p>
       </div>
     );
   }
@@ -100,16 +101,16 @@ function UsersView() {
   return (
     <>
       <PageHeader
-        title="User Management"
-        description="Administer user accounts and their roles."
+        title="用户管理"
+        description="管理用户账户及其角色。"
         icon={UsersIcon}
         actionElement={canCreate ? <UserFormSheet roles={roles} onUserChange={fetchData}/> : null}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>User List</CardTitle>
-          <CardDescription>All registered users in the system. Displaying {usersData?.data.length} of {usersData?.totalCount} users.</CardDescription>
+          <CardTitle>用户列表</CardTitle>
+          <CardDescription>系统中所有已注册用户。显示 {usersData?.data.length} 条，共 {usersData?.totalCount} 条用户数据。</CardDescription>
         </CardHeader>
         <CardContent>
           {usersData && usersData.data.length > 0 ? (
@@ -117,11 +118,11 @@ function UsersView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Last Login</TableHead>
-                    {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>用户</TableHead>
+                    <TableHead>邮箱</TableHead>
+                    <TableHead>角色</TableHead>
+                    <TableHead>上次登录</TableHead>
+                    {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -141,13 +142,13 @@ function UsersView() {
                         <Badge variant="outline">{getRoleName(user.roleId)}</Badge>
                       </TableCell>
                        <TableCell className="text-sm text-muted-foreground">
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
+                        {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : '从未'}
                       </TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (
                               <UserFormSheet user={user} roles={roles} onUserChange={fetchData}>
-                              <Button variant="ghost" size="icon" aria-label="Edit User">
+                              <Button variant="ghost" size="icon" aria-label="编辑用户">
                                   <Edit className="h-4 w-4" />
                               </Button>
                               </UserFormSheet>
@@ -159,7 +160,7 @@ function UsersView() {
                               deleteAction={deleteUserAction}
                               onDeleted={fetchData}
                               triggerButton={
-                                  <Button variant="ghost" size="icon" aria-label="Delete User" disabled={currentUser?.id === user.id}>
+                                  <Button variant="ghost" size="icon" aria-label="删除用户" disabled={currentUser?.id === user.id}>
                                   <Trash2 className="h-4 w-4" />
                                   </Button>
                               }
@@ -180,7 +181,7 @@ function UsersView() {
             </>
           ) : (
             <div className="text-center py-10">
-              <p className="text-muted-foreground">No users found.</p>
+              <p className="text-muted-foreground">未找到用户。</p>
               {canCreate && <UserFormSheet roles={roles} onUserChange={fetchData} buttonProps={{className: "mt-4"}} />}
             </div>
           )}

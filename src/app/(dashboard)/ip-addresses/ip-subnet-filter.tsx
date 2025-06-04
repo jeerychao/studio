@@ -31,25 +31,27 @@ export function IPSubnetFilter({ subnets, currentSubnetId }: IPSubnetFilterProps
     } else {
       current.set("subnetId", subnetId);
     }
+    // Reset page to 1 when filter changes
+    current.set("page", "1"); 
     const query = current.toString() ? `?${current.toString()}` : "";
     router.push(`${pathname}${query}`);
   };
 
   return (
     <div className="flex items-center gap-2">
-      <Label htmlFor="subnet-filter" className="text-sm font-medium">Filter by Subnet:</Label>
+      <Label htmlFor="subnet-filter" className="text-sm font-medium">按子网筛选:</Label>
       <Select
         value={currentSubnetId || "all"}
         onValueChange={handleSubnetChange}
       >
         <SelectTrigger id="subnet-filter" className="w-full md:w-[250px]">
-          <SelectValue placeholder="Select a subnet" />
+          <SelectValue placeholder="选择一个子网" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Subnets</SelectItem>
+          <SelectItem value="all">所有子网</SelectItem>
           {subnets.map((subnet) => (
             <SelectItem key={subnet.id} value={subnet.id}>
-              {subnet.networkAddress} ({subnet.description || "No description"})
+              {subnet.networkAddress} ({subnet.description || "无描述"})
             </SelectItem>
           ))}
         </SelectContent>

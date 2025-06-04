@@ -40,13 +40,13 @@ import { createSubnetAction, updateSubnetAction } from "@/lib/actions";
 import { parseAndValidateCIDR } from "@/lib/ip-utils";
 
 const subnetFormSchema = z.object({
-  cidr: z.string().min(7, "CIDR notation is too short (e.g., x.x.x.x/y)")
+  cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)")
     .refine((val) => {
       const parsed = parseAndValidateCIDR(val);
       return parsed !== null; 
-    }, "Invalid CIDR notation format (e.g., 192.168.1.0/24). Please ensure the IP address and prefix length are valid."),
+    }, "无效的 CIDR 表示法格式 (例如 192.168.1.0/24)。请确保 IP 地址和前缀长度有效。"),
   vlanId: z.string().optional(),
-  description: z.string().max(200, "Description too long").optional(),
+  description: z.string().max(200, "描述过长").optional(),
 });
 
 type SubnetFormValues = z.infer<typeof subnetFormSchema>;
@@ -96,18 +96,18 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
 
       if (isEditing && subnet) {
         await updateSubnetAction(subnet.id, actionData );
-        toast({ title: "Subnet Updated", description: `Subnet has been successfully updated.` });
+        toast({ title: "子网已更新", description: `子网已成功更新。` });
       } else {
         await createSubnetAction(actionData);
-        toast({ title: "Subnet Created", description: `Subnet ${data.cidr} has been successfully created.` });
+        toast({ title: "子网已创建", description: `子网 ${data.cidr} 已成功创建。` });
       }
       setIsOpen(false);
       if (onSubnetChange) onSubnetChange(); // Call callback
       form.reset();
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        title: "错误",
+        description: error instanceof Error ? error.message : "发生意外错误。",
         variant: "destructive",
       });
     }
@@ -117,8 +117,8 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
     <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
-      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Add Subnet</>}
-      {isEditing && <span className="sr-only">Edit Subnet</span>}
+      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加子网</>}
+      {isEditing && <span className="sr-only">编辑子网</span>}
     </Button>
   );
 
@@ -127,9 +127,9 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit Subnet" : "Add New Subnet"}</SheetTitle>
+          <SheetTitle>{isEditing ? "编辑子网" : "添加新子网"}</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the details of the existing subnet." : "Provide the CIDR for the new subnet (e.g., 192.168.1.0/24). Other details are optional."}
+            {isEditing ? "更新现有子网的详细信息。" : "提供新子网的 CIDR (例如 192.168.1.0/24)。其他详细信息是可选的。"}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -139,9 +139,9 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
               name="cidr"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Network Address (CIDR)</FormLabel>
+                  <FormLabel>网络地址 (CIDR)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., 192.168.1.0/24" {...field} />
+                    <Input placeholder="例如 192.168.1.0/24" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -152,7 +152,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
               name="vlanId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>VLAN (Optional)</FormLabel>
+                  <FormLabel>VLAN (可选)</FormLabel>
                   <Select
                     onValueChange={(value) => {
                       if (value === NO_VLAN_SENTINEL_VALUE) {
@@ -165,14 +165,14 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a VLAN" />
+                        <SelectValue placeholder="选择一个 VLAN" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={NO_VLAN_SENTINEL_VALUE}>No VLAN</SelectItem>
+                      <SelectItem value={NO_VLAN_SENTINEL_VALUE}>无 VLAN</SelectItem>
                       {vlans.map((vlan) => (
                         <SelectItem key={vlan.id} value={vlan.id}>
-                          VLAN {vlan.vlanNumber} ({vlan.description || "No description"})
+                          VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -186,9 +186,9 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>描述 (可选)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief description of the subnet" {...field} />
+                    <Textarea placeholder="子网的简要描述" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -197,11 +197,11 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : (isEditing ? "Save Changes" : "Create Subnet")}
+                {form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建子网")}
               </Button>
             </SheetFooter>
           </form>

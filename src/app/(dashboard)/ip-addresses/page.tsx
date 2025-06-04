@@ -27,19 +27,19 @@ function LoadingIPAddressesPageContent() {
   return (
     <>
       <PageHeader
-        title="IP Address Management"
-        description="Loading IP address data..."
+        title="IP 地址管理"
+        description="加载IP地址数据中..."
         icon={Globe}
       />
       <Card>
         <CardHeader>
-          <CardTitle>IP Address List</CardTitle>
-          <CardDescription>Fetching IP addresses from the system...</CardDescription>
+          <CardTitle>IP 地址列表</CardTitle>
+          <CardDescription>正在从系统中获取IP地址...</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-10">
              <Globe className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading IP addresses, subnets, and VLANs...</p>
+            <p className="text-muted-foreground">正在加载IP地址、子网和VLAN...</p>
           </div>
         </CardContent>
       </Card>
@@ -83,7 +83,7 @@ function IPAddressesView() {
       setSubnets(fetchedSubnetsResult.data); 
       setVlans(fetchedVlansResult.data);     
     } catch (error) {
-      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
       setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
@@ -102,8 +102,8 @@ function IPAddressesView() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Globe className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view IP addresses.</p>
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看IP地址。</p>
       </div>
     );
   }
@@ -122,7 +122,7 @@ function IPAddressesView() {
     }
   };
 
-  const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "All Subnets";
+  const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "所有子网";
 
   const getVlanDisplayForIp = (ip: IPAddress): string => {
     let vlanToDisplay: VLAN | undefined;
@@ -133,17 +133,17 @@ function IPAddressesView() {
       if (subnet?.vlanId) {
         vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
       } else if (subnet) {
-        return "No VLAN (Subnet)";
+        return "无 VLAN (子网)";
       }
     }
-    return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "N/A";
+    return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "无";
   };
 
   const actionButtons = canCreate ? (
     <div className="flex flex-col sm:flex-row gap-2">
       <IPBatchFormSheet subnets={subnets} vlans={vlans} onIpAddressChange={fetchData}>
         <Button variant="outline" className="w-full sm:w-auto">
-          <PlusCircle className="mr-2 h-4 w-4" /> Batch Add IPs
+          <PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP
         </Button>
       </IPBatchFormSheet>
       <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "w-full sm:w-auto"}} />
@@ -154,8 +154,8 @@ function IPAddressesView() {
   return (
     <>
       <PageHeader
-        title="IP Address Management"
-        description={`Manage IP addresses. Currently viewing: ${currentSubnetName || 'All Subnets'}`}
+        title="IP 地址管理"
+        description={`管理IP地址。当前查看: ${currentSubnetName || '所有子网'}`}
         icon={Globe}
       />
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
@@ -165,12 +165,12 @@ function IPAddressesView() {
 
       <Card>
         <CardHeader>
-          <CardTitle>IP Address List</CardTitle>
+          <CardTitle>IP 地址列表</CardTitle>
           <CardDescription>
             {selectedSubnetId
-              ? `IP addresses within subnet ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''}`
-              : "All managed IP addresses."}
-             Displaying {ipAddressesData?.data.length} of {ipAddressesData?.totalCount} IPs.
+              ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''} 内的IP地址`
+              : "所有受管IP地址。"}
+             显示 {ipAddressesData?.data.length} 条，共 {ipAddressesData?.totalCount} 条IP。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -179,13 +179,13 @@ function IPAddressesView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>IP Address</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Allocated To</TableHead>
-                    <TableHead>Subnet</TableHead>
+                    <TableHead>IP 地址</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead>分配给</TableHead>
+                    <TableHead>子网</TableHead>
                     <TableHead>VLAN</TableHead>
-                    <TableHead>Description</TableHead>
-                    {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>描述</TableHead>
+                    {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -194,22 +194,22 @@ function IPAddressesView() {
                       <TableCell className="font-medium">{ip.ipAddress}</TableCell>
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(ip.status)} className="capitalize">
-                          {ip.status}
+                          {ip.status === "allocated" ? "已分配" : ip.status === "free" ? "空闲" : "预留"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{ip.allocatedTo || "N/A"}</TableCell>
+                      <TableCell>{ip.allocatedTo || "无"}</TableCell>
                       <TableCell>
-                        {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "N/A"}
+                        {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "无"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
                       </TableCell>
-                      <TableCell className="max-w-xs truncate">{ip.description || "N/A"}</TableCell>
+                      <TableCell className="max-w-xs truncate">{ip.description || "无"}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (
                               <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}>
-                              <Button variant="ghost" size="icon" aria-label="Edit IP Address">
+                              <Button variant="ghost" size="icon" aria-label="编辑IP地址">
                                   <Edit className="h-4 w-4" />
                               </Button>
                               </IPAddressFormSheet>
@@ -221,7 +221,7 @@ function IPAddressesView() {
                               deleteAction={deleteIPAddressAction}
                               onDeleted={fetchData}
                               triggerButton={
-                                  <Button variant="ghost" size="icon" aria-label="Delete IP Address">
+                                  <Button variant="ghost" size="icon" aria-label="删除IP地址">
                                   <Trash2 className="h-4 w-4" />
                                   </Button>
                               }
@@ -243,7 +243,7 @@ function IPAddressesView() {
           ) : (
             <div className="text-center py-10">
               <p className="text-muted-foreground">
-                {selectedSubnetId ? "No IP addresses found in this subnet." : "No IP addresses found. Select a subnet or add a new IP."}
+                {selectedSubnetId ? "此子网中未找到IP地址。" : "未找到IP地址。选择一个子网或添加新的IP。"}
               </p>
               {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "mt-4"}} />}
             </div>

@@ -42,15 +42,20 @@ import { ipToNumber } from "@/lib/ip-utils";
 
 const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
+const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
+  allocated: "已分配",
+  free: "空闲",
+  reserved: "预留",
+};
 
 
 const ipBatchFormSchema = z.object({
-  startIp: z.string().ip({ version: "v4", message: "Invalid start IPv4 address" }),
-  endIp: z.string().ip({ version: "v4", message: "Invalid end IPv4 address" }),
-  subnetId: z.string().min(1, "Subnet is required"),
+  startIp: z.string().ip({ version: "v4", message: "无效的起始 IPv4 地址" }),
+  endIp: z.string().ip({ version: "v4", message: "无效的结束 IPv4 地址" }),
+  subnetId: z.string().min(1, "子网是必需的"),
   vlanId: z.string().optional(), 
-  commonDescription: z.string().max(200, "Description too long").optional(),
-  status: z.enum(ipAddressStatusOptions, { required_error: "Status is required"}),
+  commonDescription: z.string().max(200, "描述过长").optional(),
+  status: z.enum(ipAddressStatusOptions, { required_error: "状态是必需的"}),
 }).refine(data => {
     try {
         return ipToNumber(data.startIp) <= ipToNumber(data.endIp);
@@ -58,7 +63,7 @@ const ipBatchFormSchema = z.object({
         return false; 
     }
 }, {
-  message: "Start IP must be less than or equal to End IP.",
+  message: "起始IP必须小于或等于结束IP。",
   path: ["endIp"],
 });
 
@@ -120,7 +125,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
     const startNum = ipToNumber(data.startIp);
     const endNum = ipToNumber(data.endIp);
     if (endNum - startNum + 1 > 256) { 
-        toast({ title: "Range Too Large", description: "Please create IP addresses in smaller batches (e.g., up to 256 at a time).", variant: "destructive" });
+        toast({ title: "范围过大", description: "请分批创建IP地址 (例如，每次最多256个)。", variant: "destructive" });
         return;
     }
 
@@ -131,14 +136,14 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
 
       if (result.successCount > 0) {
         toast({
-          title: "Batch Processing Complete",
-          description: `${result.successCount} IP(s) created successfully. ${result.failureDetails.length > 0 ? `${result.failureDetails.length} failed.` : ''}`,
+          title: "批量处理完成",
+          description: `${result.successCount} 个IP创建成功。${result.failureDetails.length > 0 ? `${result.failureDetails.length} 个失败。` : ''}`,
         });
         if (onIpAddressChange) onIpAddressChange();
       } else if (result.failureDetails.length > 0) {
          toast({
-          title: "Batch Creation Failed",
-          description: "All entries failed. Check details below.",
+          title: "批量创建失败",
+          description: "所有条目均失败。请检查下面的详细信息。",
           variant: "destructive",
         });
       }
@@ -149,8 +154,8 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
 
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred during batch creation.",
+        title: "错误",
+        description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。",
         variant: "destructive",
       });
       setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp, error: (error as Error).message }] });
@@ -167,7 +172,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
 
   const triggerContent = children || (
     <Button variant="outline">
-      <PlusCircle className="mr-2 h-4 w-4" /> Batch Add IPs
+      <PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP
     </Button>
   );
 
@@ -176,10 +181,10 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
       <SheetTrigger asChild>{triggerContent}</SheetTrigger>
       <SheetContent className="sm:max-w-lg w-full flex flex-col p-0"> {/* Removed default p-6 to manage padding internally */}
         <SheetHeader className="p-6 pb-4 border-b"> {/* Added padding to header */}
-          <SheetTitle>Batch Add IP Addresses (Range)</SheetTitle>
+          <SheetTitle>批量添加IP地址 (范围)</SheetTitle>
           <SheetDescription>
-            Enter a start and end IP address to create a range. Select a subnet.
-            Other fields are optional or have defaults.
+            输入起始和结束IP地址以创建范围。选择一个子网。
+            其他字段是可选的或有默认值。
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -194,9 +199,9 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                   name="startIp"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Start IP Address</FormLabel>
+                      <FormLabel>起始IP地址</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., 192.168.1.10" {...field} />
+                        <Input placeholder="例如 192.168.1.10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -207,9 +212,9 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                   name="endIp"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>End IP Address</FormLabel>
+                      <FormLabel>结束IP地址</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., 192.168.1.20" {...field} />
+                        <Input placeholder="例如 192.168.1.20" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -220,7 +225,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                   name="subnetId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Subnet</FormLabel>
+                      <FormLabel>子网</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
@@ -228,13 +233,13 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={subnets.length > 0 ? "Select a subnet" : "No subnets available"} />
+                            <SelectValue placeholder={subnets.length > 0 ? "选择一个子网" : "无可用子网"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {subnets.map((subnet) => (
                             <SelectItem key={subnet.id} value={subnet.id}>
-                              {subnet.cidr} ({subnet.description || "No description"})
+                              {subnet.cidr} ({subnet.description || "无描述"})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -248,7 +253,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                   name="vlanId"
                   render={({ field }) => ( 
                     <FormItem>
-                      <FormLabel>VLAN (Optional)</FormLabel>
+                      <FormLabel>VLAN (可选)</FormLabel>
                       <Select
                         onValueChange={(value) => field.onChange(value)}
                         value={field.value || INHERIT_VLAN_SENTINEL}
@@ -256,14 +261,14 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={vlans.length > 0 ? "Select a VLAN or Inherit" : "No VLANs available"} />
+                            <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或继承" : "无可用VLAN"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={INHERIT_VLAN_SENTINEL}>Inherit from Subnet</SelectItem>
+                          <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承</SelectItem>
                           {vlans.map((vlan) => (
                             <SelectItem key={vlan.id} value={vlan.id}>
-                              VLAN {vlan.vlanNumber} ({vlan.description || "No description"})
+                              VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -277,17 +282,17 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                   name="status"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Status for all IPs</FormLabel>
+                      <FormLabel>所有IP的状态</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
+                            <SelectValue placeholder="选择状态" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {ipAddressStatusOptions.map((status) => (
                             <SelectItem key={status} value={status} className="capitalize">
-                              {status}
+                              {ipAddressStatusLabels[status]}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -301,9 +306,9 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                   name="commonDescription"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Common Description (Optional)</FormLabel>
+                      <FormLabel>通用描述 (可选)</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., Batch created devices" {...field} />
+                        <Input placeholder="例如 批量创建的设备" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -312,20 +317,20 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                 
                 {submissionResult && (
                   <div className="mt-4 space-y-3">
-                    <h3 className="font-semibold">Processing Results:</h3>
+                    <h3 className="font-semibold">处理结果:</h3>
                     <Alert variant={submissionResult.failureDetails.length > 0 ? "destructive" : "default"}>
                        <AlertCircle className="h-4 w-4"/>
-                      <AlertTitle>Summary</AlertTitle>
+                      <AlertTitle>概要</AlertTitle>
                       <AlertDescription>
-                        Successfully created: {submissionResult.successCount} IP(s).
+                        成功创建: {submissionResult.successCount} 个IP。
                         <br />
-                        Failed attempts: {submissionResult.failureDetails.length}.
+                        失败尝试: {submissionResult.failureDetails.length} 个。
                       </AlertDescription>
                     </Alert>
 
                     {submissionResult.failureDetails.length > 0 && (
                       <div>
-                        <h4 className="font-medium">Failure Details:</h4>
+                        <h4 className="font-medium">失败详情:</h4>
                         <ScrollArea className="h-[120px] mt-1 rounded-md border p-2">
                           <ul className="space-y-1 text-sm">
                             {submissionResult.failureDetails.map((failure, index) => (
@@ -345,11 +350,11 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
             <SheetFooter className="p-6 pt-4 border-t"> {/* Added padding to footer, ensure it's sticky at bottom */}
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Processing..." : "Create IP Addresses"}
+                {form.formState.isSubmitting ? "处理中..." : "创建IP地址"}
               </Button>
             </SheetFooter>
           </form>

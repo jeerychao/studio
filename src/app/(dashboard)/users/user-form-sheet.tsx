@@ -40,18 +40,18 @@ import { createUserAction, updateUserAction } from "@/lib/actions";
 import { ADMIN_ROLE_ID } from "@/lib/data";
 
 const userFormSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username too long"),
-  email: z.string().email("Invalid email address"),
-  roleId: z.string().min(1, "Role is required"),
+  username: z.string().min(3, "用户名必须至少3个字符").max(50, "用户名过长"),
+  email: z.string().email("无效的邮箱地址"),
+  roleId: z.string().min(1, "角色是必需的"),
   password: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.string()
-      .min(8, "Password must be 8-16 characters.")
-      .max(16, "Password must be 8-16 characters.")
-      .refine(val => /[A-Z]/.test(val), "Must include uppercase letter.")
-      .refine(val => /[a-z]/.test(val), "Must include lowercase letter.")
-      .refine(val => /[0-9]/.test(val), "Must include number.")
-      .refine(val => /[^A-Za-z0-9]/.test(val), "Must include symbol.")
+      .min(8, "密码必须为8-16个字符。")
+      .max(16, "密码必须为8-16个字符。")
+      .refine(val => /[A-Z]/.test(val), "必须包含大写字母。")
+      .refine(val => /[a-z]/.test(val), "必须包含小写字母。")
+      .refine(val => /[0-9]/.test(val), "必须包含数字。")
+      .refine(val => /[^A-Za-z0-9]/.test(val), "必须包含符号。")
       .optional()
   ),
   confirmPassword: z.string().optional().transform(e => e === "" ? undefined : e),
@@ -61,13 +61,13 @@ const userFormSchema = z.object({
     if (!data.confirmPassword) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Please confirm your new password.",
+        message: "请确认您的新密码。",
         path: ["confirmPassword"],
       });
     } else if (data.password !== data.confirmPassword) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Passwords do not match.",
+        message: "密码不匹配。",
         path: ["confirmPassword"],
       });
     }
@@ -115,8 +115,8 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
 
   async function onSubmit(data: UserFormValues) {
     if (!isEditing && !data.password) {
-        form.setError("password", { type: "manual", message: "Password is required for new users." });
-        toast({ title: "Password Required", description: "Password is required for new users.", variant: "destructive" });
+        form.setError("password", { type: "manual", message: "新用户需要密码。" });
+        toast({ title: "需要密码", description: "新用户需要密码。", variant: "destructive" });
         return;
     }
 
@@ -133,25 +133,25 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     try {
       if (isEditing && user) {
         await updateUserAction(user.id, payload);
-        let toastDescription = `User ${data.username} has been successfully updated.`;
+        let toastDescription = `用户 ${data.username} 已成功更新。`;
         if (payload.password) {
-          toastDescription += " Password has been changed.";
+          toastDescription += " 密码已更改。";
         }
-        toast({ title: "User Updated", description: toastDescription });
+        toast({ title: "用户已更新", description: toastDescription });
       } else {
         if (!payload.password) {
-            toast({ title: "Password Error", description: "Password is unexpectedly missing for new user.", variant: "destructive" });
+            toast({ title: "密码错误", description: "新用户密码意外丢失。", variant: "destructive" });
             return;
         }
         await createUserAction(payload as Omit<User, "id" | "avatar" | "lastLogin"> & { password: string });
-        toast({ title: "User Created", description: `User ${data.username} has been successfully created.` });
+        toast({ title: "用户已创建", description: `用户 ${data.username} 已成功创建。` });
       }
       setIsOpen(false);
       if (onUserChange) onUserChange();
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        title: "错误",
+        description: error instanceof Error ? error.message : "发生意外错误。",
         variant: "destructive",
       });
     }
@@ -161,8 +161,8 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
     <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
-      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Add User</>}
-      {isEditing && <span className="sr-only">Edit User</span>}
+      {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加用户</>}
+      {isEditing && <span className="sr-only">编辑用户</span>}
     </Button>
   );
 
@@ -171,9 +171,9 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit User" : "Add New User"}</SheetTitle>
+          <SheetTitle>{isEditing ? "编辑用户" : "添加新用户"}</SheetTitle>
           <SheetDescription>
-            {isEditing ? "Update the user's details. Leave password fields blank to keep current password." : "Fill in the details for the new user."}
+            {isEditing ? "更新用户的详细信息。将密码字段留空以保留当前密码。" : "填写新用户的详细信息。"}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -183,9 +183,9 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
               name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Username</FormLabel>
+                  <FormLabel>用户名</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., johndoe" {...field} />
+                    <Input placeholder="例如 zhangsan" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -196,9 +196,9 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>邮箱</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="e.g., user@example.com" {...field} />
+                    <Input type="email" placeholder="例如 user@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -209,11 +209,11 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
               name="roleId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role</FormLabel>
+                  <FormLabel>角色</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={roles.length === 0}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={roles.length > 0 ? "Select a role" : "No roles available"} />
+                        <SelectValue placeholder={roles.length > 0 ? "选择一个角色" : "无可用角色"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -233,12 +233,12 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{isEditing ? "New Password (Optional)" : "Password"}</FormLabel>
+                  <FormLabel>{isEditing ? "新密码 (可选)" : "密码"}</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
+                    <Input type="password" placeholder={isEditing ? "留空以保留当前密码" : "输入密码"} {...field} />
                   </FormControl>
                   <FormDescription>
-                    8-16 characters. Must include uppercase, lowercase, number, and symbol.
+                    8-16个字符。必须包含大写字母、小写字母、数字和符号。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -249,9 +249,9 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
               name="confirmPassword"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
+                  <FormLabel>确认密码</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder={isEditing && !form.getValues().password ? "Leave blank to keep current" : "Confirm new password"} {...field} />
+                    <Input type="password" placeholder={isEditing && !form.getValues().password ? "留空以保留当前密码" : "确认新密码"} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -260,11 +260,11 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
-                  Cancel
+                  取消
                 </Button>
               </SheetClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : (isEditing ? "Save Changes" : "Create User")}
+                {form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建用户")}
               </Button>
             </SheetFooter>
           </form>

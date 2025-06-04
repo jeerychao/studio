@@ -26,7 +26,7 @@ function LoadingSubnetsPage() {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <NetworkIcon className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">Loading Subnets...</h2>
+      <h2 className="text-2xl font-semibold mb-2">加载子网中...</h2>
     </div>
   );
 }
@@ -71,10 +71,10 @@ function SubnetsView() {
       setSubnetsData(subnetsResponse);
       setVlans(vlansResponse.data || []); 
     } catch (error: any) {
-      console.error("Error loading subnet data:", error);
+      console.error("加载子网数据时出错:", error);
       toast({
-        title: "Error Loading Subnets",
-        description: error.message || "Failed to load subnets and VLANs.",
+        title: "加载子网错误",
+        description: error.message || "无法加载子网和VLAN。",
         variant: "destructive",
       });
       setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
@@ -97,14 +97,14 @@ function SubnetsView() {
     return (
         <div className="flex flex-col items-center justify-center h-full">
             <NetworkIcon className="h-16 w-16 text-destructive mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">Access Denied</h2>
-            <p className="text-muted-foreground">You do not have permission to view subnets.</p>
+            <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+            <p className="text-muted-foreground">您没有权限查看子网。</p>
         </div>
     );
   }
   
   if (!subnetsData) {
-    return <p>Error preparing subnet data. Please try refreshing.</p>; 
+    return <p>准备子网数据时出错。请尝试刷新。</p>; 
   }
 
   const { data: subnets, totalCount, currentPage, totalPages } = subnetsData;
@@ -118,22 +118,22 @@ function SubnetsView() {
       <div className="md:hidden"> 
         <Card>
           <CardHeader>
-            <CardTitle>Mobile View Not Supported</CardTitle>
-            <CardDescription>Please use a desktop or larger screen to view this page.</CardDescription>
+            <CardTitle>不支持移动视图</CardTitle>
+            <CardDescription>请使用桌面或更大屏幕查看此页面。</CardDescription>
           </CardHeader>
         </Card>
       </div>
       <div className="hidden md:block">
         <PageHeader
-          title="Subnets"
-          description="View, create, and manage your network subnets."
+          title="子网管理"
+          description="查看、创建和管理您的网络子网。"
           actionElement={canCreate ? <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} /> : null}
         />
         <Card>
           <CardHeader>
-            <CardTitle>Subnet List</CardTitle>
+            <CardTitle>子网列表</CardTitle>
             <CardDescription>
-              Displaying {subnets.length} of {totalCount} subnets.
+              显示 {subnets.length} 条，共 {totalCount} 条子网。
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -142,9 +142,9 @@ function SubnetsView() {
                 <TableRow>
                   <TableHead>CIDR</TableHead>
                   <TableHead>VLAN</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Utilization</TableHead>
-                  {(canEdit || canDelete) && <TableHead className="text-right">Actions</TableHead>}
+                  <TableHead>描述</TableHead>
+                  <TableHead>利用率</TableHead>
+                  {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,10 +161,10 @@ function SubnetsView() {
                         {vlanInfo ? (
                           <Badge variant="outline">VLAN {vlanInfo.vlanNumber}</Badge>
                         ) : (
-                          <span className="text-muted-foreground text-xs">N/A</span>
+                          <span className="text-muted-foreground text-xs">无</span>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{subnet.description || "N/A"}</TableCell>
+                      <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{subnet.description || "无"}</TableCell>
                       <TableCell>
                         <Badge variant={ (subnet.utilization ?? 0) > 85 ? "destructive" : "secondary"}>
                           {subnet.utilization ?? 0}%
@@ -178,7 +178,7 @@ function SubnetsView() {
                               vlans={vlans}
                               onSubnetChange={fetchData}
                             >
-                              <Button variant="ghost" size="icon" aria-label="Edit Subnet">
+                              <Button variant="ghost" size="icon" aria-label="编辑子网">
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </SubnetFormSheet>
@@ -189,10 +189,10 @@ function SubnetsView() {
                               itemName={subnet.cidr}
                               deleteAction={deleteSubnetAction}
                               onDeleted={fetchData}
-                              dialogTitle="Delete Subnet?"
-                              dialogDescription={`Are you sure you want to delete subnet ${subnet.cidr}? This action cannot be undone.`}
+                              dialogTitle="删除子网?"
+                              dialogDescription={`您确定要删除子网 ${subnet.cidr} 吗？此操作无法撤销。`}
                               triggerButton={
-                                <Button variant="ghost" size="icon" aria-label="Delete Subnet">
+                                <Button variant="ghost" size="icon" aria-label="删除子网">
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               }
@@ -206,7 +206,7 @@ function SubnetsView() {
                 {subnets.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={(canEdit || canDelete) ? 5 : 4} className="text-center h-24 text-muted-foreground">
-                      No subnets found. {canCreate && "Try creating one!"}
+                      未找到子网。{canCreate && "尝试创建一个！"}
                     </TableCell>
                   </TableRow>
                 )}
