@@ -12,13 +12,24 @@ import { Button } from "@/components/ui/button";
 import { getAuditLogsAction, deleteAuditLogAction, type PaginatedResponse } from "@/lib/actions";
 import type { AuditLog } from "@/types";
 import { PERMISSIONS } from "@/types";
-import { ListChecks, Trash2 } from "lucide-react";
+import { ListChecks, Trash2, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { PaginationControls } from "@/components/pagination-controls";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-const ITEMS_PER_PAGE = 15; // More logs per page might be suitable
+const ITEMS_PER_PAGE = 10; // 分页阈值调整为10
 
 function LoadingAuditLogsPage() {
   return (
@@ -28,6 +39,36 @@ function LoadingAuditLogsPage() {
     </div>
   );
 }
+
+interface DetailsDialogProps {
+  log: AuditLog;
+  triggerText: string | React.ReactNode;
+}
+
+function DetailsDialog({ log, triggerText }: DetailsDialogProps) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <span className="cursor-pointer hover:underline text-primary">{triggerText}</span>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>日志详情</AlertDialogTitle>
+          <AlertDialogDescription>
+            以下是关于操作 <Badge variant="secondary" className="capitalize">{log.action.replace(/_/g, " ")}</Badge> (用户: {log.username || "系统"}) 的完整详情。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="my-4 max-h-[60vh] overflow-y-auto rounded-md border bg-muted p-4 text-sm">
+          <pre className="whitespace-pre-wrap break-all">{log.details || "无可用详情。"}</pre>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>关闭</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 
 function AuditLogsView() {
   const [logsData, setLogsData] = React.useState<PaginatedResponse<AuditLog> | null>(null);
@@ -106,7 +147,7 @@ function AuditLogsView() {
                     <TableHead>时间戳</TableHead>
                     <TableHead>用户</TableHead>
                     <TableHead>操作</TableHead>
-                    <TableHead>详情</TableHead>
+                    <TableHead>详情 (点击查看)</TableHead>
                     {canDeleteLog && <TableHead className="text-right">管理操作</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -120,7 +161,20 @@ function AuditLogsView() {
                           {log.action.replace(/_/g, " ")}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-xs truncate hover:max-w-none hover:whitespace-normal">{log.details || "无"}</TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {log.details && log.details.length > 50 ? ( // 截断长度可调整
+                          <DetailsDialog 
+                            log={log} 
+                            triggerText={
+                              <>
+                                {log.details.substring(0, 50)}... <Eye className="inline h-3 w-3 ml-1" />
+                              </>
+                            }
+                          />
+                        ) : (
+                          log.details || "无"
+                        )}
+                      </TableCell>
                       {canDeleteLog && (
                         <TableCell className="text-right">
                           <DeleteConfirmationDialog
@@ -140,12 +194,14 @@ function AuditLogsView() {
                   ))}
                 </TableBody>
               </Table>
-              <PaginationControls
-                currentPage={logsData.currentPage}
-                totalPages={logsData.totalPages}
-                basePath={pathname}
-                currentQuery={searchParams}
-              />
+              {logsData.totalPages > 1 && (
+                <PaginationControls
+                  currentPage={logsData.currentPage}
+                  totalPages={logsData.totalPages}
+                  basePath={pathname}
+                  currentQuery={searchParams}
+                />
+              )}
             </>
           ) : (
             <div className="text-center py-10">
