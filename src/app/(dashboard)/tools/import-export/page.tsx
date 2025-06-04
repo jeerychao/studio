@@ -5,12 +5,13 @@ import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileDown, DownloadCloud, Loader2 } from "lucide-react";
+// Removed Lucide icon imports: FileDown, DownloadCloud, Loader2
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
 import type { Subnet, VLAN, IPAddress } from "@/types";
 import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
+import Image from "next/image"; // Added Image import
 
 
 export default function ImportExportPage() {
@@ -51,14 +52,14 @@ export default function ImportExportPage() {
           networkAddress: subnet.networkAddress,
           subnetMask: subnet.subnetMask,
           ipRange: subnet.ipRange || "",
-          vlanNumber: (subnet as any).vlan?.vlanNumber?.toString() ?? "", // Assuming getSubnetsAction includes vlan: {select: {vlanNumber:true}}
+          vlanNumber: (subnet as any).vlan?.vlanNumber?.toString() ?? "",
           description: subnet.description || "",
           utilization: subnet.utilization || 0, 
         }));
         if (dataType === "subnets") {
             dataToExport = subnetsForCsv;
             csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "description", "utilization"];
-        } else { // for "all"
+        } else { 
             dataToExport.push(...subnetsForCsv.map(s => ({type: 'subnet', ...s})));
         }
       }
@@ -74,7 +75,7 @@ export default function ImportExportPage() {
          if (dataType === "vlans") {
             dataToExport = vlansForCsv;
             csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
-        } else { // for "all"
+        } else { 
             dataToExport.push(...vlansForCsv.map(v => ({type: 'vlan', ...v})));
         }
       }
@@ -83,9 +84,9 @@ export default function ImportExportPage() {
         const ipsResponse = await getIPAddressesAction(); // Fetch all
         const ipsForCsv = ipsResponse.data.map(ip => {
             let effectiveVlanNumberStr = "";
-            if (ip.vlan?.vlanNumber) { // Direct VLAN on IP
+            if (ip.vlan?.vlanNumber) { 
                 effectiveVlanNumberStr = ip.vlan.vlanNumber.toString();
-            } else if (ip.subnet?.vlan?.vlanNumber) { // VLAN inherited from subnet
+            } else if (ip.subnet?.vlan?.vlanNumber) { 
                 effectiveVlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
             }
             return {
@@ -102,25 +103,21 @@ export default function ImportExportPage() {
         if (dataType === "ips") {
             dataToExport = ipsForCsv;
             csvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanNumber", "status", "allocatedTo", "description"];
-        } else { // for "all"
+        } else { 
              dataToExport.push(...ipsForCsv.map(i => ({type: 'ipaddress', ...i})));
         }
       }
 
       if (dataType === "all") {
-        // For "all", we don't generate a single CSV directly here,
-        // as structures are different. We'd typically create a zip or multiple files.
-        // For this example, we'll just simulate it or consider a JSON export.
-        // For simplicity, we'll just toast a message and not generate a combined file.
         if (dataToExport.length > 0) {
-            filename = `ipam_lite_all_data_export.json`; // Changed to JSON for "all"
+            filename = `ipam_lite_all_data_export.json`; 
             csvContent = JSON.stringify(dataToExport, null, 2);
         } else {
             toast({ title: "无数据", description: "系统中没有可导出的数据。" });
             setIsExporting(false);
             return;
         }
-      } else { // For specific types
+      } else { 
         if (dataToExport.length === 0) {
             toast({ title: "无数据", description: `没有可用于导出的 ${dataType === "ips" ? "IP 地址" : dataType === "subnets" ? "子网" : "VLAN"} 数据。`});
             setIsExporting(false);
@@ -155,7 +152,7 @@ export default function ImportExportPage() {
   if (isAuthLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
-        <DownloadCloud className="h-16 w-16 animate-spin text-primary mb-4" />
+        <Image src="/images/tool_icons/download_cloud_icon.png" alt="Loading" width={64} height={64} className="animate-pulse text-primary mb-4" data-ai-hint="cloud download icon" />
         <h2 className="text-2xl font-semibold mb-2">加载数据导出工具中...</h2>
       </div>
     );
@@ -164,7 +161,7 @@ export default function ImportExportPage() {
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
-        <DownloadCloud className="h-16 w-16 text-destructive mb-4" />
+        <Image src="/images/tool_icons/download_cloud_icon.png" alt="Access Denied" width={64} height={64} className="text-destructive mb-4" data-ai-hint="cloud download error icon" />
         <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
         <p className="text-muted-foreground">您没有权限查看数据导出工具。</p>
       </div>
@@ -178,11 +175,14 @@ export default function ImportExportPage() {
       <PageHeader
         title="数据导出"
         description="将您当前的 IPAM 数据下载为 CSV 或 JSON 文件。导出的数据基于系统中的实时数据库。"
-        icon={FileDown}
+        icon={() => <Image src="/images/tool_icons/file_down_icon.png" alt="Export Icon" width={32} height={32} className="text-primary" data-ai-hint="download file icon" />}
       />
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><DownloadCloud className="h-6 w-6 text-primary" /> 导出数据</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Image src="/images/tool_icons/download_cloud_icon.png" alt="Export Data" width={24} height={24} className="text-primary" data-ai-hint="cloud download icon" />
+            导出数据
+          </CardTitle>
           <CardDescription>
             选择要导出的数据类型。导出的数据为 CSV 格式 (特定类型) 或 JSON 格式 (全部数据)，基于系统当前的实时数据库。
           </CardDescription>
@@ -191,19 +191,31 @@ export default function ImportExportPage() {
           <p className="text-sm">选择要导出的数据类型:</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Button variant="outline" onClick={() => handleExport("subnets")} className="w-full" disabled={!canExport || isExporting === "subnets"}>
-                {isExporting === "subnets" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                {isExporting === "subnets" 
+                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" /> 
+                  : <Image src="/images/tool_icons/file_down_icon.png" alt="Export Subnets" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
+                }
                 导出子网 (CSV)
               </Button>
               <Button variant="outline" onClick={() => handleExport("vlans")} className="w-full" disabled={!canExport || isExporting === "vlans"}>
-                {isExporting === "vlans" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                {isExporting === "vlans" 
+                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" /> 
+                  : <Image src="/images/tool_icons/file_down_icon.png" alt="Export VLANs" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
+                }
                 导出VLAN (CSV)
               </Button>
               <Button variant="outline" onClick={() => handleExport("ips")} className="w-full" disabled={!canExport || isExporting === "ips"}>
-                {isExporting === "ips" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                {isExporting === "ips" 
+                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" /> 
+                  : <Image src="/images/tool_icons/file_down_icon.png" alt="Export IPs" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
+                }
                 导出IP地址 (CSV)
               </Button>
               <Button variant="outline" onClick={() => handleExport("all")} className="w-full sm:col-span-2" disabled={!canExport || isExporting === "all"}>
-                {isExporting === "all" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                {isExporting === "all" 
+                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" /> 
+                  : <Image src="/images/tool_icons/file_down_icon.png" alt="Export All" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
+                }
                 导出所有数据 (JSON)
               </Button>
           </div>
@@ -213,5 +225,3 @@ export default function ImportExportPage() {
     </>
   );
 }
-
-    

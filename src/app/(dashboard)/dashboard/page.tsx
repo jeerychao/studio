@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
 import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
-import { Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight } from "lucide-react";
+// Removed Lucide icon imports: Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight
 import Link from "next/link";
+import Image from "next/image"; // Added Image import
 
 export default async function DashboardPage() {
   try {
@@ -46,7 +47,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">子网总数</CardTitle>
-              <Network className="h-4 w-4 text-muted-foreground" />
+              <Image src="/images/dashboard_placeholders/network_icon.png" alt="Network Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="network icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalSubnetCount}</div>
@@ -56,7 +57,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">可用 IP 总数</CardTitle>
-              <Globe className="h-4 w-4 text-muted-foreground" />
+              <Image src="/images/dashboard_placeholders/globe_icon.png" alt="Globe Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="globe icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalIPs.toLocaleString()}</div>
@@ -66,7 +67,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">已分配 IP</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <Image src="/images/dashboard_placeholders/users_icon.png" alt="Users Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="users icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{allocatedIPsCount}</div>
@@ -76,7 +77,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">网络利用率</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <Image src="/images/dashboard_placeholders/activity_icon.png" alt="Activity Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="activity pulse icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{utilizationPercentage}%</div>
@@ -131,7 +132,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
+                <Image src="/images/dashboard_placeholders/alert_triangle_icon.png" alt="Alert Icon" width={20} height={20} className="text-destructive" data-ai-hint="warning alert icon" />
                 子网健康状况
               </CardTitle>
               <CardDescription>即将达到容量上限的子网。</CardDescription>
@@ -160,7 +161,9 @@ export default async function DashboardPage() {
                       <div className="text-right">
                          <Badge variant={ (subnet.utilization ?? 0) > 95 ? "destructive" : "secondary"}>{(subnet.utilization ?? 0)}% 已使用</Badge>
                          <Link href={`/ip-addresses?subnetId=${subnet.id}`}>
-                            <Button variant="ghost" size="sm" className="text-xs mt-1">管理 IP <ArrowUpRight className="h-3 w-3 ml-1" /></Button>
+                            <Button variant="ghost" size="sm" className="text-xs mt-1">管理 IP 
+                              <Image src="/images/dashboard_placeholders/arrow_up_right_icon.png" alt="Manage IP" width={12} height={12} className="ml-1" data-ai-hint="arrow up right" />
+                            </Button>
                          </Link>
                       </div>
                     </li>
@@ -194,9 +197,10 @@ export default async function DashboardPage() {
       }
     }
     console.error("仪表盘页面内部服务器错误:", processedError.message, processedError.stack);
+    // Using a div for error display as AlertTriangle is now a local image
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
-        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
+        <Image src="/images/dashboard_placeholders/alert_triangle_icon.png" alt="Error" width={64} height={64} className="mb-4 text-destructive" data-ai-hint="error warning icon" />
         <h2 className="text-2xl font-semibold mb-2 text-destructive">仪表盘错误</h2>
         <p className="text-muted-foreground mb-2">加载仪表盘数据时出错：</p>
         <p className="text-sm text-destructive bg-destructive/10 p-2 rounded-md">{processedError.message}</p>
