@@ -18,23 +18,20 @@ services:
     restart: unless-stopped
     networks:
       - app_network
-    # Volumes section:
-    # To ensure the dev.db from the Docker image is used (as built by Dockerfile),
-    # we are NOT mounting a volume over /app/prisma or /app/prisma/dev.db here.
-    # If you need to persist dev.db data across container *removals* (not just stop/start),
-    # you can re-introduce a volume mount.
-    # Example for persisting dev.db specifically:
-    # volumes:
-    #   - ipam_db_data:/app/prisma/dev.db
-    # Be mindful that if this named volume 'ipam_db_data' already exists with content,
-    # it will take precedence over the image's baked-in DB file.
-    # To start fresh with the image's DB, you might need to `docker volume rm ipam_db_data` first.
+    volumes:
+      # Map next.config.js from host to container (read-only)
+      # Changes to this file on the host will require a container restart to take effect.
+      - ./next.config.js:/app/next.config.js:ro
+      # Persist the dev.db database file using a named volume
+      # The Dockerfile is responsible for initially creating and seeding dev.db in the image.
+      # On first container run with an empty 'ipam_db_data' volume, Docker copies dev.db from the image to the volume.
+      # On subsequent runs, the container uses the dev.db from the 'ipam_db_data' volume.
+      - ipam_db_data:/app/prisma/dev.db
 
 networks:
   app_network:
     driver: bridge
 
-# Define the volume if you re-enable the 'volumes' section in the service for dev.db persistence
-# Make sure the volume name matches what you use above (e.g., ipam_db_data)
-# volumes:
-#   ipam_db_data:
+# Define the named volume for database persistence
+volumes:
+  ipam_db_data:
