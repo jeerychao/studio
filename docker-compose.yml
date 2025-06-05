@@ -18,17 +18,20 @@ services:
     restart: unless-stopped
     networks:
       - app_network
-    # Removed specific DB file volume mount to ensure the image's /app/prisma/dev.db is used.
-    # If you need data persistence for dev.db across container removals,
-    # you can re-add a volume like:
+    # Temporarily removed specific DB file volume mount to ensure the image's /app/prisma/dev.db is used.
+    # The Dockerfile already copies a seeded dev.db into /app/prisma/.
+    # If you need data persistence for dev.db across container *removals* (not just stop/start),
+    # you can re-add a volume specifically for the database file:
     # volumes:
     #   - ipam_db_data:/app/prisma/dev.db
-    # Be mindful that this volume will then take precedence over the image's baked-in DB.
+    # Be mindful that if this named volume 'ipam_db_data' already exists with content,
+    # it will take precedence over the image's baked-in DB file.
+    # To start fresh with the image's DB, you might need to `docker volume rm ipam_db_data` first.
 
 networks:
   app_network:
     driver: bridge
 
-# Define the volume if you uncomment the 'volumes' section in the service for dev.db
+# Define the volume if you re-enable the 'volumes' section in the service for dev.db persistence
 # volumes:
 #   ipam_db_data:
