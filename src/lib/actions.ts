@@ -450,7 +450,7 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
     for (const ip of ipsInSubnet) {
       await prisma.iPAddress.update({
         where: { id: ip.id },
-        data: { subnetId: null, status: "free", allocatedTo: null, vlanId: null },
+        data: { status: "free", allocatedTo: null, subnetId: null, vlanId: null },
       });
       await prisma.auditLog.create({
         data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_ip_on_subnet_delete', details: `IP ${ip.ipAddress} 已从子网 ${subnetToDelete.cidr} 解除关联，因为子网被删除。` }
@@ -953,8 +953,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     if (data.hasOwnProperty('vlanId')) {
       const vlanIdToSet = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
       if (vlanIdToSet) {
-          const vlanExists = await prisma.vLAN.findUnique({where: {id: vlanIdToSet}});
-          if (!vlanExists) {
+          if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
               throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`);
           }
           updateData.vlan = { connect: { id: vlanIdToSet } };
@@ -966,7 +965,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || null) : ipToUpdate.subnetId;
     const finalStatus = data.status ? data.status as string : ipToUpdate.status;
 
-    if (newSubnetId) {
+    if (newSubnetId) { // If a subnet is being associated or changed
       const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
       if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。");
       const parsedTargetSubnetCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr);
@@ -978,16 +977,29 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
           const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
           if (conflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET');
       }
-    } else {
+      // Correct way to update relation
+      updateData.subnet = { connect: { id: newSubnetId } };
+    } else { // If subnet is being disassociated (newSubnetId is null)
        if (finalStatus === 'allocated' || finalStatus === 'reserved') {
           throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus);
       }
-      if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
+      if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) { // Check for global conflict only if IP or subnet association changes
           const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
           if (globallyConflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY');
       }
+      // Correct way to remove relation
+      if (ipToUpdate.subnetId) { // Only disconnect if it was previously connected
+        updateData.subnet = { disconnect: true };
+      } else {
+        // If it wasn't connected and newSubnetId is also null, no change to subnet relation.
+        // However, Prisma expects `subnetId: null` for records not in a subnet.
+        // This direct assignment to `subnetId` field for Prisma's `update` is tricky.
+        // It's safer to ensure `updateData.subnetId = null` is only set if `newSubnetId` is truly null.
+        // The `updateData.subnet = { disconnect: true }` handles making subnetId null in DB.
+      }
     }
-    updateData.subnetId = newSubnetId;
+    // This line `updateData.subnetId = newSubnetId;` was the source of the error.
+    // It is now handled by the `updateData.subnet = { connect: ... }` or `{ disconnect: ... }` logic above.
 
     const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
     await prisma.auditLog.create({
@@ -1123,7 +1135,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
       if (!roleExists || !roleExists.name) {
         throw new NotFoundError(`角色 ID: ${data.roleId}`, `选择的角色不存在或无效。`, 'roleId');
       }
-      updateData.roleId = data.roleId;
+      updateData.role = { connect: { id: data.roleId } };
     }
     if (data.hasOwnProperty('avatar')) {
       updateData.avatar = data.avatar || '/images/avatars/default_avatar.png';
@@ -1398,3 +1410,4 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
     }));
 }
 
+    
