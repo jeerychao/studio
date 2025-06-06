@@ -33,22 +33,23 @@ export class NetworkError extends AppError {
 }
 
 export class AuthError extends AppError {
-  constructor(message: string, userMessage = '认证失败，请检查您的凭据或重新登录。') {
-    super(message, 401, 'AUTH_ERROR', userMessage);
+  constructor(message: string, userMessage = '认证失败，请检查您的凭据或重新登录。', field?: string) { // Added optional field for e.g. currentPassword
+    super(message, 401, 'AUTH_ERROR', userMessage, field);
   }
 }
 
 export class ResourceError extends AppError {
-  constructor(message: string, code = 'RESOURCE_ERROR', userMessage = '操作的资源存在冲突或问题。') {
+  constructor(message: string, code = 'RESOURCE_ERROR', userMessage = '操作的资源存在冲突或问题。', field?: string) {
     // message here is often the dev message like "Subnet X already exists"
     // userMessage provides a more generic default if not overridden
-    super(message, 409, code, userMessage);
+    // Pass field to AppError constructor
+    super(message, 409, code, userMessage, field);
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource: string, userMessage?: string) {
-    super(`${resource} not found`, 404, 'NOT_FOUND', userMessage || `未找到所请求的资源：${resource}。`);
+  constructor(resource: string, userMessage?: string, field?: string) { // Added optional field
+    super(`${resource} not found`, 404, 'NOT_FOUND', userMessage || `未找到所请求的资源：${resource}。`, field);
   }
 }
 
