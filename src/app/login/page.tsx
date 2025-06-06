@@ -115,6 +115,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isSubmitting}
+                  autoComplete="email"
                 />
               </div>
               <div className="space-y-2">
@@ -127,6 +128,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isSubmitting}
+                  autoComplete="current-password"
                 />
               </div>
             </CardContent>

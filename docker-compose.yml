@@ -7,17 +7,17 @@ services:
     image: ipam-app-local:latest
     container_name: ipam_app_local_prod
     ports:
-      - "3010:3000"
+      - "8081:3000" # 更改为 8081:3000
     env_file:
       - ./production.env # production.env is in the project root
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
-      - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
-      - NEXTAUTH_URL=http://17.100.100.253:3010
-      - NEXT_PUBLIC_EXTERNAL_URL=http://17.100.100.253:3010
-      - NEXT_PRIVATE_EXTERNAL_URL=http://17.100.100.253:3010
+      - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:8081
+      - NEXTAUTH_URL=http://17.100.100.253:8081
+      - NEXT_PUBLIC_EXTERNAL_URL=http://17.100.100.253:8081
+      - NEXT_PRIVATE_EXTERNAL_URL=http://17.100.100.253:8081
     restart: unless-stopped
     networks:
       - app_network
