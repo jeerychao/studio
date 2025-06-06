@@ -5,13 +5,12 @@ import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-// Removed Lucide icon imports: FileDown, DownloadCloud, Loader2
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
-import type { Subnet, VLAN, IPAddress } from "@/types";
+import type { Subnet, VLAN, IPAddress } from "@/types"; // Ensure IPAddress type is available
 import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
-import Image from "next/image"; // Added Image import
+import Image from "next/image";
 
 
 export default function ImportExportPage() {
@@ -34,90 +33,134 @@ export default function ImportExportPage() {
     let filename = `${dataType}_export.csv`;
     let csvContent = "";
     let csvHeaders: string[] = [];
+    const lineSeparator = "\r\n"; // For CSV
 
     const convertToCSV = (data: any[], headersToUse: string[]) => {
-      let csv = headersToUse.join(",") + "\n";
+      let csv = headersToUse.join(",") + lineSeparator;
       data.forEach(row => {
-        csv += headersToUse.map(header => JSON.stringify(row[header as keyof typeof row] ?? "")).join(",") + "\n";
+        csv += headersToUse.map(header => JSON.stringify(row[header as keyof typeof row] ?? "")).join(",") + lineSeparator;
       });
       return csv;
     };
 
     try {
-      if (dataType === "subnets" || dataType === "all") {
-        const subnetsResponse = await getSubnetsAction(); // Fetch all
-        const subnetsForCsv = subnetsResponse.data.map(subnet => ({
-          id: subnet.id,
-          cidr: subnet.cidr,
-          networkAddress: subnet.networkAddress,
-          subnetMask: subnet.subnetMask,
-          ipRange: subnet.ipRange || "",
-          vlanNumber: (subnet as any).vlan?.vlanNumber?.toString() ?? "",
-          description: subnet.description || "",
-          utilization: subnet.utilization || 0, 
-        }));
-        if (dataType === "subnets") {
-            dataToExport = subnetsForCsv;
-            csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "description", "utilization"];
-        } else { 
-            dataToExport.push(...subnetsForCsv.map(s => ({type: 'subnet', ...s})));
-        }
-      }
-      
-      if (dataType === "vlans" || dataType === "all") {
-        const vlansResponse = await getVLANsAction(); // Fetch all
-        const vlansForCsv = vlansResponse.data.map(vlan => ({
-          id: vlan.id,
-          vlanNumber: vlan.vlanNumber,
-          description: vlan.description || "",
-          subnetCount: vlan.subnetCount || 0, 
-        }));
-         if (dataType === "vlans") {
-            dataToExport = vlansForCsv;
-            csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
-        } else { 
-            dataToExport.push(...vlansForCsv.map(v => ({type: 'vlan', ...v})));
-        }
-      }
-      
-      if (dataType === "ips" || dataType === "all") {
-        const ipsResponse = await getIPAddressesAction(); // Fetch all
-        const ipsForCsv = ipsResponse.data.map(ip => {
-            let effectiveVlanNumberStr = "";
-            if (ip.vlan?.vlanNumber) { 
-                effectiveVlanNumberStr = ip.vlan.vlanNumber.toString();
-            } else if (ip.subnet?.vlan?.vlanNumber) { 
-                effectiveVlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
-            }
-            return {
-                id: ip.id,
-                ipAddress: ip.ipAddress,
-                subnetId: ip.subnetId || "",
-                subnetCidr: ip.subnet?.cidr || "",
-                vlanNumber: effectiveVlanNumberStr,
-                status: ip.status,
-                allocatedTo: ip.allocatedTo || "",
-                description: ip.description || "",
-            };
-        });
-        if (dataType === "ips") {
-            dataToExport = ipsForCsv;
-            csvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanNumber", "status", "allocatedTo", "description"];
-        } else { 
-             dataToExport.push(...ipsForCsv.map(i => ({type: 'ipaddress', ...i})));
-        }
-      }
-
       if (dataType === "all") {
-        if (dataToExport.length > 0) {
-            filename = `ipam_lite_all_data_export.json`; 
-            csvContent = JSON.stringify(dataToExport, null, 2);
-        } else {
+        let combinedCsvContent = "";
+        filename = `ipam_lite_all_data_export.csv`;
+
+        const subnetsResponse = await getSubnetsAction();
+        if (subnetsResponse.data.length > 0) {
+          const subnetsForCsv = subnetsResponse.data.map(subnet => ({
+            id: subnet.id,
+            cidr: subnet.cidr,
+            networkAddress: subnet.networkAddress,
+            subnetMask: subnet.subnetMask,
+            ipRange: subnet.ipRange || "",
+            vlanId: subnet.vlanId || "",
+            description: subnet.description || "",
+            utilization: subnet.utilization || 0, 
+          }));
+          const subnetHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "description", "utilization"];
+          combinedCsvContent += "# --- SUBNETS ---" + lineSeparator;
+          combinedCsvContent += convertToCSV(subnetsForCsv, subnetHeaders) + lineSeparator;
+        }
+
+        const vlansResponse = await getVLANsAction();
+        if (vlansResponse.data.length > 0) {
+          const vlansForCsv = vlansResponse.data.map(vlan => ({
+            id: vlan.id,
+            vlanNumber: vlan.vlanNumber,
+            description: vlan.description || "",
+            subnetCount: vlan.subnetCount || 0, 
+          }));
+          const vlanHeaders = ["id", "vlanNumber", "description", "subnetCount"];
+          combinedCsvContent += "# --- VLANS ---" + lineSeparator;
+          combinedCsvContent += convertToCSV(vlansForCsv, vlanHeaders) + lineSeparator;
+        }
+        
+        const ipsResponse = await getIPAddressesAction(); // Fetch all IP addresses
+        if (ipsResponse.data.length > 0) {
+          const ipsForCsv = ipsResponse.data.map(ip => {
+              let effectiveVlanNumberStr = "";
+              if (ip.vlan?.vlanNumber) { 
+                  effectiveVlanNumberStr = ip.vlan.vlanNumber.toString();
+              } else if (ip.subnet?.vlan?.vlanNumber) { 
+                  effectiveVlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
+              }
+              return {
+                  id: ip.id,
+                  ipAddress: ip.ipAddress,
+                  subnetId: ip.subnetId || "",
+                  subnetCidr: ip.subnet?.cidr || "",
+                  vlanId: ip.vlanId || "", // Direct VLAN ID if present on IP
+                  vlanNumber: effectiveVlanNumberStr,
+                  status: ip.status,
+                  allocatedTo: ip.allocatedTo || "",
+                  description: ip.description || "",
+              };
+          });
+          const ipHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "status", "allocatedTo", "description"];
+          combinedCsvContent += "# --- IP ADDRESSES ---" + lineSeparator;
+          combinedCsvContent += convertToCSV(ipsForCsv, ipHeaders);
+        }
+        
+        if (combinedCsvContent.trim() === "") {
             toast({ title: "无数据", description: "系统中没有可导出的数据。" });
             setIsExporting(false);
             return;
         }
-      } else { 
+        csvContent = combinedCsvContent;
+
+      } else { // Specific data type export (subnets, vlans, ips)
+        if (dataType === "subnets") {
+            const subnetsResponse = await getSubnetsAction();
+            const subnetsForCsv = subnetsResponse.data.map(subnet => ({
+              id: subnet.id,
+              cidr: subnet.cidr,
+              networkAddress: subnet.networkAddress,
+              subnetMask: subnet.subnetMask,
+              ipRange: subnet.ipRange || "",
+              vlanId: subnet.vlanId || "",
+              description: subnet.description || "",
+              utilization: subnet.utilization || 0,
+            }));
+            dataToExport = subnetsForCsv;
+            csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "description", "utilization"];
+        } else if (dataType === "vlans") {
+            const vlansResponse = await getVLANsAction();
+            const vlansForCsv = vlansResponse.data.map(vlan => ({
+              id: vlan.id,
+              vlanNumber: vlan.vlanNumber,
+              description: vlan.description || "",
+              subnetCount: vlan.subnetCount || 0,
+            }));
+            dataToExport = vlansForCsv;
+            csvHeaders = ["id", "vlanNumber", "description", "subnetCount"];
+        } else if (dataType === "ips") {
+            const ipsResponse = await getIPAddressesAction();
+             const ipsForCsv = ipsResponse.data.map(ip => {
+                let effectiveVlanNumberStr = "";
+                if (ip.vlan?.vlanNumber) { 
+                    effectiveVlanNumberStr = ip.vlan.vlanNumber.toString();
+                } else if (ip.subnet?.vlan?.vlanNumber) { 
+                    effectiveVlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
+                }
+                return {
+                    id: ip.id,
+                    ipAddress: ip.ipAddress,
+                    subnetId: ip.subnetId || "",
+                    subnetCidr: ip.subnet?.cidr || "",
+                    vlanId: ip.vlanId || "",
+                    vlanNumber: effectiveVlanNumberStr,
+                    status: ip.status,
+                    allocatedTo: ip.allocatedTo || "",
+                    description: ip.description || "",
+                };
+            });
+            dataToExport = ipsForCsv;
+            csvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "status", "allocatedTo", "description"];
+        }
+
         if (dataToExport.length === 0) {
             toast({ title: "无数据", description: `没有可用于导出的 ${dataType === "ips" ? "IP 地址" : dataType === "subnets" ? "子网" : "VLAN"} 数据。`});
             setIsExporting(false);
@@ -127,7 +170,7 @@ export default function ImportExportPage() {
       }
 
 
-      const blob = new Blob([csvContent], { type: dataType === 'all' ? 'application/json;charset=utf-8;' : 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement("a");
       if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
@@ -174,7 +217,7 @@ export default function ImportExportPage() {
     <>
       <PageHeader
         title="数据导出"
-        description="将您当前的 IPAM 数据下载为 CSV 或 JSON 文件。导出的数据基于系统中的实时数据库。"
+        description="将您当前的 IPAM 数据下载为 CSV 文件。导出的数据基于系统中的实时数据库。"
         icon={<Image src="/images/tool_icons/file_down_icon.png" alt="Export Icon" width={32} height={32} data-ai-hint="download file icon" />}
       />
       <Card>
@@ -184,7 +227,7 @@ export default function ImportExportPage() {
             导出数据
           </CardTitle>
           <CardDescription>
-            选择要导出的数据类型。导出的数据为 CSV 格式 (特定类型) 或 JSON 格式 (全部数据)，基于系统当前的实时数据库。
+            选择要导出的数据类型。所有类型的数据都将以 CSV 格式导出，基于系统当前的实时数据库。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -216,7 +259,7 @@ export default function ImportExportPage() {
                   ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" /> 
                   : <Image src="/images/tool_icons/file_down_icon.png" alt="Export All" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
                 }
-                导出所有数据 (JSON)
+                导出所有数据 (CSV)
               </Button>
           </div>
           {!canExport && <p className="text-xs text-destructive mt-2">您没有权限导出数据。</p>}
@@ -225,3 +268,5 @@ export default function ImportExportPage() {
     </>
   );
 }
+    
+    
