@@ -96,13 +96,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     }
 
     try {
-      // Assuming batchCreateVLANsAction returns ActionResponse<BatchVlanCreationResult>
-      // or just BatchVlanCreationResult directly if no global error is expected from the action itself
       const result = await batchCreateVLANsAction(vlansToCreate);
-      // The 'result' here is BatchVlanCreationResult, not ActionResponse
-      // If batchCreateVLANsAction itself could fail in setup and return ActionResponse, handle that first.
-      // For now, assuming it always returns BatchVlanCreationResult or throws an error caught below.
-      
       setSubmissionResult(result);
 
       if (result.successCount > 0 && result.failureDetails.length === 0) {
@@ -112,27 +106,24 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         });
         if (onVlanChange) onVlanChange();
         form.reset(); 
-        // setIsOpen(false); // Optionally close on full success
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
           title: "批量处理部分成功",
           description: `${result.successCount} 个VLAN创建成功，${result.failureDetails.length} 个失败。详情请见下方。`,
-          variant: "default", // Or "warning" if you have one
+          variant: "default",
         });
-        if (onVlanChange) onVlanChange(); // Still refresh if some succeeded
+        if (onVlanChange) onVlanChange();
       } else if (result.failureDetails.length > 0) {
          toast({
           title: "批量创建失败",
           description: `所有 ${vlansToCreate.length} 个VLAN均创建失败。详情请见下方。`,
           variant: "destructive",
         });
-      } else { // successCount is 0, failureDetails is 0 - should not happen if vlansToCreate > 0
+      } else {
         toast({ title: "无操作", description: "没有VLAN被创建或失败。", variant: "default" });
       }
 
-    } catch (error) { // Catch unexpected errors from batchCreateVLANsAction or client-side logic
-      // If batchCreateVLANsAction throws an error that's an AppError (and thus an ActionErrorResponse in its .error)
-      // This path might be taken if the action itself fails before processing items.
+    } catch (error) { 
       const actionError = (error as ActionResponse<any>)?.error;
       if (actionError) {
         toast({
@@ -153,7 +144,6 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             variant: "destructive",
         });
       }
-      // Provide some feedback for submissionResult in case of a full crash
       setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message || "未知错误" }] });
     }
   }
@@ -241,15 +231,18 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                 </Alert>
 
                 {submissionResult.failureDetails.length > 0 && (
-                  <div>
-                    <h4 className="font-medium">失败详情:</h4>
-                    <ScrollArea className="h-[120px] mt-1 rounded-md border p-2">
+                  <div className="border border-dashed border-destructive p-2 mt-2">
+                    <h4 className="font-medium text-destructive">失败详情 (共 {submissionResult.failureDetails.length} 条):</h4>
+                    <ScrollArea className="h-[120px] mt-1 rounded-md border p-2 bg-destructive/10">
                       <ul className="space-y-1 text-sm">
                         {submissionResult.failureDetails.map((failure, index) => (
-                          <li key={index} className="text-destructive">
-                            VLAN {failure.vlanNumberAttempted}: {failure.error}
+                          <li key={index} className="text-destructive font-medium">
+                            VLAN {failure.vlanNumberAttempted}: {failure.error || "错误信息未提供"}
                           </li>
                         ))}
+                        {submissionResult.failureDetails.length === 0 && (
+                           <li>无失败详情记录。</li>
+                        )}
                       </ul>
                     </ScrollArea>
                   </div>
@@ -273,3 +266,5 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
+
+    
