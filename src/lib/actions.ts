@@ -188,9 +188,9 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     const appSubnets: AppSubnet[] = await Promise.all(subnetsFromDb.map(async (subnet) => {
       const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
       let utilization = 0;
-      let networkAddress = subnet.networkAddress;
-      let subnetMask = subnet.subnetMask;
-      let ipRange = subnet.ipRange;
+      let networkAddress = subnet.networkAddress; // Initial value from DB
+      let subnetMask = subnet.subnetMask;     // Initial value from DB
+      let ipRange: string | null = subnet.ipRange; // Prisma type for ipRange is String? which translates to string | null
 
       if (subnetProperties && typeof subnetProperties.prefix === 'number') {
         const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
@@ -202,18 +202,19 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         }
         networkAddress = subnetProperties.networkAddress;
         subnetMask = subnetProperties.subnetMask;
-        ipRange = subnetProperties.ipRange;
+        // subnetProperties.ipRange is string | undefined
+        // We need to assign to ipRange (string | null)
+        ipRange = subnetProperties.ipRange !== undefined ? subnetProperties.ipRange : null;
       } else {
         logger.warn(`[${actionName}] Could not parse CIDR properties for '${subnet.cidr}' from DB for subnet ID ${subnet.id}. Using DB values or defaults.`, undefined, { subnetId: subnet.id, cidr: subnet.cidr });
-        // Fallback to DB values if parsing fails, but utilization might be 0 or inaccurate
-        // If DB values for networkAddress, subnetMask, ipRange are also suspect, this part might need adjustment.
-        // For now, assume we try to use parsed ones first.
+        // ipRange remains its value from DB (string | null)
+        // networkAddress and subnetMask remain their values from DB
       }
       return {
         ...subnet,
         networkAddress,
         subnetMask,
-        ipRange: ipRange || undefined,
+        ipRange: ipRange || undefined, // Convert null to undefined for AppSubnet type (ipRange?: string)
         vlanId: subnet.vlanId || undefined,
         description: subnet.description || undefined,
         utilization: utilization,
@@ -278,7 +279,7 @@ export async function createSubnetAction(
         cidr: canonicalCidrToStore,
         networkAddress: subnetProperties.networkAddress,
         subnetMask: subnetProperties.subnetMask,
-        ipRange: subnetProperties.ipRange,
+        ipRange: subnetProperties.ipRange || null, // Ensure null if undefined
         vlanId: data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId,
         description: data.description || null,
       },
@@ -345,7 +346,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       updateData.cidr = newCanonicalCidr;
       updateData.networkAddress = newSubnetProperties.networkAddress;
       updateData.subnetMask = newSubnetProperties.subnetMask;
-      updateData.ipRange = newSubnetProperties.ipRange;
+      updateData.ipRange = newSubnetProperties.ipRange || null; // Ensure null if undefined
 
       const allocatedIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: "allocated" } });
       const ipsToDisassociateDetails: string[] = [];
@@ -1392,3 +1393,4 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
+
