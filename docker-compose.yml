@@ -11,17 +11,22 @@ services:
       - "3010:3000"
     env_file:
       - ./production.env
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
+      - NEXTAUTH_URL=http://17.100.100.253:3010
     restart: unless-stopped
     networks:
       - app_network
     volumes:
-      - ./next.config.js:/app/next.config.js:ro # For easier modification of allowedOrigins
-      - ipam_db_data:/app/prisma # Persist the entire prisma directory (contains dev.db and schema)
+      - prisma_data:/app/prisma
 
 networks:
   app_network:
     driver: bridge
 
 volumes:
-  ipam_db_data:
-    driver: local # Ensures the volume is managed by Docker on the host
+  prisma_data:
+    driver: local
