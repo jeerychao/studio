@@ -15,9 +15,8 @@ services:
     networks:
       - app_network
     volumes:
-      - ./next.config.js:/app/next.config.js:ro
-      - ./prisma:/app/prisma
-      - ipam_db_data:/app/prisma/dev.db
+      - ./next.config.js:/app/next.config.js:ro # For easier modification of allowedOrigins
+      - ipam_db_data:/app/prisma # Persist the entire prisma directory (contains dev.db and schema)
 
 networks:
   app_network:
@@ -25,3 +24,4 @@ networks:
 
 volumes:
   ipam_db_data:
+    driver: local # Ensures the volume is managed by Docker on the host

@@ -10,6 +10,7 @@ const nextConfig = {
       ],
     },
   },
+  output: 'standalone', // Optimizes Docker builds by outputting a minimal server
 };
 
 module.exports = nextConfig;
