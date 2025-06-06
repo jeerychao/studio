@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  ipam-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ipam-app-local:latest
+    container_name: ipam_app_local_prod
+    ports:
+      - "3010:3000" # 确保这里是 hostPort:containerPort，且 containerPort 是有效数字
+    env_file:
+      - ./production.env
+    restart: unless-stopped
+    networks:
+      - app_network
+    volumes:
+      - prisma_data:/app/prisma
+    healthcheck:
+      test: ["CMD", "/app/health-check.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  prisma_data:
+    driver: local
