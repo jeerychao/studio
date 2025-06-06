@@ -135,8 +135,6 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
 
 
     try {
-      // Assuming batchCreateIPAddressesAction returns BatchIpCreationResult directly or throws an error
-      // If it can return ActionResponse for setup errors, that needs specific handling.
       const result = await batchCreateIPAddressesAction(payload);
       setSubmissionResult(result);
 
@@ -163,7 +161,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
          toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" });
       }
 
-    } catch (error) { // Catch unexpected errors from action or client logic
+    } catch (error) { 
       const actionError = (error as ActionResponse<any>)?.error;
       if (actionError) {
         toast({
@@ -342,8 +340,8 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                 />
 
                 {submissionResult && (
-                  <div className="mt-4 space-y-3">
-                    <h3 className="font-semibold">处理结果:</h3>
+                  <div className="mt-6 space-y-3">
+                    <h3 className="text-lg font-semibold border-b pb-2 mb-3">处理结果:</h3>
                     <Alert variant={submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 ? "destructive" : "default"}>
                        <AlertCircle className="h-4 w-4"/>
                       <AlertTitle>概要</AlertTitle>
@@ -355,15 +353,18 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                     </Alert>
 
                     {submissionResult.failureDetails.length > 0 && (
-                      <div>
-                        <h4 className="font-medium">失败详情:</h4>
-                        <ScrollArea className="h-[120px] mt-1 rounded-md border p-2">
+                      <div className="border border-dashed border-destructive p-3 mt-3 rounded-md">
+                        <h4 className="font-medium text-destructive mb-2">失败详情 (共 {submissionResult.failureDetails.length} 条):</h4>
+                        <ScrollArea className="h-[120px] mt-1 rounded-md border bg-destructive/5 p-2">
                           <ul className="space-y-1 text-sm">
                             {submissionResult.failureDetails.map((failure, index) => (
-                              <li key={index} className="text-destructive">
-                                IP {failure.ipAttempted}: {failure.error}
+                              <li key={index} className="text-destructive font-medium">
+                                IP {failure.ipAttempted}: {failure.error || "错误信息未提供"}
                               </li>
                             ))}
+                            {submissionResult.failureDetails.length === 0 && (
+                               <li>无失败详情记录。</li>
+                            )}
                           </ul>
                         </ScrollArea>
                       </div>
@@ -389,3 +390,6 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
     </Sheet>
   );
 }
+
+
+    
