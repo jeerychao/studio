@@ -5,15 +5,15 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
       allowedForwardedHosts: [
-        '17.100.100.253:3010',
+        '17.100.100.253:3010', // 匹配日志中的 X-Forwarded-Host
       ],
       allowedOrigins: [
-        'http://17.100.100.253:8081',
-        'http://17.100.100.253:3010',
+        'http://17.100.100.253:8081', // 匹配浏览器实际的 Origin (包含协议)
+        'http://17.100.100.253:3010', // Next.js 感知的自身 Origin
       ]
     }
   },
-  // 禁用客户端缓存以解决 CacheStore 错误
+  // 禁用客户端缓存以解决 CacheStore 错误 (根据您之前的请求保留)
   cache: false,
   headers: async () => {
     return [
