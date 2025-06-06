@@ -1,7 +1,41 @@
+version: '3.8'
+
 services:
   ipam-app:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ipam-app-local:latest
+    container_name: ipam_app_local_prod
     ports:
       - "3010:3000"
+    env_file:
+      - ./production.env
+    # environment:
+    #   - NODE_ENV=production
+    #   - HOST=0.0.0.0
+    #   - HOSTNAME=0.0.0.0
+    #   - PORT=3000
+    #   - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
+    #   - NEXTAUTH_URL=http://17.100.100.253:3010
+    #   - NEXT_PUBLIC_VERCEL_URL=17.100.100.253:3010
+    #   - NEXTAUTH_SECRET=your-secret-key # Ensure this is set in production.env or here
+    #   - NODE_OPTIONS=--max-old-space-size=4096
+    restart: unless-stopped
+    networks:
+      - app_network
+    volumes:
+      - prisma_data:/app/prisma
+    healthcheck:
+      test: ["CMD", "/app/health-check.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  prisma_data:
+    driver: local
