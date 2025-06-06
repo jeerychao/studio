@@ -217,42 +217,54 @@ export async function createSubnetAction(data: {
   cidr: string;
   vlanId?: string;
   description?: string;
-}): Promise<AppSubnet> {
+}): Promise<{ success: true; subnet: AppSubnet } | { success: false; error: string }> {
   const auditUser = await getAuditUserInfo();
   const parsedCidr = parseAndValidateCIDR(data.cidr);
 
   if (!parsedCidr) {
-    throw new Error("无效的 CIDR 表示法格式。请使用 X.X.X.X/Y。");
+    return { success: false, error: "无效的 CIDR 表示法格式。请使用 X.X.X.X/Y。" };
   }
   const canonicalCidrToStore = `${parsedCidr.networkAddress}/${parsedCidr.prefix}`;
   if (data.cidr !== canonicalCidrToStore) {
-    throw new Error(`无效的 CIDR：IP 地址部分不是网络地址。对于输入 ${data.cidr}，请使用 ${canonicalCidrToStore}。`);
+    return { success: false, error: `无效的 CIDR：IP 地址部分不是网络地址。对于输入 ${data.cidr}，请使用 ${canonicalCidrToStore}。` };
   }
 
   const existingSubnetByCidr = await prisma.subnet.findUnique({ where: { cidr: canonicalCidrToStore } });
   if (existingSubnetByCidr) {
-    throw new Error(`CIDR 为 ${canonicalCidrToStore} 的子网已存在。`);
+    return { success: false, error: `CIDR 为 ${canonicalCidrToStore} 的子网已存在。` };
   }
 
-  const newSubnet = await prisma.subnet.create({
-    data: {
-      cidr: canonicalCidrToStore,
-      networkAddress: parsedCidr.networkAddress,
-      subnetMask: parsedCidr.subnetMask,
-      ipRange: parsedCidr.ipRange,
-      vlanId: data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId,
-      description: data.description || null,
-    },
-  });
+  try {
+    const newSubnet = await prisma.subnet.create({
+      data: {
+        cidr: canonicalCidrToStore,
+        networkAddress: parsedCidr.networkAddress,
+        subnetMask: parsedCidr.subnetMask,
+        ipRange: parsedCidr.ipRange,
+        vlanId: data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId,
+        description: data.description || null,
+      },
+    });
 
-  await prisma.auditLog.create({
-    data: { userId: auditUser.userId, username: auditUser.username, action: 'create_subnet', details: `创建了子网 ${newSubnet.cidr}` }
-  });
+    await prisma.auditLog.create({
+      data: { userId: auditUser.userId, username: auditUser.username, action: 'create_subnet', details: `创建了子网 ${newSubnet.cidr}` }
+    });
 
-  revalidatePath("/subnets");
-  revalidatePath("/dashboard");
-  revalidatePath("/ip-addresses");
-  return { ...newSubnet, vlanId: newSubnet.vlanId || undefined, description: newSubnet.description || undefined, utilization: 0, ipRange: newSubnet.ipRange || undefined };
+    revalidatePath("/subnets");
+    revalidatePath("/dashboard");
+    revalidatePath("/ip-addresses");
+    const appSubnet = { ...newSubnet, vlanId: newSubnet.vlanId || undefined, description: newSubnet.description || undefined, utilization: 0, ipRange: newSubnet.ipRange || undefined };
+    return { success: true, subnet: appSubnet };
+  } catch (dbError: any) {
+    console.error("CreateSubnetAction DB Error:", dbError);
+    // 在这里，我们应该返回一个对用户友好的错误，或者一个通用的错误。
+    // 避免直接暴露 Prisma 或数据库的内部错误信息给客户端。
+    if (dbError instanceof Prisma.PrismaClientKnownRequestError) {
+        // 处理已知的 Prisma 错误, e.g., unique constraint violation if not caught above
+        return { success: false, error: `创建子网时发生数据库错误。代码: ${dbError.code}` };
+    }
+    return { success: false, error: "创建子网时发生意外的服务器错误。" };
+  }
 }
 
 export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubnet, "id" | "utilization">> & { cidr?: string }): Promise<AppSubnet | null> {
@@ -980,7 +992,7 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   };
 }
 
-export async function createUserAction(data: Omit<AppUser, "id" | "avatar" | "lastLogin" | "roleName"> & { password: string, avatar?: string }): Promise<FetchedUserDetails> {
+export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string }): Promise<FetchedUserDetails> {
   const auditUser = await getAuditUserInfo();
   if (await prisma.user.findUnique({ where: { email: data.email } })) throw new Error(`邮箱 ${data.email} 已存在。`);
   if (await prisma.user.findUnique({ where: { username: data.username } })) throw new Error(`用户名 ${data.username} 已存在。`);
@@ -1318,6 +1330,8 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
+    
+
     
 
     

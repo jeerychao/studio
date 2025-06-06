@@ -87,6 +87,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
 
 
   async function onSubmit(data: SubnetFormValues) {
+    form.clearErrors(); // Clear previous validation errors
     try {
       const actionData = {
         cidr: data.cidr,
@@ -94,20 +95,49 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         description: data.description || undefined,
       };
 
+      let result;
       if (isEditing && subnet) {
-        await updateSubnetAction(subnet.id, actionData );
-        toast({ title: "子网已更新", description: `子网已成功更新。` });
+        // For updateSubnetAction, we assume it might still throw errors for now,
+        // or you'd modify it similarly to createSubnetAction.
+        // If it throws, the catch block below will handle it.
+        // If it's modified to return a result object:
+        // result = await updateSubnetAction(subnet.id, actionData);
+        // For now, let's keep it simple and assume updateSubnetAction might throw
+        const updatedSubnet = await updateSubnetAction(subnet.id, actionData );
+        result = { success: true, subnet: updatedSubnet }; // Mock success if it doesn't throw
+        if (!updatedSubnet) { // Handle case where updateSubnetAction returns null on failure
+            result = { success: false, error: "更新子网失败，未找到子网或发生错误。" };
+        }
+
       } else {
-        await createSubnetAction(actionData);
-        toast({ title: "子网已创建", description: `子网 ${data.cidr} 已成功创建。` });
+        result = await createSubnetAction(actionData);
       }
-      setIsOpen(false);
-      if (onSubnetChange) onSubnetChange(); // Call callback
-      form.reset();
-    } catch (error) {
+
+      if (result.success) {
+        toast({
+          title: isEditing ? "子网已更新" : "子网已创建",
+          description: isEditing ? `子网已成功更新。` : `子网 ${data.cidr} 已成功创建。`,
+        });
+        setIsOpen(false);
+        if (onSubnetChange) onSubnetChange();
+        form.reset();
+      } else {
+        // result.error should contain the specific error message from the Server Action
+        toast({
+          title: "操作失败",
+          description: result.error || "发生未知错误。",
+          variant: "destructive",
+        });
+        // Optionally, set form error if the error is field-specific, e.g., for CIDR
+        if (result.error && result.error.toLowerCase().includes("cidr")) {
+            form.setError("cidr", { type: "manual", message: result.error });
+        }
+      }
+    } catch (error: any) { // Catches errors if updateSubnetAction (or others) still throw
+      console.error("SubnetFormSheet onSubmit unexpected error:", error);
       toast({
-        title: "错误",
-        description: error instanceof Error ? error.message : "发生意外错误。",
+        title: "提交错误",
+        description: error.message || "提交表单时发生意外错误。",
         variant: "destructive",
       });
     }
@@ -210,3 +240,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
+
+
+    
