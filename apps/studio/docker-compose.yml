@@ -11,16 +11,14 @@ services:
       - "3010:3000"
     env_file:
       - ./production.env
-    # environment:
-    #   - NODE_ENV=production
-    #   - HOST=0.0.0.0
-    #   - HOSTNAME=0.0.0.0
-    #   - PORT=3000
-    #   - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
-    #   - NEXTAUTH_URL=http://17.100.100.253:3010
-    #   - NEXT_PUBLIC_VERCEL_URL=17.100.100.253:3010
-    #   - NEXTAUTH_SECRET=your-secret-key # Ensure this is set in production.env or here
-    #   - NODE_OPTIONS=--max-old-space-size=4096
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
+      - NEXTAUTH_URL=http://17.100.100.253:3010
+      - NEXT_PUBLIC_EXTERNAL_URL=http://17.100.100.253:3010
+      - NEXT_PRIVATE_EXTERNAL_URL=http://17.100.100.253:3010
     restart: unless-stopped
     networks:
       - app_network
