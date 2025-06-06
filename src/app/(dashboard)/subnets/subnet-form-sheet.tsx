@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form"; // Import FieldPath
 import * as z from "zod";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import {
@@ -36,15 +36,17 @@ import {
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
-import { createSubnetAction, updateSubnetAction } from "@/lib/actions";
-import { parseAndValidateCIDR } from "@/lib/ip-utils";
+import { createSubnetAction, updateSubnetAction, type ActionResponse } from "@/lib/actions"; // Import ActionResponse
+// Removed: import { parseAndValidateCIDR } from "@/lib/ip-utils"; // Now handled by actions and error-utils
 
+// Zod schema for client-side validation (can be simpler than server-side if desired,
+// or try to match. Server-side will always re-validate).
 const subnetFormSchema = z.object({
-  cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)")
-    .refine((val) => {
-      const parsed = parseAndValidateCIDR(val);
-      return parsed !== null; 
-    }, "无效的 CIDR 表示法格式 (例如 192.168.1.0/24)。请确保 IP 地址和前缀长度有效。"),
+  cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)"),
+    // .refine((val) => { // Basic client-side check, server will do full validation
+    //   const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/(\d{1,2})$/;
+    //   return cidrRegex.test(val);
+    // }, "无效的 CIDR 表示法格式 (例如 192.168.1.0/24)。"),
   vlanId: z.string().optional(),
   description: z.string().max(200, "描述过长").optional(),
 });
@@ -56,7 +58,7 @@ interface SubnetFormSheetProps {
   vlans: VLAN[];
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
-  onSubnetChange?: () => void; // Callback prop
+  onSubnetChange?: () => void;
 }
 
 const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
@@ -79,65 +81,73 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
-        vlanId: subnet?.vlanId || "",
+        vlanId: subnet?.vlanId || "", // Will be mapped to sentinel if empty
         description: subnet?.description || "",
       });
     }
   }, [isOpen, subnet, form]);
 
 
-  async function onSubmit(data: SubnetFormValues) {
+  async function onSubmit(values: SubnetFormValues) {
     form.clearErrors(); // Clear previous validation errors
+    const actionData = {
+      cidr: values.cidr,
+      vlanId: values.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : (values.vlanId || undefined),
+      description: values.description || undefined,
+    };
+
+    let response: ActionResponse<Subnet>;
     try {
-      const actionData = {
-        cidr: data.cidr,
-        vlanId: data.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : (data.vlanId || undefined),
-        description: data.description || undefined,
-      };
-
-      let result;
       if (isEditing && subnet) {
-        // For updateSubnetAction, we assume it might still throw errors for now,
-        // or you'd modify it similarly to createSubnetAction.
-        // If it throws, the catch block below will handle it.
-        // If it's modified to return a result object:
-        // result = await updateSubnetAction(subnet.id, actionData);
-        // For now, let's keep it simple and assume updateSubnetAction might throw
-        const updatedSubnet = await updateSubnetAction(subnet.id, actionData );
-        result = { success: true, subnet: updatedSubnet }; // Mock success if it doesn't throw
-        if (!updatedSubnet) { // Handle case where updateSubnetAction returns null on failure
-            result = { success: false, error: "更新子网失败，未找到子网或发生错误。" };
-        }
-
+        response = await updateSubnetAction(subnet.id, actionData);
       } else {
-        result = await createSubnetAction(actionData);
+        response = await createSubnetAction(actionData);
       }
 
-      if (result.success) {
+      if (response.success && response.data) {
         toast({
           title: isEditing ? "子网已更新" : "子网已创建",
-          description: isEditing ? `子网已成功更新。` : `子网 ${data.cidr} 已成功创建。`,
+          description: isEditing ? `子网 ${response.data.cidr} 已成功更新。` : `子网 ${response.data.cidr} 已成功创建。`,
         });
         setIsOpen(false);
         if (onSubnetChange) onSubnetChange();
-        form.reset();
-      } else {
-        // result.error should contain the specific error message from the Server Action
+        form.reset(); // Reset form on success
+      } else if (response.error) {
         toast({
           title: "操作失败",
-          description: result.error || "发生未知错误。",
+          description: response.error.userMessage,
           variant: "destructive",
         });
-        // Optionally, set form error if the error is field-specific, e.g., for CIDR
-        if (result.error && result.error.toLowerCase().includes("cidr")) {
-            form.setError("cidr", { type: "manual", message: result.error });
+        if (response.error.field && form.setError) {
+          // Ensure the field name from the error matches a field in your form
+          // The `as FieldPath<SubnetFormValues>` cast might be needed if the field name isn't statically known
+          // to be one of 'cidr', 'vlanId', or 'description'.
+          const fieldName = response.error.field as FieldPath<SubnetFormValues>;
+          if (fieldName in form.getValues()) {
+            form.setError(fieldName, {
+              type: "server",
+              message: response.error.userMessage,
+            });
+          } else {
+             // If field name doesn't match form, show it in general toast or log it
+            console.warn(`Server returned error for field '${response.error.field}' which is not in the form.`);
+          }
         }
+      } else {
+        // Should not happen if actions always return success or error object
+        toast({
+          title: "未知响应",
+          description: "从服务器收到意外响应。",
+          variant: "destructive",
+        });
       }
-    } catch (error: any) { // Catches errors if updateSubnetAction (or others) still throw
-      console.error("SubnetFormSheet onSubmit unexpected error:", error);
+    } catch (error: unknown) { 
+      // This catch block is for unexpected errors during the await/response handling itself,
+      // NOT for business logic errors returned by the action.
+      console.error("SubnetFormSheet onSubmit unexpected client-side error:", error);
       toast({
-        title: "提交错误",
-        description: error.message || "提交表单时发生意外错误。",
+        title: "客户端错误",
+        description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
         variant: "destructive",
       });
     }
@@ -185,17 +195,14 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                   <FormLabel>VLAN (可选)</FormLabel>
                   <Select
                     onValueChange={(value) => {
-                      if (value === NO_VLAN_SENTINEL_VALUE) {
-                        field.onChange(""); 
-                      } else {
-                        field.onChange(value);
-                      }
+                      field.onChange(value === NO_VLAN_SENTINEL_VALUE ? "" : value);
                     }}
-                    value={field.value === "" || field.value === undefined ? NO_VLAN_SENTINEL_VALUE : field.value}
+                    // Ensure value is correctly mapped for the Select component
+                    value={field.value === "" || field.value === null || field.value === undefined ? NO_VLAN_SENTINEL_VALUE : field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="选择一个 VLAN" />
+                        <SelectValue placeholder="选择一个 VLAN 或留空" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -240,6 +247,3 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
-
-
-    
