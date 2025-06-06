@@ -65,7 +65,7 @@ export function PasswordChangeForm() {
         toast({ title: "Password Updated", description: "Your password has been successfully updated." });
         form.reset();
       } else {
-        toast({ title: "Error", description: result.message || "Failed to update password.", variant: "destructive" });
+        toast({ title: "Error", description: result.error?.userMessage || "Failed to update password.", variant: "destructive" });
       }
     } catch (error) {
       toast({
