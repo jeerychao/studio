@@ -11,7 +11,8 @@ import {
   isIpInCidrRange,
   ipToNumber,
   numberToIp,
-  getPrefixFromCidr
+  getPrefixFromCidr,
+  doSubnetsOverlap // Import for overlap detection
 } from "./ip-utils";
 // validateCidrInput is for validating user input and throws specific errors
 import { validateCIDR as validateCidrInput } from "./error-utils";
@@ -241,8 +242,8 @@ export async function createSubnetAction(
 
     validateCidrInput(data.cidr, 'cidr'); 
 
-    const subnetProperties = getSubnetPropertiesFromCidr(data.cidr);
-    if (!subnetProperties) {
+    const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr);
+    if (!newSubnetProperties) {
       throw new AppError(
         'Failed to parse CIDR properties even after initial validation.',
         500,
@@ -252,22 +253,37 @@ export async function createSubnetAction(
     }
     const canonicalCidrToStore = data.cidr; 
 
-    const existingSubnet = await prisma.subnet.findUnique({
+    const existingSubnetByCidr = await prisma.subnet.findUnique({
       where: { cidr: canonicalCidrToStore }
     });
-    if (existingSubnet) {
+    if (existingSubnetByCidr) {
       throw new ResourceError(
         `子网 ${canonicalCidrToStore} 已存在。`,
         'SUBNET_ALREADY_EXISTS',
-        `子网 ${canonicalCidrToStore} 已存在，无法重复创建。`, // No specific field, error is about the CIDR itself
+        `子网 ${canonicalCidrToStore} 已存在，无法重复创建。`, 
+        'cidr' 
       );
+    }
+
+    // Check for overlaps with other existing subnets
+    const allExistingSubnets = await prisma.subnet.findMany();
+    for (const existingSub of allExistingSubnets) {
+      const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
+      if (existingSubProps && newSubnetProperties && doSubnetsOverlap(newSubnetProperties, existingSubProps)) {
+        throw new ResourceError(
+          `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。`,
+          'SUBNET_OVERLAP_ERROR',
+          `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。请选择一个不冲突的范围。`,
+          'cidr' 
+        );
+      }
     }
 
     const createPayload: Prisma.SubnetCreateInput = {
       cidr: canonicalCidrToStore,
-      networkAddress: subnetProperties.networkAddress,
-      subnetMask: subnetProperties.subnetMask,
-      ipRange: subnetProperties.ipRange || null,
+      networkAddress: newSubnetProperties.networkAddress,
+      subnetMask: newSubnetProperties.subnetMask,
+      ipRange: newSubnetProperties.ipRange || null,
       description: data.description || null,
     };
 
@@ -324,20 +340,36 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
     const updateData: Prisma.SubnetUpdateInput = {};
     const originalCidrForLog = subnetToUpdate.cidr;
     let newCanonicalCidrForLog = subnetToUpdate.cidr;
+    let newSubnetPropertiesForOverlapCheck = getSubnetPropertiesFromCidr(subnetToUpdate.cidr); // Initialize with current properties
 
     if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
       validateCidrInput(data.cidr, 'cidr');
-      const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr);
+      const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr); // Properties of the proposed new CIDR
       if (!newSubnetProperties) {
         throw new AppError('Failed to parse new CIDR properties after validation.', 500, 'CIDR_PARSE_UNEXPECTED_ERROR', '无法解析新的有效 CIDR 属性。');
       }
+      newSubnetPropertiesForOverlapCheck = newSubnetProperties; // Update for overlap check
 
       const newCanonicalCidr = data.cidr;
       newCanonicalCidrForLog = newCanonicalCidr;
 
-      const conflictingSubnet = await prisma.subnet.findFirst({ where: { cidr: newCanonicalCidr, NOT: { id } } });
-      if (conflictingSubnet) {
+      const conflictingSubnetByCidr = await prisma.subnet.findFirst({ where: { cidr: newCanonicalCidr, NOT: { id } } });
+      if (conflictingSubnetByCidr) {
         throw new ResourceError(`子网 ${newCanonicalCidr} 已存在。`, 'SUBNET_ALREADY_EXISTS', `新的 CIDR ${newCanonicalCidr} 与现有子网冲突。`, 'cidr');
+      }
+      
+      // Check for overlaps with other existing subnets (excluding the current one being updated)
+      const otherExistingSubnets = await prisma.subnet.findMany({ where: { NOT: { id } } });
+      for (const existingSub of otherExistingSubnets) {
+        const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
+        if (existingSubProps && newSubnetProperties && doSubnetsOverlap(newSubnetProperties, existingSubProps)) {
+          throw new ResourceError(
+            `更新后的子网 ${newCanonicalCidr} 与现有子网 ${existingSub.cidr} 重叠。`,
+            'SUBNET_OVERLAP_ERROR',
+            `更新后的子网 ${newCanonicalCidr} 与现有子网 ${existingSub.cidr} 重叠。请选择一个不冲突的范围。`,
+            'cidr' 
+          );
+        }
       }
 
       updateData.cidr = newCanonicalCidr;
@@ -953,7 +985,8 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     if (data.hasOwnProperty('vlanId')) {
       const vlanIdToSet = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
       if (vlanIdToSet) {
-          if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
+          const vlanExists = await prisma.vLAN.findUnique({where: {id: vlanIdToSet}});
+          if (!vlanExists) {
               throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
           }
           updateData.vlan = { connect: { id: vlanIdToSet } };
@@ -986,7 +1019,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
           const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
           if (globallyConflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress');
       }
-      if (ipToUpdate.subnetId) { 
+      if (ipToUpdate.subnetId && newSubnetId === null) { // Explicitly disconnecting
         updateData.subnet = { disconnect: true };
       }
     }
