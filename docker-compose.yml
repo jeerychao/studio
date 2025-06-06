@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
     networks:
       - app_network
-    volumes:
-      - prisma_data:/app/prisma
+    # volumes:
+    #   - prisma_data:/app/prisma # Temporarily commented out to use DB from image
     healthcheck:
       test: ["CMD", "/app/health-check.sh"]
       interval: 30s
@@ -33,6 +33,6 @@ networks:
   app_network:
     driver: bridge
 
-volumes:
-  prisma_data:
-    driver: local
+# volumes:
+#   prisma_data: # Temporarily commented out
+#     driver: local
