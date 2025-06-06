@@ -11,7 +11,7 @@ import {
   isIpInCidrRange,
   ipToNumber,
   numberToIp,
-  // getPrefixFromCidr // Not strictly needed if getSubnetPropertiesFromCidr provides prefix
+  getPrefixFromCidr
 } from "./ip-utils";
 // validateCidrInput is for validating user input and throws specific errors
 import { validateCIDR as validateCidrInput } from "./error-utils";
@@ -153,6 +153,14 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
   };
 }
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+}
+
 export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedResponse<AppSubnet>> {
   const actionName = 'getSubnetsAction';
   try {
@@ -178,14 +186,13 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       });
 
     const appSubnets: AppSubnet[] = await Promise.all(subnetsFromDb.map(async (subnet) => {
-      // Use getSubnetPropertiesFromCidr for parsing CIDR from DB to get prefix for utilization
       const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
       let utilization = 0;
       let networkAddress = subnet.networkAddress;
       let subnetMask = subnet.subnetMask;
       let ipRange = subnet.ipRange;
 
-      if (subnetProperties) {
+      if (subnetProperties && typeof subnetProperties.prefix === 'number') {
         const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
         const allocatedIpsCount = await prisma.iPAddress.count({
           where: { subnetId: subnet.id, status: "allocated" },
@@ -193,16 +200,14 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         if (totalUsableIps > 0) {
           utilization = Math.round((allocatedIpsCount / totalUsableIps) * 100);
         }
-        // Keep existing db values for address, mask, range, but ensure they are consistent if desired.
-        // For now, assume DB values are source of truth unless parsing fails.
-        networkAddress = subnetProperties.networkAddress; // Or use subnet.networkAddress
-        subnetMask = subnetProperties.subnetMask;     // Or use subnet.subnetMask
-        ipRange = subnetProperties.ipRange;           // Or use subnet.ipRange
+        networkAddress = subnetProperties.networkAddress;
+        subnetMask = subnetProperties.subnetMask;
+        ipRange = subnetProperties.ipRange;
       } else {
-        logger.error(`[${actionName}] Invalid CIDR format in DB: ${subnet.cidr} for subnet ID ${subnet.id}. Cannot calculate properties accurately.`, undefined, { subnetId: subnet.id, cidr: subnet.cidr });
-        networkAddress = "N/A (DB CIDR格式错误)";
-        subnetMask = "N/A (DB CIDR格式错误)";
-        ipRange = "N/A (DB CIDR格式错误)";
+        logger.warn(`[${actionName}] Could not parse CIDR properties for '${subnet.cidr}' from DB for subnet ID ${subnet.id}. Using DB values or defaults.`, undefined, { subnetId: subnet.id, cidr: subnet.cidr });
+        // Fallback to DB values if parsing fails, but utilization might be 0 or inaccurate
+        // If DB values for networkAddress, subnetMask, ipRange are also suspect, this part might need adjustment.
+        // For now, assume we try to use parsed ones first.
       }
       return {
         ...subnet,
@@ -223,8 +228,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     };
   } catch (error: unknown) {
     logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
-    if (error instanceof AppError) throw error; // Re-throw known AppErrors
-    // For other errors, wrap them to ensure a consistent error structure if this action is awaited directly
+    if (error instanceof AppError) throw error;
     throw new AppError("获取子网数据时发生服务器错误。", 500, "GET_SUBNETS_FAILED", "无法加载子网数据，请稍后重试。");
   }
 }
@@ -238,12 +242,10 @@ export async function createSubnetAction(
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
 
-    validateCidrInput(data.cidr, 'cidr'); // This will throw ValidationError if CIDR is not network address or bad format
+    validateCidrInput(data.cidr, 'cidr'); 
 
     const subnetProperties = getSubnetPropertiesFromCidr(data.cidr);
     if (!subnetProperties) {
-      // This should not be reached if validateCidrInput is robust.
-      // But as a safeguard for getSubnetPropertiesFromCidr's own parsing:
       throw new AppError(
         'Failed to parse CIDR properties even after initial validation.',
         500,
@@ -251,8 +253,7 @@ export async function createSubnetAction(
         '无法解析有效的 CIDR 属性，这通常表示一个内部错误。'
       );
     }
-    // By this point, data.cidr is confirmed to be a valid network address CIDR.
-    const canonicalCidrToStore = data.cidr; // or subnetProperties.networkAddress + '/' + subnetProperties.prefix;
+    const canonicalCidrToStore = data.cidr; 
 
     const existingSubnet = await prisma.subnet.findUnique({
       where: { cidr: canonicalCidrToStore }
@@ -333,7 +334,6 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
         throw new AppError('Failed to parse new CIDR properties after validation.', 500, 'CIDR_PARSE_UNEXPECTED_ERROR', '无法解析新的有效 CIDR 属性。');
       }
 
-      // data.cidr should be the network address form due to validateCidrInput
       const newCanonicalCidr = data.cidr;
       newCanonicalCidrForLog = newCanonicalCidr;
 
@@ -419,8 +419,8 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
 async function calculateSubnetUtilization(subnetId: string): Promise<number> {
     const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } });
     if (!subnet) return 0;
-    const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); // Use the property parser
-    if (!subnetProperties) return 0;
+    const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
+    if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
     const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
     if (totalUsableIps === 0) return 0;
     const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" }});
@@ -627,7 +627,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
 
     if (Object.keys(updatePayload).length === 0) {
       logger.info('No changes detected for VLAN update.', { vlanId: id, inputData: data }, actionName);
-      const currentVlanData = await getVLANsAction({page: 1, pageSize: 1});
+      const currentVlanData = await getVLANsAction({page: 1, pageSize: 1}); // Inefficient, better to calc count directly
       const currentVLANApp: AppVLAN = { ...vlanToUpdate, description: vlanToUpdate.description || undefined, subnetCount: currentVlanData.data.find(v=>v.id === id)?.subnetCount || 0 };
       return { success: true, data: currentVLANApp };
     }
@@ -712,7 +712,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
             },
             vlan: { select: { vlanNumber: true }}
         },
-        orderBy: { ipAddress: 'asc' },
+        orderBy: { ipAddress: 'asc' }, // Consider custom sorting for IPs if needed (ipToNumber)
         skip,
         take: pageSize,
     }) :
@@ -1283,7 +1283,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
 
     if (Object.keys(updateData).length === 0) {
         logger.info('No changes detected for role update.', { roleId: id, inputData: data }, actionName);
-        const currentRoleWithCounts = await getRolesAction();
+        const currentRoleWithCounts = await getRolesAction(); // Inefficient; consider direct count or specific fetch
         const currentRoleApp = currentRoleWithCounts.data.find(r => r.id === id);
         if (!currentRoleApp) throw new AppError("Failed to fetch current role details after no-op update.");
         return { success: true, data: currentRoleApp };
