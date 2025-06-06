@@ -6,15 +6,13 @@ import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, U
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import {
-  getSubnetPropertiesFromCidr, // For parsing properties from a CIDR string
+  getSubnetPropertiesFromCidr,
   getUsableIpCount,
   isIpInCidrRange,
   ipToNumber,
   numberToIp,
-  getPrefixFromCidr,
-  doSubnetsOverlap // Import for overlap detection
+  doSubnetsOverlap
 } from "./ip-utils";
-// validateCidrInput is for validating user input and throws specific errors
 import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
 import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, type ActionErrorResponse } from './errors';
@@ -189,9 +187,9 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     const appSubnets: AppSubnet[] = await Promise.all(subnetsFromDb.map(async (subnet) => {
       const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
       let utilization = 0;
-      let networkAddress = subnet.networkAddress; 
-      let subnetMask = subnet.subnetMask;     
-      let ipRange: string | null = subnet.ipRange; 
+      let networkAddress = subnet.networkAddress;
+      let subnetMask = subnet.subnetMask;
+      let ipRange: string | null = subnet.ipRange;
 
       if (subnetProperties && typeof subnetProperties.prefix === 'number') {
         const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
@@ -211,7 +209,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         ...subnet,
         networkAddress,
         subnetMask,
-        ipRange: ipRange || undefined, 
+        ipRange: ipRange || undefined,
         vlanId: subnet.vlanId || undefined,
         description: subnet.description || undefined,
         utilization: utilization,
@@ -240,7 +238,7 @@ export async function createSubnetAction(
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
 
-    validateCidrInput(data.cidr, 'cidr'); 
+    validateCidrInput(data.cidr, 'cidr');
 
     const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr);
     if (!newSubnetProperties) {
@@ -251,7 +249,7 @@ export async function createSubnetAction(
         '无法解析有效的 CIDR 属性，这通常表示一个内部错误。'
       );
     }
-    const canonicalCidrToStore = data.cidr; 
+    const canonicalCidrToStore = data.cidr;
 
     const existingSubnetByCidr = await prisma.subnet.findUnique({
       where: { cidr: canonicalCidrToStore }
@@ -260,12 +258,11 @@ export async function createSubnetAction(
       throw new ResourceError(
         `子网 ${canonicalCidrToStore} 已存在。`,
         'SUBNET_ALREADY_EXISTS',
-        `子网 ${canonicalCidrToStore} 已存在，无法重复创建。`, 
-        'cidr' 
+        `子网 ${canonicalCidrToStore} 已存在，无法重复创建。`,
+        'cidr'
       );
     }
 
-    // Check for overlaps with other existing subnets
     const allExistingSubnets = await prisma.subnet.findMany();
     for (const existingSub of allExistingSubnets) {
       const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
@@ -274,7 +271,7 @@ export async function createSubnetAction(
           `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。`,
           'SUBNET_OVERLAP_ERROR',
           `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。请选择一个不冲突的范围。`,
-          'cidr' 
+          'cidr'
         );
       }
     }
@@ -294,7 +291,6 @@ export async function createSubnetAction(
         }
         createPayload.vlan = { connect: { id: data.vlanId } };
     }
-
 
     const newSubnetPrisma = await prisma.subnet.create({ data: createPayload });
 
@@ -340,16 +336,15 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
     const updateData: Prisma.SubnetUpdateInput = {};
     const originalCidrForLog = subnetToUpdate.cidr;
     let newCanonicalCidrForLog = subnetToUpdate.cidr;
-    let newSubnetPropertiesForOverlapCheck = getSubnetPropertiesFromCidr(subnetToUpdate.cidr); // Initialize with current properties
+    let newSubnetPropertiesForOverlapCheck = getSubnetPropertiesFromCidr(subnetToUpdate.cidr);
 
     if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
       validateCidrInput(data.cidr, 'cidr');
-      const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr); // Properties of the proposed new CIDR
+      const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr);
       if (!newSubnetProperties) {
         throw new AppError('Failed to parse new CIDR properties after validation.', 500, 'CIDR_PARSE_UNEXPECTED_ERROR', '无法解析新的有效 CIDR 属性。');
       }
-      newSubnetPropertiesForOverlapCheck = newSubnetProperties; // Update for overlap check
-
+      newSubnetPropertiesForOverlapCheck = newSubnetProperties; 
       const newCanonicalCidr = data.cidr;
       newCanonicalCidrForLog = newCanonicalCidr;
 
@@ -357,17 +352,16 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       if (conflictingSubnetByCidr) {
         throw new ResourceError(`子网 ${newCanonicalCidr} 已存在。`, 'SUBNET_ALREADY_EXISTS', `新的 CIDR ${newCanonicalCidr} 与现有子网冲突。`, 'cidr');
       }
-      
-      // Check for overlaps with other existing subnets (excluding the current one being updated)
+
       const otherExistingSubnets = await prisma.subnet.findMany({ where: { NOT: { id } } });
       for (const existingSub of otherExistingSubnets) {
         const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
-        if (existingSubProps && newSubnetProperties && doSubnetsOverlap(newSubnetProperties, existingSubProps)) {
+        if (existingSubProps && newSubnetPropertiesForOverlapCheck && doSubnetsOverlap(newSubnetPropertiesForOverlapCheck, existingSubProps)) {
           throw new ResourceError(
             `更新后的子网 ${newCanonicalCidr} 与现有子网 ${existingSub.cidr} 重叠。`,
             'SUBNET_OVERLAP_ERROR',
             `更新后的子网 ${newCanonicalCidr} 与现有子网 ${existingSub.cidr} 重叠。请选择一个不冲突的范围。`,
-            'cidr' 
+            'cidr'
           );
         }
       }
@@ -659,7 +653,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
 
     if (Object.keys(updatePayload).length === 0) {
       logger.info('No changes detected for VLAN update.', { vlanId: id, inputData: data }, actionName);
-      const currentVlanData = await getVLANsAction({page: 1, pageSize: 1}); 
+      const currentVlanData = await getVLANsAction({page: 1, pageSize: 1});
       const currentVLANApp: AppVLAN = { ...vlanToUpdate, description: vlanToUpdate.description || undefined, subnetCount: currentVlanData.data.find(v=>v.id === id)?.subnetCount || 0 };
       return { success: true, data: currentVLANApp };
     }
@@ -744,7 +738,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
             },
             vlan: { select: { vlanNumber: true }}
         },
-        orderBy: { ipAddress: 'asc' }, 
+        orderBy: { ipAddress: 'asc' },
         skip,
         take: pageSize,
     }) :
@@ -821,24 +815,28 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
             }
         }
 
+        const createPayload: Prisma.IPAddressCreateInput = {
+            ipAddress: data.ipAddress,
+            status: prismaStatus,
+            allocatedTo: data.allocatedTo || null,
+            description: data.description || null,
+            lastSeen: data.lastSeen ? new Date(data.lastSeen) : null,
+        };
+
+        if (data.subnetId) {
+            createPayload.subnet = { connect: { id: data.subnetId } };
+        }
+
         if (data.vlanId && data.vlanId !== "") {
             const vlanExists = await prisma.vLAN.findUnique({ where: { id: data.vlanId }});
             if (!vlanExists) {
               throw new NotFoundError(`VLAN ID: ${data.vlanId}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
             }
+            createPayload.vlan = { connect: { id: data.vlanId } };
         }
 
-        const newIP = await prisma.iPAddress.create({
-            data: {
-                ipAddress: data.ipAddress,
-                status: prismaStatus,
-                allocatedTo: data.allocatedTo || null,
-                description: data.description || null,
-                subnetId: data.subnetId || null,
-                vlanId: data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId,
-                lastSeen: data.lastSeen ? new Date(data.lastSeen) : null,
-            },
-        });
+
+        const newIP = await prisma.iPAddress.create({ data: createPayload });
 
         const subnetCidr = data.subnetId ? (await prisma.subnet.findUnique({where: {id: data.subnetId}}))?.cidr : null;
         const subnetInfo = subnetCidr ? ` 在子网 ${subnetCidr} 中` : ' 在全局池中';
@@ -919,16 +917,20 @@ export async function batchCreateIPAddressesAction(payload: {
           throw new ResourceError(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'startIp/endIp');
         }
 
-        await prisma.iPAddress.create({
-          data: {
+        const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr,
             status: status,
             allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
             description: description || null,
-            subnetId: subnetId,
-            vlanId: vlanId === "" || vlanId === undefined ? null : vlanId,
-          },
-        });
+        };
+        if (subnetId) {
+            createPayload.subnet = { connect: { id: subnetId } };
+        }
+        if (vlanId && vlanId !== "") {
+            createPayload.vlan = { connect: { id: vlanId } };
+        }
+
+        await prisma.iPAddress.create({ data: createPayload });
         createdIpAddressesForAudit.push(currentIpStr);
         successCount++;
       } catch (e: unknown) {
@@ -998,7 +1000,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || null) : ipToUpdate.subnetId;
     const finalStatus = data.status ? data.status as string : ipToUpdate.status;
 
-    if (newSubnetId) { 
+    if (newSubnetId) {
       const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
       if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。", 'subnetId');
       const parsedTargetSubnetCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr);
@@ -1011,15 +1013,15 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
           if (conflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
       }
       updateData.subnet = { connect: { id: newSubnetId } };
-    } else { 
+    } else {
        if (finalStatus === 'allocated' || finalStatus === 'reserved') {
           throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus);
       }
-      if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) { 
+      if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
           const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
           if (globallyConflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress');
       }
-      if (ipToUpdate.subnetId && newSubnetId === null) { // Explicitly disconnecting
+      if (ipToUpdate.subnetId && newSubnetId === null) {
         updateData.subnet = { disconnect: true };
       }
     }
@@ -1090,25 +1092,27 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (await prisma.user.findUnique({ where: { email: data.email } })) {
-      throw new ResourceError(`提供的邮箱 '${data.email}' 已被其他用户使用。`, 'USER_EMAIL_EXISTS', `邮箱 '${data.email}' 已被注册。`, 'email');
+      throw new ResourceError(`邮箱 ${data.email} 已存在。`, 'USER_EMAIL_EXISTS', `邮箱 '${data.email}' 已被其他用户使用。`, 'email');
     }
     if (await prisma.user.findUnique({ where: { username: data.username } })) {
-      throw new ResourceError(`提供的用户名 '${data.username}' 已被其他用户使用。`, 'USER_USERNAME_EXISTS', `用户名 '${data.username}' 已被注册。`, 'username');
+      throw new ResourceError(`用户名 ${data.username} 已存在。`, 'USER_USERNAME_EXISTS', `用户名 '${data.username}' 已被其他用户使用。`, 'username');
     }
     const roleExists = await prisma.role.findUnique({ where: { id: data.roleId }, include: {permissions: true} });
     if (!roleExists || !roleExists.name) {
       throw new NotFoundError(`角色 ID: ${data.roleId}`, `选择的角色不存在或无效。`, 'roleId');
     }
 
-    const newUser = await prisma.user.create({
-      data: {
+    const createPayload: Prisma.UserCreateInput = {
         username: data.username,
         email: data.email,
-        password: data.password, // In a real app, hash this password
-        roleId: data.roleId,
+        password: data.password,
         avatar: data.avatar || '/images/avatars/default_avatar.png',
         lastLogin: new Date(),
-      },
+        role: { connect: { id: data.roleId } }
+    };
+
+    const newUser = await prisma.user.create({
+      data: createPayload,
       include: { role: { include: { permissions: true } } }
     });
     await prisma.auditLog.create({
@@ -1164,7 +1168,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
       updateData.avatar = data.avatar || '/images/avatars/default_avatar.png';
     }
     if (data.password && data.password.length > 0) {
-      updateData.password = data.password; // In a real app, hash this password
+      updateData.password = data.password;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -1219,7 +1223,6 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
       throw new ValidationError("当前密码是必需的。", "currentPassword");
     }
     if (user.password !== payload.currentPassword) {
-      // Note: Passing 'currentPassword' as field to AuthError
       throw new AuthError("当前密码不匹配。", "当前密码不正确。", "currentPassword");
     }
     if (!payload.newPassword) {
@@ -1228,7 +1231,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
 
     await prisma.user.update({
       where: { id: userId },
-      data: { password: payload.newPassword }, // In a real app, hash this password
+      data: { password: payload.newPassword },
     });
     await prisma.auditLog.create({
       data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了自己的密码。` }
@@ -1324,7 +1327,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
 
     if (Object.keys(updateData).length === 0) {
         logger.info('No changes detected for role update.', { roleId: id, inputData: data }, actionName);
-        const currentRoleWithCounts = await getRolesAction(); 
+        const currentRoleWithCounts = await getRolesAction();
         const currentRoleApp = currentRoleWithCounts.data.find(r => r.id === id);
         if (!currentRoleApp) throw new AppError("Failed to fetch current role details after no-op update.");
         return { success: true, data: currentRoleApp };
@@ -1433,3 +1436,5 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
         description: p.description || undefined,
     }));
 }
+
+    

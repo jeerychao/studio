@@ -1,3 +1,4 @@
+
 // src/lib/errors.ts
 
 export class AppError extends Error {
@@ -18,11 +19,8 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  // constructor specific field property is already in AppError
   constructor(message: string, field?: string, value?: any, userMessage?: string) {
-    // If userMessage is not provided, it will default to the (developer) message
     super(message, 400, 'VALIDATION_ERROR', userMessage || '输入验证失败，请检查您的输入。', field);
-    // this.value = value; // value is not used in user's useErrorHandler, omitting for now
   }
 }
 
@@ -33,22 +31,19 @@ export class NetworkError extends AppError {
 }
 
 export class AuthError extends AppError {
-  constructor(message: string, userMessage = '认证失败，请检查您的凭据或重新登录。', field?: string) { // Added optional field for e.g. currentPassword
+  constructor(message: string, userMessage = '认证失败，请检查您的凭据或重新登录。', field?: string) {
     super(message, 401, 'AUTH_ERROR', userMessage, field);
   }
 }
 
 export class ResourceError extends AppError {
   constructor(message: string, code = 'RESOURCE_ERROR', userMessage = '操作的资源存在冲突或问题。', field?: string) {
-    // message here is often the dev message like "Subnet X already exists"
-    // userMessage provides a more generic default if not overridden
-    // Pass field to AppError constructor
     super(message, 409, code, userMessage, field);
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource: string, userMessage?: string, field?: string) { // Added optional field
+  constructor(resource: string, userMessage?: string, field?: string) {
     super(`${resource} not found`, 404, 'NOT_FOUND', userMessage || `未找到所请求的资源：${resource}。`, field);
   }
 }
@@ -60,3 +55,5 @@ export interface ActionErrorResponse {
   field?: string;
   details?: string; // For development-only verbose details
 }
+
+    
