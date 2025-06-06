@@ -72,6 +72,6 @@ USER nextjs
 COPY --chown=nextjs:nodejs health-check.sh ./
 RUN chmod +x health-check.sh
 
-EXPOSE 3000 # 端口应与 PORT 环境变量匹配
+EXPOSE 3000
 
 CMD ["node", "server.js"]

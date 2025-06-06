@@ -3,27 +3,5 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ipam-app-local:latest
-    container_name: ipam_app_local_prod
     ports:
       - "3010:3000"
-    env_file:
-      - ./production.env
-    restart: unless-stopped
-    networks:
-      - app_network
-    volumes:
-      - prisma_data:/app/prisma
-    healthcheck:
-      test: ["CMD", "/app/health-check.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-networks:
-  app_network:
-    driver: bridge
-
-volumes:
-  prisma_data:
-    driver: local
