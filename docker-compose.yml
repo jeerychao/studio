@@ -1,6 +1,4 @@
 
-version: '3.8'
-
 services:
   ipam-app:
     build:
@@ -27,6 +25,9 @@ services:
       # the /app/prisma/dev.db from the image to the volume.
       # On subsequent runs, the container uses the dev.db from the 'ipam_db_data' volume.
       - ipam_db_data:/app/prisma/dev.db
+      # DO NOT map the entire ./prisma directory from host to /app/prisma in container
+      # as it would overwrite the dev.db created during the image build.
+      # - ./prisma:/app/prisma # This line is intentionally removed/commented.
 
 networks:
   app_network:

@@ -1,37 +1,11 @@
-
-# Docker
+# Default Vercel .dockerignore
 Dockerfile
 .dockerignore
-
-# Git
-.git
-.gitignore
-
-# Node
 node_modules
 npm-debug.log
-yarn-error.log
-pnpm-debug.log
-
-# Next.js
+README.md
 .next
-out
-
-# Prisma (schema is needed, local DB state typically not for image build)
-# prisma/dev.db
-# prisma/dev.db-journal
-
-# Env files (managed by Docker Compose or other means for runtime)
-# .env
-# .env*.local
-# production.env # If you want to ensure it's NEVER copied, but env_file in compose is fine
-
-# VSCode
-.vscode
-
-# TypeScript cache
-*.tsbuildinfo
-
-# OS specific
-.DS_Store
-Thumbs.db
+.git
+.env
+*.db
+*.db-journal

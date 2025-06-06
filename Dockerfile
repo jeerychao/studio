@@ -1,71 +1,77 @@
-# Dockerfile
-
-# 1. Base stage for common setup
+# Base image with Node.js
 FROM node:18-slim AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
+
+# Install OpenSSL and other necessary dependencies
+# Debian Bullseye (node:18-slim) comes with OpenSSL 1.1.1. Explicitly installing ensures it's there.
+RUN apt-get update -y && \
+    apt-get install -y openssl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable
 WORKDIR /app
 
-# 2. Dependencies stage for caching node_modules
+# Dependencies stage: Install production dependencies
 FROM base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json* ./
-
-# --->>> 新增: 复制 prisma 目录，确保 schema 文件在 npm install (触发 prisma generate) 时可用
+# Copy prisma directory here so `prisma generate` in postinstall can find schema.prisma
 COPY prisma ./prisma/
-
 RUN npm install --frozen-lockfile --omit=dev
 
-
-# 3. Builder stage to build the application
+# Builder stage: Build the application
 FROM base AS builder
 WORKDIR /app
+
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-# Prisma Client Generation and DB Push/Seed
-# This DATABASE_URL is temporary for the build process
-ENV DATABASE_URL="file:/app/prisma/dev.db"
+# Set DATABASE_URL for build-time prisma commands (db push, seed)
+# This path is relative to /app, so it points to /app/prisma/dev.db
+ENV DATABASE_URL="file:./prisma/dev.db"
 
-# Ensure Prisma Client is generated (might be redundant if postinstall script works correctly after schema copy)
-# RUN npx prisma generate # Can be kept or removed if postinstall handles it
+# Ensure Prisma Client is generated using the correct schema and binary target
+RUN npx prisma generate
 
-# Push schema and seed the database
-RUN npx prisma db push --skip-generate
-RUN echo "--- Dockerfile: After prisma db push, listing /app/prisma ---" && ls -l /app/prisma || echo "ls /app/prisma failed"
+# Create and initialize the database (dev.db as per DATABASE_URL)
+# The --skip-generate is good practice here as generate was just run
+RUN npm run prisma:db:push -- --skip-generate
+RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed or dir empty"
+
+# Seed the database
 RUN npm run prisma:db:seed
-RUN echo "--- Dockerfile: After prisma db seed, listing /app/prisma ---" && ls -l /app/prisma || echo "ls /app/prisma failed"
-
+RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed or dir empty"
 
 # Build the Next.js application
 RUN npm run build
 
-# 4. Runner stage for the final production image
+# Runner stage: Create the final production image
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-# This default DATABASE_URL will be overridden by docker-compose env_file if provided
-ENV DATABASE_URL="file:/app/prisma/dev.db"
-
+# Create a non-root user and group for security
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copy the prisma directory (including the seeded dev.db) from the builder stage
-# Ensure the 'nextjs' user owns these files
+# Copy only necessary files from builder stage and set correct permissions
+# Copy public assets
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# Copy Next.js build output
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+# Copy production node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Copy package.json for `npm start`
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+# Copy the prisma directory which now includes schema.prisma AND the generated dev.db
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
+# Switch to the non-root user
 USER nextjs
 
-EXPOSE 3000
+# Set the port the app will run on
 ENV PORT 3000
+# Expose the port
+EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Command to run the application
+CMD ["npm", "start"]
