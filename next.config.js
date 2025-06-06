@@ -4,8 +4,8 @@ const nextConfig = {
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',
-      allowedForwardedHosts: ['17.100.100.253:3010'],
-      allowedOrigins: ['*'] // Allow all origins for now
+      allowedForwardedHosts: ['17.100.100.253:3010'], // Specific forwarded host
+      allowedOrigins: ['*'] // Allow all origins for now, consider tightening later
     }
   },
   // 禁用客户端缓存以解决 CacheStore 错误 (根据您之前的请求保留)
