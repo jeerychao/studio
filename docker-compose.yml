@@ -9,10 +9,9 @@ services:
     image: ipam-app-local:latest # Name the image that will be built
     container_name: ipam_app_local_prod
     ports:
-      # Map host port 3010 to container port 3000
-      # Access via http://localhost:3010 on the host machine if WSL port forwarding is set up,
-      # or via WSL's IP:3010
-      - "3010:3000"
+      # Map host port 3010 to container port 3000 (Next.js default)
+      # Access via http://localhost:3010 or your_WSL_IP:3010
+      - "3010:3000" 
     env_file:
       - ./production.env # Load environment variables from this file for runtime
     restart: unless-stopped
@@ -22,9 +21,10 @@ services:
       # Map next.config.js from host to container (read-only)
       # Changes to this file on the host will require a container restart to take effect.
       - ./next.config.js:/app/next.config.js:ro
-      # Persist the dev.db database file using a named volume
+      # Persist the dev.db database file using a named volume.
       # The Dockerfile is responsible for initially creating and seeding dev.db in the image.
-      # On first container run with an empty 'ipam_db_data' volume, Docker copies dev.db from the image to the volume.
+      # On first container run with an empty 'ipam_db_data' volume, Docker copies 
+      # the /app/prisma/dev.db from the image to the volume.
       # On subsequent runs, the container uses the dev.db from the 'ipam_db_data' volume.
       - ipam_db_data:/app/prisma/dev.db
 
@@ -35,3 +35,4 @@ networks:
 # Define the named volume for database persistence
 volumes:
   ipam_db_data:
+    # driver: local # Default driver is local
