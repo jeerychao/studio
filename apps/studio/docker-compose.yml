@@ -1,24 +1,23 @@
-version: '3.8'
 
 services:
   ipam-app:
     build:
-      context: .. # Corrected: build context is the project root
-      dockerfile: Dockerfile # Corrected: Dockerfile is in the project root
+      context: .. # Assuming this correctly points to the project root with Dockerfile
+      dockerfile: Dockerfile # Assuming Dockerfile is at project root
     image: ipam-app-local:latest
     container_name: ipam_app_local_prod
     ports:
       - "3010:3000"
     env_file:
-      - ../production.env # Corrected: production.env is in the project root
+      - ../production.env # Assuming production.env is at project root
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
       - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
       - NEXTAUTH_URL=http://17.100.100.253:3010
-      - NEXT_PUBLIC_EXTERNAL_URL=http://17.100.100.253:3010 # Added
-      - NEXT_PRIVATE_EXTERNAL_URL=http://17.100.100.253:3010 # Added
+      - NEXT_PUBLIC_EXTERNAL_URL=http://17.100.100.253:3010
+      - NEXT_PRIVATE_EXTERNAL_URL=http://17.100.100.253:3010
     restart: unless-stopped
     networks:
       - app_network
