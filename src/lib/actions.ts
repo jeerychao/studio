@@ -202,19 +202,15 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         }
         networkAddress = subnetProperties.networkAddress;
         subnetMask = subnetProperties.subnetMask;
-        // subnetProperties.ipRange is string | undefined
-        // We need to assign to ipRange (string | null)
         ipRange = subnetProperties.ipRange !== undefined ? subnetProperties.ipRange : null;
       } else {
         logger.warn(`[${actionName}] Could not parse CIDR properties for '${subnet.cidr}' from DB for subnet ID ${subnet.id}. Using DB values or defaults.`, undefined, { subnetId: subnet.id, cidr: subnet.cidr });
-        // ipRange remains its value from DB (string | null)
-        // networkAddress and subnetMask remain their values from DB
       }
       return {
         ...subnet,
         networkAddress,
         subnetMask,
-        ipRange: ipRange || undefined, // Convert null to undefined for AppSubnet type (ipRange?: string)
+        ipRange: ipRange || undefined, 
         vlanId: subnet.vlanId || undefined,
         description: subnet.description || undefined,
         utilization: utilization,
@@ -271,7 +267,7 @@ export async function createSubnetAction(
       cidr: canonicalCidrToStore,
       networkAddress: subnetProperties.networkAddress,
       subnetMask: subnetProperties.subnetMask,
-      ipRange: subnetProperties.ipRange || null, // Ensure null if undefined
+      ipRange: subnetProperties.ipRange || null,
       description: data.description || null,
     };
 
@@ -347,7 +343,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       updateData.cidr = newCanonicalCidr;
       updateData.networkAddress = newSubnetProperties.networkAddress;
       updateData.subnetMask = newSubnetProperties.subnetMask;
-      updateData.ipRange = newSubnetProperties.ipRange || null; // Ensure null if undefined
+      updateData.ipRange = newSubnetProperties.ipRange || null;
 
       const allocatedIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: "allocated" } });
       const ipsToDisassociateDetails: string[] = [];
@@ -631,7 +627,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
 
     if (Object.keys(updatePayload).length === 0) {
       logger.info('No changes detected for VLAN update.', { vlanId: id, inputData: data }, actionName);
-      const currentVlanData = await getVLANsAction({page: 1, pageSize: 1}); // Inefficient, better to calc count directly
+      const currentVlanData = await getVLANsAction({page: 1, pageSize: 1}); 
       const currentVLANApp: AppVLAN = { ...vlanToUpdate, description: vlanToUpdate.description || undefined, subnetCount: currentVlanData.data.find(v=>v.id === id)?.subnetCount || 0 };
       return { success: true, data: currentVLANApp };
     }
@@ -716,7 +712,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
             },
             vlan: { select: { vlanNumber: true }}
         },
-        orderBy: { ipAddress: 'asc' }, // Consider custom sorting for IPs if needed (ipToNumber)
+        orderBy: { ipAddress: 'asc' }, 
         skip,
         take: pageSize,
     }) :
@@ -956,10 +952,15 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
 
     if (data.hasOwnProperty('vlanId')) {
       const vlanIdToSet = data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
-      if (vlanIdToSet && !(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
-          throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`);
+      if (vlanIdToSet) {
+          const vlanExists = await prisma.vLAN.findUnique({where: {id: vlanIdToSet}});
+          if (!vlanExists) {
+              throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`);
+          }
+          updateData.vlan = { connect: { id: vlanIdToSet } };
+      } else {
+          updateData.vlan = { disconnect: true };
       }
-      updateData.vlanId = vlanIdToSet;
     }
 
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || null) : ipToUpdate.subnetId;
@@ -1287,7 +1288,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
 
     if (Object.keys(updateData).length === 0) {
         logger.info('No changes detected for role update.', { roleId: id, inputData: data }, actionName);
-        const currentRoleWithCounts = await getRolesAction(); // Inefficient; consider direct count or specific fetch
+        const currentRoleWithCounts = await getRolesAction(); 
         const currentRoleApp = currentRoleWithCounts.data.find(r => r.id === id);
         if (!currentRoleApp) throw new AppError("Failed to fetch current role details after no-op update.");
         return { success: true, data: currentRoleApp };
