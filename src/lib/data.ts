@@ -1,6 +1,6 @@
 
 import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog } from '../types';
-import { calculateIpRange, calculateNetworkAddress, prefixToSubnetMask, cidrToPrefix } from './ip-utils';
+import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils'; // Updated import
 import { PERMISSIONS } from '../types';
 
 
@@ -52,7 +52,7 @@ export const mockPermissions: Permission[] = [
 
 // Helper to generate initial subnet data with calculated fields for seeding
 function createInitialSubnetSeedData(id: string, cidr: string, vlanId?: string, description?: string): Omit<Subnet, 'utilization'> {
-  const prefix = cidrToPrefix(cidr);
+  const prefix = getPrefixFromCidr(cidr); // Updated function call
   const ipPart = cidr.split('/')[0];
   const networkAddress = calculateNetworkAddress(ipPart, prefix);
   const subnetMask = prefixToSubnetMask(prefix);
@@ -141,3 +141,6 @@ export let mockAuditLogs: AuditLog[] = [ // For seeding
   { id: 'log-2-seed', userId: 'user-operator-seed', username: 'operator', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
   { id: 'log-3-seed', userId: 'user-admin-seed', username: 'admin', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 description update' },
 ];
+
+
+    
