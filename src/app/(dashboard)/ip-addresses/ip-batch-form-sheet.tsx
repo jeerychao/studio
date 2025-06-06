@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,11 +37,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN, IPAddressStatus } from "@/types";
-import { batchCreateIPAddressesAction, type BatchIpCreationResult } from "@/lib/actions";
+import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 
 const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
-const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const; // Changed line
+const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const;
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
   allocated: "已分配",
   free: "空闲",
@@ -60,7 +60,7 @@ const ipBatchFormSchema = z.object({
     try {
         return ipToNumber(data.startIp) <= ipToNumber(data.endIp);
     } catch (e) {
-        return false;
+        return false; // Should be caught by individual IP validation first
     }
 }, {
   message: "起始IP必须小于或等于结束IP。",
@@ -104,11 +104,13 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
             status: "free",
         });
         setSubmissionResult(null);
+        form.clearErrors();
     }
   }, [isOpen, subnets, form]);
 
 
   async function onSubmit(data: IpBatchFormValues) {
+    form.clearErrors();
     setSubmissionResult(null);
 
     const vlanIdToSubmit = data.vlanId === INHERIT_VLAN_SENTINEL ? undefined : data.vlanId;
@@ -124,41 +126,65 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
 
     const startNum = ipToNumber(data.startIp);
     const endNum = ipToNumber(data.endIp);
-    if (endNum - startNum + 1 > 256) {
+    const numToCreate = endNum - startNum + 1;
+
+    if (numToCreate > 256) { // Limit batch size
         toast({ title: "范围过大", description: "请分批创建IP地址 (例如，每次最多256个)。", variant: "destructive" });
         return;
     }
 
 
     try {
+      // Assuming batchCreateIPAddressesAction returns BatchIpCreationResult directly or throws an error
+      // If it can return ActionResponse for setup errors, that needs specific handling.
       const result = await batchCreateIPAddressesAction(payload);
       setSubmissionResult(result);
 
-      if (result.successCount > 0) {
+      if (result.successCount > 0 && result.failureDetails.length === 0) {
         toast({
-          title: "批量处理完成",
-          description: `${result.successCount} 个IP创建成功。${result.failureDetails.length > 0 ? `${result.failureDetails.length} 个失败。` : ''}`,
+          title: "批量创建成功",
+          description: `${result.successCount} 个IP地址已成功创建。`,
+        });
+        if (onIpAddressChange) onIpAddressChange();
+        form.reset();
+      } else if (result.successCount > 0 && result.failureDetails.length > 0) {
+         toast({
+          title: "批量处理部分成功",
+          description: `${result.successCount} 个IP创建成功，${result.failureDetails.length} 个失败。详情请见下方。`,
         });
         if (onIpAddressChange) onIpAddressChange();
       } else if (result.failureDetails.length > 0) {
          toast({
           title: "批量创建失败",
-          description: "所有条目均失败。请检查下面的详细信息。",
+          description: `所有 ${numToCreate} 个IP地址均创建失败。详情请见下方。`,
           variant: "destructive",
         });
+      } else {
+         toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" });
       }
 
-      if (result.failureDetails.length === 0 && result.successCount > 0) {
-         form.reset();
+    } catch (error) { // Catch unexpected errors from action or client logic
+      const actionError = (error as ActionResponse<any>)?.error;
+      if (actionError) {
+        toast({
+            title: "批量创建预处理错误",
+            description: actionError.userMessage,
+            variant: "destructive",
+        });
+        if (actionError.field) {
+          form.setError(actionError.field as FieldPath<IpBatchFormValues>, {
+            type: "server",
+            message: actionError.userMessage,
+          });
+        }
+      } else {
+        toast({
+            title: "客户端错误",
+            description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。",
+            variant: "destructive",
+        });
       }
-
-    } catch (error) {
-      toast({
-        title: "错误",
-        description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。",
-        variant: "destructive",
-      });
-      setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp, error: (error as Error).message }] });
+      setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp, error: (error as Error).message || "未知错误" }] });
     }
   }
 
@@ -179,8 +205,8 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{triggerContent}</SheetTrigger>
-      <SheetContent className="sm:max-w-lg w-full flex flex-col p-0"> {/* Removed default p-6 to manage padding internally */}
-        <SheetHeader className="p-6 pb-4 border-b"> {/* Added padding to header */}
+      <SheetContent className="sm:max-w-lg w-full flex flex-col p-0">
+        <SheetHeader className="p-6 pb-4 border-b">
           <SheetTitle>批量添加IP地址 (范围)</SheetTitle>
           <SheetDescription>
             输入起始和结束IP地址以创建范围。选择一个子网。
@@ -190,10 +216,10 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="flex flex-col flex-grow overflow-hidden" /* Form takes remaining space and allows internal scrolling */
+            className="flex flex-col flex-grow overflow-hidden"
           >
-            <ScrollArea className="flex-1 px-6 pt-4"> {/* Scrollable area for form fields and results */}
-              <div className="space-y-4 pb-4"> {/* Inner div for spacing, pb-4 for space before footer */}
+            <ScrollArea className="flex-1 px-6 pt-4">
+              <div className="space-y-4 pb-4">
                 <FormField
                   control={form.control}
                   name="startIp"
@@ -265,7 +291,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承</SelectItem>
+                          <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承或无</SelectItem>
                           {vlans.map((vlan) => (
                             <SelectItem key={vlan.id} value={vlan.id}>
                               VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
@@ -318,7 +344,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                 {submissionResult && (
                   <div className="mt-4 space-y-3">
                     <h3 className="font-semibold">处理结果:</h3>
-                    <Alert variant={submissionResult.failureDetails.length > 0 ? "destructive" : "default"}>
+                    <Alert variant={submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 ? "destructive" : "default"}>
                        <AlertCircle className="h-4 w-4"/>
                       <AlertTitle>概要</AlertTitle>
                       <AlertDescription>
@@ -347,7 +373,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
               </div>
             </ScrollArea>
 
-            <SheetFooter className="p-6 pt-4 border-t"> {/* Added padding to footer, ensure it's sticky at bottom */}
+            <SheetFooter className="p-6 pt-4 border-t">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
                   取消
@@ -363,5 +389,3 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
     </Sheet>
   );
 }
-
-    

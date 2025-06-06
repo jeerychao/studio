@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import * as z from "zod";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import {
@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { VLAN } from "@/types";
-import { createVLANAction, updateVLANAction } from "@/lib/actions";
+import { createVLANAction, updateVLANAction, type ActionResponse } from "@/lib/actions";
 
 const vlanFormSchema = z.object({
   vlanNumber: z.coerce.number().int().min(1, "VLAN 号码必须至少为 1").max(4094, "VLAN 号码不能超过 4094"),
@@ -64,25 +64,45 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
         vlanNumber: vlan?.vlanNumber || undefined,
         description: vlan?.description || "",
         });
+        form.clearErrors();
     }
   }, [isOpen, vlan, form]);
 
   async function onSubmit(data: VlanFormValues) {
+    form.clearErrors();
+    let response: ActionResponse<VLAN>;
     try {
       if (isEditing && vlan) {
-        await updateVLANAction(vlan.id, data);
-        toast({ title: "VLAN 已更新", description: `VLAN ${data.vlanNumber} 已成功更新。` });
+        response = await updateVLANAction(vlan.id, data);
       } else {
-        await createVLANAction(data);
-        toast({ title: "VLAN 已创建", description: `VLAN ${data.vlanNumber} 已成功创建。` });
+        response = await createVLANAction(data);
       }
-      setIsOpen(false);
-      if (onVlanChange) onVlanChange();
-      form.reset({ vlanNumber: undefined, description: "" });
-    } catch (error) {
+
+      if (response.success && response.data) {
+        toast({ 
+            title: isEditing ? "VLAN 已更新" : "VLAN 已创建", 
+            description: `VLAN ${response.data.vlanNumber} 已成功${isEditing ? '更新' : '创建'}。` 
+        });
+        setIsOpen(false);
+        if (onVlanChange) onVlanChange();
+        form.reset({ vlanNumber: undefined, description: "" });
+      } else if (response.error) {
+        toast({
+          title: "操作失败",
+          description: response.error.userMessage,
+          variant: "destructive",
+        });
+        if (response.error.field) {
+          form.setError(response.error.field as FieldPath<VlanFormValues>, {
+            type: "server",
+            message: response.error.userMessage,
+          });
+        }
+      }
+    } catch (error) { // Catch unexpected errors during the action call itself
       toast({
-        title: "错误",
-        description: error instanceof Error ? error.message : "发生意外错误。",
+        title: "客户端错误",
+        description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
         variant: "destructive",
       });
     }

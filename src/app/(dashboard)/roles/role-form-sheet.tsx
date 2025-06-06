@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import * as z from "zod";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import {
@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Role, Permission, PermissionId as AppPermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { mockPermissions } from "@/lib/data"; 
-import { updateRoleAction, getAllPermissionsAction } from "@/lib/actions";
+import { updateRoleAction, getAllPermissionsAction, type ActionResponse } from "@/lib/actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const permissionIntegrityRules = [
@@ -119,26 +119,47 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
         description: role.description || "",
         permissions: role.permissions || [],
       });
+      form.clearErrors();
     }
-  }, [isOpen, role.id, role.name, role.description, role.permissions, form]);
+  }, [isOpen, role, form]);
 
 
   async function onSubmit(data: RoleFormValues) {
+    form.clearErrors();
     try {
-      await updateRoleAction(role.id, {
+      const response = await updateRoleAction(role.id, {
         description: data.description,
         permissions: data.permissions as AppPermissionId[],
       });
-      toast({ title: "角色已更新", description: `角色 ${role.name} 的权限和描述已成功更新。` });
-      setIsOpen(false);
-      if (onRoleChange) {
-        onRoleChange();
+
+      if (response.success) {
+        toast({ title: "角色已更新", description: `角色 ${role.name} 的权限和描述已成功更新。` });
+        setIsOpen(false);
+        if (onRoleChange) {
+          onRoleChange();
+        }
+      } else if (response.error) {
+        toast({
+          title: "更新角色失败",
+          description: response.error.userMessage,
+          variant: "destructive",
+        });
+        // Role form errors from server are less likely to be field-specific in the same way,
+        // unless it's a permissions integrity issue not caught by Zod (which is unlikely if server logic is sound).
+        // For now, we'll just show the main error message in the toast.
+        // If server-side validation can pinpoint a field (e.g., 'permissions'), it can be added here.
+        if (response.error.field) {
+            form.setError(response.error.field as FieldPath<RoleFormValues>, {
+                type: "server",
+                message: response.error.userMessage,
+            });
+        }
       }
-    } catch (error) {
+    } catch (error) { // Catch unexpected errors
       console.error("[RoleFormSheet onSubmit] Error updating role:", error); 
       toast({
-        title: "更新角色错误",
-        description: error instanceof Error ? error.message : "发生意外错误。",
+        title: "客户端错误",
+        description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
         variant: "destructive",
       });
     }
@@ -275,6 +296,3 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
     </Sheet>
   );
 }
-    
-
-    

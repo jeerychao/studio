@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import * as z from "zod";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import {
@@ -36,7 +36,7 @@ import {
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types";
-import { createIPAddressAction, updateIPAddressAction } from "@/lib/actions";
+import { createIPAddressAction, updateIPAddressAction, type ActionResponse } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
@@ -63,7 +63,7 @@ interface IPAddressFormSheetProps {
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
-  onIpAddressChange?: () => void; // Added callback prop
+  onIpAddressChange?: () => void;
 }
 
 const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
@@ -121,42 +121,53 @@ export function IPAddressFormSheet({
             allocatedTo: ipAddress?.allocatedTo || "",
             description: ipAddress?.description || "",
         });
+        form.clearErrors();
     }
-  }, [isOpen, ipAddress, subnets, currentSubnetId, form, vlans]);
+  }, [isOpen, ipAddress, subnets, vlans, currentSubnetId, form]);
 
   async function onSubmit(data: IPAddressFormValues) {
+    form.clearErrors();
+    let response: ActionResponse<IPAddress>;
     try {
-      const isAddingToSpecificSubnet = !isEditing && currentSubnetId;
       const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
-
-      if (!effectiveSubnetId && (data.status !== 'free' || isAddingToSpecificSubnet)) {
-        toast({ title: "需要子网", description: "除非IP为“空闲”且未添加到特定子网上下文中，否则必须选择子网。", variant: "destructive"});
-        return;
-      }
-      
-      const vlanIdToSave = data.vlanId === "" ? undefined : data.vlanId;
+      const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" ? undefined : data.vlanId;
 
       const payload = {
         ...data,
         subnetId: effectiveSubnetId,
         vlanId: vlanIdToSave,
       };
-
+      
       if (isEditing && ipAddress) {
-        await updateIPAddressAction(ipAddress.id, payload);
-        toast({ title: "IP 地址已更新", description: `IP ${data.ipAddress} 已成功更新。` });
+        response = await updateIPAddressAction(ipAddress.id, payload);
       } else {
-        await createIPAddressAction(payload as Omit<IPAddress, "id">);
-        toast({ title: "IP 地址已创建", description: `IP ${data.ipAddress} 已成功创建。` });
+        response = await createIPAddressAction(payload as Omit<IPAddress, "id">);
       }
-      setIsOpen(false);
-      if (onIpAddressChange) {
-        onIpAddressChange(); // Call the callback to refresh data in parent
+
+      if (response.success && response.data) {
+        toast({ 
+            title: isEditing ? "IP 地址已更新" : "IP 地址已创建", 
+            description: `IP ${response.data.ipAddress} 已成功${isEditing ? '更新' : '创建'}。` 
+        });
+        setIsOpen(false);
+        if (onIpAddressChange) onIpAddressChange();
+      } else if (response.error) {
+        toast({
+          title: "操作失败",
+          description: response.error.userMessage,
+          variant: "destructive",
+        });
+        if (response.error.field) {
+          form.setError(response.error.field as FieldPath<IPAddressFormValues>, {
+            type: "server",
+            message: response.error.userMessage,
+          });
+        }
       }
-    } catch (error) {
+    } catch (error) { // Catch unexpected errors
       toast({
-        title: "错误",
-        description: error instanceof Error ? error.message : "发生意外错误。",
+        title: "客户端错误",
+        description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
         variant: "destructive",
       });
     }
@@ -216,7 +227,7 @@ export function IPAddressFormSheet({
                        <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>无子网 / 全局池</SelectItem>
                       {subnets.map((subnet) => (
                         <SelectItem key={subnet.id} value={subnet.id}>
-                          {subnet.networkAddress} ({subnet.description || "无描述"})
+                          {subnet.cidr} ({subnet.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -242,7 +253,7 @@ export function IPAddressFormSheet({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承</SelectItem>
+                      <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承或无</SelectItem>
                       {vlans.map((vlan) => (
                         <SelectItem key={vlan.id} value={vlan.id}>
                           VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})

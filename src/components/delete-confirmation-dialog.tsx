@@ -15,13 +15,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import type { ActionResponse } from "@/lib/actions"; // Import ActionResponse
 
 interface DeleteConfirmationDialogProps {
   itemId: string;
   itemName: string;
-  deleteAction: (id: string) => Promise<{ success: boolean; message?: string } | void>;
-  triggerButton: React.ReactElement; // Expects a Button component usually
-  onDeleted?: () => void; // Optional callback after successful deletion
+  deleteAction: (id: string) => Promise<ActionResponse<unknown>>; // Updated type
+  triggerButton: React.ReactElement;
+  onDeleted?: () => void;
   dialogTitle?: string;
   dialogDescription?: string;
 }
@@ -43,11 +44,8 @@ export function DeleteConfirmationDialog({
     setIsDeleting(true);
     try {
       const result = await deleteAction(itemId);
-      // Assuming action returns { success: true } or throws error / returns { success: false }
-      const success = typeof result === 'object' ? result?.success : true; // void means success
-      const message = typeof result === 'object' ? result?.message : undefined;
 
-      if (success) {
+      if (result.success) {
         toast({
           title: "删除成功",
           description: `${itemName} 已被删除。`,
@@ -57,11 +55,11 @@ export function DeleteConfirmationDialog({
       } else {
         toast({
           title: "删除失败",
-          description: message || `无法删除 ${itemName}。请重试。`,
+          description: result.error?.userMessage || `无法删除 ${itemName}。请重试。`,
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error) { // Catch unexpected errors during the action call itself
       toast({
         title: "错误",
         description: error instanceof Error ? error.message : "删除过程中发生意外错误。",
@@ -72,7 +70,6 @@ export function DeleteConfirmationDialog({
     }
   };
   
-  // Ensure the triggerButton has its onClick handler correctly assigned to open the dialog
   const Trigger = React.cloneElement(triggerButton, {
     onClick: () => setIsOpen(true),
   });
@@ -94,7 +91,7 @@ export function DeleteConfirmationDialog({
               ? <React.Fragment key={index}>{part}<strong className="text-foreground">“{array[index+1].substring(0, array[index+1].indexOf('”'))}”</strong>{array[index+1].substring(array[index+1].indexOf('”')+1)}</React.Fragment>
               : part
             ).reduce((acc: (string | JSX.Element)[], part, index) => {
-                if (index === 0 && typeof part === 'string' && part.includes('”')) { // handles cases where the first part already contains the strong text
+                if (index === 0 && typeof part === 'string' && part.includes('”')) { 
                     const firstStrongEnd = part.indexOf('”') + 1;
                     const beforeStrong = part.substring(0, part.indexOf('“'));
                     const strongText = part.substring(part.indexOf('“'), firstStrongEnd);
@@ -107,7 +104,7 @@ export function DeleteConfirmationDialog({
                         ];
                     }
                 }
-                if (index > 0 && typeof acc[acc.length-1] === 'object' && React.isValidElement(acc[acc.length-1])) { // if previous was a strong tag, this 'part' is the text after it
+                if (index > 0 && typeof acc[acc.length-1] === 'object' && React.isValidElement(acc[acc.length-1])) { 
                     return [...acc, part];
                 }
                 if (typeof part === 'string' && part.includes('“') && part.includes('”')) {

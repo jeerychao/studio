@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import *   as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,21 +17,21 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { updateOwnPasswordAction } from "@/lib/actions";
+import { updateOwnPasswordAction, type ActionResponse } from "@/lib/actions";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const passwordChangeSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required."),
+  currentPassword: z.string().min(1, "当前密码是必需的。"),
   newPassword: z.string()
-    .min(8, "New password must be 8-16 characters.")
-    .max(16, "New password must be 8-16 characters.")
-    .refine(val => /[A-Z]/.test(val), "Must include uppercase letter.")
-    .refine(val => /[a-z]/.test(val), "Must include lowercase letter.")
-    .refine(val => /[0-9]/.test(val), "Must include number.")
-    .refine(val => /[^A-Za-z0-9]/.test(val), "Must include symbol."),
-  confirmNewPassword: z.string().min(1, "Please confirm your new password."),
+    .min(8, "新密码必须为8-16个字符。")
+    .max(16, "新密码必须为8-16个字符。")
+    .refine(val => /[A-Z]/.test(val), "必须包含大写字母。")
+    .refine(val => /[a-z]/.test(val), "必须包含小写字母。")
+    .refine(val => /[0-9]/.test(val), "必须包含数字。")
+    .refine(val => /[^A-Za-z0-9]/.test(val), "必须包含符号。"),
+  confirmNewPassword: z.string().min(1, "请确认您的新密码。"),
 }).refine(data => data.newPassword === data.confirmNewPassword, {
-  message: "New passwords do not match.",
+  message: "新密码不匹配。",
   path: ["confirmNewPassword"],
 });
 
@@ -51,8 +51,9 @@ export function PasswordChangeForm() {
   });
 
   async function onSubmit(data: PasswordChangeFormValues) {
+    form.clearErrors();
     if (isAuthLoading || !currentUser || !currentUser.id || currentUser.id === 'guest-fallback-id') {
-        toast({ title: "Error", description: "User not properly authenticated.", variant: "destructive" });
+        toast({ title: "错误", description: "用户未正确认证。", variant: "destructive" });
         return;
     }
     try {
@@ -62,22 +63,32 @@ export function PasswordChangeForm() {
       });
 
       if (result.success) {
-        toast({ title: "Password Updated", description: "Your password has been successfully updated." });
+        toast({ title: "密码已更新", description: "您的密码已成功更新。" });
         form.reset();
-      } else {
-        toast({ title: "Error", description: result.error?.userMessage || "Failed to update password.", variant: "destructive" });
+      } else if (result.error) {
+        toast({ 
+            title: "更新失败", 
+            description: result.error.userMessage || "无法更新密码。", 
+            variant: "destructive" 
+        });
+        if (result.error.field) {
+            form.setError(result.error.field as FieldPath<PasswordChangeFormValues>, {
+                type: "server",
+                message: result.error.userMessage,
+            });
+        }
       }
-    } catch (error) {
+    } catch (error) { // Catch unexpected errors
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        title: "客户端错误",
+        description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
         variant: "destructive",
       });
     }
   }
   
   if (isAuthLoading) {
-    return <p>Loading form...</p>;
+    return <p>加载表单中...</p>;
   }
 
   return (
@@ -88,9 +99,9 @@ export function PasswordChangeForm() {
           name="currentPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Current Password</FormLabel>
+              <FormLabel>当前密码</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="Enter your current password" {...field} />
+                <Input type="password" placeholder="输入您当前的密码" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -101,12 +112,12 @@ export function PasswordChangeForm() {
           name="newPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>New Password</FormLabel>
+              <FormLabel>新密码</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="Enter new password" {...field} />
+                <Input type="password" placeholder="输入新密码" {...field} />
               </FormControl>
               <FormDescription>
-                8-16 characters. Must include uppercase, lowercase, number, and symbol.
+                8-16个字符。必须包含大写字母、小写字母、数字和符号。
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -117,16 +128,16 @@ export function PasswordChangeForm() {
           name="confirmNewPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Confirm New Password</FormLabel>
+              <FormLabel>确认新密码</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="Confirm new password" {...field} />
+                <Input type="password" placeholder="确认新密码" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         <Button type="submit" disabled={form.formState.isSubmitting || isAuthLoading}>
-          {form.formState.isSubmitting ? "Updating..." : "Change Password"}
+          {form.formState.isSubmitting ? "更新中..." : "更改密码"}
         </Button>
       </form>
     </Form>
