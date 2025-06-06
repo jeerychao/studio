@@ -15,9 +15,9 @@ services:
     networks:
       - app_network
     volumes:
-      - prisma_data:/app/prisma
+      - prisma_data:/app/prisma # 持久化整个 prisma 目录
     healthcheck:
-      test: ["CMD", "/app/health-check.sh"]
+      test: ["CMD", "/app/health-check.sh"] # 确保路径在容器内是正确的
       interval: 30s
       timeout: 10s
       retries: 3
@@ -27,5 +27,5 @@ networks:
     driver: bridge
 
 volumes:
-  prisma_data:
+  prisma_data: # 使用 prisma_data 作为卷名
     driver: local
