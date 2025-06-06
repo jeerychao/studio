@@ -6,7 +6,6 @@ const nextConfig = {
       bodySizeLimit: '2mb',
       allowedForwardedHosts: [
         '17.100.100.253:3010',
-        '17.100.100.253:8081',
       ],
       allowedOrigins: [
         'http://17.100.100.253:8081',
