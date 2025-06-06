@@ -1,5 +1,6 @@
 
-import { ValidationError } from './errors'; // Assuming errors.ts is in the same directory or accessible
+// src/lib/ip-utils.ts
+import { ValidationError } from './errors';
 
 // Helper: Convert IP string to integer
 export function ipToNumber(ip: string): number {
@@ -29,15 +30,10 @@ export function subnetMaskToPrefix(mask: string): number {
     const maskNum = ipToNumber(mask);
     let prefix = 0;
     let tempMask = maskNum;
-    // Check for non-contiguous mask bits from the right (least significant)
-    // A valid mask has all 1s on the left and all 0s on the right.
-    // So, (mask XOR (mask + 1)) / 2 should be all 1s up to the prefix length.
-    // Easier way: count leading 1s.
     for (let i = 0; i < 32; i++) {
-        if ((tempMask << i) & 0x80000000) { // Check most significant bit
+        if ((tempMask << i) & 0x80000000) {
             prefix++;
         } else {
-            // After the first 0, all subsequent bits must also be 0 for a valid mask
             if (((tempMask << i) & 0xFFFFFFFF) !== 0) {
                  throw new ValidationError(`无效的子网掩码: ${mask} (非连续)。`, 'subnetMask', mask, '子网掩码格式不正确。');
             }
@@ -47,12 +43,11 @@ export function subnetMaskToPrefix(mask: string): number {
     return prefix;
 }
 
-
 // Helper: Calculate network address
 export function calculateNetworkAddress(ip: string, prefix: number): string {
   const ipNum = ipToNumber(ip);
   if (prefix < 0 || prefix > 32) throw new RangeError('Invalid prefix length for network address calculation.');
-  if (prefix === 0) return '0.0.0.0'; 
+  if (prefix === 0) return '0.0.0.0';
   const maskNum = (0xffffffff << (32 - prefix)) >>> 0;
   const networkNum = (ipNum & maskNum) >>> 0;
   return numberToIp(networkNum);
@@ -62,9 +57,9 @@ export function calculateNetworkAddress(ip: string, prefix: number): string {
 export function calculateBroadcastAddress(ipOrNetworkAddress: string, prefix: number): string {
   if (prefix < 0 || prefix > 32) throw new RangeError('Invalid prefix length for broadcast address calculation.');
   const networkNum = ipToNumber(calculateNetworkAddress(ipOrNetworkAddress, prefix));
-  if (prefix === 32) return ipOrNetworkAddress; 
-  if (prefix === 0) return '255.255.255.255'; 
-  
+  if (prefix === 32) return ipOrNetworkAddress;
+  if (prefix === 0) return '255.255.255.255';
+
   const hostBits = 32 - prefix;
   const broadcastNum = (networkNum | ((1 << hostBits) - 1)) >>> 0;
   return numberToIp(broadcastNum);
@@ -76,61 +71,59 @@ export function calculateIpRange(networkAddr: string, prefix: number): string | 
   const networkAddressNum = ipToNumber(networkAddr);
 
   if (prefix === 32) {
-    return `${networkAddr} - ${networkAddr}`; // Single IP is "usable"
+    return `${networkAddr} - ${networkAddr}`;
   }
   if (prefix === 31) {
-    // RFC 3021: for /31, both addresses are usable
     const secondIpNum = (networkAddressNum + 1) >>> 0;
     return `${networkAddr} - ${numberToIp(secondIpNum)}`;
   }
-   // For /0, there are no "usable" host IPs in the traditional sense (network=0.0.0.0, broadcast=255.255.255.255)
-   // but the range of all IPs is vast. For typical "usable" ranges, /0 is not applicable.
-  if (prefix > 30 || prefix < 1) { 
-    return null; // No typical usable host range for /0 or prefixes > /30 (handled by /31, /32 above)
+  if (prefix > 30 || prefix < 1) {
+    return null;
   }
 
   const firstUsableNum = (networkAddressNum + 1) >>> 0;
-  
+
   const broadcastAddress = calculateBroadcastAddress(networkAddr, prefix);
   const broadcastNum = ipToNumber(broadcastAddress);
   const lastUsableNum = (broadcastNum - 1) >>> 0;
 
-  if (lastUsableNum < firstUsableNum) return null; 
+  if (lastUsableNum < firstUsableNum) return null;
 
   return `${numberToIp(firstUsableNum)} - ${numberToIp(lastUsableNum)}`;
 }
 
 export interface SubnetProperties {
-    inputIp: string; 
+    inputIp: string;
     prefix: number;
-    networkAddress: string; 
+    networkAddress: string;
     subnetMask: string;
-    broadcastAddress: string; 
+    broadcastAddress: string;
     firstUsableIp?: string;
     lastUsableIp?: string;
-    ipRange?: string; // String representation like "192.168.1.1 - 192.168.1.254"
+    ipRange?: string;
 }
 
-// Renamed from parseAndValidateCIDR to getSubnetPropertiesFromCidr
-// This function now PRIMARILY PARSES and CALCULATES properties assuming basic CIDR format is okay.
-// Deep validation (like ensuring input IP is network address) is now in error-utils.ts/validateCIDR
+// This function is for parsing properties from a CIDR string.
+// It assumes basic format validity; stricter validation (e.g., ensuring IP is network address)
+// should be done by validateCidrInput from error-utils.ts before or after.
 export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | null {
   const match = cidr.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
-  if (!match) return null; // Basic format check
-  
+  if (!match) return null; // Basic format check failed
+
   const [, inputIp, prefixStr] = match;
   const prefix = parseInt(prefixStr, 10);
 
-  if (prefix < 0 || prefix > 32) return null; // Basic prefix range check
+  if (isNaN(prefix) || prefix < 0 || prefix > 32) return null; // Invalid prefix number
 
   const ipParts = inputIp.split('.').map(Number);
-  if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) return null;
-  
+  if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) return null; // Invalid IP part
+
+  // Calculate network address based on the input IP and prefix
   const networkAddress = calculateNetworkAddress(inputIp, prefix);
   const subnetMask = prefixToSubnetMask(prefix);
-  const broadcastAddress = calculateBroadcastAddress(networkAddress, prefix);
+  const broadcastAddress = calculateBroadcastAddress(networkAddress, prefix); // Use calculated networkAddress
   const ipRangeString = calculateIpRange(networkAddress, prefix);
-  
+
   let firstUsableIp: string | undefined;
   let lastUsableIp: string | undefined;
 
@@ -140,10 +133,10 @@ export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | nu
     lastUsableIp = parts[1];
   }
 
-  return { 
-    inputIp,
-    prefix, 
-    networkAddress,
+  return {
+    inputIp, // The original IP part of the CIDR string
+    prefix,
+    networkAddress, // The calculated network address
     subnetMask,
     broadcastAddress,
     firstUsableIp,
@@ -152,6 +145,7 @@ export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | nu
   };
 }
 
+// This function extracts the prefix from a CIDR string.
 export function getPrefixFromCidr(cidr: string): number {
     const parts = cidr.split('/');
     if (parts.length !== 2) throw new ValidationError('CIDR 格式无效，缺少前缀。', 'cidr', cidr, 'CIDR 格式无效，缺少斜杠和前缀长度。');
@@ -163,10 +157,10 @@ export function getPrefixFromCidr(cidr: string): number {
 }
 
 export function getUsableIpCount(prefix: number): number {
-  if (prefix === 32) return 1;
-  if (prefix === 31) return 2;
-  if (prefix >= 0 && prefix <= 30) return Math.pow(2, 32 - prefix) - 2;
-  return 0;
+  if (prefix === 32) return 1; // For a /32, the single IP is considered usable in some contexts.
+  if (prefix === 31) return 2; // RFC 3021 for /31 networks
+  if (prefix >= 0 && prefix <= 30) return Math.pow(2, 32 - prefix) - 2; // Network and broadcast addresses are unusable
+  return 0; // Invalid prefix
 }
 
 export function doSubnetsOverlap(subnet1Details: SubnetProperties, subnet2Details: SubnetProperties): boolean {
@@ -181,5 +175,6 @@ export function isIpInCidrRange(ipAddress: string, cidrDetails: SubnetProperties
   const ipNum = ipToNumber(ipAddress);
   const networkNum = ipToNumber(cidrDetails.networkAddress);
   const broadcastNum = ipToNumber(cidrDetails.broadcastAddress);
+  // Ensure IP is within the network and broadcast addresses inclusive.
   return ipNum >= networkNum && ipNum <= broadcastNum;
 }

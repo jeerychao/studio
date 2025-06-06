@@ -5,15 +5,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getSubnetsAction, getIPAddressesAction, getAuditLogsAction } from "@/lib/actions";
-import { cidrToPrefix, getUsableIpCount } from "@/lib/ip-utils";
-// Removed Lucide icon imports: Network, Globe, Users, Activity, AlertTriangle, ArrowUpRight
+// Ensure correct imports from ip-utils
+import { getUsableIpCount, getSubnetPropertiesFromCidr, getPrefixFromCidr } from "@/lib/ip-utils";
 import Link from "next/link";
-import Image from "next/image"; // Added Image import
+import Image from "next/image";
+import { logger } from "@/lib/logger";
+import type { AppError } from "@/lib/errors"; // Import AppError for type checking
 
 export default async function DashboardPage() {
   try {
-    const subnetsResponse = await getSubnetsAction(); 
-    const ipsResponse = await getIPAddressesAction();   
+    // These actions should ideally not throw errors that break the page,
+    // but rather return data or a well-structured error/empty state.
+    // If getSubnetsAction throws, the catch block below will handle it.
+    const subnetsResponse = await getSubnetsAction();
+    const ipsResponse = await getIPAddressesAction();
     const auditLogsResponse = await getAuditLogsAction({ page: 1, pageSize: 5 });
 
     const subnetsForProcessing = Array.isArray(subnetsResponse.data) ? subnetsResponse.data : [];
@@ -24,12 +29,12 @@ export default async function DashboardPage() {
 
     const totalIPs = subnetsForProcessing.reduce((acc, subnet) => {
       if (subnet && typeof subnet.cidr === 'string') {
-        try {
-          const prefix = cidrToPrefix(subnet.cidr);
-          return acc + getUsableIpCount(prefix);
-        } catch (e) {
-          const error = e instanceof Error ? e : new Error(String(e));
-          console.error(`DashboardPage: Error processing CIDR '${subnet.cidr}' for subnet ID '${subnet.id}' during totalIPs calculation: ${error.message}`);
+        // Use getSubnetPropertiesFromCidr to safely parse and get prefix
+        const props = getSubnetPropertiesFromCidr(subnet.cidr);
+        if (props && typeof props.prefix === 'number') {
+          return acc + getUsableIpCount(props.prefix);
+        } else {
+          logger.warn(`[DashboardPage] Could not parse CIDR properties or get prefix for '${subnet.cidr}' during totalIPs calculation.`, undefined, { subnetId: subnet.id });
           return acc;
         }
       }
@@ -145,11 +150,18 @@ export default async function DashboardPage() {
                     let prefixDisplay: string | number = 'N/A';
                     if (subnet.cidr && typeof subnet.cidr === 'string') {
                       try {
-                        prefixDisplay = cidrToPrefix(subnet.cidr);
-                      } catch (prefixErr) {
-                        const pError = prefixErr instanceof Error ? prefixErr : new Error(String(prefixErr));
-                        console.warn(`DashboardPage: Error parsing prefix for subnet CIDR '${subnet.cidr}' in Subnet Health card: ${pError.message}`);
-                        prefixDisplay = '无效';
+                        // Use getSubnetPropertiesFromCidr for safer prefix extraction
+                        const props = getSubnetPropertiesFromCidr(subnet.cidr);
+                        if (props && typeof props.prefix === 'number') {
+                            prefixDisplay = props.prefix;
+                        } else {
+                            prefixDisplay = '无效'; // CIDR format might be wrong for parsing properties
+                            logger.warn(`[DashboardPage] Could not parse CIDR properties for '${subnet.cidr}' in Subnet Health card.`, undefined, { subnetId: subnet.id });
+                        }
+                      } catch (parseErr) { // Catch if getSubnetPropertiesFromCidr itself throws (should be rare now)
+                        const pError = parseErr instanceof Error ? parseErr : new Error(String(parseErr));
+                        logger.warn(`[DashboardPage] Error parsing properties for subnet CIDR '${subnet.cidr}' in Subnet Health card: ${pError.message}`, pError, { subnetId: subnet.id });
+                        prefixDisplay = '解析错误';
                       }
                     }
                     return (
@@ -161,7 +173,7 @@ export default async function DashboardPage() {
                       <div className="text-right">
                          <Badge variant={ (subnet.utilization ?? 0) > 95 ? "destructive" : "secondary"}>{(subnet.utilization ?? 0)}% 已使用</Badge>
                          <Link href={`/ip-addresses?subnetId=${subnet.id}`}>
-                            <Button variant="ghost" size="sm" className="text-xs mt-1">管理 IP 
+                            <Button variant="ghost" size="sm" className="text-xs mt-1">管理 IP
                               <Image src="/images/dashboard_placeholders/arrow_up_right_icon.png" alt="Manage IP" width={12} height={12} className="ml-1" data-ai-hint="arrow up right" />
                             </Button>
                          </Link>
@@ -181,29 +193,37 @@ export default async function DashboardPage() {
         </div>
       </div>
     );
-  } catch (e) {
+  } catch (e: unknown) { // Catch errors from await getSubnetsAction() etc.
     let processedError: Error;
+    let userDisplayMessage: string;
+
     if (e instanceof Error) {
       processedError = e;
+      // Check if it's an AppError with a userMessage, otherwise use the raw message
+      userDisplayMessage = (e as AppError).userMessage || e.message;
     } else if (typeof e === 'string') {
       processedError = new Error(e);
+      userDisplayMessage = e;
     } else if (e === null || e === undefined) {
       processedError = new Error("仪表盘页面发生未知 null 或 undefined 错误。");
+      userDisplayMessage = "发生未知错误。";
     } else {
       try {
         processedError = new Error(JSON.stringify(e));
+        userDisplayMessage = "发生序列化错误。";
       } catch (stringifyError) {
         processedError = new Error("仪表盘页面发生未知不可序列化错误。");
+        userDisplayMessage = "发生未知且不可序列化的错误。";
       }
     }
-    console.error("仪表盘页面内部服务器错误:", processedError.message, processedError.stack);
-    // Using a div for error display as AlertTriangle is now a local image
+    logger.error("[DashboardPage] Server Component render error:", processedError, { stack: processedError.stack, originalError: e });
+
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
         <Image src="/images/dashboard_placeholders/alert_triangle_icon.png" alt="Error" width={64} height={64} className="mb-4 text-destructive" data-ai-hint="error warning icon" />
         <h2 className="text-2xl font-semibold mb-2 text-destructive">仪表盘错误</h2>
         <p className="text-muted-foreground mb-2">加载仪表盘数据时出错：</p>
-        <p className="text-sm text-destructive bg-destructive/10 p-2 rounded-md">{processedError.message}</p>
+        <p className="text-sm text-destructive bg-destructive/10 p-2 rounded-md">{userDisplayMessage}</p>
         <p className="text-xs text-muted-foreground mt-4">请检查服务器日志获取更多详情或稍后再试。</p>
       </div>
     );
