@@ -267,23 +267,24 @@ export async function createSubnetAction(
       );
     }
 
+    const createPayload: Prisma.SubnetCreateInput = {
+      cidr: canonicalCidrToStore,
+      networkAddress: subnetProperties.networkAddress,
+      subnetMask: subnetProperties.subnetMask,
+      ipRange: subnetProperties.ipRange || null, // Ensure null if undefined
+      description: data.description || null,
+    };
+
     if (data.vlanId && data.vlanId !== "") {
         const vlanExists = await prisma.vLAN.findUnique({ where: { id: data.vlanId }});
         if (!vlanExists) {
             throw new NotFoundError(`VLAN ID: ${data.vlanId}`, `选择的 VLAN 不存在。`);
         }
+        createPayload.vlan = { connect: { id: data.vlanId } };
     }
 
-    const newSubnetPrisma = await prisma.subnet.create({
-      data: {
-        cidr: canonicalCidrToStore,
-        networkAddress: subnetProperties.networkAddress,
-        subnetMask: subnetProperties.subnetMask,
-        ipRange: subnetProperties.ipRange || null, // Ensure null if undefined
-        vlanId: data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId,
-        description: data.description || null,
-      },
-    });
+
+    const newSubnetPrisma = await prisma.subnet.create({ data: createPayload });
 
     await prisma.auditLog.create({
       data: {
@@ -373,8 +374,10 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
           if (!vlanExists) {
               throw new NotFoundError(`VLAN ID: ${newVlanId}`, `选择的 VLAN (ID: ${newVlanId}) 不存在。`);
           }
+          updateData.vlan = { connect: { id: newVlanId } };
+      } else {
+          updateData.vlan = { disconnect: true };
       }
-      updateData.vlanId = newVlanId;
     }
     if (data.hasOwnProperty('description')) {
       updateData.description = data.description === undefined ? null : data.description;
