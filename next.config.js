@@ -5,7 +5,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
       allowedForwardedHosts: ['17.100.100.253:3010'], // Specific forwarded host
-      allowedOrigins: ['*'] // Allow all origins for now, consider tightening later
+      allowedOrigins: [
+        'http://17.100.100.253:8081', // Actual browser origin
+        'http://17.100.100.253:3010'  // Next.js perceived self-origin
+      ]
     }
   },
   // 禁用客户端缓存以解决 CacheStore 错误 (根据您之前的请求保留)
