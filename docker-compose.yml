@@ -11,22 +11,32 @@ services:
       - "3010:3000"
     env_file:
       - ./production.env
-    environment:
-      - NODE_ENV=production
-      - HOSTNAME=0.0.0.0
-      - PORT=3000
-      - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
-      - NEXTAUTH_URL=http://17.100.100.253:3010
+    # environment: # 这些现在应该主要在 production.env 中定义，或根据需要在此覆盖
+    #   - NODE_ENV=production
+    #   - HOST=0.0.0.0
+    #   - HOSTNAME=0.0.0.0
+    #   - PORT=3000
+    #   - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:3010
+    #   - NEXTAUTH_URL=http://17.100.100.253:3010
+    #   - NEXT_PUBLIC_VERCEL_URL=17.100.100.253:3010
+    #   - NEXTAUTH_SECRET=your-secret-key # 应该在 .env 文件中更安全地管理
+    #   - NODE_OPTIONS=--max-old-space-size=4096
     restart: unless-stopped
     networks:
       - app_network
     volumes:
-      - prisma_data:/app/prisma
+      - prisma_data:/app/prisma # 持久化整个 prisma 目录，包括 dev.db 和 schema
+      # - ./next.config.js:/app/next.config.js:ro # 如果next.config.js被 standalone build复制，则不需要此映射
+    healthcheck:
+      test: ["CMD", "/app/health-check.sh"] # 确保路径正确
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   app_network:
     driver: bridge
 
 volumes:
-  prisma_data:
+  prisma_data: # 使用 prisma_data 作为卷名
     driver: local

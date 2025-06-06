@@ -1,31 +1,55 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone', // 添加独立输出支持
+  output: 'standalone',
   experimental: {
-    serverActions: true // 简化 server actions 配置
+    serverActions: {
+      bodySizeLimit: '2mb',
+      allowedForwardedHosts: [
+        '17.100.100.253:3010',
+        '17.100.100.253:8081',
+      ],
+      allowedOrigins: [
+        'http://17.100.100.253:8081',
+        'http://17.100.100.253:3010',
+      ]
+    }
   },
-  // 添加跨域支持
-  async headers() {
+  // 禁用客户端缓存以解决 CacheStore 错误
+  cache: false,
+  headers: async () => {
     return [
       {
         source: '/:path*',
         headers: [
           {
             key: 'Access-Control-Allow-Origin',
-            value: '*',
+            value: '*'
           },
           {
             key: 'Access-Control-Allow-Methods',
-            value: 'GET,POST,PUT,DELETE,OPTIONS',
+            value: 'GET, POST, PUT, DELETE, OPTIONS'
           },
           {
             key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization',
+            value: 'X-Forwarded-Host, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
           },
-        ],
-      },
+          // 禁用客户端缓存
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate'
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache'
+          },
+          {
+            key: 'Expires',
+            value: '0'
+          }
+        ]
+      }
     ];
-  },
+  }
 };
 
 module.exports = nextConfig;
