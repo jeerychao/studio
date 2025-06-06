@@ -49,9 +49,9 @@ RUN mkdir -p ./.next/cache && chown -R nextjs:nodejs ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma # 复制准备好的prisma目录
-COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./ # standalone模式需要
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./ # standalone模式可能需要
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma 
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./ 
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./ 
 
 USER nextjs
 
