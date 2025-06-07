@@ -94,7 +94,7 @@ function AuditLogsView() {
   
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
-      const allIdsOnPage = logsData?.data.map(log => log.id) || [];
+      const allIdsOnPage = logsData?.data?.map(log => log.id) || []; // Added optional chaining for logsData.data
       setSelectedIds(new Set(allIdsOnPage));
     } else {
       setSelectedIds(new Set());
@@ -126,8 +126,13 @@ function AuditLogsView() {
   }
 
   const canDeleteLog = hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
-  const isAllOnPageSelected = logsData?.data.length > 0 && logsData.data.every(log => selectedIds.has(log.id));
-  const isSomeOnPageSelected = logsData?.data.some(log => selectedIds.has(log.id));
+
+  // Ensure logsData and logsData.data are available before accessing length or methods
+  const dataIsAvailable = logsData && logsData.data && logsData.data.length > 0;
+
+  const isAllOnPageSelected = dataIsAvailable ? logsData.data.every(log => selectedIds.has(log.id)) : false;
+  const isSomeOnPageSelected = dataIsAvailable ? logsData.data.some(log => selectedIds.has(log.id)) : false;
+
 
   const pageActionElement = canDeleteLog && selectedIds.size > 0 ? (
     <BatchDeleteConfirmationDialog
@@ -151,11 +156,11 @@ function AuditLogsView() {
           <CardTitle>系统活动日志</CardTitle>
           <CardDescription>
             IPAM 系统中执行操作的时间顺序记录。
-            显示 {logsData?.data.length} 条，共 {logsData?.totalCount} 条日志。
+            显示 {logsData?.data?.length || 0} 条，共 {logsData?.totalCount || 0} 条日志。 {/* Safely access length */}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {logsData && logsData.data.length > 0 ? (
+          {logsData && logsData.data && logsData.data.length > 0 ? ( // Check logsData.data here as well
             <>
               <Table>
                 <TableHeader>
@@ -163,10 +168,10 @@ function AuditLogsView() {
                     <TableHead className="w-[50px]">
                       {canDeleteLog && (
                         <Checkbox
-                            checked={isAllOnPageSelected}
+                            checked={dataIsAvailable && isAllOnPageSelected} // Safely use isAllOnPageSelected
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected} // Safely use both
                         />
                       )}
                     </TableHead>
@@ -183,7 +188,7 @@ function AuditLogsView() {
                       key={log.id}
                       onClick={(e) => handleRowClick(log, e)}
                       className="cursor-pointer hover:bg-muted/50"
-                      data-state={selectedIds.has(log.id) && "selected"}
+                      data-state={selectedIds.has(log.id) ? "selected" : ""} // ensure data-state is always a string
                     >
                       <TableCell>
                         {canDeleteLog && (
