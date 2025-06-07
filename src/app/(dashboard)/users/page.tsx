@@ -11,8 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getUsersAction, getRolesAction, deleteUserAction, type PaginatedResponse } from "@/lib/actions";
-import type { User, Role } from "@/types";
+import { getUsersAction, getRolesAction, deleteUserAction } from "@/lib/actions";
+import type { User, Role, PaginatedResponse } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { UserFormSheet } from "./user-form-sheet";

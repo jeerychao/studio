@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure, SubnetFreeIpDetails } from '@/types';
+import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure, SubnetFreeIpDetails, PaginatedResponse } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import {
@@ -31,15 +31,7 @@ export interface ActionResponse<TData = unknown> {
   error?: ActionErrorResponse;
 }
 
-// Exporting PaginatedResponse interface
-export interface PaginatedResponse<TData> {
-  data: TData[];
-  totalCount: number;
-  currentPage: number;
-  totalPages: number;
-  pageSize: number;
-}
-
+// PaginatedResponse is now imported from '@/types'
 
 async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: string, username: string }> {
   if (performingUserId) {
@@ -58,7 +50,7 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_QUERY_PAGE_SIZE = 10; // For query tool specific pagination
 
-export interface FetchParams {
+interface FetchParams {
   page?: number;
   pageSize?: number;
   subnetId?: string;

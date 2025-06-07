@@ -10,8 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getAuditLogsAction, deleteAuditLogAction, batchDeleteAuditLogsAction, type PaginatedResponse } from "@/lib/actions";
-import type { AuditLog } from "@/types";
+import { getAuditLogsAction, deleteAuditLogAction, batchDeleteAuditLogsAction } from "@/lib/actions";
+import type { AuditLog, PaginatedResponse } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { ListChecks, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
