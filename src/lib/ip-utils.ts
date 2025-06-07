@@ -17,6 +17,18 @@ export function numberToIp(num: number): string {
   ].join('.');
 }
 
+// Helper: Compare two IP address strings numerically
+export function compareIpStrings(ipA: string, ipB: string): number {
+  const partsA = ipA.split('.').map(Number);
+  const partsB = ipB.split('.').map(Number);
+
+  for (let i = 0; i < 4; i++) {
+    if (partsA[i] < partsB[i]) return -1;
+    if (partsA[i] > partsB[i]) return 1;
+  }
+  return 0;
+}
+
 // Helper: Calculate subnet mask from prefix length
 export function prefixToSubnetMask(prefix: number): string {
   if (prefix < 0 || prefix > 32) throw new RangeError('Invalid prefix length, must be 0-32.');
