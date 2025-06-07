@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Edit, Trash2, Users as UsersIcon } from "lucide-react";
+import { Edit, Trash2, Users as UsersIcon, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,9 +24,9 @@ const ITEMS_PER_PAGE = 10;
 
 function LoadingUsersPage() {
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <UsersIcon className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">加载用户中...</h2>
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <p className="ml-3 text-lg">加载用户中...</p>
     </div>
   );
 }

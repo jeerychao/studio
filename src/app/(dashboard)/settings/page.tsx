@@ -4,7 +4,7 @@
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, Palette, Lock, UserCircle2 } from "lucide-react";
+import { Settings, Palette, Lock, UserCircle2, Loader2 } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 // PERMISSIONS import is no longer needed for the primary page access check here
 // import { PERMISSIONS } from "@/types"; 
@@ -36,9 +36,9 @@ export default function SettingsPage() {
 
   if (isAuthLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Settings className="h-16 w-16 animate-spin text-primary mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">{texts.loadingMessage}</h2>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-lg">{texts.loadingMessage}</p>
       </div>
     );
   }

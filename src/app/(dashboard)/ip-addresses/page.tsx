@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, Edit, Trash2, PlusCircle } from "lucide-react";
+import { Globe, Edit, Trash2, PlusCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,25 +28,10 @@ const ITEMS_PER_PAGE = 10;
 
 function LoadingIPAddressesPageContent() {
   return (
-    <>
-      <PageHeader
-        title="IP 地址管理"
-        description="加载IP地址数据中..."
-        icon={<Globe className="h-6 w-6 text-primary" />}
-      />
-      <Card>
-        <CardHeader>
-          <CardTitle>IP 地址列表</CardTitle>
-          <CardDescription>正在从系统中获取IP地址...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-10">
-             <Globe className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">正在加载IP地址、子网和VLAN...</p>
-          </div>
-        </CardContent>
-      </Card>
-    </>
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <p className="ml-3 text-lg">加载IP地址数据中...</p>
+    </div>
   );
 }
 

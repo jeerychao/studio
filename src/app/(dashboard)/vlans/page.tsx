@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Edit, Trash2, Cable, PlusCircle } from "lucide-react";
+import { Edit, Trash2, Cable, PlusCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,9 +25,9 @@ const ITEMS_PER_PAGE = 10;
 
 function LoadingVlansPage() {
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <Cable className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">加载VLAN中...</h2>
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <p className="ml-3 text-lg">加载VLAN中...</p>
     </div>
   );
 }

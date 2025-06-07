@@ -11,6 +11,7 @@ import { PERMISSIONS } from "@/types";
 import type { Subnet, VLAN, IPAddress } from "@/types"; // Ensure IPAddress type is available
 import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
 import Image from "next/image";
+import { Loader2 } from "lucide-react";
 
 
 export default function ImportExportPage() {
@@ -194,9 +195,9 @@ export default function ImportExportPage() {
   
   if (isAuthLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Image src="/images/tool_icons/download_cloud_icon.png" alt="Loading" width={64} height={64} className="animate-pulse text-primary mb-4" data-ai-hint="cloud download icon" />
-        <h2 className="text-2xl font-semibold mb-2">加载数据导出工具中...</h2>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-lg">加载数据导出工具中...</p>
       </div>
     );
   }

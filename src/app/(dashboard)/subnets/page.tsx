@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { NetworkIcon, Edit, Trash2 } from "lucide-react";
+import { NetworkIcon, Edit, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +26,9 @@ const ITEMS_PER_PAGE = 10;
 
 function LoadingSubnetsPage() {
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <NetworkIcon className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">加载子网中...</h2>
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <p className="ml-3 text-lg">加载子网中...</p>
     </div>
   );
 }

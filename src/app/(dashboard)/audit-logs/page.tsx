@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { getAuditLogsAction, deleteAuditLogAction, batchDeleteAuditLogsAction, type PaginatedResponse } from "@/lib/actions";
 import type { AuditLog } from "@/types";
 import { PERMISSIONS } from "@/types";
-import { ListChecks, Trash2 } from "lucide-react";
+import { ListChecks, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
@@ -33,9 +33,9 @@ const ITEMS_PER_PAGE = 10;
 
 function LoadingAuditLogsPage() {
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <ListChecks className="h-16 w-16 animate-spin text-primary mb-4" />
-      <h2 className="text-2xl font-semibold mb-2">加载审计日志中...</h2>
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <p className="ml-3 text-lg">加载审计日志中...</p>
     </div>
   );
 }
