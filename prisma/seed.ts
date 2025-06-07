@@ -32,33 +32,44 @@ async function main() {
   }
   console.log('Permissions seeded.');
 
-  console.log('Seeding Roles...');
+  console.log('Seeding Roles (Pass 1: Create roles without permissions)...');
   for (const roleData of seedRolesData) {
     const prismaRoleName = roleData.name as string;
-    const mappedPermissions = roleData.permissions.map(appPermId => ({
-      id: appPermId as string
-    }));
-
     await prisma.role.upsert({
       where: { id: roleData.id },
       update: {
         name: prismaRoleName,
         description: roleData.description,
-        permissions: {
-          set: mappedPermissions,
-        },
       },
       create: {
         id: roleData.id,
         name: prismaRoleName,
         description: roleData.description,
-        permissions: {
-          connect: mappedPermissions,
-        },
       },
     });
   }
-  console.log('Roles seeded.');
+  console.log('Roles seeded (Pass 1 complete).');
+
+  console.log('Updating Roles (Pass 2: Connect permissions)...');
+  for (const roleData of seedRolesData) {
+    const mappedPermissions = roleData.permissions.map(appPermId => ({
+      id: appPermId as string
+    }));
+
+    // Use update to set permissions. This ensures that if a role exists,
+    // its permissions are overwritten with what's in seedRolesData.
+    // If a role is defined in seedRolesData with no permissions,
+    // this will clear any existing permissions for that role.
+    await prisma.role.update({
+        where: { id: roleData.id },
+        data: {
+        permissions: {
+            set: mappedPermissions,
+        },
+        },
+    });
+  }
+  console.log('Roles updated with permissions (Pass 2 complete).');
 
   const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar' | 'permissions'> & { password: string; avatarPath: string }> = [
     {
@@ -67,7 +78,7 @@ async function main() {
       email: 'admin@example.com',
       roleId: SEED_ADMIN_ROLE_ID,
       password: 'admin',
-      avatarPath: '/images/avatars/admin_avatar.png', // Updated path
+      avatarPath: '/images/avatars/admin_avatar.png',
     },
     {
       id: 'user-operator-seed',
@@ -75,7 +86,7 @@ async function main() {
       email: 'operator@example.com',
       roleId: SEED_OPERATOR_ROLE_ID,
       password: 'operator',
-      avatarPath: '/images/avatars/operator_avatar.png', // Updated path
+      avatarPath: '/images/avatars/operator_avatar.png',
     },
     {
       id: 'user-viewer-seed',
@@ -83,7 +94,7 @@ async function main() {
       email: 'viewer@example.com',
       roleId: SEED_VIEWER_ROLE_ID,
       password: 'viewer',
-      avatarPath: '/images/avatars/viewer_avatar.png', // Updated path
+      avatarPath: '/images/avatars/viewer_avatar.png',
     },
   ];
 
@@ -93,7 +104,7 @@ async function main() {
       where: { email: userData.email },
       update: {
         username: userData.username,
-        password: userData.password, // Note: In a real app, hash passwords
+        password: userData.password,
         roleId: userData.roleId,
         avatar: userData.avatarPath,
         lastLogin: new Date(),
@@ -102,7 +113,7 @@ async function main() {
         id: userData.id,
         username: userData.username,
         email: userData.email,
-        password: userData.password, // Note: In a real app, hash passwords
+        password: userData.password,
         roleId: userData.roleId,
         avatar: userData.avatarPath,
         lastLogin: new Date(),
@@ -113,12 +124,11 @@ async function main() {
 
   console.log('Seeding VLANs...');
   for (const vlanData of seedVLANsData) {
-    // Check if a VLAN already exists with the target vlanNumber but a different ID
     const conflictingVlan = await prisma.vLAN.findFirst({
       where: {
         vlanNumber: vlanData.vlanNumber,
         NOT: {
-          id: vlanData.id, 
+          id: vlanData.id,
         },
       },
     });
@@ -164,7 +174,6 @@ async function main() {
 
   console.log('Seeding Subnets...');
   for (const subnetData of seedSubnetsData) {
-    // Check if a Subnet already exists with the target cidr but a different ID
     const conflictingSubnet = await prisma.subnet.findFirst({
         where: {
             cidr: subnetData.cidr,
@@ -281,3 +290,4 @@ main()
     await prisma.$disconnect();
   });
 
+    
