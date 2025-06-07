@@ -85,13 +85,11 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
   async function onSubmit(values: SubnetFormValues) {
     form.clearErrors(); 
 
-    // Determine the vlanId to send: null if "No VLAN" or empty, otherwise the selected ID.
     const vlanIdForAction = 
       values.vlanId === NO_VLAN_SENTINEL_VALUE || values.vlanId === "" || values.vlanId === undefined
       ? null 
       : values.vlanId;
 
-    // Determine the description to send: null if empty/undefined, otherwise the value.
     const descriptionForAction = 
       values.description === "" || values.description === undefined
       ? null
@@ -108,18 +106,9 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
       if (isEditing && subnet) {
         response = await updateSubnetAction(subnet.id, actionData);
       } else {
-        // For create, ensure undefined is not sent if fields are truly optional per DB schema
-        // However, createSubnetAction expects specific types, so we ensure they are compatible.
-        // If description is optional and can be undefined, that's fine.
-        // If vlanId is optional and can be undefined, that's fine.
-        // Here, we stick to the `actionData` which uses null for clarity.
-        // The createSubnetAction needs to handle `vlanId: null` and `description: null` appropriately (e.g., by omitting them or setting DB to NULL).
-        // Let's assume createSubnetAction can handle nulls by converting them to undefined if the Prisma schema expects optional undefined.
-        // For now, let's ensure the create payload matches what createSubnetAction expects,
-        // which might be { cidr: string; vlanId?: string; description?: string; }
         const createPayloadForAction = {
             cidr: actionData.cidr,
-            vlanId: actionData.vlanId === null ? undefined : actionData.vlanId,
+            vlanId: actionData.vlanId === null ? undefined : actionData.vlanId, // Prisma create might prefer undefined for optional
             description: actionData.description === null ? undefined : actionData.description,
         };
         response = await createSubnetAction(createPayloadForAction);
@@ -141,7 +130,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         });
         if (response.error.field && form.setError) {
           const fieldName = response.error.field as FieldPath<SubnetFormValues>;
-          if (fieldName in form.getValues()) {
+          if (Object.keys(form.getValues()).includes(fieldName)) { // Check if fieldName is a valid key
             form.setError(fieldName, {
               type: "server",
               message: response.error.userMessage,
@@ -211,6 +200,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                     onValueChange={(value) => {
                       field.onChange(value === NO_VLAN_SENTINEL_VALUE ? "" : value);
                     }}
+                    // Ensure the value prop correctly reflects an empty or sentinel state
                     value={field.value === "" || field.value === null || field.value === undefined ? NO_VLAN_SENTINEL_VALUE : field.value}
                   >
                     <FormControl>
@@ -260,3 +250,4 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
+
