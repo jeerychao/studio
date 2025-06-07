@@ -179,8 +179,9 @@ function IPAddressesView() {
     </div>
   );
 
-  const isAllOnPageSelected = ipAddressesData?.data.length > 0 && ipAddressesData.data.every(ip => selectedIds.has(ip.id));
-  const isSomeOnPageSelected = ipAddressesData?.data.some(s => selectedIds.has(s.id));
+  const dataIsAvailable = ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0;
+  const isAllOnPageSelected = dataIsAvailable && ipAddressesData.data.every(ip => selectedIds.has(ip.id));
+  const isSomeOnPageSelected = dataIsAvailable && ipAddressesData.data.some(s => selectedIds.has(s.id));
 
   return (
     <>
@@ -205,7 +206,7 @@ function IPAddressesView() {
               ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''} 内的IP地址`
               : "所有受管IP地址。"}
             {selectedStatus !== 'all' && ` (状态: ${ipAddressStatusLabels[selectedStatus as IPAddressStatus]})`}
-             显示 {ipAddressesData?.data.length} 条，共 {ipAddressesData?.totalCount} 条IP。
+             显示 {ipAddressesData?.data.length || 0} 条，共 {ipAddressesData?.totalCount || 0} 条IP。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -217,10 +218,10 @@ function IPAddressesView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={isAllOnPageSelected}
+                            checked={dataIsAvailable && isAllOnPageSelected}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
@@ -315,3 +316,5 @@ export default function IPAddressesPage() {
     </Suspense>
   );
 }
+
+    

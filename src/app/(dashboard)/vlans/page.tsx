@@ -128,8 +128,9 @@ function VlansView() {
     </div>
   );
 
-  const isAllOnPageSelected = vlansData?.data.length > 0 && vlansData.data.every(v => selectedIds.has(v.id));
-  const isSomeOnPageSelected = vlansData?.data.some(s => selectedIds.has(s.id));
+  const dataIsAvailable = vlansData && vlansData.data && vlansData.data.length > 0;
+  const isAllOnPageSelected = dataIsAvailable && vlansData.data.every(v => selectedIds.has(v.id));
+  const isSomeOnPageSelected = dataIsAvailable && vlansData.data.some(s => selectedIds.has(s.id));
 
   return (
     <>
@@ -143,7 +144,7 @@ function VlansView() {
       <Card>
         <CardHeader>
           <CardTitle>VLAN 列表</CardTitle>
-          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansData?.data.length} 条，共 {vlansData?.totalCount} 条VLAN。</CardDescription>
+          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansData?.data.length || 0} 条，共 {vlansData?.totalCount || 0} 条VLAN。</CardDescription>
         </CardHeader>
         <CardContent>
           {vlansData && vlansData.data.length > 0 ? (
@@ -154,10 +155,10 @@ function VlansView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={isAllOnPageSelected}
+                            checked={dataIsAvailable && isAllOnPageSelected}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
@@ -238,3 +239,5 @@ export default function VlansPage() {
     </Suspense>
   );
 }
+
+    
