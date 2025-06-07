@@ -135,8 +135,11 @@ function SubnetsView() {
   const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
   const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
 
+  // Safe calculation for isAllOnPageSelected and isSomeOnPageSelected
+  // subnets is guaranteed to be an array here (even if empty)
   const isAllOnPageSelected = subnets.length > 0 && subnets.every(s => selectedIds.has(s.id));
-  const isSomeOnPageSelected = subnets.some(s => selectedIds.has(s.id));
+  const isSomeOnPageSelected = subnets.length > 0 && subnets.some(s => selectedIds.has(s.id));
+
 
   return (
     <>
@@ -181,10 +184,9 @@ function SubnetsView() {
                   <TableHead className="w-[50px]">
                     {canDelete && (
                       <Checkbox
-                        checked={isAllOnPageSelected}
+                        checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
                         onCheckedChange={handleSelectAll}
                         aria-label="全选当前页"
-                        indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                       />
                     )}
                   </TableHead>
