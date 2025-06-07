@@ -62,7 +62,7 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
-              <UserCircle className="h-6 w-6" />
+              <UserCircle className="h-7 w-7" /> {/* Increased size from h-6 w-6 */}
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>

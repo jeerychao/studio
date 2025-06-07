@@ -52,7 +52,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">子网总数</CardTitle>
-              <Image src="/images/dashboard_placeholders/network_icon.png" alt="Network Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="network icon" />
+              <Image src="/images/dashboard_placeholders/network_icon.png" alt="Network Icon" width={20} height={20} className="text-muted-foreground" data-ai-hint="network icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalSubnetCount}</div>
@@ -62,7 +62,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">可用 IP 总数</CardTitle>
-              <Image src="/images/dashboard_placeholders/globe_icon.png" alt="Globe Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="globe icon" />
+              <Image src="/images/dashboard_placeholders/globe_icon.png" alt="Globe Icon" width={20} height={20} className="text-muted-foreground" data-ai-hint="globe icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalIPs.toLocaleString()}</div>
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">已分配 IP</CardTitle>
-              <Image src="/images/dashboard_placeholders/users_icon.png" alt="Users Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="users icon" />
+              <Image src="/images/dashboard_placeholders/users_icon.png" alt="Users Icon" width={20} height={20} className="text-muted-foreground" data-ai-hint="users icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{allocatedIPsCount}</div>
@@ -82,7 +82,7 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">网络利用率</CardTitle>
-              <Image src="/images/dashboard_placeholders/activity_icon.png" alt="Activity Icon" width={16} height={16} className="text-muted-foreground" data-ai-hint="activity pulse icon" />
+              <Image src="/images/dashboard_placeholders/activity_icon.png" alt="Activity Icon" width={20} height={20} className="text-muted-foreground" data-ai-hint="activity pulse icon" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{utilizationPercentage}%</div>
