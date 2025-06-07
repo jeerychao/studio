@@ -108,7 +108,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
       } else {
         const createPayloadForAction = {
             cidr: actionData.cidr,
-            vlanId: actionData.vlanId === null ? undefined : actionData.vlanId, // Prisma create might prefer undefined for optional
+            vlanId: actionData.vlanId === null ? undefined : actionData.vlanId, 
             description: actionData.description === null ? undefined : actionData.description,
         };
         response = await createSubnetAction(createPayloadForAction);
@@ -130,7 +130,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         });
         if (response.error.field && form.setError) {
           const fieldName = response.error.field as FieldPath<SubnetFormValues>;
-          if (Object.keys(form.getValues()).includes(fieldName)) { // Check if fieldName is a valid key
+          if (Object.keys(form.getValues()).includes(fieldName)) { 
             form.setError(fieldName, {
               type: "server",
               message: response.error.userMessage,
@@ -200,7 +200,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                     onValueChange={(value) => {
                       field.onChange(value === NO_VLAN_SENTINEL_VALUE ? "" : value);
                     }}
-                    // Ensure the value prop correctly reflects an empty or sentinel state
                     value={field.value === "" || field.value === null || field.value === undefined ? NO_VLAN_SENTINEL_VALUE : field.value}
                   >
                     <FormControl>
@@ -251,3 +250,5 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
   );
 }
 
+
+    

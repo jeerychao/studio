@@ -116,14 +116,12 @@ export function IPAddressFormSheet({
     let response: ActionResponse<IPAddress>;
     try {
       const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
-      // When "Inherit/None" (INHERIT_VLAN_SENTINEL) is selected, or if vlanId is an empty string from the form,
-      // vlanIdToSave becomes null. This null value is passed to the server action.
-      const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" ? null : data.vlanId;
+      const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
 
       const payload = {
         ...data,
         subnetId: effectiveSubnetId,
-        vlanId: vlanIdToSave, // Now sends null if "Inherit/None" was selected
+        vlanId: vlanIdToSave, 
       };
 
       if (isEditing && ipAddress) {
@@ -152,7 +150,7 @@ export function IPAddressFormSheet({
           });
         }
       }
-    } catch (error) { // Catch unexpected errors
+    } catch (error) { 
       toast({
         title: "客户端错误",
         description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
@@ -232,8 +230,8 @@ export function IPAddressFormSheet({
                   <FormLabel>VLAN (可选)</FormLabel>
                   <Select
                     onValueChange={(value) => field.onChange(value === INHERIT_VLAN_SENTINEL ? "" : value)}
-                    value={field.value === "" ? INHERIT_VLAN_SENTINEL : (field.value || INHERIT_VLAN_SENTINEL) }
-                    disabled={vlans.length === 0 && field.value !== INHERIT_VLAN_SENTINEL}
+                    value={field.value === "" || field.value === null || field.value === undefined ? INHERIT_VLAN_SENTINEL : field.value }
+                    disabled={vlans.length === 0 && field.value !== INHERIT_VLAN_SENTINEL && field.value !== ""}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -319,4 +317,6 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
+    
+
     
