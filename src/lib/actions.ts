@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, PaginatedResponse, SubnetFreeIpDetails } from '@/types';
+import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, PaginatedResponse, SubnetFreeIpDetails, BatchDeleteResult, BatchOperationFailure } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import {
@@ -13,7 +13,7 @@ import {
   numberToIp,
   doSubnetsOverlap,
   compareIpStrings,
-  groupConsecutiveIpsToRanges, // New import
+  groupConsecutiveIpsToRanges,
 } from "./ip-utils";
 import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
@@ -575,6 +575,80 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
   }
 }
 
+export async function batchDeleteSubnetsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteSubnetsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0;
+  const failureDetails: BatchOperationFailure[] = [];
+  const deletedSubnetCidrs: string[] = [];
+
+  for (const id of ids) {
+    try {
+      const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } });
+      if (!subnetToDelete) {
+        failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '子网未找到。' });
+        continue;
+      }
+      if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") {
+        const vlanNumberForMessage = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`;
+        throw new ResourceError(
+          `子网 ${subnetToDelete.cidr} 已关联到 ${vlanNumberForMessage}，无法删除。`,
+          'SUBNET_HAS_VLAN_ASSOCIATION_BATCH',
+          `子网 ${subnetToDelete.cidr} 已关联到 ${vlanNumberForMessage}。请先解除其 VLAN 关联。`
+        );
+      }
+      const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } });
+      if (allocatedIpsCount > 0) {
+        throw new ResourceError(
+          `子网 ${subnetToDelete.cidr} 中仍有 ${allocatedIpsCount} 个已分配的 IP 地址，无法删除。`,
+          'SUBNET_HAS_ALLOCATED_IPS_BATCH',
+          `子网 ${subnetToDelete.cidr} 仍包含已分配的 IP 地址。`
+        );
+      }
+      const reservedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } });
+      if (reservedIpsCount > 0) {
+        throw new ResourceError(
+          `子网 ${subnetToDelete.cidr} 中仍有 ${reservedIpsCount} 个预留的 IP 地址，无法删除。`,
+          'SUBNET_HAS_RESERVED_IPS_BATCH',
+          `子网 ${subnetToDelete.cidr} 仍包含预留的 IP 地址。`
+        );
+      }
+      const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
+      for (const ip of freeIpsInSubnet) {
+        await prisma.iPAddress.update({
+          where: { id: ip.id },
+          data: { subnet: { disconnect: true }, vlan: { disconnect: true } },
+        });
+      }
+      await prisma.subnet.delete({ where: { id } });
+      deletedSubnetCidrs.push(subnetToDelete.cidr);
+      successCount++;
+    } catch (error: unknown) {
+      const errorResponse = createActionErrorResponse(error, `${actionName}_single`);
+      const itemIdentifier = (error instanceof AppError && error.field === 'id') ? `ID ${id}` : (await prisma.subnet.findUnique({ where: { id } }))?.cidr || `ID ${id}`;
+      failureDetails.push({ id, itemIdentifier, error: errorResponse.userMessage });
+    }
+  }
+
+  if (deletedSubnetCidrs.length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        userId: auditUser.userId,
+        username: auditUser.username,
+        action: 'batch_delete_subnet',
+        details: `批量删除了 ${deletedSubnetCidrs.length} 个子网: ${deletedSubnetCidrs.join(', ')}。失败 ${failureDetails.length} 个。`
+      }
+    });
+    revalidatePath("/subnets");
+    revalidatePath("/ip-addresses");
+    revalidatePath("/dashboard");
+    revalidatePath("/query");
+  }
+  logger.info(`批量删除子网完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
+
+
 export async function getVLANsAction(params?: FetchParams): Promise<PaginatedResponse<AppVLAN>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -786,6 +860,65 @@ export async function deleteVLANAction(id: string, performingUserId?: string): P
   }
 }
 
+export async function batchDeleteVLANsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteVLANsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0;
+  const failureDetails: BatchOperationFailure[] = [];
+  const deletedVlanNumbers: number[] = [];
+
+  for (const id of ids) {
+    try {
+      const vlanToDelete = await prisma.vLAN.findUnique({ where: { id } });
+      if (!vlanToDelete) {
+        failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: 'VLAN 未找到。' });
+        continue;
+      }
+      const subnetsUsingVlanCount = await prisma.subnet.count({ where: { vlanId: id } });
+      if (subnetsUsingVlanCount > 0) {
+        throw new ResourceError(
+          `VLAN ${vlanToDelete.vlanNumber} 已分配给 ${subnetsUsingVlanCount} 个子网。`,
+          'VLAN_IN_USE_SUBNET_BATCH',
+          `VLAN ${vlanToDelete.vlanNumber} 仍被 ${subnetsUsingVlanCount} 个子网使用。`
+        );
+      }
+      const ipsUsingVlanDirectlyCount = await prisma.iPAddress.count({ where: { vlanId: id } });
+      if (ipsUsingVlanDirectlyCount > 0) {
+        throw new ResourceError(
+          `VLAN ${vlanToDelete.vlanNumber} 已直接分配给 ${ipsUsingVlanDirectlyCount} 个 IP 地址。`,
+          'VLAN_IN_USE_IP_BATCH',
+          `VLAN ${vlanToDelete.vlanNumber} 仍被 ${ipsUsingVlanDirectlyCount} 个 IP 地址直接使用。`
+        );
+      }
+      await prisma.vLAN.delete({ where: { id } });
+      deletedVlanNumbers.push(vlanToDelete.vlanNumber);
+      successCount++;
+    } catch (error: unknown) {
+      const errorResponse = createActionErrorResponse(error, `${actionName}_single`);
+      const itemIdentifier = (await prisma.vLAN.findUnique({ where: { id } }))?.vlanNumber.toString() || `ID ${id}`;
+      failureDetails.push({ id, itemIdentifier: `VLAN ${itemIdentifier}`, error: errorResponse.userMessage });
+    }
+  }
+
+  if (deletedVlanNumbers.length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        userId: auditUser.userId,
+        username: auditUser.username,
+        action: 'batch_delete_vlan',
+        details: `批量删除了 ${deletedVlanNumbers.length} 个 VLAN: ${deletedVlanNumbers.join(', ')}。失败 ${failureDetails.length} 个。`
+      }
+    });
+    revalidatePath("/vlans");
+    revalidatePath("/subnets");
+    revalidatePath("/ip-addresses");
+    revalidatePath("/query");
+  }
+  logger.info(`批量删除 VLAN 完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
+
+
 type PrismaIPAddressWithRelations = PrismaIPAddress & {
   subnet: (PrismaSubnet & { vlan: PrismaVLAN | null }) | null;
   vlan: PrismaVLAN | null;
@@ -819,9 +952,9 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   let paginatedDbItems: PrismaIPAddressWithRelations[];
   let finalTotalCount: number;
 
-  if (params?.subnetId) { 
+  if (params?.subnetId) {
     const allIpsInSubnetUnsorted = await prisma.iPAddress.findMany({
-      where: whereClause, 
+      where: whereClause,
       include: includeClause,
     });
 
@@ -829,10 +962,10 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     finalTotalCount = allIpsInSubnetSorted.length;
     paginatedDbItems = allIpsInSubnetSorted.slice(skip, skip + pageSize);
 
-  } else { 
+  } else {
     const orderByClause: Prisma.IPAddressOrderByWithRelationInput[] = [
-      { subnet: { networkAddress: 'asc' } }, 
-      { ipAddress: 'asc' }, 
+      { subnet: { networkAddress: 'asc' } },
+      { ipAddress: 'asc' },
     ];
 
     if (params?.page && params?.pageSize) {
@@ -844,7 +977,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
             skip: skip,
             take: pageSize,
         });
-    } else { 
+    } else {
         const allIPs = await prisma.iPAddress.findMany({
             where: whereClause,
             include: includeClause,
@@ -1226,6 +1359,66 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
+}
+
+export async function batchDeleteIPAddressesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteIPAddressesAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0;
+  const failureDetails: BatchOperationFailure[] = [];
+  const deletedIpAddresses: string[] = [];
+
+  for (const id of ids) {
+    try {
+      const ipToDelete = await prisma.iPAddress.findUnique({
+        where: { id },
+        include: { vlan: { select: { vlanNumber: true } } }
+      });
+      if (!ipToDelete) {
+        failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: 'IP 地址未找到。' });
+        continue;
+      }
+      if (ipToDelete.status === 'allocated' || ipToDelete.status === 'reserved') {
+        throw new ResourceError(
+          `IP 地址 ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status}"。`,
+          'IP_ADDRESS_IN_USE_STATUS_BATCH',
+          `IP ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status === 'allocated' ? '已分配' : '预留'}"。`
+        );
+      }
+      if (ipToDelete.vlanId && ipToDelete.vlanId.trim() !== "") {
+         const directVlanNumber = ipToDelete.vlan?.vlanNumber || ipToDelete.vlanId;
+        throw new ResourceError(
+          `IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。`,
+          'IP_ADDRESS_HAS_DIRECT_VLAN_BATCH',
+          `IP ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。`
+        );
+      }
+      await prisma.iPAddress.delete({ where: { id } });
+      deletedIpAddresses.push(ipToDelete.ipAddress);
+      successCount++;
+    } catch (error: unknown) {
+      const errorResponse = createActionErrorResponse(error, `${actionName}_single`);
+      const itemIdentifier = (await prisma.iPAddress.findUnique({ where: { id } }))?.ipAddress || `ID ${id}`;
+      failureDetails.push({ id, itemIdentifier, error: errorResponse.userMessage });
+    }
+  }
+
+  if (deletedIpAddresses.length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        userId: auditUser.userId,
+        username: auditUser.username,
+        action: 'batch_delete_ip_address',
+        details: `批量删除了 ${deletedIpAddresses.length} 个 IP 地址: ${deletedIpAddresses.join(', ')}。失败 ${failureDetails.length} 个。`
+      }
+    });
+    revalidatePath("/ip-addresses");
+    revalidatePath("/dashboard");
+    revalidatePath("/subnets");
+    revalidatePath("/query");
+  }
+  logger.info(`批量删除 IP 地址完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
+  return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
 
@@ -1639,6 +1832,49 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
   }
 }
 
+export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteAuditLogsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0;
+  const failureDetails: BatchOperationFailure[] = [];
+  const deletedLogSummaries: string[] = [];
+
+  for (const id of ids) {
+    try {
+      const logToDelete = await prisma.auditLog.findUnique({ where: { id } });
+      if (!logToDelete) {
+        failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '审计日志条目未找到。' });
+        continue;
+      }
+      await prisma.auditLog.delete({ where: { id } });
+      deletedLogSummaries.push(`ID ${id} (操作: ${logToDelete.action}, 用户: ${logToDelete.username || 'N/A'})`);
+      successCount++;
+    } catch (error: unknown) {
+      const errorResponse = createActionErrorResponse(error, `${actionName}_single`);
+      failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: errorResponse.userMessage });
+    }
+  }
+
+  if (deletedLogSummaries.length > 0) {
+    try {
+        await prisma.auditLog.create({
+        data: {
+            userId: auditUser.userId,
+            username: auditUser.username,
+            action: 'batch_delete_audit_log',
+            details: `批量删除了 ${deletedLogSummaries.length} 个审计日志条目。失败 ${failureDetails.length} 个。`
+        }
+        });
+    } catch (logError) {
+        logger.error('Failed to create audit log for batch audit log deletion', logError as Error, { deletedCount: deletedLogSummaries.length }, actionName);
+    }
+    revalidatePath("/audit-logs");
+  }
+  logger.info(`批量删除审计日志完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
+
+
 export async function getAllPermissionsAction(): Promise<AppPermission[]> {
     return mockPermissions.map(p => ({
         ...p,
@@ -1648,7 +1884,7 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
 
 // --- Query Tool Actions ---
 
-interface QueryParams extends FetchParams { 
+interface QueryParams extends FetchParams {
     queryString?: string;
     vlanNumberQuery?: number;
     searchTerm?: string;
@@ -1688,7 +1924,7 @@ export async function querySubnetsAction(params: QueryParams): Promise<ActionRes
         const allocatedIPsCount = await prisma.iPAddress.count({ where: { subnetId: subnet.id, status: 'allocated' } });
         const dbFreeIPsCount = await prisma.iPAddress.count({ where: { subnetId: subnet.id, status: 'free' } });
         const reservedIPsCount = await prisma.iPAddress.count({ where: { subnetId: subnet.id, status: 'reserved' } });
-        
+
         return {
           id: subnet.id,
           cidr: subnet.cidr,
@@ -1734,8 +1970,8 @@ export async function queryVlansAction(params: QueryParams): Promise<ActionRespo
     const vlansFromDb = await prisma.vLAN.findMany({
       where: whereClause,
       include: {
-        subnets: { select: { id: true, cidr: true, description: true }, take: 10 }, 
-        ipAddresses: { select: { id: true, ipAddress: true, description: true }, take: 10 }, 
+        subnets: { select: { id: true, cidr: true, description: true }, take: 10 },
+        ipAddresses: { select: { id: true, ipAddress: true, description: true }, take: 10 },
       },
       orderBy: { vlanNumber: 'asc' },
       skip,
@@ -1774,30 +2010,38 @@ export async function queryIpAddressesAction(params: QueryParams): Promise<Actio
     if (!searchTerm || searchTerm.trim() === "") {
         return { success: true, data: { data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize } };
     }
-    
-    let whereClause: Prisma.IPAddressWhereInput = {};
-    const wildcardIpPatternFull = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/; // X.Y.Z.*
-    const wildcardIpPatternMedium = /^(\d{1,3}\.\d{1,3})\.\*$/;    // X.Y.*
-    const wildcardIpPatternShort = /^(\d{1,3})\.\*$/;             // X.*
-    let match;
 
-    if ((match = searchTerm.match(wildcardIpPatternFull))) { // e.g., 10.0.1.*
-        whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
-    } else if ((match = searchTerm.match(wildcardIpPatternMedium))) { // e.g., 10.0.*
-        whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
-    } else if ((match = searchTerm.match(wildcardIpPatternShort))) { // e.g., 10.*
-        whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
-    } else if (searchTerm === "*") { // Search for literal '*' in text fields
+    let whereClause: Prisma.IPAddressWhereInput = {};
+
+    const ipWildcardPatterns = [
+      { regex: /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` }, // X.Y.Z.*
+      { regex: /^(\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },    // X.Y.*
+      { regex: /^(\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },             // X.*
+    ];
+
+    let matchedIpPattern = false;
+    for (const pattern of ipWildcardPatterns) {
+      const match = searchTerm.match(pattern.regex);
+      if (match) {
+        whereClause = { ipAddress: { startsWith: pattern.prefixBuilder(match) } };
+        matchedIpPattern = true;
+        break;
+      }
+    }
+
+    if (!matchedIpPattern) {
+      if (searchTerm === "*") {
         whereClause = { OR: [ { allocatedTo: { contains: searchTerm } }, { description: { contains: searchTerm } } ] };
-    } else { // General search term
+      } else {
         const orConditions: Prisma.IPAddressWhereInput[] = [
             { allocatedTo: { contains: searchTerm } },
             { description: { contains: searchTerm } },
         ];
-        if (/^[\d.]+$/.test(searchTerm)) { // If it looks like an IP or IP prefix (only digits and dots)
+        if (/^[\d.]+$/.test(searchTerm)) {
             orConditions.push({ ipAddress: { startsWith: searchTerm } });
         }
         whereClause = { OR: orConditions };
+      }
     }
 
 
@@ -1810,7 +2054,7 @@ export async function queryIpAddressesAction(params: QueryParams): Promise<Actio
         subnet: { select: { id: true, cidr: true, networkAddress: true, vlan: { select: { vlanNumber: true } } } },
         vlan: { select: { vlanNumber: true } },
       },
-      orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], 
+      orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ],
       skip,
       take: pageSize,
     });
@@ -1832,7 +2076,7 @@ export async function queryIpAddressesAction(params: QueryParams): Promise<Actio
         } : null,
         vlan: ip.vlan ? { vlanNumber: ip.vlan.vlanNumber } : null,
     }));
-    
+
     const paginatedResult: PaginatedResponse<AppIPAddressWithRelations> = {
         data: results,
         totalCount,
@@ -1870,7 +2114,6 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
 
     const dbAllocatedIpsSet = new Set<number>();
     const dbReservedIpsSet = new Set<number>();
-    // let dbFreeIpsInDbCount = 0;
 
     dbIpsInSubnet.forEach(ip => {
       const ipNum = ipToNumber(ip.ipAddress);
@@ -1878,12 +2121,9 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
         dbAllocatedIpsSet.add(ipNum);
       } else if (ip.status === 'reserved') {
         dbReservedIpsSet.add(ipNum);
-      } 
-      // else if (ip.status === 'free') {
-      //   dbFreeIpsInDbCount++;
-      // }
+      }
     });
-    
+
     const dbAllocatedIPsCount = dbAllocatedIpsSet.size;
     const dbReservedIPsCount = dbReservedIpsSet.size;
 
@@ -1898,12 +2138,12 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
           calculatedAvailableNumericIps.push(currentIpNum);
         }
       }
-    } else if (subnetProperties.prefix === 32) { // Handle /32
+    } else if (subnetProperties.prefix === 32) {
         const singleIpNum = ipToNumber(subnetProperties.networkAddress);
         if (!dbAllocatedIpsSet.has(singleIpNum) && !dbReservedIpsSet.has(singleIpNum)) {
             calculatedAvailableNumericIps.push(singleIpNum);
         }
-    } else if (subnetProperties.prefix === 31) { // Handle /31
+    } else if (subnetProperties.prefix === 31) {
         const firstIpNum = ipToNumber(subnetProperties.networkAddress);
         const secondIpNum = firstIpNum + 1;
         if (!dbAllocatedIpsSet.has(firstIpNum) && !dbReservedIpsSet.has(firstIpNum)) {
@@ -1924,7 +2164,6 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
       totalUsableIPs,
       dbAllocatedIPsCount,
       dbReservedIPsCount,
-      // dbFreeIPsInDbCount,
       calculatedAvailableIPsCount,
       calculatedAvailableIpRanges,
     };

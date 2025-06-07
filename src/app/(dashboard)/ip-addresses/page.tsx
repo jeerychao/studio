@@ -6,18 +6,20 @@ import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Globe, Edit, Trash2, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction, type PaginatedResponse } from "@/lib/actions";
+import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction, batchDeleteIPAddressesAction, type PaginatedResponse } from "@/lib/actions";
 import type { IPAddress, IPAddressStatus, Subnet, VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPBatchFormSheet } from "./ip-batch-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
-import { IPStatusFilter } from "./ip-status-filter"; // New Import
+import { IPStatusFilter } from "./ip-status-filter";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -61,6 +63,8 @@ function IPAddressesView() {
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+
 
   const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
@@ -78,24 +82,44 @@ function IPAddressesView() {
       }
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getSubnetsAction(), 
-        getVLANsAction(),   
+        getSubnetsAction(),
+        getVLANsAction(),
       ]);
       setIpAddressesData(fetchedIpsResult);
-      setSubnets(fetchedSubnetsResult.data); 
-      setVlans(fetchedVlansResult.data);     
+      setSubnets(fetchedSubnetsResult.data);
+      setVlans(fetchedVlansResult.data);
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
       setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
+      setSelectedIds(new Set());
     }
   }, [currentUser, isAuthLoading, toast, selectedSubnetId, selectedStatus, currentPage]);
 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
-  
+
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      const allIdsOnPage = ipAddressesData?.data.map(ip => ip.id) || [];
+      setSelectedIds(new Set(allIdsOnPage));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
+    const newSelectedIds = new Set(selectedIds);
+    if (checked === true) {
+      newSelectedIds.add(id);
+    } else {
+      newSelectedIds.delete(id);
+    }
+    setSelectedIds(newSelectedIds);
+  };
+
   if (isAuthLoading || isLoading) {
     return <LoadingIPAddressesPageContent />;
   }
@@ -123,7 +147,7 @@ function IPAddressesView() {
       default: return "secondary";
     }
   };
-  
+
   const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
     allocated: "已分配",
     free: "空闲",
@@ -147,17 +171,31 @@ function IPAddressesView() {
     return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "无";
   };
 
-  const actionButtons = canCreate ? (
+  const pageActionButtons = (
     <div className="flex flex-col sm:flex-row gap-2">
-      <IPBatchFormSheet subnets={subnets} vlans={vlans} onIpAddressChange={fetchData}>
-        <Button variant="outline" className="w-full sm:w-auto">
-          <PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP
-        </Button>
-      </IPBatchFormSheet>
-      <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "w-full sm:w-auto"}} />
+      {canDelete && selectedIds.size > 0 && (
+        <BatchDeleteConfirmationDialog
+          selectedIds={selectedIds}
+          itemTypeDisplayName="IP 地址"
+          batchDeleteAction={batchDeleteIPAddressesAction}
+          onBatchDeleted={fetchData}
+        />
+      )}
+      {canCreate && (
+        <>
+        <IPBatchFormSheet subnets={subnets} vlans={vlans} onIpAddressChange={fetchData}>
+          <Button variant="outline" className="w-full sm:w-auto">
+            <PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP
+          </Button>
+        </IPBatchFormSheet>
+        <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "w-full sm:w-auto"}} />
+        </>
+      )}
     </div>
-  ) : null;
+  );
 
+  const isAllOnPageSelected = ipAddressesData?.data.length > 0 && ipAddressesData.data.every(ip => selectedIds.has(ip.id));
+  const isSomeOnPageSelected = ipAddressesData?.data.some(s => selectedIds.has(s.id));
 
   return (
     <>
@@ -171,7 +209,7 @@ function IPAddressesView() {
             <IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} />
             <IPStatusFilter currentStatus={selectedStatus} />
         </div>
-        {actionButtons}
+        {pageActionButtons}
       </div>
 
       <Card>
@@ -191,6 +229,16 @@ function IPAddressesView() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      {canDelete && (
+                        <Checkbox
+                            checked={isAllOnPageSelected}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="全选当前页"
+                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                        />
+                      )}
+                    </TableHead>
                     <TableHead>IP 地址</TableHead>
                     <TableHead>状态</TableHead>
                     <TableHead>分配给</TableHead>
@@ -202,7 +250,16 @@ function IPAddressesView() {
                 </TableHeader>
                 <TableBody>
                   {ipAddressesData.data.map((ip) => (
-                    <TableRow key={ip.id}>
+                    <TableRow key={ip.id} data-state={selectedIds.has(ip.id) && "selected"}>
+                      <TableCell>
+                        {canDelete && (
+                          <Checkbox
+                            checked={selectedIds.has(ip.id)}
+                            onCheckedChange={(checked) => handleSelectItem(ip.id, checked)}
+                            aria-label={`选择IP ${ip.ipAddress}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">{ip.ipAddress}</TableCell>
                       <TableCell>
                         <Badge variant={getStatusBadgeVariant(ip.status)} className="capitalize">

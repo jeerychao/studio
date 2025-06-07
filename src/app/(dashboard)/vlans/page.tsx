@@ -4,17 +4,19 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Edit, Trash2, Cable, PlusCircle } from "lucide-react"; // Added PlusCircle
+import { Edit, Trash2, Cable, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import { getVLANsAction, deleteVLANAction, type PaginatedResponse } from "@/lib/actions";
+import { getVLANsAction, deleteVLANAction, batchDeleteVLANsAction, type PaginatedResponse } from "@/lib/actions";
 import type { VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
-import { VlanBatchFormSheet } from "./vlan-batch-form-sheet"; // New import
+import { VlanBatchFormSheet } from "./vlan-batch-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -33,6 +35,8 @@ function LoadingVlansPage() {
 function VlansView() {
   const [vlansData, setVlansData] = React.useState<PaginatedResponse<VLAN> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+
   const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
   const searchParams = useSearchParams();
@@ -56,12 +60,32 @@ function VlansView() {
        setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
+      setSelectedIds(new Set());
     }
   }, [currentUser, isAuthLoading, toast, currentPage]);
 
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      const allIdsOnPage = vlansData?.data.map(v => v.id) || [];
+      setSelectedIds(new Set(allIdsOnPage));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
+    const newSelectedIds = new Set(selectedIds);
+    if (checked === true) {
+      newSelectedIds.add(id);
+    } else {
+      newSelectedIds.delete(id);
+    }
+    setSelectedIds(newSelectedIds);
+  };
 
   if (isAuthLoading || isLoading) {
      return <LoadingVlansPage />;
@@ -76,21 +100,36 @@ function VlansView() {
       </div>
     );
   }
-  
+
   const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
   const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
   const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
 
-  const actionButtons = canCreate ? (
-    <div className="flex gap-2">
-      <VlanBatchFormSheet onVlanChange={fetchData}>
-        <Button variant="outline">
-          <PlusCircle className="mr-2 h-4 w-4" /> 批量添加VLAN
-        </Button>
-      </VlanBatchFormSheet>
-      <VlanFormSheet onVlanChange={fetchData} />
+  const actionButtons = (
+    <div className="flex flex-wrap gap-2">
+      {canDelete && selectedIds.size > 0 && (
+        <BatchDeleteConfirmationDialog
+          selectedIds={selectedIds}
+          itemTypeDisplayName="VLAN"
+          batchDeleteAction={batchDeleteVLANsAction}
+          onBatchDeleted={fetchData}
+        />
+      )}
+      {canCreate && (
+        <>
+          <VlanBatchFormSheet onVlanChange={fetchData}>
+            <Button variant="outline">
+              <PlusCircle className="mr-2 h-4 w-4" /> 批量添加VLAN
+            </Button>
+          </VlanBatchFormSheet>
+          <VlanFormSheet onVlanChange={fetchData} />
+        </>
+      )}
     </div>
-  ) : null;
+  );
+
+  const isAllOnPageSelected = vlansData?.data.length > 0 && vlansData.data.every(v => selectedIds.has(v.id));
+  const isSomeOnPageSelected = vlansData?.data.some(s => selectedIds.has(s.id));
 
   return (
     <>
@@ -112,18 +151,37 @@ function VlansView() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      {canDelete && (
+                        <Checkbox
+                            checked={isAllOnPageSelected}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="全选当前页"
+                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                        />
+                      )}
+                    </TableHead>
                     <TableHead>VLAN 号码</TableHead>
                     <TableHead>描述</TableHead>
-                    <TableHead>关联资源数</TableHead> 
+                    <TableHead>关联资源数</TableHead>
                     {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {vlansData.data.map((vlan) => (
-                    <TableRow key={vlan.id}>
+                    <TableRow key={vlan.id} data-state={selectedIds.has(vlan.id) && "selected"}>
+                      <TableCell>
+                        {canDelete && (
+                          <Checkbox
+                            checked={selectedIds.has(vlan.id)}
+                            onCheckedChange={(checked) => handleSelectItem(vlan.id, checked)}
+                            aria-label={`选择VLAN ${vlan.vlanNumber}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">{vlan.vlanNumber}</TableCell>
                       <TableCell className="max-w-md truncate">{vlan.description || "无"}</TableCell>
-                      <TableCell>{vlan.subnetCount ?? 0}</TableCell> 
+                      <TableCell>{vlan.subnetCount ?? 0}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (

@@ -8,11 +8,13 @@ import { NetworkIcon, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/page-header";
-import { getSubnetsAction, getVLANsAction, deleteSubnetAction, type PaginatedResponse } from "@/lib/actions";
+import { getSubnetsAction, getVLANsAction, deleteSubnetAction, batchDeleteSubnetsAction, type PaginatedResponse } from "@/lib/actions";
 import type { Subnet, VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,8 @@ function SubnetsView() {
   const [subnetsData, setSubnetsData] = React.useState<PaginatedResponse<Subnet> | null>(null);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+
   const { currentUser, isAuthLoading } = useCurrentUser();
   const { toast } = useToast();
   const router = useRouter();
@@ -46,12 +49,12 @@ function SubnetsView() {
 
   const fetchData = React.useCallback(async () => {
     if (isAuthLoading || !currentUser) {
-      if (!isAuthLoading && !currentUser) { 
+      if (!isAuthLoading && !currentUser) {
            setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
            setVlans([]);
            setIsLoading(false);
       } else {
-        setIsLoading(true); 
+        setIsLoading(true);
       }
       return;
     }
@@ -66,10 +69,10 @@ function SubnetsView() {
 
       const [subnetsResponse, vlansResponse] = await Promise.all([
         getSubnetsAction({ page, pageSize: ITEMS_PER_PAGE }),
-        getVLANsAction(), 
+        getVLANsAction(),
       ]);
       setSubnetsData(subnetsResponse);
-      setVlans(vlansResponse.data || []); 
+      setVlans(vlansResponse.data || []);
     } catch (error: any) {
       console.error("加载子网数据时出错:", error);
       toast({
@@ -81,6 +84,7 @@ function SubnetsView() {
       setVlans([]);
     } finally {
       setIsLoading(false);
+      setSelectedIds(new Set()); // Clear selection on data refresh
     }
   }, [page, toast, currentUser, isAuthLoading]);
 
@@ -88,8 +92,26 @@ function SubnetsView() {
     fetchData();
   }, [fetchData]);
 
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      const allIdsOnPage = subnetsData?.data.map(s => s.id) || [];
+      setSelectedIds(new Set(allIdsOnPage));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
 
-  if (isAuthLoading || isLoading) { 
+  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
+    const newSelectedIds = new Set(selectedIds);
+    if (checked === true) {
+      newSelectedIds.add(id);
+    } else {
+      newSelectedIds.delete(id);
+    }
+    setSelectedIds(newSelectedIds);
+  };
+
+  if (isAuthLoading || isLoading) {
     return <LoadingSubnetsPage />;
   }
 
@@ -102,20 +124,23 @@ function SubnetsView() {
         </div>
     );
   }
-  
+
   if (!subnetsData) {
-    return <p>准备子网数据时出错。请尝试刷新。</p>; 
+    return <p>准备子网数据时出错。请尝试刷新。</p>;
   }
 
   const { data: subnets, totalCount, currentPage, totalPages } = subnetsData;
-  
+
   const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
   const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
   const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
 
+  const isAllOnPageSelected = subnets.length > 0 && subnets.every(s => selectedIds.has(s.id));
+  const isSomeOnPageSelected = subnets.some(s => selectedIds.has(s.id));
+
   return (
     <>
-      <div className="md:hidden"> 
+      <div className="md:hidden">
         <Card>
           <CardHeader>
             <CardTitle>不支持移动视图</CardTitle>
@@ -128,7 +153,19 @@ function SubnetsView() {
           title="子网管理"
           description="查看、创建和管理您的网络子网。"
           icon={<NetworkIcon className="h-6 w-6 text-primary" />}
-          actionElement={canCreate ? <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} /> : null}
+          actionElement={
+            <div className="flex gap-2">
+              {canDelete && selectedIds.size > 0 && (
+                <BatchDeleteConfirmationDialog
+                  selectedIds={selectedIds}
+                  itemTypeDisplayName="子网"
+                  batchDeleteAction={batchDeleteSubnetsAction}
+                  onBatchDeleted={fetchData}
+                />
+              )}
+              {canCreate && <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} />}
+            </div>
+          }
         />
         <Card>
           <CardHeader>
@@ -141,6 +178,16 @@ function SubnetsView() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    {canDelete && (
+                      <Checkbox
+                        checked={isAllOnPageSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="全选当前页"
+                        indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                      />
+                    )}
+                  </TableHead>
                   <TableHead>CIDR</TableHead>
                   <TableHead>VLAN</TableHead>
                   <TableHead>描述</TableHead>
@@ -152,7 +199,16 @@ function SubnetsView() {
                 {subnets.map((subnet) => {
                   const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
                   return (
-                    <TableRow key={subnet.id}>
+                    <TableRow key={subnet.id} data-state={selectedIds.has(subnet.id) && "selected"}>
+                      <TableCell>
+                        {canDelete && (
+                           <Checkbox
+                            checked={selectedIds.has(subnet.id)}
+                            onCheckedChange={(checked) => handleSelectItem(subnet.id, checked)}
+                            aria-label={`选择子网 ${subnet.cidr}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline font-medium">
                           {subnet.cidr}
@@ -206,7 +262,7 @@ function SubnetsView() {
                 })}
                 {subnets.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={(canEdit || canDelete) ? 5 : 4} className="text-center h-24 text-muted-foreground">
+                    <TableCell colSpan={(canEdit || canDelete) ? 6 : 5} className="text-center h-24 text-muted-foreground">
                       未找到子网。{canCreate && "尝试创建一个！"}
                     </TableCell>
                   </TableRow>

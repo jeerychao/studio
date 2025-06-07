@@ -163,3 +163,15 @@ export interface PaginatedResponse<T> {
   totalPages: number;
   pageSize: number;
 }
+
+export interface BatchOperationFailure<TIdentifier = string> {
+  id: TIdentifier;
+  itemIdentifier: string; // User-friendly identifier (e.g., CIDR, IP address, VLAN number)
+  error: string; // User-friendly error message
+}
+
+export interface BatchDeleteResult<TIdentifier = string> {
+  successCount: number;
+  failureCount: number;
+  failureDetails: Array<BatchOperationFailure<TIdentifier>>;
+}

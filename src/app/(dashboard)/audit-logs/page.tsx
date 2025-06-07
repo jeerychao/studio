@@ -9,13 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getAuditLogsAction, deleteAuditLogAction, type PaginatedResponse } from "@/lib/actions";
+import { Checkbox } from "@/components/ui/checkbox";
+import { getAuditLogsAction, deleteAuditLogAction, batchDeleteAuditLogsAction, type PaginatedResponse } from "@/lib/actions";
 import type { AuditLog } from "@/types";
 import { PERMISSIONS } from "@/types";
-import { ListChecks, Trash2, Eye } from "lucide-react";
+import { ListChecks, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
+import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { PaginationControls } from "@/components/pagination-controls";
 import {
   AlertDialog,
@@ -27,7 +29,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 
-const ITEMS_PER_PAGE = 10; // 分页阈值调整为10
+const ITEMS_PER_PAGE = 10;
 
 function LoadingAuditLogsPage() {
   return (
@@ -41,6 +43,7 @@ function LoadingAuditLogsPage() {
 function AuditLogsView() {
   const [logsData, setLogsData] = React.useState<PaginatedResponse<AuditLog> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { currentUser, isAuthLoading } = useCurrentUser();
   const searchParams = useSearchParams();
@@ -67,6 +70,7 @@ function AuditLogsView() {
       setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
     } finally {
       setIsLoading(false);
+      setSelectedIds(new Set());
     }
   }, [currentUser, isAuthLoading, toast, currentPage]);
 
@@ -78,9 +82,33 @@ function AuditLogsView() {
     return new Date(timestamp).toLocaleString();
   };
 
-  const handleRowClick = (log: AuditLog) => {
+  const handleRowClick = (log: AuditLog, e: React.MouseEvent<HTMLTableRowElement, MouseEvent>) => {
+    // Prevent row click when clicking on checkbox or delete button inside the row
+    const target = e.target as HTMLElement;
+    if (target.closest('[role="checkbox"]') || target.closest('button[aria-label^="删除"]')) {
+      return;
+    }
     setSelectedLogForDetails(log);
     setIsDetailsDialogOpen(true);
+  };
+  
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      const allIdsOnPage = logsData?.data.map(log => log.id) || [];
+      setSelectedIds(new Set(allIdsOnPage));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
+    const newSelectedIds = new Set(selectedIds);
+    if (checked === true) {
+      newSelectedIds.add(id);
+    } else {
+      newSelectedIds.delete(id);
+    }
+    setSelectedIds(newSelectedIds);
   };
 
   if (isAuthLoading || isLoading) {
@@ -98,6 +126,17 @@ function AuditLogsView() {
   }
 
   const canDeleteLog = hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
+  const isAllOnPageSelected = logsData?.data.length > 0 && logsData.data.every(log => selectedIds.has(log.id));
+  const isSomeOnPageSelected = logsData?.data.some(log => selectedIds.has(log.id));
+
+  const pageActionElement = canDeleteLog && selectedIds.size > 0 ? (
+    <BatchDeleteConfirmationDialog
+      selectedIds={selectedIds}
+      itemTypeDisplayName="审计日志条目"
+      batchDeleteAction={batchDeleteAuditLogsAction}
+      onBatchDeleted={fetchData}
+    />
+  ) : null;
 
   return (
     <>
@@ -105,6 +144,7 @@ function AuditLogsView() {
         title="审计日志"
         description="跟踪用户活动和系统事件。"
         icon={<ListChecks className="h-6 w-6 text-primary" />}
+        actionElement={pageActionElement}
       />
       <Card>
         <CardHeader>
@@ -120,6 +160,16 @@ function AuditLogsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      {canDeleteLog && (
+                        <Checkbox
+                            checked={isAllOnPageSelected}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="全选当前页"
+                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
+                        />
+                      )}
+                    </TableHead>
                     <TableHead>时间戳</TableHead>
                     <TableHead>用户</TableHead>
                     <TableHead>操作</TableHead>
@@ -129,11 +179,22 @@ function AuditLogsView() {
                 </TableHeader>
                 <TableBody>
                   {logsData.data.map((log) => (
-                    <TableRow 
-                      key={log.id} 
-                      onClick={() => handleRowClick(log)}
+                    <TableRow
+                      key={log.id}
+                      onClick={(e) => handleRowClick(log, e)}
                       className="cursor-pointer hover:bg-muted/50"
+                      data-state={selectedIds.has(log.id) && "selected"}
                     >
+                      <TableCell>
+                        {canDeleteLog && (
+                           <Checkbox
+                            checked={selectedIds.has(log.id)}
+                            onCheckedChange={(checked) => handleSelectItem(log.id, checked)}
+                            onClick={(e) => e.stopPropagation()} // Prevent row click when clicking checkbox
+                            aria-label={`选择日志 ${log.id}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatDate(log.timestamp)}</TableCell>
                       <TableCell className="font-medium">{log.username || "系统"}</TableCell>
                       <TableCell>
