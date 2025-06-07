@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, PaginatedResponse, SubnetFreeIpDetails, BatchDeleteResult, BatchOperationFailure } from '@/types';
+import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure, SubnetFreeIpDetails } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import {
@@ -21,6 +21,8 @@ import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, typ
 import { createActionErrorResponse } from './error-utils';
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
 import { Prisma, type IPAddress as PrismaIPAddress, type Subnet as PrismaSubnet, type VLAN as PrismaVLAN } from '@prisma/client';
+import fs from 'fs/promises';
+import path from 'path';
 
 // Standardized Action Response
 export interface ActionResponse<TData = unknown> {
@@ -28,6 +30,16 @@ export interface ActionResponse<TData = unknown> {
   data?: TData;
   error?: ActionErrorResponse;
 }
+
+// Exporting PaginatedResponse interface
+export interface PaginatedResponse<TData> {
+  data: TData[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+}
+
 
 async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: string, username: string }> {
   if (performingUserId) {
