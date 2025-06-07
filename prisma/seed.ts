@@ -118,7 +118,7 @@ async function main() {
       where: {
         vlanNumber: vlanData.vlanNumber,
         NOT: {
-          id: vlanData.id, // We are interested in conflicts where the ID is different
+          id: vlanData.id, 
         },
       },
     });
@@ -129,28 +129,27 @@ async function main() {
         `The seed data expects VLAN number ${vlanData.vlanNumber} to be associated with ID ${vlanData.id}.`
       );
 
-      // Check if this problematic, pre-existing VLAN is in use by any subnets
       const subnetsUsingConflictingVlan = await prisma.subnet.count({
         where: { vlanId: conflictingVlan.id },
       });
+      const ipsUsingConflictingVlan = await prisma.iPAddress.count({
+        where: { vlanId: conflictingVlan.id },
+      });
 
-      if (subnetsUsingConflictingVlan > 0) {
-        // If the conflicting VLAN is in use, it's safer to stop and inform the user.
+      if (subnetsUsingConflictingVlan > 0 || ipsUsingConflictingVlan > 0) {
         throw new Error(
           `Cannot automatically resolve VLAN seed conflict for VLAN number ${vlanData.vlanNumber}. ` +
-          `This VLAN number is currently used by an existing VLAN (ID: ${conflictingVlan.id}) which is associated with ${subnetsUsingConflictingVlan} subnet(s). ` +
+          `This VLAN number is currently used by an existing VLAN (ID: ${conflictingVlan.id}) which is associated with ${subnetsUsingConflictingVlan} subnet(s) and ${ipsUsingConflictingVlan} IP address(es). ` +
           `To resolve, please manually clean up the conflicting VLAN data or reset the database using 'npm run prisma:migrate:reset'.`
         );
       } else {
-        // If the conflicting VLAN is not in use, it's safer to delete it to make way for the seed data.
         console.warn(
-          `The conflicting VLAN (ID: ${conflictingVlan.id}, Number: ${vlanData.vlanNumber}) is not used by any subnets. Deleting it.`
+          `The conflicting VLAN (ID: ${conflictingVlan.id}, Number: ${vlanData.vlanNumber}) is not used by any subnets or IPs. Deleting it.`
         );
         await prisma.vLAN.delete({ where: { id: conflictingVlan.id } });
       }
     }
 
-    // Proceed with the original upsert logic for the current vlanData item
     await prisma.vLAN.upsert({
       where: { id: vlanData.id },
       update: { vlanNumber: vlanData.vlanNumber, description: vlanData.description },
@@ -165,6 +164,40 @@ async function main() {
 
   console.log('Seeding Subnets...');
   for (const subnetData of seedSubnetsData) {
+    // Check if a Subnet already exists with the target cidr but a different ID
+    const conflictingSubnet = await prisma.subnet.findFirst({
+        where: {
+            cidr: subnetData.cidr,
+            NOT: {
+                id: subnetData.id,
+            },
+        },
+    });
+
+    if (conflictingSubnet) {
+        console.warn(
+            `Conflict detected: Subnet CIDR ${subnetData.cidr} is already used by Subnet ID ${conflictingSubnet.id}. ` +
+            `The seed data expects CIDR ${subnetData.cidr} to be associated with ID ${subnetData.id}.`
+        );
+
+        const ipsInConflictingSubnet = await prisma.iPAddress.count({
+            where: { subnetId: conflictingSubnet.id },
+        });
+
+        if (ipsInConflictingSubnet > 0) {
+            throw new Error(
+                `Cannot automatically resolve Subnet seed conflict for CIDR ${subnetData.cidr}. ` +
+                `This CIDR is currently used by an existing Subnet (ID: ${conflictingSubnet.id}) which has ${ipsInConflictingSubnet} associated IP address(es). ` +
+                `To resolve, please manually clean up the conflicting Subnet data (and its IPs) or reset the database using 'npm run prisma:migrate:reset'.`
+            );
+        } else {
+            console.warn(
+                `The conflicting Subnet (ID: ${conflictingSubnet.id}, CIDR: ${subnetData.cidr}) has no associated IP addresses. Deleting it.`
+            );
+            await prisma.subnet.delete({ where: { id: conflictingSubnet.id } });
+        }
+    }
+
     await prisma.subnet.upsert({
       where: { id: subnetData.id },
       update: {
