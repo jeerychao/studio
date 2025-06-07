@@ -48,6 +48,8 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: 'Perform Data Export', group: 'Tools' },
   // Settings
   { id: PERMISSIONS.VIEW_SETTINGS, name: 'View Settings', group: 'System Settings' },
+  // Query Page (New)
+  { id: PERMISSIONS.VIEW_QUERY_PAGE, name: 'View Query Page', group: 'Query Tool', description: 'Access the comprehensive query tool.' },
 ];
 
 // Helper to generate initial subnet data with calculated fields for seeding
@@ -96,7 +98,7 @@ export const mockRoles: Role[] = [
     id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: mockPermissions.map(p => p.id as PermissionId)
+    permissions: mockPermissions.map(p => p.id as PermissionId) // Admin gets all permissions including new query page
   },
   {
     id: OPERATOR_ROLE_ID,
@@ -108,6 +110,7 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_VLAN, PERMISSIONS.CREATE_VLAN, PERMISSIONS.EDIT_VLAN, PERMISSIONS.DELETE_VLAN,
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
+      PERMISSIONS.VIEW_QUERY_PAGE, // Operator can also use query tool
     ] as PermissionId[]
   },
   {
@@ -120,6 +123,7 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_VLAN,
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
+      PERMISSIONS.VIEW_QUERY_PAGE, // Viewer can also use query tool
     ] as PermissionId[]
   },
 ];
@@ -141,6 +145,3 @@ export let mockAuditLogs: AuditLog[] = [ // For seeding
   { id: 'log-2-seed', userId: 'user-operator-seed', username: 'operator', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
   { id: 'log-3-seed', userId: 'user-admin-seed', username: 'admin', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 description update' },
 ];
-
-
-    

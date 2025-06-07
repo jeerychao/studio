@@ -37,7 +37,7 @@ export const PERMISSIONS = {
 
   // Audit Logs
   VIEW_AUDIT_LOG: 'auditlog.view',
-  DELETE_AUDIT_LOG: 'auditlog.delete', // New permission
+  DELETE_AUDIT_LOG: 'auditlog.delete',
 
   // Tools
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
@@ -46,6 +46,9 @@ export const PERMISSIONS = {
 
   // Settings
   VIEW_SETTINGS: 'settings.view',
+
+  // Query Page (New)
+  VIEW_QUERY_PAGE: 'querypage.view',
 
 } as const;
 
@@ -118,3 +121,25 @@ export interface AuditLog {
   details?: string;
 }
 
+// Types for Query Results (New)
+export interface SubnetQueryResult {
+  id: string;
+  cidr: string;
+  description?: string;
+  vlanNumber?: number;
+  vlanDescription?: string;
+  totalUsableIPs: number;
+  allocatedIPsCount: number;
+  dbFreeIPsCount: number;
+  reservedIPsCount: number;
+  sampleFreeIPs: string[]; // e.g., ["192.168.1.5", "192.168.1.6"]
+}
+
+export interface VlanQueryResult {
+  id: string;
+  vlanNumber: number;
+  description?: string;
+  associatedSubnets: Array<{ id: string; cidr: string; description?: string }>;
+  associatedDirectIPs: Array<{ id: string; ipAddress: string; description?: string }>;
+}
+// For IP Address query, we can reuse AppIPAddressWithRelations from actions.ts

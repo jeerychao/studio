@@ -10,8 +10,9 @@ import {
   Globe,
   Users,
   ShieldCheck,
-  FileDown, // Changed from Wrench/FileUp
+  FileDown,
   ListChecks,
+  Search, // New Icon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -50,8 +51,14 @@ const navItemConfigs: NavItemConfig[] = [
     ],
   },
   {
+    href: "/query", // New page route
+    label: "信息查询", // Information Query
+    icon: Search,
+    requiredPermission: PERMISSIONS.VIEW_QUERY_PAGE,
+  },
+  {
     href: "/user-management",
-    label: "用户和角色", // Changed label
+    label: "用户和角色",
     icon: Users,
     requiredPermission: PERMISSIONS.VIEW_USER, // Broad permission for the group
     subItems: [
@@ -59,12 +66,11 @@ const navItemConfigs: NavItemConfig[] = [
       { href: "/roles", label: "角色管理", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
     ],
   },
-  // Changed "工具" to a direct "数据导出" link
-  { 
-    href: "/tools/import-export", 
-    label: "数据导出", 
-    icon: FileDown, 
-    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT 
+  {
+    href: "/tools/import-export",
+    label: "数据导出",
+    icon: FileDown,
+    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT
   },
   { href: "/audit-logs", label: "审计日志", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
 ];
@@ -74,7 +80,7 @@ export function SidebarNav() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
-    if (!user) return []; 
+    if (!user) return [];
     return items.map(item => {
       const hasAccessToItem = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
       if (!hasAccessToItem) return null;
@@ -82,10 +88,8 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        // If a group has no visible sub-items, and it's a "management" group or "tools", don't show the group itself.
-        // For "数据导出" which is now a direct link, this specific condition won't apply as it has no subItems.
-        if (filteredSubItems.length === 0 && (item.href.includes("-management") || item.href === "/tools" && item.label === "工具" /* old label check, not relevant now */)) {
-           return null; 
+        if (filteredSubItems.length === 0 && item.href.includes("-management")) {
+           return null;
         }
       }
       return { ...item, subItems: filteredSubItems };
@@ -95,9 +99,8 @@ export function SidebarNav() {
   const accessibleNavItems = React.useMemo(() => {
       if (isAuthLoading || !currentUser) return [];
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
-      // This secondary filter might be redundant now that "数据导出" is a direct link.
       items = items.filter(item => {
-        if (item.subItems && item.subItems.length === 0 && (item.href.includes("-management") || item.href === "/tools" && item.label === "工具")) {
+        if (item.subItems && item.subItems.length === 0 && item.href.includes("-management")) {
             return false;
         }
         return true;
@@ -125,8 +128,6 @@ export function SidebarNav() {
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
     const Icon = item.icon;
-    // For direct links, isActive check is straightforward.
-    // For parent accordion items, if any subItem is active, the parent group might also be styled as active/open.
     const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/" && item.href.length > 1 && (!item.subItems || item.subItems.length === 0));
 
     const linkClass = cn(
@@ -138,7 +139,7 @@ export function SidebarNav() {
     if (item.subItems && item.subItems.length > 0) {
       const isActiveGroup = item.subItems.some(sub => pathname.startsWith(sub.href));
       const isOpen = openAccordionItems.includes(item.href);
-      
+
       const triggerClass = cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
         isSubItem ? "text-sm" : "font-medium",
@@ -167,7 +168,6 @@ export function SidebarNav() {
       );
     }
 
-    // Render direct link (no sub-items or sub-items are empty)
     return (
       <Link key={item.href} href={item.href} className={linkClass}>
         <Icon className="h-5 w-5" />
