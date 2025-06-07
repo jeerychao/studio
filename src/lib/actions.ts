@@ -408,17 +408,16 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
 
     if (data.hasOwnProperty('vlanId')) {
       const newVlanId = (data.vlanId === "" || data.vlanId === undefined || data.vlanId === null) ? null : data.vlanId;
-      const oldVlanId = subnetToUpdate.vlanId; // This is the subnet's current vlanId from DB
+      const oldVlanId = subnetToUpdate.vlanId; 
 
       logger.debug(`[${actionName}] Subnet VLAN update: Subnet ID ${id}, Old VLAN ID ${oldVlanId}, New requested VLAN ID ${newVlanId}`);
 
-      if (newVlanId === null && oldVlanId !== null) { // User is trying to remove an existing VLAN association
+      if (newVlanId === null && oldVlanId !== null) { 
         logger.debug(`[${actionName}] Attempting to remove VLAN from subnet. Subnet ID: ${id}, Old VLAN ID: ${oldVlanId}`);
-        // Check if any IP addresses *within this subnet* are still *directly assigned* to this oldVlanId
         const ipsDirectlyOnOldVlanCount = await prisma.iPAddress.count({
           where: {
-            subnetId: id, // The ID of the subnet being updated
-            vlanId: oldVlanId, // IP's vlanId must match the subnet's old vlanId
+            subnetId: id, 
+            vlanId: oldVlanId, 
           },
         });
         logger.debug(`[${actionName}] Found ${ipsDirectlyOnOldVlanCount} IPs directly on old VLAN ${oldVlanId} for subnet ${id}.`, { count: ipsDirectlyOnOldVlanCount });
@@ -433,11 +432,10 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
             'vlanId'
           );
         }
-        // If no IPs are directly on the old VLAN, it's safe to disconnect the subnet from the VLAN
         updateData.vlan = { disconnect: true };
         logger.debug(`[${actionName}] Disconnecting subnet ${id} from VLAN ${oldVlanId}.`);
-      } else if (newVlanId !== null) { // User is trying to assign a new VLAN or change to a different VLAN
-        if (newVlanId !== oldVlanId) { // Only connect if it's actually a new/different VLAN
+      } else if (newVlanId !== null) { 
+        if (newVlanId !== oldVlanId) { 
             const vlanExists = await prisma.vLAN.findUnique({ where: { id: newVlanId }});
             if (!vlanExists) {
                 throw new NotFoundError(`VLAN ID: ${newVlanId}`, `选择的 VLAN (ID: ${newVlanId}) 不存在。`, 'vlanId');
@@ -447,7 +445,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
         } else {
             logger.debug(`[${actionName}] New VLAN ID ${newVlanId} is same as old VLAN ID ${oldVlanId}. No change to subnet's VLAN connection.`);
         }
-      } else { // newVlanId is null AND oldVlanId was also null
+      } else { 
         logger.debug(`[${actionName}] Subnet ${id} was not associated with a VLAN, and new VLAN ID is also null. No change.`);
       }
     }
@@ -515,7 +513,6 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
       throw new NotFoundError(`子网 ID: ${id}`, `要删除的子网未找到。`);
     }
 
-    // Check 1: Is the subnet associated with a VLAN (and is not an empty string)?
     if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") {
       const vlanNumberForMessage = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`;
       throw new ResourceError(
@@ -525,7 +522,6 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
       );
     }
     
-    // Check 2: Are there any 'allocated' IPs in the subnet?
     const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } });
     if (allocatedIpsCount > 0) {
       throw new ResourceError(
@@ -535,7 +531,6 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
       );
     }
     
-    // Check 3: Are there any 'reserved' IPs in the subnet?
     const reservedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } });
     if (reservedIpsCount > 0) {
         throw new ResourceError(
@@ -1061,20 +1056,16 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     if (data.hasOwnProperty('lastSeen')) updateData.lastSeen = data.lastSeen ? new Date(data.lastSeen) : null;
 
     if (data.hasOwnProperty('vlanId')) {
-        const vlanIdToSet = data.vlanId; // This could be null, undefined, or a string ID
+        const vlanIdToSet = data.vlanId; 
 
-        if (vlanIdToSet === null) { // Explicitly clearing the VLAN
+        if (vlanIdToSet === null) { 
             updateData.vlan = { disconnect: true };
-        } else if (vlanIdToSet && vlanIdToSet.trim() !== "") { // Setting to a new VLAN ID
+        } else if (vlanIdToSet && vlanIdToSet.trim() !== "") { 
             if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
                 throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
             }
             updateData.vlan = { connect: { id: vlanIdToSet } };
         }
-        // If vlanIdToSet is undefined or an empty string from the form, it's treated as "no change to direct assignment" or "inherit"
-        // The key 'vlanId' being present with undefined/empty string means the user *might* have interacted with the field
-        // but didn't select a new VLAN *nor* explicitly cleared it to NULL.
-        // Current logic on form sheet: "INHERIT_VLAN_SENTINEL" / "" maps to null in payload, so `vlanIdToSet` will be null.
     }
 
 
