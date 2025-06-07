@@ -93,7 +93,7 @@ async function main() {
       where: { email: userData.email },
       update: {
         username: userData.username,
-        password: userData.password,
+        password: userData.password, // Note: In a real app, hash passwords
         roleId: userData.roleId,
         avatar: userData.avatarPath,
         lastLogin: new Date(),
@@ -102,7 +102,7 @@ async function main() {
         id: userData.id,
         username: userData.username,
         email: userData.email,
-        password: userData.password,
+        password: userData.password, // Note: In a real app, hash passwords
         roleId: userData.roleId,
         avatar: userData.avatarPath,
         lastLogin: new Date(),
@@ -113,6 +113,44 @@ async function main() {
 
   console.log('Seeding VLANs...');
   for (const vlanData of seedVLANsData) {
+    // Check if a VLAN already exists with the target vlanNumber but a different ID
+    const conflictingVlan = await prisma.vLAN.findFirst({
+      where: {
+        vlanNumber: vlanData.vlanNumber,
+        NOT: {
+          id: vlanData.id, // We are interested in conflicts where the ID is different
+        },
+      },
+    });
+
+    if (conflictingVlan) {
+      console.warn(
+        `Conflict detected: VLAN number ${vlanData.vlanNumber} is already used by VLAN ID ${conflictingVlan.id}. ` +
+        `The seed data expects VLAN number ${vlanData.vlanNumber} to be associated with ID ${vlanData.id}.`
+      );
+
+      // Check if this problematic, pre-existing VLAN is in use by any subnets
+      const subnetsUsingConflictingVlan = await prisma.subnet.count({
+        where: { vlanId: conflictingVlan.id },
+      });
+
+      if (subnetsUsingConflictingVlan > 0) {
+        // If the conflicting VLAN is in use, it's safer to stop and inform the user.
+        throw new Error(
+          `Cannot automatically resolve VLAN seed conflict for VLAN number ${vlanData.vlanNumber}. ` +
+          `This VLAN number is currently used by an existing VLAN (ID: ${conflictingVlan.id}) which is associated with ${subnetsUsingConflictingVlan} subnet(s). ` +
+          `To resolve, please manually clean up the conflicting VLAN data or reset the database using 'npm run prisma:migrate:reset'.`
+        );
+      } else {
+        // If the conflicting VLAN is not in use, it's safer to delete it to make way for the seed data.
+        console.warn(
+          `The conflicting VLAN (ID: ${conflictingVlan.id}, Number: ${vlanData.vlanNumber}) is not used by any subnets. Deleting it.`
+        );
+        await prisma.vLAN.delete({ where: { id: conflictingVlan.id } });
+      }
+    }
+
+    // Proceed with the original upsert logic for the current vlanData item
     await prisma.vLAN.upsert({
       where: { id: vlanData.id },
       update: { vlanNumber: vlanData.vlanNumber, description: vlanData.description },
@@ -209,3 +247,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
