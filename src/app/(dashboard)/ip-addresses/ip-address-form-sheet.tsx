@@ -36,7 +36,7 @@ import {
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types";
-import { createIPAddressAction, updateIPAddressAction, type ActionResponse } from "@/lib/actions";
+import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions"; // Import UpdateIPAddressData
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
@@ -68,7 +68,6 @@ interface IPAddressFormSheetProps {
 
 const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
 const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
-
 
 export function IPAddressFormSheet({
     ipAddress,
@@ -118,16 +117,26 @@ export function IPAddressFormSheet({
       const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
       const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
 
-      const payload = {
-        ...data,
-        subnetId: effectiveSubnetId,
-        vlanId: vlanIdToSave, 
-      };
-
       if (isEditing && ipAddress) {
-        response = await updateIPAddressAction(ipAddress.id, payload);
+        const payloadForUpdate: UpdateIPAddressData = {
+            ipAddress: data.ipAddress,
+            subnetId: effectiveSubnetId,
+            vlanId: vlanIdToSave, // string | null (compatible with string | null | undefined)
+            status: data.status,
+            allocatedTo: data.allocatedTo || null, // Pass null if empty/undefined
+            description: data.description || null, // Pass null if empty/undefined
+        };
+        response = await updateIPAddressAction(ipAddress.id, payloadForUpdate);
       } else {
-        response = await createIPAddressAction(payload as Omit<IPAddress, "id">);
+        const payloadForCreate: Omit<IPAddress, "id"> = {
+            ipAddress: data.ipAddress,
+            subnetId: effectiveSubnetId,
+            vlanId: vlanIdToSave === null ? undefined : vlanIdToSave, // createIPAddress expects string | undefined for vlanId
+            status: data.status,
+            allocatedTo: data.allocatedTo || undefined,
+            description: data.description || undefined,
+        };
+        response = await createIPAddressAction(payloadForCreate);
       }
 
       if (response.success && response.data) {
@@ -150,7 +159,7 @@ export function IPAddressFormSheet({
           });
         }
       }
-    } catch (error) { 
+    } catch (error) {
       toast({
         title: "客户端错误",
         description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
@@ -317,6 +326,5 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
-    
 
     

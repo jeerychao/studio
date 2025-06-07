@@ -36,7 +36,7 @@ import {
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
-import { createSubnetAction, updateSubnetAction, type ActionResponse } from "@/lib/actions"; // Import ActionResponse
+import { createSubnetAction, updateSubnetAction, type ActionResponse, type UpdateSubnetData, type CreateSubnetData } from "@/lib/actions"; // Import ActionResponse & UpdateSubnetData
 
 const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)"),
@@ -69,49 +69,52 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
       description: subnet?.description || "",
     },
   });
-  
+
   React.useEffect(() => {
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
-        vlanId: subnet?.vlanId || "", 
+        vlanId: subnet?.vlanId || "",
         description: subnet?.description || "",
       });
       form.clearErrors();
     }
   }, [isOpen, subnet, form]);
 
-
   async function onSubmit(values: SubnetFormValues) {
-    form.clearErrors(); 
+    form.clearErrors();
 
-    const vlanIdForAction = 
+    const vlanIdForAction =
       values.vlanId === NO_VLAN_SENTINEL_VALUE || values.vlanId === "" || values.vlanId === undefined
-      ? null 
+      ? null
       : values.vlanId;
 
-    const descriptionForAction = 
+    const descriptionForAction =
       values.description === "" || values.description === undefined
       ? null
       : values.description;
 
-    const actionData: { cidr: string; vlanId: string | null; description: string | null; } = {
-      cidr: values.cidr,
-      vlanId: vlanIdForAction,
-      description: descriptionForAction,
-    };
-
     let response: ActionResponse<Subnet>;
     try {
       if (isEditing && subnet) {
-        response = await updateSubnetAction(subnet.id, actionData);
-      } else {
-        const createPayloadForAction = {
-            cidr: actionData.cidr,
-            vlanId: actionData.vlanId === null ? undefined : actionData.vlanId, 
-            description: actionData.description === null ? undefined : actionData.description,
+        const updatePayload: UpdateSubnetData = {
+            cidr: values.cidr,
+            vlanId: vlanIdForAction, // string | null (compatible with string | null | undefined)
+            description: descriptionForAction, // string | null (compatible with string | null | undefined)
         };
-        response = await createSubnetAction(createPayloadForAction);
+        response = await updateSubnetAction(subnet.id, updatePayload);
+      } else {
+        const createPayload: CreateSubnetData = {
+            cidr: values.cidr,
+            // createSubnetAction expects vlanId as string | null | undefined.
+            // If vlanIdForAction is null, it's passed as null.
+            // If it's string, it's passed as string.
+            // If it needs to be undefined when null, adjust here or in action.
+            // Current action `createSubnetAction` handles `vlanId?: string | null | undefined`.
+            vlanId: vlanIdForAction,
+            description: descriptionForAction,
+        };
+        response = await createSubnetAction(createPayload);
       }
 
       if (response.success && response.data) {
@@ -121,7 +124,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         });
         setIsOpen(false);
         if (onSubnetChange) onSubnetChange();
-        form.reset(); 
+        form.reset();
       } else if (response.error) {
         toast({
           title: "操作失败",
@@ -130,12 +133,12 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         });
         if (response.error.field && form.setError) {
           const fieldName = response.error.field as FieldPath<SubnetFormValues>;
-          if (Object.keys(form.getValues()).includes(fieldName)) { 
+          if (Object.keys(form.getValues()).includes(fieldName)) {
             form.setError(fieldName, {
               type: "server",
               message: response.error.userMessage,
             });
-          } else { 
+          } else {
             console.warn(`Server returned error for field '${response.error.field}' which is not in the form.`);
           }
         }
@@ -146,7 +149,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
           variant: "destructive",
         });
       }
-    } catch (error: unknown) { 
+    } catch (error: unknown) {
       console.error("SubnetFormSheet onSubmit unexpected client-side error:", error);
       toast({
         title: "客户端错误",
@@ -249,6 +252,5 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
-
 
     
