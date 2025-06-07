@@ -37,16 +37,9 @@ import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
 import { createSubnetAction, updateSubnetAction, type ActionResponse } from "@/lib/actions"; // Import ActionResponse
-// Removed: import { parseAndValidateCIDR } from "@/lib/ip-utils"; // Now handled by actions and error-utils
 
-// Zod schema for client-side validation (can be simpler than server-side if desired,
-// or try to match. Server-side will always re-validate).
 const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)"),
-    // .refine((val) => { // Basic client-side check, server will do full validation
-    //   const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/(\d{1,2})$/;
-    //   return cidrRegex.test(val);
-    // }, "无效的 CIDR 表示法格式 (例如 192.168.1.0/24)。"),
   vlanId: z.string().optional(),
   description: z.string().max(200, "描述过长").optional(),
 });
@@ -81,19 +74,33 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
-        vlanId: subnet?.vlanId || "", // Will be mapped to sentinel if empty
+        vlanId: subnet?.vlanId || "", 
         description: subnet?.description || "",
       });
+      form.clearErrors();
     }
   }, [isOpen, subnet, form]);
 
 
   async function onSubmit(values: SubnetFormValues) {
-    form.clearErrors(); // Clear previous validation errors
-    const actionData = {
+    form.clearErrors(); 
+
+    // Determine the vlanId to send: null if "No VLAN" or empty, otherwise the selected ID.
+    const vlanIdForAction = 
+      values.vlanId === NO_VLAN_SENTINEL_VALUE || values.vlanId === "" || values.vlanId === undefined
+      ? null 
+      : values.vlanId;
+
+    // Determine the description to send: null if empty/undefined, otherwise the value.
+    const descriptionForAction = 
+      values.description === "" || values.description === undefined
+      ? null
+      : values.description;
+
+    const actionData: { cidr: string; vlanId: string | null; description: string | null; } = {
       cidr: values.cidr,
-      vlanId: values.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : (values.vlanId || undefined),
-      description: values.description || undefined,
+      vlanId: vlanIdForAction,
+      description: descriptionForAction,
     };
 
     let response: ActionResponse<Subnet>;
@@ -101,7 +108,21 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
       if (isEditing && subnet) {
         response = await updateSubnetAction(subnet.id, actionData);
       } else {
-        response = await createSubnetAction(actionData);
+        // For create, ensure undefined is not sent if fields are truly optional per DB schema
+        // However, createSubnetAction expects specific types, so we ensure they are compatible.
+        // If description is optional and can be undefined, that's fine.
+        // If vlanId is optional and can be undefined, that's fine.
+        // Here, we stick to the `actionData` which uses null for clarity.
+        // The createSubnetAction needs to handle `vlanId: null` and `description: null` appropriately (e.g., by omitting them or setting DB to NULL).
+        // Let's assume createSubnetAction can handle nulls by converting them to undefined if the Prisma schema expects optional undefined.
+        // For now, let's ensure the create payload matches what createSubnetAction expects,
+        // which might be { cidr: string; vlanId?: string; description?: string; }
+        const createPayloadForAction = {
+            cidr: actionData.cidr,
+            vlanId: actionData.vlanId === null ? undefined : actionData.vlanId,
+            description: actionData.description === null ? undefined : actionData.description,
+        };
+        response = await createSubnetAction(createPayloadForAction);
       }
 
       if (response.success && response.data) {
@@ -111,7 +132,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         });
         setIsOpen(false);
         if (onSubnetChange) onSubnetChange();
-        form.reset(); // Reset form on success
+        form.reset(); 
       } else if (response.error) {
         toast({
           title: "操作失败",
@@ -119,22 +140,17 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
           variant: "destructive",
         });
         if (response.error.field && form.setError) {
-          // Ensure the field name from the error matches a field in your form
-          // The `as FieldPath<SubnetFormValues>` cast might be needed if the field name isn't statically known
-          // to be one of 'cidr', 'vlanId', or 'description'.
           const fieldName = response.error.field as FieldPath<SubnetFormValues>;
           if (fieldName in form.getValues()) {
             form.setError(fieldName, {
               type: "server",
               message: response.error.userMessage,
             });
-          } else {
-             // If field name doesn't match form, show it in general toast or log it
+          } else { 
             console.warn(`Server returned error for field '${response.error.field}' which is not in the form.`);
           }
         }
       } else {
-        // Should not happen if actions always return success or error object
         toast({
           title: "未知响应",
           description: "从服务器收到意外响应。",
@@ -142,8 +158,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         });
       }
     } catch (error: unknown) { 
-      // This catch block is for unexpected errors during the await/response handling itself,
-      // NOT for business logic errors returned by the action.
       console.error("SubnetFormSheet onSubmit unexpected client-side error:", error);
       toast({
         title: "客户端错误",
@@ -197,7 +211,6 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                     onValueChange={(value) => {
                       field.onChange(value === NO_VLAN_SENTINEL_VALUE ? "" : value);
                     }}
-                    // Ensure value is correctly mapped for the Select component
                     value={field.value === "" || field.value === null || field.value === undefined ? NO_VLAN_SENTINEL_VALUE : field.value}
                   >
                     <FormControl>
