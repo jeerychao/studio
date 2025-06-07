@@ -414,7 +414,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
     }
 
     if (data.hasOwnProperty('vlanId')) {
-      const newVlanId = data.vlanId; // This will be null if "No VLAN" was selected and sent by frontend
+      const newVlanId = data.vlanId; 
       const oldVlanId = subnetToUpdate.vlanId;
       logger.debug(`[${actionName}] VLAN Update Check: Subnet ID: ${id}, Received newVlanId: '${newVlanId}' (type: ${typeof newVlanId}), Old DB VLAN ID: '${oldVlanId}'.`);
 
@@ -423,7 +423,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
         const ipsDirectlyOnOldVlanCount = await prisma.iPAddress.count({
           where: {
             subnetId: id,
-            vlanId: oldVlanId,
+            vlanId: oldVlanId, // Check IPs directly assigned to the old VLAN within this subnet
           },
         });
         logger.debug(`[${actionName}] CRITICAL CHECK RESULT: Found ${ipsDirectlyOnOldVlanCount} IPs directly assigned to old VLAN '${oldVlanId}' within subnet '${id}'.`, { count: ipsDirectlyOnOldVlanCount });
@@ -440,8 +440,8 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
         }
         updateData.vlan = { disconnect: true };
         logger.debug(`[${actionName}] Disconnecting subnet ${id} from VLAN ${oldVlanId}.`);
-      } else if (newVlanId !== null && newVlanId !== undefined) {
-        if (newVlanId !== oldVlanId) {
+      } else if (newVlanId !== null && newVlanId !== undefined) { // newVlanId is a string (actual VLAN ID)
+        if (newVlanId !== oldVlanId) { // Only connect if it's a different VLAN
             const vlanExists = await prisma.vLAN.findUnique({ where: { id: newVlanId }});
             if (!vlanExists) {
                 throw new NotFoundError(`VLAN ID: ${newVlanId}`, `选择的 VLAN (ID: ${newVlanId}) 不存在。`, 'vlanId');
@@ -451,7 +451,7 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
         } else {
             logger.debug(`[${actionName}] New VLAN ID ${newVlanId} is same as old VLAN ID ${oldVlanId}. No change to subnet's VLAN connection.`);
         }
-      } else {
+      } else { // newVlanId is undefined (meaning vlanId was not in data) or an empty string (should have been converted to null)
         logger.debug(`[${actionName}] Subnet ${id} VLAN association unchanged or newVlanId implies no effective change (current: ${oldVlanId}, new raw: ${data.vlanId}, new processed: ${newVlanId}).`);
       }
     } else {
@@ -826,36 +826,36 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   let finalTotalCount: number;
 
   if (params?.subnetId && params.page && params.pageSize) {
-    // Fetch all IPs for the specific subnet first for accurate in-memory sorting and pagination
     const allIpsInSubnetUnsorted = await prisma.iPAddress.findMany({
-      where: whereClause, // This already includes the subnetId filter
+      where: whereClause,
       include: includeClause,
     });
 
+    // Apply numerical sort using compareIpStrings
     const allIpsInSubnetSorted = allIpsInSubnetUnsorted.sort((a, b) => compareIpStrings(a.ipAddress, b.ipAddress));
     finalTotalCount = allIpsInSubnetSorted.length;
     paginatedDbItems = allIpsInSubnetSorted.slice(skip, skip + pageSize);
 
-  } else { // Global view or specific subnet view without pagination (get all)
+  } else { 
     const orderByClause: Prisma.IPAddressOrderByWithRelationInput[] = [
-      { subnet: { networkAddress: 'asc' } }, // Primarily sort by subnet's network address (string/dictionary sort)
-      { ipAddress: 'asc' }, // Secondarily sort by IP address (string/dictionary sort)
+      { subnet: { networkAddress: 'asc' } }, 
+      { ipAddress: 'asc' }, 
     ];
 
-    if (params?.page && params?.pageSize) { // Global view WITH pagination
+    if (params?.page && params?.pageSize) { 
         finalTotalCount = await prisma.iPAddress.count({ where: whereClause });
         paginatedDbItems = await prisma.iPAddress.findMany({
             where: whereClause,
             include: includeClause,
-            orderBy: orderByClause,
+            orderBy: orderByClause, // Database sorts here for global view
             skip: skip,
             take: pageSize,
         });
-    } else { // Get ALL IPs (e.g. for export or if no pagination params provided)
+    } else { 
         const allIPs = await prisma.iPAddress.findMany({
             where: whereClause,
             include: includeClause,
-            orderBy: orderByClause,
+            orderBy: orderByClause, // Database sorts here for global view (get all)
         });
         finalTotalCount = allIPs.length;
         paginatedDbItems = allIPs;
@@ -1114,14 +1114,15 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     if (data.hasOwnProperty('vlanId')) {
         const vlanIdToSet = data.vlanId;
 
-        if (vlanIdToSet === null) {
+        if (vlanIdToSet === null) { // Explicitly passed as null means disconnect
             updateData.vlan = { disconnect: true };
-        } else if (vlanIdToSet && vlanIdToSet.trim() !== "") {
+        } else if (vlanIdToSet && vlanIdToSet.trim() !== "") { // Non-empty string means connect
             if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
                 throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
             }
             updateData.vlan = { connect: { id: vlanIdToSet } };
         }
+        // If vlanIdToSet is undefined or an empty string (other than explicitly null), no change to vlan is made.
     }
 
 
@@ -1670,7 +1671,7 @@ export async function querySubnetsAction(queryString: string): Promise<ActionRes
       where: whereClause,
       include: { vlan: true },
       orderBy: { cidr: 'asc' },
-      take: 20, // Limit results for a query tool
+      take: 20, 
     });
 
     const results: SubnetQueryResult[] = await Promise.all(
@@ -1717,11 +1718,11 @@ export async function queryVlansAction(vlanNumberQuery?: number): Promise<Action
     const vlansFromDb = await prisma.vLAN.findMany({
       where: whereClause,
       include: {
-        subnets: { select: { id: true, cidr: true, description: true }, take: 10 }, // Limit associated items
-        ipAddresses: { select: { id: true, ipAddress: true, description: true }, take: 10 }, // Limit associated items
+        subnets: { select: { id: true, cidr: true, description: true }, take: 10 }, 
+        ipAddresses: { select: { id: true, ipAddress: true, description: true }, take: 10 }, 
       },
       orderBy: { vlanNumber: 'asc' },
-      take: 20, // Limit results for a query tool
+      take: 20, 
     });
 
     const results: VlanQueryResult[] = vlansFromDb.map(vlan => ({
@@ -1744,13 +1745,33 @@ export async function queryIpAddressesAction(searchTerm: string): Promise<Action
     if (!searchTerm || searchTerm.trim() === "") {
         return { success: true, data: [] };
     }
-    const whereClause: Prisma.IPAddressWhereInput = {
-      OR: [
-        { allocatedTo: { contains: searchTerm, mode: 'insensitive' } },
-        { description: { contains: searchTerm, mode: 'insensitive' } },
-        { ipAddress: { contains: searchTerm, mode: 'insensitive' } }, // Also search by IP address itself
-      ],
-    };
+
+    const orConditions: Prisma.IPAddressWhereInput[] = [
+      { allocatedTo: { contains: searchTerm, mode: 'insensitive' } },
+      { description: { contains: searchTerm, mode: 'insensitive' } },
+    ];
+
+    // IP Address specific search logic
+    const wildcardIpPatternFull = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/; // e.g., 192.168.1.*
+    const wildcardIpPatternMedium = /^(\d{1,3}\.\d{1,3})\.\*$/;       // e.g., 192.168.*
+    const wildcardIpPatternShort = /^(\d{1,3})\.\*$/;                // e.g., 192.*
+    
+    let match;
+
+    if (searchTerm === "*") {
+        // No specific IP filter, let text search cover generic cases.
+    } else if ((match = searchTerm.match(wildcardIpPatternFull))) {
+      orConditions.push({ ipAddress: { startsWith: `${match[1]}.` } });
+    } else if ((match = searchTerm.match(wildcardIpPatternMedium))) {
+      orConditions.push({ ipAddress: { startsWith: `${match[1]}.` } });
+    } else if ((match = searchTerm.match(wildcardIpPatternShort))) {
+      orConditions.push({ ipAddress: { startsWith: `${match[1]}.` } });
+    } else if (/^[\d.]+$/.test(searchTerm)) { // Contains only digits and dots (potential IP or prefix)
+      orConditions.push({ ipAddress: { startsWith: searchTerm } });
+    }
+    // If searchTerm is not an IP pattern handled above, only allocatedTo and description are searched for the searchTerm.
+
+    const whereClause: Prisma.IPAddressWhereInput = { OR: orConditions };
 
     const ipsFromDb = await prisma.iPAddress.findMany({
       where: whereClause,
@@ -1758,8 +1779,8 @@ export async function queryIpAddressesAction(searchTerm: string): Promise<Action
         subnet: { select: { id: true, cidr: true, networkAddress: true, vlan: { select: { vlanNumber: true } } } },
         vlan: { select: { vlanNumber: true } },
       },
-      orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], // Keep consistent ordering
-      take: 50, // Limit results for a query tool
+      orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ],
+      take: 50,
     });
 
     const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({

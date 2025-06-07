@@ -25,11 +25,11 @@ CREATE TABLE "VLAN" (
 CREATE TABLE "IPAddress" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ipAddress" TEXT NOT NULL,
+    "subnetId" TEXT,
+    "vlanId" TEXT,
     "status" TEXT NOT NULL,
     "allocatedTo" TEXT,
     "description" TEXT,
-    "subnetId" TEXT,
-    "vlanId" TEXT,
     "lastSeen" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
@@ -82,11 +82,11 @@ CREATE TABLE "AuditLog" (
 );
 
 -- CreateTable
-CREATE TABLE "_RolePermissions" (
+CREATE TABLE "_RoleToPermission" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
-    CONSTRAINT "_RolePermissions_A_fkey" FOREIGN KEY ("A") REFERENCES "Permission" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "_RolePermissions_B_fkey" FOREIGN KEY ("B") REFERENCES "Role" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "_RoleToPermission_A_fkey" FOREIGN KEY ("A") REFERENCES "Permission" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "_RoleToPermission_B_fkey" FOREIGN KEY ("B") REFERENCES "Role" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateIndex
@@ -111,7 +111,7 @@ CREATE UNIQUE INDEX "Role_name_key" ON "Role"("name");
 CREATE UNIQUE INDEX "Permission_name_key" ON "Permission"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "_RolePermissions_AB_unique" ON "_RolePermissions"("A", "B");
+CREATE UNIQUE INDEX "_RoleToPermission_AB_unique" ON "_RoleToPermission"("A", "B");
 
 -- CreateIndex
-CREATE INDEX "_RolePermissions_B_index" ON "_RolePermissions"("B");
+CREATE INDEX "_RoleToPermission_B_index" ON "_RoleToPermission"("B");

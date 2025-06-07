@@ -13,7 +13,7 @@ import { Search, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
-import type { SubnetQueryResult, VlanQueryResult } from "@/types";
+import type { SubnetQueryResult, VlanQueryResult, IPAddressStatus as AppIPAddressStatusType } from "@/types";
 import type { AppIPAddressWithRelations } from "@/lib/actions";
 import { querySubnetsAction, queryVlansAction, queryIpAddressesAction } from "@/lib/actions";
 
@@ -295,12 +295,12 @@ export default function QueryPage() {
           <Card>
             <CardHeader>
               <CardTitle>查询IP地址</CardTitle>
-              <CardDescription>按IP地址、分配对象或描述模糊查询。最多显示50条结果。</CardDescription>
+              <CardDescription>按IP地址 (支持 `10.0.1.*` 通配符)、分配对象或描述模糊查询。最多显示50条结果。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="例如 Server01 或 10.0.1.5"
+                  placeholder="例如 Server01 或 10.0.1.*"
                   value={ipQuery}
                   onChange={(e) => setIpQuery(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleIpQuery()}
