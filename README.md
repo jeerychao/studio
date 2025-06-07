@@ -20,3 +20,6 @@ docker-compose logs -f ipam-app
 按 Ctrl+C 停止查看日志。
 
 访问应用程序： 一旦容器成功启动，您应该可以通过浏览器访问 http://localhost:3001 来查看您的应用程序。这是因为 docker-compose.yml 中将主机的 3001 端口映射到了容器的 3000 端口。
+
+#其它部署方式
+请按以上前后端要求安装依赖部署

@@ -1,28 +1,26 @@
-
 services:
   ipam-app:
     build:
-      context: . # Dockerfile is in the project root
+      context: .
       dockerfile: Dockerfile
     image: ipam-app-local:latest
     container_name: ipam_app_local_prod
     ports:
-      - "8081:3000" # 更改为 8081:3000
+      - "8081:3000"
     env_file:
-      - ./production.env # production.env is in the project root
+      - ./production.env
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
-      - NEXT_PUBLIC_BASE_URL=http://17.100.100.253:8081
-      - NEXTAUTH_URL=http://17.100.100.253:8081
-      - NEXT_PUBLIC_EXTERNAL_URL=http://17.100.100.253:8081
-      - NEXT_PRIVATE_EXTERNAL_URL=http://17.100.100.253:8081
+      # 使用环境变量，方便不同环境配置
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
+      - NEXTAUTH_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
+      - NEXT_PUBLIC_EXTERNAL_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
+      - NEXT_PRIVATE_EXTERNAL_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
     restart: unless-stopped
     networks:
       - app_network
-    # volumes:
-    #   - prisma_data:/app/prisma # Temporarily commented out to use DB from image
     healthcheck:
       test: ["CMD", "/app/health-check.sh"]
       interval: 30s
@@ -32,7 +30,3 @@ services:
 networks:
   app_network:
     driver: bridge
-
-# volumes:
-#   prisma_data: # Temporarily commented out
-#     driver: local
