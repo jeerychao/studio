@@ -121,7 +121,7 @@ export interface AuditLog {
   details?: string;
 }
 
-// Types for Query Results (New)
+// Types for Query Results
 export interface SubnetQueryResult {
   id: string;
   cidr: string;
@@ -129,10 +129,9 @@ export interface SubnetQueryResult {
   vlanNumber?: number;
   vlanDescription?: string;
   totalUsableIPs: number;
-  allocatedIPsCount: number;
-  dbFreeIPsCount: number;
-  reservedIPsCount: number;
-  sampleFreeIPs: string[]; // e.g., ["192.168.1.5", "192.168.1.6"]
+  allocatedIPsCount: number; // IPs marked 'allocated' in DB
+  dbFreeIPsCount: number;    // IPs marked 'free' in DB
+  reservedIPsCount: number;  // IPs marked 'reserved' in DB
 }
 
 export interface VlanQueryResult {
@@ -143,3 +142,24 @@ export interface VlanQueryResult {
   associatedDirectIPs: Array<{ id: string; ipAddress: string; description?: string }>;
 }
 // For IP Address query, we can reuse AppIPAddressWithRelations from actions.ts
+
+
+// New type for Subnet IP Details view
+export interface SubnetFreeIpDetails {
+  subnetId: string;
+  subnetCidr: string;
+  totalUsableIPs: number;      // Mathematical total usable IPs in the subnet
+  dbAllocatedIPsCount: number; // Count of IPs marked 'allocated' in DB for this subnet
+  dbReservedIPsCount: number;  // Count of IPs marked 'reserved' in DB for this subnet
+  // dbFreeIPsInDbCount: number; // Count of IPs marked 'free' in DB for this subnet (might be less relevant than calculated)
+  calculatedAvailableIPsCount: number; // Count of IPs that are not allocated or reserved (includes those not in DB and those marked 'free' in DB)
+  calculatedAvailableIpRanges: string[]; // Formatted list of free IP ranges (e.g., ["10.0.1.1-10.0.1.6", "10.0.1.10"])
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+}

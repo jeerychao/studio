@@ -85,12 +85,13 @@ export function calculateIpRange(networkAddr: string, prefix: number): string | 
   if (prefix === 32) {
     return `${networkAddr} - ${networkAddr}`;
   }
-  if (prefix === 31) {
+  if (prefix === 31) { // Per RFC 3021, /31s have two usable IPs, which are the network and broadcast addresses themselves.
     const secondIpNum = (networkAddressNum + 1) >>> 0;
     return `${networkAddr} - ${numberToIp(secondIpNum)}`;
   }
-  if (prefix > 30 || prefix < 1) {
-    return null;
+  // For prefixes /30 and smaller, the network and broadcast addresses are unusable.
+  if (prefix > 30 || prefix < 1) { // /0 is not practical for usable IPs.
+    return null; // Or handle as a special case, e.g., for /0, all IPs are usable.
   }
 
   const firstUsableNum = (networkAddressNum + 1) >>> 0;
@@ -99,7 +100,7 @@ export function calculateIpRange(networkAddr: string, prefix: number): string | 
   const broadcastNum = ipToNumber(broadcastAddress);
   const lastUsableNum = (broadcastNum - 1) >>> 0;
 
-  if (lastUsableNum < firstUsableNum) return null;
+  if (lastUsableNum < firstUsableNum) return null; // Should not happen for prefix <= 30
 
   return `${numberToIp(firstUsableNum)} - ${numberToIp(lastUsableNum)}`;
 }
@@ -110,45 +111,51 @@ export interface SubnetProperties {
     networkAddress: string;
     subnetMask: string;
     broadcastAddress: string;
-    firstUsableIp?: string;
-    lastUsableIp?: string;
-    ipRange?: string;
+    firstUsableIp?: string; // First IP address in the usable range
+    lastUsableIp?: string;  // Last IP address in the usable range
+    ipRange?: string;       // String representation like "X.X.X.X - Y.Y.Y.Y" for usable range
 }
 
-// This function is for parsing properties from a CIDR string.
-// It assumes basic format validity; stricter validation (e.g., ensuring IP is network address)
-// should be done by validateCidrInput from error-utils.ts before or after.
 export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | null {
   const match = cidr.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
-  if (!match) return null; // Basic format check failed
+  if (!match) return null;
 
   const [, inputIp, prefixStr] = match;
   const prefix = parseInt(prefixStr, 10);
 
-  if (isNaN(prefix) || prefix < 0 || prefix > 32) return null; // Invalid prefix number
+  if (isNaN(prefix) || prefix < 0 || prefix > 32) return null;
 
   const ipParts = inputIp.split('.').map(Number);
-  if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) return null; // Invalid IP part
+  if (ipParts.some(part => isNaN(part) || part < 0 || part > 255) || ipParts.length !== 4) return null;
 
-  // Calculate network address based on the input IP and prefix
   const networkAddress = calculateNetworkAddress(inputIp, prefix);
   const subnetMask = prefixToSubnetMask(prefix);
-  const broadcastAddress = calculateBroadcastAddress(networkAddress, prefix); // Use calculated networkAddress
+  const broadcastAddress = calculateBroadcastAddress(networkAddress, prefix);
   const ipRangeString = calculateIpRange(networkAddress, prefix);
 
   let firstUsableIp: string | undefined;
   let lastUsableIp: string | undefined;
 
-  if (ipRangeString) {
-    const parts = ipRangeString.split(' - ');
-    firstUsableIp = parts[0];
-    lastUsableIp = parts[1];
+  if (prefix === 32) {
+    firstUsableIp = networkAddress;
+    lastUsableIp = networkAddress;
+  } else if (prefix === 31) {
+    firstUsableIp = networkAddress;
+    lastUsableIp = numberToIp(ipToNumber(networkAddress) + 1);
+  } else if (prefix >= 0 && prefix <= 30) {
+    const networkNum = ipToNumber(networkAddress);
+    const broadcastNum = ipToNumber(broadcastAddress);
+    if (networkNum + 1 <= broadcastNum - 1) {
+        firstUsableIp = numberToIp(networkNum + 1);
+        lastUsableIp = numberToIp(broadcastNum - 1);
+    }
   }
 
+
   return {
-    inputIp, // The original IP part of the CIDR string
+    inputIp,
     prefix,
-    networkAddress, // The calculated network address
+    networkAddress,
     subnetMask,
     broadcastAddress,
     firstUsableIp,
@@ -157,7 +164,7 @@ export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | nu
   };
 }
 
-// This function extracts the prefix from a CIDR string.
+
 export function getPrefixFromCidr(cidr: string): number {
     const parts = cidr.split('/');
     if (parts.length !== 2) throw new ValidationError('CIDR 格式无效，缺少前缀。', 'cidr', cidr, 'CIDR 格式无效，缺少斜杠和前缀长度。');
@@ -169,10 +176,10 @@ export function getPrefixFromCidr(cidr: string): number {
 }
 
 export function getUsableIpCount(prefix: number): number {
-  if (prefix === 32) return 1; // For a /32, the single IP is considered usable in some contexts.
-  if (prefix === 31) return 2; // RFC 3021 for /31 networks
-  if (prefix >= 0 && prefix <= 30) return Math.pow(2, 32 - prefix) - 2; // Network and broadcast addresses are unusable
-  return 0; // Invalid prefix
+  if (prefix < 0 || prefix > 32) return 0; // Invalid prefix
+  if (prefix === 32) return 1;
+  if (prefix === 31) return 2; // RFC 3021
+  return Math.pow(2, 32 - prefix) - 2; // Network and broadcast addresses are unusable
 }
 
 export function doSubnetsOverlap(subnet1Details: SubnetProperties, subnet2Details: SubnetProperties): boolean {
@@ -187,6 +194,42 @@ export function isIpInCidrRange(ipAddress: string, cidrDetails: SubnetProperties
   const ipNum = ipToNumber(ipAddress);
   const networkNum = ipToNumber(cidrDetails.networkAddress);
   const broadcastNum = ipToNumber(cidrDetails.broadcastAddress);
-  // Ensure IP is within the network and broadcast addresses inclusive.
   return ipNum >= networkNum && ipNum <= broadcastNum;
+}
+
+// Helper function to group consecutive IP numbers into ranges or single IPs
+export function groupConsecutiveIpsToRanges(ipNumbers: number[]): string[] {
+  if (!ipNumbers || ipNumbers.length === 0) return [];
+  
+  // Ensure IPs are sorted and unique for correct range calculation
+  const sortedUniqueIpNumbers = Array.from(new Set(ipNumbers)).sort((a, b) => a - b);
+
+  const ranges: string[] = [];
+  if (sortedUniqueIpNumbers.length === 0) return ranges;
+
+  let rangeStart = sortedUniqueIpNumbers[0];
+  let rangeEnd = sortedUniqueIpNumbers[0];
+
+  for (let i = 1; i < sortedUniqueIpNumbers.length; i++) {
+    if (sortedUniqueIpNumbers[i] === rangeEnd + 1) {
+      rangeEnd = sortedUniqueIpNumbers[i];
+    } else {
+      if (rangeStart === rangeEnd) {
+        ranges.push(numberToIp(rangeStart));
+      } else {
+        ranges.push(`${numberToIp(rangeStart)}-${numberToIp(rangeEnd)}`);
+      }
+      rangeStart = sortedUniqueIpNumbers[i];
+      rangeEnd = sortedUniqueIpNumbers[i];
+    }
+  }
+  
+  // Push the last range
+  if (rangeStart === rangeEnd) {
+    ranges.push(numberToIp(rangeStart));
+  } else {
+    ranges.push(`${numberToIp(rangeStart)}-${numberToIp(rangeEnd)}`);
+  }
+  
+  return ranges;
 }
