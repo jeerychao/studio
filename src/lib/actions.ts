@@ -249,17 +249,17 @@ export async function createSubnetAction(
         '无法解析有效的 CIDR 属性，这通常表示一个内部错误。'
       );
     }
-    const canonicalCidrToStore = data.cidr;
+    const canonicalCidrToStore = data.cidr; // Use the validated CIDR as is.
 
     const existingSubnetByCidr = await prisma.subnet.findUnique({
       where: { cidr: canonicalCidrToStore }
     });
     if (existingSubnetByCidr) {
       throw new ResourceError(
-        `子网 ${canonicalCidrToStore} 已存在。`,
-        'SUBNET_ALREADY_EXISTS',
-        `子网 ${canonicalCidrToStore} 已存在，无法重复创建。`,
-        'cidr'
+        `子网 ${canonicalCidrToStore} 已存在。`, // Dev message
+        'SUBNET_ALREADY_EXISTS',                 // Code
+        `子网 ${canonicalCidrToStore} 已存在，无法重复创建。`, // User message
+        'cidr'                                   // Field
       );
     }
 
@@ -268,10 +268,10 @@ export async function createSubnetAction(
       const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
       if (existingSubProps && newSubnetProperties && doSubnetsOverlap(newSubnetProperties, existingSubProps)) {
         throw new ResourceError(
-          `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。`,
-          'SUBNET_OVERLAP_ERROR',
-          `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。请选择一个不冲突的范围。`,
-          'cidr'
+          `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。`, // Dev message
+          'SUBNET_OVERLAP_ERROR',                                                // Code
+          `提供的子网 ${canonicalCidrToStore} 与现有子网 ${existingSub.cidr} 重叠。请选择一个不冲突的范围。`, // User message
+          'cidr'                                                                 // Field
         );
       }
     }
@@ -407,17 +407,44 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
     }
 
     if (data.hasOwnProperty('vlanId')) {
-      const newVlanId = data.vlanId === "" || data.vlanId === undefined || data.vlanId === null ? null : data.vlanId;
-      if (newVlanId) {
-          const vlanExists = await prisma.vLAN.findUnique({ where: { id: newVlanId }});
-          if (!vlanExists) {
-              throw new NotFoundError(`VLAN ID: ${newVlanId}`, `选择的 VLAN (ID: ${newVlanId}) 不存在。`, 'vlanId');
-          }
-          updateData.vlan = { connect: { id: newVlanId } };
-      } else {
-          updateData.vlan = { disconnect: true };
+      const newVlanId = (data.vlanId === "" || data.vlanId === undefined || data.vlanId === null) ? null : data.vlanId;
+      const oldVlanId = subnetToUpdate.vlanId;
+
+      if (newVlanId === null && oldVlanId !== null) {
+        // Attempting to remove VLAN from subnet
+        const ipsDirectlyOnOldVlanCount = await prisma.iPAddress.count({
+          where: {
+            subnetId: id, // The ID of the subnet being updated
+            vlanId: oldVlanId, // IPs directly assigned to the subnet's old VLAN
+          },
+        });
+
+        if (ipsDirectlyOnOldVlanCount > 0) {
+          const oldVlanDetails = await prisma.vLAN.findUnique({ where: { id: oldVlanId } });
+          const oldVlanNumberForMessage = oldVlanDetails ? `VLAN ${oldVlanDetails.vlanNumber}` : `旧VLAN (ID: ${oldVlanId})`;
+          throw new ResourceError(
+            `无法移除子网的 ${oldVlanNumberForMessage}。`, // Dev message
+            'SUBNET_VLAN_REMOVE_CONFLICT_IPS', // Code
+            `子网 ${subnetToUpdate.cidr} 中仍有 ${ipsDirectlyOnOldVlanCount} 个 IP 地址直接分配给了 ${oldVlanNumberForMessage}。请先修改这些 IP 地址的 VLAN 配置。`, // User message
+            'vlanId' // Field
+          );
+        }
+        // If count is 0, it's safe to disconnect
+        updateData.vlan = { disconnect: true };
+      } else if (newVlanId !== null) {
+        // Attempting to set or change to a new VLAN
+        if (newVlanId !== oldVlanId) { // Only connect if newVlanId is actually different
+            const vlanExists = await prisma.vLAN.findUnique({ where: { id: newVlanId }});
+            if (!vlanExists) {
+                throw new NotFoundError(`VLAN ID: ${newVlanId}`, `选择的 VLAN (ID: ${newVlanId}) 不存在。`, 'vlanId');
+            }
+            updateData.vlan = { connect: { id: newVlanId } };
+        }
+        // If newVlanId is the same as oldVlanId, no change to updateData.vlan needed
       }
+      // If newVlanId is null AND oldVlanId was already null, no change needed.
     }
+
     if (data.hasOwnProperty('description')) {
       updateData.description = data.description === undefined ? null : data.description;
     }
@@ -474,21 +501,23 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
   const actionName = 'deleteSubnetAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const subnetToDelete = await prisma.subnet.findUnique({ where: { id } });
+    const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } });
 
     if (!subnetToDelete) {
       throw new NotFoundError(`子网 ID: ${id}`, `要删除的子网未找到。`);
     }
 
+    // Rule 1: Prevent deletion if associated with a VLAN
     if (subnetToDelete.vlanId && subnetToDelete.vlanId !== "") {
-      const vlan = await prisma.vLAN.findUnique({ where: { id: subnetToDelete.vlanId } });
+      const vlanNumberForMessage = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`;
       throw new ResourceError(
-        `子网 ${subnetToDelete.cidr} 已关联到 VLAN ${vlan?.vlanNumber || subnetToDelete.vlanId}。`,
+        `子网 ${subnetToDelete.cidr} 已关联到 ${vlanNumberForMessage}。`,
         'SUBNET_HAS_VLAN_ASSOCIATION',
-        `无法删除子网 ${subnetToDelete.cidr}，因为它已关联到一个 VLAN (${vlan?.vlanNumber || subnetToDelete.vlanId})。请先解除其 VLAN 关联。`
+        `无法删除子网 ${subnetToDelete.cidr}，因为它已关联到 ${vlanNumberForMessage}。请先解除其 VLAN 关联。`
       );
     }
 
+    // Rule 2 (Combined): Prevent deletion if utilization > 0% (meaning allocated IPs or reserved IPs potentially)
     const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } });
     if (allocatedIpsCount > 0) {
       throw new ResourceError(
@@ -498,36 +527,27 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
       );
     }
     
-    // Check utilization based on calculated value, not just allocated count
-    const utilization = await calculateSubnetUtilization(id);
-    if (utilization > 0) {
-      throw new ResourceError(
-        `子网 ${subnetToDelete.cidr} 的利用率为 ${utilization}%。`,
-        'SUBNET_UTILIZATION_NOT_ZERO',
-        `无法删除子网 ${subnetToDelete.cidr}，因为其利用率 (${utilization}%) 大于 0。请确保子网内没有已分配的 IP 地址。`
-      );
-    }
-
-
-    const nonFreeIpsCount = await prisma.iPAddress.count({
-      where: { subnetId: id, NOT: { status: 'free' } }
-    });
-    if (nonFreeIpsCount > 0) {
+    const reservedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } });
+    if (reservedIpsCount > 0) {
         throw new ResourceError(
-        `子网 ${subnetToDelete.cidr} 中仍有 ${nonFreeIpsCount} 个非空闲状态的 IP 地址 (例如：预留)。`,
-        'SUBNET_HAS_NON_FREE_IPS',
-        `无法删除子网 ${subnetToDelete.cidr}，因为它仍包含非空闲状态的 IP 地址。请将这些 IP 状态改为空闲或移至其他子网。`
+        `子网 ${subnetToDelete.cidr} 中仍有 ${reservedIpsCount} 个预留状态的 IP 地址。`,
+        'SUBNET_HAS_RESERVED_IPS',
+        `无法删除子网 ${subnetToDelete.cidr}，因为它仍包含预留状态的 IP 地址。请将这些 IP 状态改为空闲或移至其他子网。`
       );
     }
-
-    const ipsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id } });
-    for (const ip of ipsInSubnet) {
+    
+    // If we reach here, only 'free' IPs might be in the subnet. These should be disassociated.
+    const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
+    for (const ip of freeIpsInSubnet) {
+      // For 'free' IPs, we are just disassociating them from the subnet.
+      // Their status remains 'free', but they become part of the global pool.
+      // Their direct VLAN (if any) should remain, as it's an IP-specific setting.
       await prisma.iPAddress.update({
         where: { id: ip.id },
-        data: { status: "free", allocatedTo: null, subnet: { disconnect: true }, vlan: { disconnect: true } },
+        data: { subnet: { disconnect: true } }, // Only disconnect subnet
       });
       await prisma.auditLog.create({
-        data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_ip_on_subnet_delete', details: `IP ${ip.ipAddress} 已从子网 ${subnetToDelete.cidr} 解除关联，因为子网被删除。` }
+        data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_ip_on_subnet_delete', details: `IP ${ip.ipAddress} 已从子网 ${subnetToDelete.cidr} 解除关联（变为全局空闲），因为子网被删除。` }
       });
     }
 
@@ -573,7 +593,7 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
         vlanId: vlan.id,
         OR: [
           { subnetId: null },
-          { subnet: { vlanId: { not: vlan.id } } }
+          { subnet: { vlanId: { not: vlan.id } } } // Count IPs directly on this VLAN but whose subnet (if any) is on a *different* VLAN or no VLAN
         ]
       }
     });
@@ -857,7 +877,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
             if (existingIPInSubnet) {
               throw new ResourceError(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', `IP 地址 ${data.ipAddress} 已存在于所选子网中。`, 'ipAddress');
             }
-        } else {
+        } else { // No subnetId provided, check global pool
             const globallyExistingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } });
             if (globallyExistingIP) {
               throw new ResourceError(`IP ${data.ipAddress} 已存在于全局池中 (未分配给任何子网)。`, 'IP_EXISTS_GLOBALLY', `IP 地址 ${data.ipAddress} 已存在于全局池中。`, 'ipAddress');
@@ -876,7 +896,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
             createPayload.subnet = { connect: { id: data.subnetId } };
         }
 
-        if (data.vlanId && data.vlanId !== "") {
+        if (data.vlanId && data.vlanId !== "") { // Check for non-empty string as well
             const vlanExists = await prisma.vLAN.findUnique({ where: { id: data.vlanId }});
             if (!vlanExists) {
               throw new NotFoundError(`VLAN ID: ${data.vlanId}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
@@ -938,7 +958,7 @@ export async function batchCreateIPAddressesAction(payload: {
       throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 配置无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_BATCH');
     }
 
-    if (vlanId && vlanId !== "") {
+    if (vlanId && vlanId !== "") { // Check for non-empty string
       const vlanExists = await prisma.vLAN.findUnique({ where: { id: vlanId } });
       if (!vlanExists) {
         throw new NotFoundError(`VLAN ID: ${vlanId}`, "为批量 IP 创建选择的 VLAN 不存在。", 'vlanId');
@@ -975,7 +995,7 @@ export async function batchCreateIPAddressesAction(payload: {
         if (subnetId) {
             createPayload.subnet = { connect: { id: subnetId } };
         }
-        if (vlanId && vlanId !== "") {
+        if (vlanId && vlanId !== "") { // Check for non-empty string
             createPayload.vlan = { connect: { id: vlanId } };
         }
 
@@ -989,6 +1009,7 @@ export async function batchCreateIPAddressesAction(payload: {
     }
   } catch (e: unknown) {
       const errorResponse = createActionErrorResponse(e, 'batchCreateIPAddressesAction_setup');
+      // If setup fails (e.g., subnet not found), report a single failure for the whole range
       return {
         successCount: 0,
         failureDetails: [{ ipAttempted: `${startIp}-${endIp}`, error: errorResponse.userMessage }]
@@ -1018,7 +1039,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     }
 
     const updateData: Prisma.IPAddressUpdateInput = {};
-    let finalIpAddress = ipToUpdate.ipAddress;
+    let finalIpAddress = ipToUpdate.ipAddress; // Assume IP address string itself doesn't change unless specified
 
     if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) {
       const ipParts = data.ipAddress.split('.').map(Number);
@@ -1026,32 +1047,37 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
           throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress);
       }
       updateData.ipAddress = data.ipAddress;
-      finalIpAddress = data.ipAddress;
+      finalIpAddress = data.ipAddress; // Update the IP address string to be used for checks
     }
 
     if (data.hasOwnProperty('status') && data.status !== undefined) updateData.status = data.status as string;
-    if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = data.allocatedTo || null;
-    if (data.hasOwnProperty('description')) updateData.description = data.description || null;
+    if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = data.allocatedTo || null; // Set to null if empty string
+    if (data.hasOwnProperty('description')) updateData.description = data.description || null; // Set to null if empty string
     if (data.hasOwnProperty('lastSeen')) updateData.lastSeen = data.lastSeen ? new Date(data.lastSeen) : null;
 
     // Handle VLAN update
     if (data.hasOwnProperty('vlanId')) {
-      const vlanIdToSet = (data.vlanId === "" || data.vlanId === undefined || data.vlanId === null) ? null : data.vlanId;
-      if (vlanIdToSet) { // If trying to set a VLAN
+      // data.vlanId can be an ID, null (from form submission logic), or undefined (if not touched)
+      const vlanIdToSet = data.vlanId; // This will be null if user chose "Inherit/None" and form logic converted it
+      
+      if (vlanIdToSet === null) { // Explicitly clearing VLAN
+          updateData.vlan = { disconnect: true };
+      } else if (vlanIdToSet && vlanIdToSet !== "") { // Setting to a specific VLAN ID (and it's not an empty string)
           if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
               throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
           }
           updateData.vlan = { connect: { id: vlanIdToSet } };
-      } else { // If trying to remove VLAN (vlanId is empty string, null, or undefined)
-          updateData.vlan = { disconnect: true };
       }
+      // If vlanIdToSet is undefined or an empty string that wasn't converted to null by form logic, it means no change or error.
+      // The form sheet now sends `null` for clearing, so an empty string case for `vlanIdToSet` should ideally not occur here if it means clear.
     }
 
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || null) : ipToUpdate.subnetId;
     const finalStatus = data.status ? data.status as string : ipToUpdate.status;
 
-    // Handle Subnet update
-    if (data.hasOwnProperty('subnetId')) { // Only process subnet if it's explicitly in the data
+    // Handle Subnet update:
+    // 1. If subnetId is explicitly provided in `data`
+    if (data.hasOwnProperty('subnetId')) {
         if (newSubnetId) { // Trying to associate with a new subnet or change subnet
             const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
             if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。", 'subnetId');
@@ -1061,7 +1087,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
             if (!isIpInCidrRange(finalIpAddress, parsedTargetSubnetCidr)) {
               throw new ValidationError(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress/subnetId', finalIpAddress);
             }
-            // Check for IP conflict only if IP or subnet is changing
+            // Check for IP conflict only if IP or subnet is changing to something new
             if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) {
                 const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
                 if (conflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
@@ -1071,23 +1097,26 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
             if (finalStatus === 'allocated' || finalStatus === 'reserved') {
                 throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus);
             }
-            // Check for global IP conflict only if IP changed or subnet is being removed
-            if (finalIpAddress !== ipToUpdate.ipAddress || ipToUpdate.subnetId) { // ipToUpdate.subnetId ensures we only check global if it HAD a subnet
+            // Check for global IP conflict only if IP changed OR if it was previously in a subnet
+            if (finalIpAddress !== ipToUpdate.ipAddress || ipToUpdate.subnetId !== null) {
                 const globallyConflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } });
                 if (globallyConflictingIP) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress');
             }
             updateData.subnet = { disconnect: true };
         }
-    } else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) { // Subnet not changed, but IP address changed
-        // If IP address changed, it must still be valid for the *existing* subnet.
-        const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
+    }
+    // 2. Else if subnetId was NOT in `data` (meaning not changed by user), but ipAddress string WAS changed by user
+    else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) {
+        // IP address string changed, but subnet association remains the same.
+        // Validate the new IP string is valid for the *existing* subnet.
+        const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } }); // newSubnetId is ipToUpdate.subnetId here
         if (!currentSubnet) throw new NotFoundError(`当前子网 ID: ${newSubnetId}`, "IP 的当前子网未找到。", 'subnetId');
         const parsedCurrentSubnetCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr);
         if (!parsedCurrentSubnetCidr) throw new AppError(`当前子网 ${currentSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
         if (!isIpInCidrRange(finalIpAddress, parsedCurrentSubnetCidr)) {
           throw new ValidationError(`新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`, 'ipAddress', finalIpAddress);
         }
-        // And check conflict for new IP in same subnet
+        // And check conflict for new IP string in the same subnet
         const conflictingIP = await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } });
         if (conflictingIP) throw new ResourceError(`新 IP ${finalIpAddress} 已存在于子网 ${currentSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
     }
@@ -1125,6 +1154,7 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
       throw new NotFoundError(`IP 地址 ID: ${id}`, `要删除的 IP 地址未找到。`);
     }
 
+    // Rule 1: Prevent deletion if status is 'allocated' or 'reserved'
     if (ipToDelete.status === 'allocated' || ipToDelete.status === 'reserved') {
       throw new ResourceError(
         `IP 地址 ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status}"。`,
@@ -1133,7 +1163,9 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
       );
     }
 
-    const hasDirectVlan = ipToDelete.vlanId && ipToDelete.vlanId !== "";
+    // Rule 2: Prevent deletion if IP has a direct VLAN assignment
+    // Check if vlanId is not null AND not an empty string
+    const hasDirectVlan = ipToDelete.vlanId && ipToDelete.vlanId.trim() !== "";
     if (hasDirectVlan) {
       const directVlanNumber = ipToDelete.vlan?.vlanNumber || ipToDelete.vlanId;
       throw new ResourceError(
@@ -1143,7 +1175,9 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
       );
     }
 
-    const hasInheritedVlan = ipToDelete.subnet?.vlanId && ipToDelete.subnet.vlanId !== "";
+    // Rule 3: Prevent deletion if IP's subnet has a VLAN assignment (inherited VLAN)
+    // Check if subnet exists, and its vlanId is not null AND not an empty string
+    const hasInheritedVlan = ipToDelete.subnet?.vlanId && ipToDelete.subnet.vlanId.trim() !== "";
     if (hasInheritedVlan) {
       const inheritedVlanNumber = ipToDelete.subnet?.vlan?.vlanNumber || ipToDelete.subnet?.vlanId;
       throw new ResourceError(
@@ -1153,6 +1187,7 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
       );
     }
 
+    // If all checks pass, proceed with deletion
     await prisma.iPAddress.delete({ where: { id } });
     await prisma.auditLog.create({
       data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_ip_address', details: `删除了 IP ${ipToDelete.ipAddress}` }
@@ -1246,12 +1281,12 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     const auditUser = await getAuditUserInfo(performingUserId);
     const userToUpdate = await prisma.user.findUnique({
       where: { id },
-      include: { role: true }, // Include role to check its name
+      include: { role: true },
     });
     if (!userToUpdate) {
       throw new NotFoundError(`用户 ID: ${id}`, `要更新的用户未找到。`);
     }
-    if (!userToUpdate.role || !userToUpdate.role.name) { // Ensure role and role name exist
+    if (!userToUpdate.role || !userToUpdate.role.name) {
       throw new AppError(`用户 ${id} 没有关联的角色或角色名无效。`, 500, 'USER_MISSING_ROLE_ON_UPDATE', `用户 ${userToUpdate.username} 的角色信息丢失，无法更新。`);
     }
 
@@ -1274,7 +1309,6 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
         throw new NotFoundError(`角色 ID: ${data.roleId}`, `选择的角色不存在或无效。`, 'roleId');
       }
 
-      // Check if trying to change the last admin's role
       if (userToUpdate.role.name === 'Administrator' && newRole.name !== 'Administrator') {
         const adminCount = await prisma.user.count({
           where: { role: { name: 'Administrator' } },
@@ -1307,10 +1341,10 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     const updatedUser = await prisma.user.update({
       where: { id },
       data: updateData,
-      include: { role: { include: {permissions: true} } } // Include role and permissions
+      include: { role: { include: {permissions: true} } }
     });
 
-    if (!updatedUser.role || !updatedUser.role.name) { // Should not happen if newRole check passed
+    if (!updatedUser.role || !updatedUser.role.name) {
         throw new AppError("更新用户后，角色信息无效。", 500, 'USER_ROLE_INVALID_POST_UPDATE');
     }
 
@@ -1354,7 +1388,6 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
     if (!payload.newPassword) {
       throw new ValidationError("新密码是必需的。", "newPassword");
     }
-    // Password complexity rules should be enforced by Zod on client, or here if needed
 
     await prisma.user.update({
       where: { id: userId },
@@ -1387,7 +1420,6 @@ export async function deleteUserAction(id: string, performingUserId?: string): P
         throw new ResourceError("无法删除当前登录的用户。", "DELETE_SELF_NOT_ALLOWED", "您不能删除自己的账户。");
     }
 
-    // Prevent deletion of the last admin
     if (userToDelete.role.name === "Administrator") {
       const adminCount = await prisma.user.count({ where: { role: { name: "Administrator" } } });
       if (adminCount <= 1) {
@@ -1395,10 +1427,9 @@ export async function deleteUserAction(id: string, performingUserId?: string): P
       }
     }
 
-    // Anonymize audit logs associated with this user
     await prisma.auditLog.updateMany({
       where: { userId: id },
-      data: { userId: null, username: `已删除用户 (${userToDelete.username})` } // Keep username for context
+      data: { userId: null, username: `已删除用户 (${userToDelete.username})` }
     });
 
     await prisma.user.delete({ where: { id } });
@@ -1428,7 +1459,6 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
   const appRoles = rolesFromDb.map(role => {
     if (!role.name) {
         logger.error(`Role ${role.id} has a missing name in getRolesAction.`, new AppError("Role name missing"), {roleId: role.id});
-        // Fallback if name is missing, though it shouldn't be based on schema
         return { id: role.id, name: 'Viewer' as AppRoleNameType, description: role.description || undefined, userCount: role._count.users, permissions: role.permissions.map(p => p.id as AppPermissionIdType) };
     }
     return { id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, userCount: role._count.users, permissions: role.permissions.map(p => p.id as AppPermissionIdType) };
@@ -1441,17 +1471,16 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const roleToUpdate = await prisma.role.findUnique({ where: { id } });
-    if (!roleToUpdate || !roleToUpdate.name) { // Check name for good measure
+    if (!roleToUpdate || !roleToUpdate.name) {
       throw new NotFoundError(`角色 ID: ${id}`, `要更新的角色未找到或名称无效。`);
     }
 
-    // Prevent changing permissions of the built-in Administrator role
     if (roleToUpdate.id === ADMIN_ROLE_ID && data.permissions) {
         throw new ResourceError(
             '无法修改内置 "Administrator" 角色的权限。',
             'ADMIN_ROLE_PERMISSIONS_FIXED',
             '系统内置的 "Administrator" 角色的权限集是固定的，无法修改。您可以修改其描述。',
-            'permissions' // Associate with the permissions field in the form if applicable
+            'permissions'
         );
     }
 
@@ -1460,11 +1489,10 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
       updateData.description = data.description === undefined ? null : data.description;
     }
 
-    if (data.permissions && roleToUpdate.id !== ADMIN_ROLE_ID) { // Only set permissions if not Admin role
+    if (data.permissions && roleToUpdate.id !== ADMIN_ROLE_ID) {
       const prismaPermissions = data.permissions.map(appPermId => ({ id: appPermId as string }));
       updateData.permissions = { set: prismaPermissions };
     } else if (data.permissions && roleToUpdate.id === ADMIN_ROLE_ID) {
-        // This case should be caught by the check above, but log if it somehow passes
         logger.warn('Attempted to set permissions for ADMIN_ROLE_ID in updateRoleAction despite check.', undefined, { roleId: id, permissionsAttempted: data.permissions });
     }
 
@@ -1482,7 +1510,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
       include: { permissions: true, _count: { select: { users: true } } }
     });
 
-    if (!updatedRole.name) { // Should not happen if it existed before
+    if (!updatedRole.name) {
         throw new AppError("更新角色后，角色名称信息无效。", 500, 'ROLE_NAME_INVALID_POST_UPDATE');
     }
 
@@ -1509,20 +1537,17 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
   }
 }
 
-// Role creation is disabled as roles are fixed
 export async function createRoleAction(data: any): Promise<ActionResponse<AppRole>> {
   logger.warn('Attempted to call createRoleAction, which is disabled.', undefined, { inputData: data });
   throw new AppError("不允许创建新角色。角色是固定的 (Administrator, Operator, Viewer)。", 403, 'ROLE_CREATION_NOT_ALLOWED');
 }
 
-// Role deletion is disabled for fixed roles
 export async function deleteRoleAction(id: string): Promise<ActionResponse> {
   const role = await prisma.role.findUnique({where: {id}});
    if (role && (role.name === "Administrator" || role.name === "Operator" || role.name === "Viewer" )) {
      logger.warn(`Attempted to delete fixed role: ${role.name}`, undefined, { roleId: id });
      throw new AppError("不允许删除固定角色 (Administrator, Operator, Viewer)。", 403, 'FIXED_ROLE_DELETION_NOT_ALLOWED');
    }
-  // If not a fixed role (which shouldn't exist with current seeding) or not found
   logger.warn(`Attempted to delete non-fixed or non-existent role.`, undefined, { roleId: id });
   throw new NotFoundError(`角色 ID: ${id}`, "未找到角色或不允许删除。");
 }
@@ -1558,7 +1583,6 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
 
     await prisma.auditLog.delete({ where: { id } });
 
-    // Log the deletion itself. Try-catch to prevent this from failing the whole operation if logging fails.
     try {
       await prisma.auditLog.create({
         data: {
@@ -1581,17 +1605,8 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
 }
 
 export async function getAllPermissionsAction(): Promise<AppPermission[]> {
-    // Instead of hitting DB, return the mockPermissions which is the source of truth
-    // This ensures consistency with types and what's seeded.
-    // const permissionsFromDb = await prisma.permission.findMany({ orderBy: { id: 'asc' }});
-    // return permissionsFromDb.map(p => ({
-    //     ...p,
-    //     id: p.id as AppPermissionIdType,
-    //     description: p.description || undefined,
-    // }));
     return mockPermissions.map(p => ({
         ...p,
-        description: p.description || undefined // Ensure description is optional
+        description: p.description || undefined
     }));
 }
-
