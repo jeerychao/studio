@@ -411,11 +411,10 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
       const oldVlanId = subnetToUpdate.vlanId;
 
       if (newVlanId === null && oldVlanId !== null) {
-        // Attempting to remove VLAN from subnet
         const ipsDirectlyOnOldVlanCount = await prisma.iPAddress.count({
           where: {
-            subnetId: id, // The ID of the subnet being updated
-            vlanId: oldVlanId, // IPs directly assigned to the subnet's old VLAN
+            subnetId: id,
+            vlanId: oldVlanId,
           },
         });
 
@@ -423,16 +422,14 @@ export async function updateSubnetAction(id: string, data: Partial<Omit<AppSubne
           const oldVlanDetails = await prisma.vLAN.findUnique({ where: { id: oldVlanId } });
           const oldVlanNumberForMessage = oldVlanDetails ? `VLAN ${oldVlanDetails.vlanNumber}` : `旧VLAN (ID: ${oldVlanId})`;
           throw new ResourceError(
-            `无法移除子网的 ${oldVlanNumberForMessage}。`, // Dev message
-            'SUBNET_VLAN_REMOVE_CONFLICT_IPS', // Code
-            `子网 ${subnetToUpdate.cidr} 中仍有 ${ipsDirectlyOnOldVlanCount} 个 IP 地址直接分配给了 ${oldVlanNumberForMessage}。请先修改这些 IP 地址的 VLAN 配置。`, // User message
-            'vlanId' // Field
+            `无法移除子网的 ${oldVlanNumberForMessage}。`,
+            'SUBNET_VLAN_REMOVE_CONFLICT_IPS',
+            `子网 ${subnetToUpdate.cidr} 中仍有 ${ipsDirectlyOnOldVlanCount} 个 IP 地址直接分配给了 ${oldVlanNumberForMessage}。请先修改这些 IP 地址的 VLAN 配置。`,
+            'vlanId'
           );
         }
-        // If count is 0, it's safe to disconnect
         updateData.vlan = { disconnect: true };
       } else if (newVlanId !== null) {
-        // Attempting to set or change to a new VLAN
         if (newVlanId !== oldVlanId) { 
             const vlanExists = await prisma.vLAN.findUnique({ where: { id: newVlanId }});
             if (!vlanExists) {
@@ -513,7 +510,7 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
         `无法删除子网 ${subnetToDelete.cidr}，因为它已关联到 ${vlanNumberForMessage}。请先解除其 VLAN 关联。`
       );
     }
-
+    
     const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } });
     if (allocatedIpsCount > 0) {
       throw new ResourceError(
@@ -1047,16 +1044,20 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
     if (data.hasOwnProperty('lastSeen')) updateData.lastSeen = data.lastSeen ? new Date(data.lastSeen) : null;
 
     if (data.hasOwnProperty('vlanId')) {
-      const vlanIdToSet = data.vlanId; 
+      const vlanIdToSet = data.vlanId; // This could be null, undefined, or an ID string
       
-      if (vlanIdToSet === null) { 
+      if (vlanIdToSet === null) { // Explicitly set to null means disconnect
           updateData.vlan = { disconnect: true };
-      } else if (vlanIdToSet && vlanIdToSet !== "") { 
+      } else if (vlanIdToSet && vlanIdToSet !== "") { // Set to a new VLAN ID
           if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) {
               throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `为 IP 地址选择的 VLAN 不存在。`, 'vlanId');
           }
           updateData.vlan = { connect: { id: vlanIdToSet } };
       }
+      // If vlanIdToSet is undefined or "", it means "no change" or "use subnet's vlan" from form,
+      // so we don't explicitly set `updateData.vlan` unless it was an explicit null for disconnect.
+      // The server action parameter `data.vlanId` being `undefined` means "don't touch the direct VLAN assignment".
+      // If `data.vlanId` is `null`, it means "clear the direct VLAN assignment".
     }
 
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || null) : ipToUpdate.subnetId;
@@ -1088,7 +1089,7 @@ export async function updateIPAddressAction(id: string, data: Partial<Omit<AppIP
             updateData.subnet = { disconnect: true };
         }
     }
-    else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) {
+    else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) { // Subnet not changed, but IP address itself changed
         const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } }); 
         if (!currentSubnet) throw new NotFoundError(`当前子网 ID: ${newSubnetId}`, "IP 的当前子网未找到。", 'subnetId');
         const parsedCurrentSubnetCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr);
@@ -1141,6 +1142,7 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
       );
     }
 
+    // Check for direct VLAN assignment
     const hasDirectVlan = ipToDelete.vlanId && ipToDelete.vlanId.trim() !== "";
     if (hasDirectVlan) {
       const directVlanNumber = ipToDelete.vlan?.vlanNumber || ipToDelete.vlanId;
@@ -1151,6 +1153,7 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
       );
     }
 
+    // Check for inherited VLAN from subnet
     const hasInheritedVlan = ipToDelete.subnet?.vlanId && ipToDelete.subnet.vlanId.trim() !== "";
     if (hasInheritedVlan) {
       const inheritedVlanNumber = ipToDelete.subnet?.vlan?.vlanNumber || ipToDelete.subnet?.vlanId;
@@ -1379,11 +1382,11 @@ export async function deleteUserAction(id: string, performingUserId?: string): P
   const actionName = 'deleteUserAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const userToDelete = await prisma.user.findUnique({ where: { id }, include: {role: true} }); 
+    const userToDelete = await prisma.user.findUnique({ where: { id }, include: {role: true} });
     if (!userToDelete) {
       throw new NotFoundError(`用户 ID: ${id}`, "要删除的用户未找到。");
     }
-    if (!userToDelete.role || !userToDelete.role.name) { 
+    if (!userToDelete.role || !userToDelete.role.name) {
       throw new AppError("无法删除用户：关联的角色信息无效。", 500, 'USER_ROLE_INVALID_PRE_DELETE');
     }
 
@@ -1582,3 +1585,4 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
     }));
 }
 
+    
