@@ -168,10 +168,10 @@ function AuditLogsView() {
                     <TableHead className="w-[50px]">
                       {canDeleteLog && (
                         <Checkbox
-                            checked={dataIsAvailable && isAllOnPageSelected} // Safely use isAllOnPageSelected
+                            checked={dataIsAvailable && isAllOnPageSelected}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected} // Safely use both
+                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
