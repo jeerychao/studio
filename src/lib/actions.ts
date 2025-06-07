@@ -43,6 +43,7 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
 }
 
 const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_QUERY_PAGE_SIZE = 10; // For query tool specific pagination
 
 export interface FetchParams {
   page?: number;
@@ -825,20 +826,21 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   let paginatedDbItems: PrismaIPAddressWithRelations[];
   let finalTotalCount: number;
 
-  if (params?.subnetId && params.page && params.pageSize) {
+  if (params?.subnetId) { // If filtering by a specific subnet, fetch all, then sort and paginate in application layer for correct numeric IP sort
     const allIpsInSubnetUnsorted = await prisma.iPAddress.findMany({
-      where: whereClause,
+      where: whereClause, // This will include the subnetId filter
       include: includeClause,
     });
 
+    // Application-layer sorting for IPs within the specific subnet
     const allIpsInSubnetSorted = allIpsInSubnetUnsorted.sort((a, b) => compareIpStrings(a.ipAddress, b.ipAddress));
     finalTotalCount = allIpsInSubnetSorted.length;
     paginatedDbItems = allIpsInSubnetSorted.slice(skip, skip + pageSize);
 
-  } else {
+  } else { // For global IP list (no specific subnet filter), rely on database sorting
     const orderByClause: Prisma.IPAddressOrderByWithRelationInput[] = [
-      { subnet: { networkAddress: 'asc' } },
-      { ipAddress: 'asc' },
+      { subnet: { networkAddress: 'asc' } }, // Sort by subnet network address first
+      { ipAddress: 'asc' }, // Then by IP address string (lexicographical)
     ];
 
     if (params?.page && params?.pageSize) {
@@ -850,7 +852,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
             skip: skip,
             take: pageSize,
         });
-    } else {
+    } else { // Fetch all if no pagination params (should ideally not happen for lists)
         const allIPs = await prisma.iPAddress.findMany({
             where: whereClause,
             include: includeClause,
@@ -1654,9 +1656,20 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> {
 
 // --- Query Tool Actions ---
 
-export async function querySubnetsAction(queryString: string): Promise<ActionResponse<SubnetQueryResult[]>> {
+interface QueryParams extends FetchParams { // Extends FetchParams to include page and pageSize
+    queryString?: string;
+    vlanNumberQuery?: number;
+    searchTerm?: string;
+}
+
+export async function querySubnetsAction(params: QueryParams): Promise<ActionResponse<PaginatedResponse<SubnetQueryResult>>> {
   const actionName = 'querySubnetsAction';
   try {
+    const page = params.page || 1;
+    const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const queryString = params.queryString;
+
     const whereClause: Prisma.SubnetWhereInput = queryString ? {
       OR: [
         { cidr: { contains: queryString } },
@@ -1665,11 +1678,15 @@ export async function querySubnetsAction(queryString: string): Promise<ActionRes
       ],
     } : {};
 
+    const totalCount = await prisma.subnet.count({ where: whereClause });
+    const totalPages = Math.ceil(totalCount / pageSize);
+
     const subnetsFromDb = await prisma.subnet.findMany({
       where: whereClause,
       include: { vlan: true },
       orderBy: { cidr: 'asc' },
-      take: 20,
+      skip,
+      take: pageSize,
     });
 
     const results: SubnetQueryResult[] = await Promise.all(
@@ -1699,28 +1716,44 @@ export async function querySubnetsAction(queryString: string): Promise<ActionRes
         };
       })
     );
-    return { success: true, data: results };
+    const paginatedResult: PaginatedResponse<SubnetQueryResult> = {
+        data: results,
+        totalCount,
+        currentPage: page,
+        totalPages,
+        pageSize
+    };
+    return { success: true, data: paginatedResult };
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
 
-export async function queryVlansAction(vlanNumberQuery?: number): Promise<ActionResponse<VlanQueryResult[]>> {
+export async function queryVlansAction(params: QueryParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
   try {
+    const page = params.page || 1;
+    const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const vlanNumberQuery = params.vlanNumberQuery;
+
     const whereClause: Prisma.VLANWhereInput = {};
     if (vlanNumberQuery && !isNaN(vlanNumberQuery)) {
       whereClause.vlanNumber = vlanNumberQuery;
     }
 
+    const totalCount = await prisma.vLAN.count({ where: whereClause });
+    const totalPages = Math.ceil(totalCount / pageSize);
+
     const vlansFromDb = await prisma.vLAN.findMany({
       where: whereClause,
       include: {
-        subnets: { select: { id: true, cidr: true, description: true }, take: 10 },
-        ipAddresses: { select: { id: true, ipAddress: true, description: true }, take: 10 },
+        subnets: { select: { id: true, cidr: true, description: true }, take: 10 }, // Keep sample size for details
+        ipAddresses: { select: { id: true, ipAddress: true, description: true }, take: 10 }, // Keep sample size for details
       },
       orderBy: { vlanNumber: 'asc' },
-      take: 20,
+      skip,
+      take: pageSize,
     });
 
     const results: VlanQueryResult[] = vlansFromDb.map(vlan => ({
@@ -1731,55 +1764,63 @@ export async function queryVlansAction(vlanNumberQuery?: number): Promise<Action
       associatedDirectIPs: vlan.ipAddresses.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined })),
     }));
 
-    return { success: true, data: results };
+    const paginatedResult: PaginatedResponse<VlanQueryResult> = {
+        data: results,
+        totalCount,
+        currentPage: page,
+        totalPages,
+        pageSize
+    };
+    return { success: true, data: paginatedResult };
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
 
-export async function queryIpAddressesAction(searchTerm: string): Promise<ActionResponse<AppIPAddressWithRelations[]>> {
+export async function queryIpAddressesAction(params: QueryParams): Promise<ActionResponse<PaginatedResponse<AppIPAddressWithRelations>>> {
   const actionName = 'queryIpAddressesAction';
   try {
+    const page = params.page || 1;
+    const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const searchTerm = params.searchTerm;
+
     if (!searchTerm || searchTerm.trim() === "") {
-        return { success: true, data: [] };
+        return { success: true, data: { data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize } };
     }
 
     let whereClause: Prisma.IPAddressWhereInput = {};
-    const wildcardIpPatternFull = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/;
-    const wildcardIpPatternMedium = /^(\d{1,3}\.\d{1,3})\.\*$/;
-    const wildcardIpPatternShort = /^(\d{1,3})\.\*$/;
+    const wildcardIpPatternFull = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/; // X.Y.Z.*
+    const wildcardIpPatternMedium = /^(\d{1,3}\.\d{1,3})\.\*$/;    // X.Y.*
+    const wildcardIpPatternShort = /^(\d{1,3})\.\*$/;             // X.*
     let match;
 
-    if (searchTerm === "*") {
-      // If search term is only "*", search for it literally in text fields.
-      // Avoids overly broad IP search if user literally types "*".
-      whereClause = {
-        OR: [
-          { allocatedTo: { contains: searchTerm } },
-          { description: { contains: searchTerm } },
-        ],
-      };
-    } else if ((match = searchTerm.match(wildcardIpPatternFull))) {
-      // Specific wildcard: X.Y.Z.*
-      whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
+    if ((match = searchTerm.match(wildcardIpPatternFull))) {
+        whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
     } else if ((match = searchTerm.match(wildcardIpPatternMedium))) {
-      // Specific wildcard: X.Y.*
-      whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
+        whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
     } else if ((match = searchTerm.match(wildcardIpPatternShort))) {
-      // Specific wildcard: X.*
-      whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
+        whereClause = { ipAddress: { startsWith: `${match[1]}.` } };
+    } else if (searchTerm === "*") {
+         whereClause = {
+            OR: [
+                { allocatedTo: { contains: searchTerm } },
+                { description: { contains: searchTerm } },
+            ]
+        };
     } else {
-      // General search term (could be text, could be an IP prefix or full IP)
-      const orConditions: Prisma.IPAddressWhereInput[] = [
-        { allocatedTo: { contains: searchTerm } },
-        { description: { contains: searchTerm } },
-      ];
-      // If it looks like an IP or IP prefix (only digits and dots), add IP startsWith search
-      if (/^[\d.]+$/.test(searchTerm)) {
-        orConditions.push({ ipAddress: { startsWith: searchTerm } });
-      }
-      whereClause = { OR: orConditions };
+        const orConditions: Prisma.IPAddressWhereInput[] = [
+            { allocatedTo: { contains: searchTerm } },
+            { description: { contains: searchTerm } },
+        ];
+        if (/^[\d.]+$/.test(searchTerm)) { // Looks like an IP or IP prefix
+            orConditions.push({ ipAddress: { startsWith: searchTerm } });
+        }
+        whereClause = { OR: orConditions };
     }
+
+    const totalCount = await prisma.iPAddress.count({ where: whereClause });
+    const totalPages = Math.ceil(totalCount / pageSize);
 
     const ipsFromDb = await prisma.iPAddress.findMany({
       where: whereClause,
@@ -1787,8 +1828,9 @@ export async function queryIpAddressesAction(searchTerm: string): Promise<Action
         subnet: { select: { id: true, cidr: true, networkAddress: true, vlan: { select: { vlanNumber: true } } } },
         vlan: { select: { vlanNumber: true } },
       },
-      orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ],
-      take: 50,
+      orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], // Keep general sorting
+      skip,
+      take: pageSize,
     });
 
     const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({
@@ -1808,11 +1850,17 @@ export async function queryIpAddressesAction(searchTerm: string): Promise<Action
         } : null,
         vlan: ip.vlan ? { vlanNumber: ip.vlan.vlanNumber } : null,
     }));
-
-    return { success: true, data: results };
+    
+    const paginatedResult: PaginatedResponse<AppIPAddressWithRelations> = {
+        data: results,
+        totalCount,
+        currentPage: page,
+        totalPages,
+        pageSize
+    };
+    return { success: true, data: paginatedResult };
   } catch (error: unknown) {
-    logger.error(`Error in ${actionName}`, error as Error, { inputData: searchTerm });
+    logger.error(`Error in ${actionName}`, error as Error, { inputData: params.searchTerm });
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-

@@ -11,6 +11,7 @@ interface PaginationControlsProps {
   totalPages: number;
   basePath: string; // e.g., "/subnets"
   currentQuery?: URLSearchParams; // To preserve other query params
+  onPageChange?: (newPage: number) => void; // Optional callback for client-side page state management
 }
 
 export function PaginationControls({
@@ -18,14 +19,20 @@ export function PaginationControls({
   totalPages,
   basePath,
   currentQuery,
+  onPageChange,
 }: PaginationControlsProps) {
   const router = useRouter();
-  const pathname = usePathname(); // Should match basePath or be more specific
+  // const pathname = usePathname(); // basePath is preferred for constructing links
 
   const handlePageChange = (newPage: number) => {
-    const params = new URLSearchParams(currentQuery?.toString() || "");
-    params.set("page", String(newPage));
-    router.push(`${basePath}?${params.toString()}`);
+    if (onPageChange) {
+      onPageChange(newPage);
+    } else {
+      // Default behavior: update URL
+      const params = new URLSearchParams(currentQuery?.toString() || "");
+      params.set("page", String(newPage));
+      router.push(`${basePath}?${params.toString()}`);
+    }
   };
 
   if (totalPages <= 1) {
