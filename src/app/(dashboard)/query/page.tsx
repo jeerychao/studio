@@ -14,13 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import { Search, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { PERMISSIONS, type PaginatedResponse } from "@/types"; // Added PaginatedResponse to types import
+import { PERMISSIONS, type PaginatedResponse } from "@/types";
 import type { SubnetQueryResult, VlanQueryResult, IPAddressStatus as AppIPAddressStatusType } from "@/types";
 import type { AppIPAddressWithRelations } from "@/lib/actions";
 import { querySubnetsAction, queryVlansAction, queryIpAddressesAction } from "@/lib/actions";
-import { PaginationControls } from "@/components/pagination-controls"; // Import PaginationControls
+import { PaginationControls } from "@/components/pagination-controls";
 
 const ITEMS_PER_PAGE_QUERY = 10;
+const DEBOUNCE_DELAY = 500; // milliseconds
 
 function LoadingSpinner() {
   return (
@@ -68,6 +69,7 @@ function QueryPageContent() {
 
   // VLAN Query State
   const [vlanQuery, setVlanQuery] = React.useState("");
+  const [debouncedVlanQuery, setDebouncedVlanQuery] = React.useState("");
   const [vlanResultsData, setVlanResultsData] = React.useState<PaginatedResponse<VlanQueryResult> | null>(null);
   const [isVlanLoading, setIsVlanLoading] = React.useState(false);
   const [vlanError, setVlanError] = React.useState<string | null>(null);
@@ -80,17 +82,17 @@ function QueryPageContent() {
   const [ipError, setIpError] = React.useState<string | null>(null);
   const [currentIpPage, setCurrentIpPage] = React.useState(1);
 
-
-  const fetchSubnetData = React.useCallback(async (page = 1) => {
-    if (!subnetQuery.trim()) {
-      setSubnetResultsData(null); // Clear results if query is empty
+  // --- Subnet Query Logic ---
+  const fetchSubnetData = React.useCallback(async (page = 1, query = subnetQuery) => {
+    if (!query.trim()) {
+      setSubnetResultsData(null); 
       setSubnetError(null);
       return;
     }
     setIsSubnetLoading(true);
     setSubnetError(null);
     try {
-      const response = await querySubnetsAction({ queryString: subnetQuery, page, pageSize: ITEMS_PER_PAGE_QUERY });
+      const response = await querySubnetsAction({ queryString: query, page, pageSize: ITEMS_PER_PAGE_QUERY });
       if (response.success && response.data) {
         setSubnetResultsData(response.data);
       } else {
@@ -105,34 +107,56 @@ function QueryPageContent() {
     } finally {
       setIsSubnetLoading(false);
     }
-  }, [subnetQuery, toast]);
+  }, [toast, subnetQuery]); // subnetQuery dependency for useCallback if it directly uses it, or pass as param
 
   const handleSubnetQuerySubmit = () => {
     setCurrentSubnetPage(1);
-    fetchSubnetData(1);
+    fetchSubnetData(1, subnetQuery);
   };
   
   React.useEffect(() => {
-    if(subnetQuery.trim()){ // Fetch on page change only if there's an active query
-        fetchSubnetData(currentSubnetPage);
+    if(subnetQuery.trim()){ 
+        fetchSubnetData(currentSubnetPage, subnetQuery);
     } else {
-        setSubnetResultsData(null); // Clear if query becomes empty
+        setSubnetResultsData(null); 
     }
-  }, [currentSubnetPage, fetchSubnetData, subnetQuery]);
+  }, [currentSubnetPage]); // Removed fetchSubnetData and subnetQuery from deps to avoid loop with useCallback
 
 
-  const fetchVlanData = React.useCallback(async (page = 1) => {
-    const vlanNumber = parseInt(vlanQuery, 10);
-    if (vlanQuery.trim() && (isNaN(vlanNumber) || vlanNumber < 1 || vlanNumber > 4094)) {
-      toast({ title: "无效的VLAN号", description: "请输入1到4094之间的有效VLAN号码，或留空以查询所有。", variant: "destructive" });
+  // --- VLAN Query Logic ---
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedVlanQuery(vlanQuery);
+    }, DEBOUNCE_DELAY);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [vlanQuery]);
+
+  const fetchVlanData = React.useCallback(async (page = 1, query = debouncedVlanQuery) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
       setVlanResultsData(null);
-      setVlanError("无效的VLAN号输入");
+      setVlanError(null);
+      setIsVlanLoading(false); // Ensure loading is false if query is empty
       return;
     }
+
     setIsVlanLoading(true);
     setVlanError(null);
+    const vlanNumber = parseInt(trimmedQuery, 10);
+
+    if (isNaN(vlanNumber) || vlanNumber < 1 || vlanNumber > 4094) {
+      toast({ title: "无效的VLAN号", description: "请输入1到4094之间的有效VLAN号码进行精确查询，或留空。", variant: "destructive" });
+      setVlanResultsData(null);
+      setVlanError("无效的VLAN号输入。仅支持数字查询。");
+      setIsVlanLoading(false);
+      return;
+    }
+
     try {
-      const response = await queryVlansAction({ vlanNumberQuery: vlanQuery.trim() ? vlanNumber : undefined, page, pageSize: ITEMS_PER_PAGE_QUERY });
+      const response = await queryVlansAction({ vlanNumberQuery: vlanNumber, page, pageSize: ITEMS_PER_PAGE_QUERY });
       if (response.success && response.data) {
         setVlanResultsData(response.data);
       } else {
@@ -147,20 +171,35 @@ function QueryPageContent() {
     } finally {
       setIsVlanLoading(false);
     }
-  }, [vlanQuery, toast]);
-
-  const handleVlanQuerySubmit = () => {
-    setCurrentVlanPage(1);
-    fetchVlanData(1);
-  };
+  }, [toast, debouncedVlanQuery]); // debouncedVlanQuery is the key dependency here
 
   React.useEffect(() => {
-      fetchVlanData(currentVlanPage);
-  }, [currentVlanPage, fetchVlanData]);
-  
+    // This effect triggers when debouncedVlanQuery changes or page changes
+    if (debouncedVlanQuery.trim()) {
+      fetchVlanData(currentVlanPage, debouncedVlanQuery);
+    } else {
+      setVlanResultsData(null); // Clear results if debounced query is empty
+      setVlanError(null);
+    }
+  }, [debouncedVlanQuery, currentVlanPage, fetchVlanData]);
 
-  const fetchIpData = React.useCallback(async (page = 1) => {
-    if (!ipQuery.trim()) {
+  const handleVlanQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newQuery = e.target.value;
+    setVlanQuery(newQuery);
+    if (newQuery.trim() !== debouncedVlanQuery.trim()) { // Reset page only if effective query changes
+        setCurrentVlanPage(1);
+    }
+  };
+  
+  const handleVlanQuerySubmitButton = () => { // For explicit button click
+    setDebouncedVlanQuery(vlanQuery); // Trigger search immediately
+    setCurrentVlanPage(1);
+    // fetchVlanData(1, vlanQuery) will be called by the useEffect for debouncedVlanQuery
+  };
+
+  // --- IP Address Query Logic ---
+  const fetchIpData = React.useCallback(async (page = 1, query = ipQuery) => {
+    if (!query.trim()) {
       setIpResultsData(null);
       setIpError(null);
       return;
@@ -168,7 +207,7 @@ function QueryPageContent() {
     setIsIpLoading(true);
     setIpError(null);
     try {
-      const response = await queryIpAddressesAction({ searchTerm: ipQuery, page, pageSize: ITEMS_PER_PAGE_QUERY });
+      const response = await queryIpAddressesAction({ searchTerm: query, page, pageSize: ITEMS_PER_PAGE_QUERY });
       if (response.success && response.data) {
         setIpResultsData(response.data);
       } else {
@@ -183,20 +222,20 @@ function QueryPageContent() {
     } finally {
       setIsIpLoading(false);
     }
-  }, [ipQuery, toast]);
+  }, [toast, ipQuery]); // ipQuery for useCallback if it directly uses it, or pass as param
 
   const handleIpQuerySubmit = () => {
     setCurrentIpPage(1);
-    fetchIpData(1);
+    fetchIpData(1, ipQuery);
   };
 
   React.useEffect(() => {
     if(ipQuery.trim()){
-        fetchIpData(currentIpPage);
+        fetchIpData(currentIpPage, ipQuery);
     } else {
         setIpResultsData(null);
     }
-  }, [currentIpPage, fetchIpData, ipQuery]);
+  }, [currentIpPage]); // Removed fetchIpData and ipQuery from deps
 
 
   const ipAddressStatusLabels: Record<AppIPAddressStatusType, string> = {
@@ -233,10 +272,9 @@ function QueryPageContent() {
     );
   }
   
-  // Helper to create query params for pagination
   const createPaginationQuery = (tabBaseParams: URLSearchParams = new URLSearchParams()): URLSearchParams => {
-    const current = new URLSearchParams(searchParams); // Preserve existing URL params from other sources
-    tabBaseParams.forEach((value, key) => current.set(key, value)); // Overlay tab-specific params
+    const current = new URLSearchParams(searchParams); 
+    tabBaseParams.forEach((value, key) => current.set(key, value)); 
     return current;
   };
 
@@ -267,7 +305,10 @@ function QueryPageContent() {
                 <Input
                   placeholder="例如 192.168.1.0/24 或 Main Office"
                   value={subnetQuery}
-                  onChange={(e) => setSubnetQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSubnetQuery(e.target.value);
+                    setCurrentSubnetPage(1); // Reset page on new query typing
+                  }}
                   onKeyPress={(e) => e.key === 'Enter' && handleSubnetQuerySubmit()}
                 />
                 <Button onClick={handleSubnetQuerySubmit} disabled={isSubnetLoading}>
@@ -277,7 +318,7 @@ function QueryPageContent() {
               </div>
               {isSubnetLoading && <LoadingSpinner />}
               {subnetError && <QueryErrorDisplay message={subnetError} />}
-              {!isSubnetLoading && !subnetError && subnetResultsData && subnetResultsData.data.length === 0 && subnetQuery && <NoResultsFound />}
+              {!isSubnetLoading && !subnetError && subnetResultsData && subnetResultsData.data.length === 0 && subnetQuery.trim() && <NoResultsFound />}
               {!isSubnetLoading && !subnetError && subnetResultsData && subnetResultsData.data.length > 0 && (
                 <>
                   <Table>
@@ -314,8 +355,8 @@ function QueryPageContent() {
                      <PaginationControls
                         currentPage={currentSubnetPage}
                         totalPages={subnetResultsData.totalPages}
-                        basePath={pathname}
-                        currentQuery={createPaginationQuery(new URLSearchParams({ tab: "subnet", q_subnet: subnetQuery }))}
+                        basePath={pathname} // Not strictly used due to onPageChange
+                        currentQuery={createPaginationQuery(new URLSearchParams({ tab: "subnet", q_subnet: subnetQuery }))} // For reference if needed
                         onPageChange={(newPage) => setCurrentSubnetPage(newPage)}
                     />
                   )}
@@ -329,26 +370,26 @@ function QueryPageContent() {
         <TabsContent value="vlan">
           <Card>
             <CardHeader>
-              <CardTitle>查询VLAN</CardTitle>
-              <CardDescription>按VLAN号码查询 (1-4094)，或留空以查询所有活动的VLAN。</CardDescription>
+              <CardTitle>VLAN查询</CardTitle>
+              <CardDescription>按VLAN号码 (1-4094) 查询。输入时自动搜索。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
                   type="number"
-                  placeholder="例如 10 (或留空)"
+                  placeholder="例如 10 (仅支持数字)"
                   value={vlanQuery}
-                  onChange={(e) => setVlanQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleVlanQuerySubmit()}
+                  onChange={handleVlanQueryChange}
+                  onKeyPress={(e) => e.key === 'Enter' && handleVlanQuerySubmitButton()}
                 />
-                <Button onClick={handleVlanQuerySubmit} disabled={isVlanLoading}>
+                <Button onClick={handleVlanQuerySubmitButton} disabled={isVlanLoading}>
                   {isVlanLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                   查询
                 </Button>
               </div>
               {isVlanLoading && <LoadingSpinner />}
               {vlanError && <QueryErrorDisplay message={vlanError} />}
-              {!isVlanLoading && !vlanError && vlanResultsData && vlanResultsData.data.length === 0 && vlanQuery && <NoResultsFound />}
+              {!isVlanLoading && !vlanError && vlanResultsData && vlanResultsData.data.length === 0 && debouncedVlanQuery.trim() && <NoResultsFound />}
               {!isVlanLoading && !vlanError && vlanResultsData && vlanResultsData.data.length > 0 && (
                 <>
                   <div className="space-y-3">
@@ -370,7 +411,7 @@ function QueryPageContent() {
                         currentPage={currentVlanPage}
                         totalPages={vlanResultsData.totalPages}
                         basePath={pathname}
-                        currentQuery={createPaginationQuery(new URLSearchParams({ tab: "vlan", q_vlan: vlanQuery }))}
+                        currentQuery={createPaginationQuery(new URLSearchParams({ tab: "vlan", q_vlan: debouncedVlanQuery }))}
                         onPageChange={(newPage) => setCurrentVlanPage(newPage)}
                     />
                   )}
@@ -396,7 +437,10 @@ function QueryPageContent() {
                 <Input
                   placeholder="例如 Server01, 10.0.1.*, 或 192.168.1.10"
                   value={ipQuery}
-                  onChange={(e) => setIpQuery(e.target.value)}
+                  onChange={(e) => {
+                    setIpQuery(e.target.value);
+                    setCurrentIpPage(1); // Reset page on new query typing
+                  }}
                   onKeyPress={(e) => e.key === 'Enter' && handleIpQuerySubmit()}
                 />
                 <Button onClick={handleIpQuerySubmit} disabled={isIpLoading}>
@@ -406,7 +450,7 @@ function QueryPageContent() {
               </div>
               {isIpLoading && <LoadingSpinner />}
               {ipError && <QueryErrorDisplay message={ipError} />}
-              {!isIpLoading && !ipError && ipResultsData && ipResultsData.data.length === 0 && ipQuery && <NoResultsFound />}
+              {!isIpLoading && !ipError && ipResultsData && ipResultsData.data.length === 0 && ipQuery.trim() && <NoResultsFound />}
               {!isIpLoading && !ipError && ipResultsData && ipResultsData.data.length > 0 && (
                 <>
                   <Table>
@@ -457,8 +501,9 @@ function QueryPageContent() {
 
 export default function QueryPage() {
   return (
-    <Suspense fallback={<LoadingSpinner />}> {/* Fallback for the whole page if needed */}
+    <Suspense fallback={<LoadingSpinner />}> 
       <QueryPageContent />
     </Suspense>
   );
 }
+
