@@ -61,8 +61,9 @@ export function Header() {
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <UserCircle className="h-8 w-8" /> {/* Changed from h-7 w-7 to h-8 w-8 */}
+            {/* Modified Button for UserCircle to be larger */}
+            <Button variant="ghost" className="rounded-full h-10 w-10 p-0 flex items-center justify-center">
+              <UserCircle className="h-8 w-8" /> 
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
