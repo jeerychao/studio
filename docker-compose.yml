@@ -1,3 +1,4 @@
+
 services:
   ipam-app:
     build:
@@ -6,18 +7,29 @@ services:
     image: ipam-app-local:latest
     container_name: ipam_app_local_prod
     ports:
-      - "8081:3000"
+      - "8081:3000" # Host port 8081 mapped to container port 3000
     env_file:
-      - ./production.env
+      - ./production.env # Loads environment variables from production.env
     environment:
       - NODE_ENV=production
-      - HOSTNAME=0.0.0.0
-      - PORT=3000
-      # 使用环境变量，方便不同环境配置
+      - HOSTNAME=0.0.0.0 # Make Next.js listen on all interfaces within the container
+      - PORT=3000       # Port Next.js will listen on inside the container
+      # These ensure Next.js knows its public URL, especially important for Server Actions, auth, etc.
+      # It uses the value from `production.env` or the host's environment if set, otherwise defaults.
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
-      - NEXTAUTH_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}} # If using NextAuth, align with base URL
       - NEXT_PUBLIC_EXTERNAL_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
       - NEXT_PRIVATE_EXTERNAL_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
+    volumes:
+      # Persist SQLite database:
+      # Mounts the 'ipam_db_data' named volume to /app/prisma inside the container.
+      # On first run, if 'ipam_db_data' is empty, Docker usually populates it with
+      # the /app/prisma directory from the image (which includes the seeded dev.db).
+      # Subsequent runs will use the data from the volume.
+      - ipam_db_data:/app/prisma
+      # Persist application logs:
+      # Mounts the 'ipam_logs_data' named volume to /app/logs inside the container.
+      - ipam_logs_data:/app/logs
     restart: unless-stopped
     networks:
       - app_network
@@ -30,3 +42,7 @@ services:
 networks:
   app_network:
     driver: bridge
+
+volumes:
+  ipam_db_data: # Defines a named volume for the database
+  ipam_logs_data: # Defines a named volume for logs

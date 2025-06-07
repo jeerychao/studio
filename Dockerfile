@@ -1,77 +1,113 @@
-# Base image with Node.js
-FROM node:18-slim AS base
 
-# Install required dependencies
+# --- Base Stage ---
+# Use a specific Node.js version. `slim` variant is smaller.
+FROM node:18-slim AS base
+LABEL maintainer="leejie2017@gmail.com"
+LABEL description="Base image for IPAM Lite application with Node.js and essential tools."
+
+# Install openssl and curl, which might be needed by Prisma or other dependencies.
+# Clean up apt cache to reduce image size.
 RUN apt-get update -y && \
     apt-get install -y openssl curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Enable corepack to use pnpm/yarn if desired (though current project uses npm)
 RUN corepack enable
+
+# Set working directory
 WORKDIR /app
 
-# Dependencies stage
+# --- Dependencies Stage ---
+# This stage is for installing npm dependencies.
+# It's a separate stage to leverage Docker layer caching.
+# If package.json or package-lock.json don't change, this layer won't be rebuilt.
 FROM base AS dependencies
+LABEL description="Stage for installing Node.js dependencies for IPAM Lite."
+
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
-# 保留开发依赖以供构建使用 (例如 TailwindCSS, Autoprefixer, PostCSS, Prisma CLI dev dep)
+# Install dependencies using the lockfile for reproducible builds
 RUN npm install --frozen-lockfile
 
-# Builder stage
+# --- Builder Stage ---
+# This stage builds the Next.js application and prepares Prisma.
 FROM base AS builder
+LABEL description="Stage for building the Next.js application and preparing Prisma for IPAM Lite."
+
 WORKDIR /app
+
+# Copy dependencies from the 'dependencies' stage
 COPY --from=dependencies /app/node_modules ./node_modules
+# Copy the rest of the application code
 COPY . .
 
-# Generate Prisma client and prepare database
-# ENV DATABASE_URL="file:/app/prisma/dev.db" # 已移至 production.env, Dockerfile中可以不重复设置，除非构建时明确需要
-# RUN npx prisma generate # postinstall脚本通常会处理，但可以保留以确保
+# Set a build-time DATABASE_URL for Prisma commands that need it.
+# This points to the SQLite file that will be created within the image.
+ENV DATABASE_URL="file:/app/prisma/dev.db"
+
+# Push the Prisma schema to the database. This creates the dev.db file.
+# --skip-generate is used because `npm install` in dependencies stage (or postinstall) should have already run `prisma generate`.
 RUN npm run prisma:db:push -- --skip-generate
+
+# Debug: List contents of prisma directory after db:push
 RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed in builder after push"
+
+# Seed the database.
 RUN npm run prisma:db:seed
+
+# Debug: List contents of prisma directory after db:seed
 RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed in builder after seed"
+
+# Build the Next.js application for production.
 RUN npm run build
 
-# Runner stage
+# --- Runner Stage (Final Production Image) ---
+# This stage creates the final, lean production image.
 FROM base AS runner
+LABEL description="Production image for IPAM Lite application."
+
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Setup directory structure and permissions for standalone output
-# /app/prisma 目录将在下面通过 COPY --chown 创建
-RUN mkdir -p ./.next/cache && chown -R nextjs:nodejs ./.next
-
-# Copy necessary files from builder stage
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma 
-COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./ 
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./ 
-
-USER nextjs
-
-# ENV NODE_ENV="production" # 将通过 env_file (production.env) 设置
-# ENV PORT="3000" # 将通过 env_file (production.env) 设置
-# ENV HOST="0.0.0.0" # 将通过 env_file (production.env) 设置
-# ENV HOSTNAME="0.0.0.0" # 将通过 env_file (production.env) 设置
-# ENV NEXT_PUBLIC_BASE_URL="http://17.100.100.253:3010" # 将通过 env_file (production.env) 设置
-# ENV NEXTAUTH_URL="http://17.100.100.253:3010" # 将通过 env_file (production.env) 设置
-# ENV DATABASE_URL="file:/app/prisma/dev.db" # 将通过 env_file (production.env) 设置
-# ENV NEXTAUTH_SECRET="your-secret-key" # 将通过 env_file (production.env) 设置
-# ENV NEXT_PUBLIC_VERCEL_URL="17.100.100.253:3010" # 将通过 env_file (production.env) 设置
-# ENV NODE_OPTIONS="--max-old-space-size=4096" # 将通过 env_file (production.env) 设置
-# ENV DEBUG="prisma:*,next:*" # 将通过 env_file (production.env) 设置
-
-
-# 添加健康检查脚本
-COPY --chown=nextjs:nodejs health-check.sh ./
-RUN chmod +x health-check.sh
-
+# Set Node environment to production.
+ENV NODE_ENV production
+# Default port, can be overridden by PORT env var at runtime.
+ENV PORT 3000
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Create a non-root user 'node' and group 'node'.
+# Applications should run as non-root users for security.
+RUN addgroup --system --gid 1001 node
+RUN adduser --system --uid 1001 node
+
+# Copy only production dependencies from the 'dependencies' stage.
+# Using a multi-stage build like this helps keep the final image smaller.
+COPY --from=dependencies /app/node_modules ./node_modules
+# If you had a separate step for production-only dependencies, you'd use that.
+# For now, `npm install` in dependencies stage installs all. If you optimize for prod-only deps later, adjust this.
+
+# Copy the built Next.js application from the 'builder' stage.
+COPY --from=builder /app/.next ./.next
+# Copy public assets.
+COPY --from=builder /app/public ./public
+# Copy the Prisma schema and the seeded database file from the 'builder' stage.
+COPY --from=builder --chown=node:node /app/prisma ./prisma
+
+# Copy package.json for `npm start` and other metadata.
+COPY package.json .
+
+# Create and set permissions for the logs directory
+RUN mkdir -p /app/logs && chown node:node /app/logs
+
+# Change to the non-root user.
+USER node
+
+# Health check script
+COPY health-check.sh /app/health-check.sh
+RUN chmod +x /app/health-check.sh
+# Healthcheck defined in docker-compose.yml for more flexibility
+
+# Command to run the application.
+# `npm start` should be defined in package.json to run `next start`.
+CMD ["npm", "start"]
