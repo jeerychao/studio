@@ -155,10 +155,9 @@ function VlansView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={isAllOnPageSelected}
+                            checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>

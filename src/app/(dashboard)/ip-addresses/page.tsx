@@ -68,8 +68,8 @@ function IPAddressesView() {
       }
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getSubnetsAction(), // Fetches all subnets for the filter, pagination not needed here
-        getVLANsAction(), // Fetches all VLANs, pagination not needed here
+        getSubnetsAction(), 
+        getVLANsAction(), 
       ]);
       setIpAddressesData(fetchedIpsResult);
       setSubnets(fetchedSubnetsResult.data); 
@@ -144,9 +144,9 @@ function IPAddressesView() {
 
   const getVlanDisplayForIp = (ip: AppIPAddressWithRelations): string => {
     if (ip.vlan?.vlanNumber) {
-        return `${ip.vlan.vlanNumber}`; // Direct VLAN on IP
+        return `${ip.vlan.vlanNumber}`; 
     } else if (ip.subnet?.vlan?.vlanNumber) {
-        return `${ip.subnet.vlan.vlanNumber} (继承)`; // Inherited from Subnet
+        return `${ip.subnet.vlan.vlanNumber} (继承)`; 
     }
     return "无";
   };
@@ -214,10 +214,9 @@ function IPAddressesView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={isAllOnPageSelected}
+                            checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>

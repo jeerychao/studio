@@ -127,7 +127,6 @@ function AuditLogsView() {
   const canDeleteLog = hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
 
   const dataIsAvailable = !!(logsData && logsData.data && logsData.data.length > 0);
-
   const isAllOnPageSelected = dataIsAvailable ? logsData.data!.every(log => selectedIds.has(log.id)) : false;
   const isSomeOnPageSelected = dataIsAvailable ? logsData.data!.some(log => selectedIds.has(log.id)) : false;
 
@@ -165,10 +164,9 @@ function AuditLogsView() {
                     <TableHead className="w-[50px]">
                       {canDeleteLog && (
                         <Checkbox
-                            checked={isAllOnPageSelected}
+                            checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
