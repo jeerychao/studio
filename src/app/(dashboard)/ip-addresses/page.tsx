@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction, batchDeleteIPAddressesAction } from "@/lib/actions";
-import type { IPAddress, IPAddressStatus, Subnet, VLAN, PaginatedResponse } from "@/types";
+import type { AppIPAddressWithRelations } from "@/lib/actions";
+import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
@@ -44,7 +45,7 @@ function IPAddressesView() {
   const selectedStatus = searchParams.get("status") as IPAddressStatus | 'all' || 'all';
   const currentPage = Number(searchParams.get('page')) || 1;
 
-  const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<IPAddress> | null>(null);
+  const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<AppIPAddressWithRelations> | null>(null);
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -67,11 +68,11 @@ function IPAddressesView() {
       }
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getSubnetsAction(),
-        getVLANsAction(),
+        getSubnetsAction(), // Fetches all subnets for the filter, pagination not needed here
+        getVLANsAction(), // Fetches all VLANs, pagination not needed here
       ]);
       setIpAddressesData(fetchedIpsResult);
-      setSubnets(fetchedSubnetsResult.data);
+      setSubnets(fetchedSubnetsResult.data); 
       setVlans(fetchedVlansResult.data);
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
@@ -141,19 +142,13 @@ function IPAddressesView() {
 
   const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "所有子网";
 
-  const getVlanDisplayForIp = (ip: IPAddress): string => {
-    let vlanToDisplay: VLAN | undefined;
-    if (ip.vlanId) {
-      vlanToDisplay = vlans.find(v => v.id === ip.vlanId);
-    } else if (ip.subnetId) {
-      const subnet = subnets.find(s => s.id === ip.subnetId);
-      if (subnet?.vlanId) {
-        vlanToDisplay = vlans.find(v => v.id === subnet.vlanId);
-      } else if (subnet) {
-        return "无 VLAN (子网)";
-      }
+  const getVlanDisplayForIp = (ip: AppIPAddressWithRelations): string => {
+    if (ip.vlan?.vlanNumber) {
+        return `${ip.vlan.vlanNumber}`; // Direct VLAN on IP
+    } else if (ip.subnet?.vlan?.vlanNumber) {
+        return `${ip.subnet.vlan.vlanNumber} (继承)`; // Inherited from Subnet
     }
-    return vlanToDisplay ? `${vlanToDisplay.vlanNumber}` : "无";
+    return "无";
   };
 
   const pageActionButtons = (
@@ -179,9 +174,10 @@ function IPAddressesView() {
     </div>
   );
 
-  const dataIsAvailable = ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0;
-  const isAllOnPageSelected = dataIsAvailable && ipAddressesData.data.every(ip => selectedIds.has(ip.id));
-  const isSomeOnPageSelected = dataIsAvailable && ipAddressesData.data.some(s => selectedIds.has(s.id));
+  const dataIsAvailable = !!(ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0);
+  const isAllOnPageSelected = dataIsAvailable ? ipAddressesData.data!.every(ip => selectedIds.has(ip.id)) : false;
+  const isSomeOnPageSelected = dataIsAvailable ? ipAddressesData.data!.some(s => selectedIds.has(s.id)) : false;
+
 
   return (
     <>
@@ -210,7 +206,7 @@ function IPAddressesView() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {ipAddressesData && ipAddressesData.data.length > 0 ? (
+          {dataIsAvailable ? (
             <>
               <Table>
                 <TableHeader>
@@ -218,10 +214,10 @@ function IPAddressesView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={dataIsAvailable && isAllOnPageSelected}
+                            checked={isAllOnPageSelected}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected}
+                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
@@ -235,8 +231,8 @@ function IPAddressesView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ipAddressesData.data.map((ip) => (
-                    <TableRow key={ip.id} data-state={selectedIds.has(ip.id) && "selected"}>
+                  {ipAddressesData!.data.map((ip) => (
+                    <TableRow key={ip.id} data-state={selectedIds.has(ip.id) ? "selected" : ""}>
                       <TableCell>
                         {canDelete && (
                           <Checkbox
@@ -254,7 +250,7 @@ function IPAddressesView() {
                       </TableCell>
                       <TableCell>{ip.allocatedTo || "无"}</TableCell>
                       <TableCell>
-                        {subnets.find(s => s.id === ip.subnetId)?.networkAddress || "无"}
+                        {ip.subnet?.cidr || "无"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge>
@@ -288,12 +284,14 @@ function IPAddressesView() {
                   ))}
                 </TableBody>
               </Table>
-              <PaginationControls
-                currentPage={ipAddressesData.currentPage}
-                totalPages={ipAddressesData.totalPages}
-                basePath={pathname}
-                currentQuery={searchParams}
-              />
+              {ipAddressesData!.totalPages > 1 && (
+                <PaginationControls
+                    currentPage={ipAddressesData!.currentPage}
+                    totalPages={ipAddressesData!.totalPages}
+                    basePath={pathname}
+                    currentQuery={searchParams}
+                />
+              )}
             </>
           ) : (
             <div className="text-center py-10">
@@ -316,6 +314,3 @@ export default function IPAddressesPage() {
     </Suspense>
   );
 }
-
-    
-    

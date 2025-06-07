@@ -128,9 +128,9 @@ function VlansView() {
     </div>
   );
 
-  const dataIsAvailable = vlansData && vlansData.data && vlansData.data.length > 0;
-  const isAllOnPageSelected = dataIsAvailable && vlansData.data.every(v => selectedIds.has(v.id));
-  const isSomeOnPageSelected = dataIsAvailable && vlansData.data.some(s => selectedIds.has(s.id));
+  const dataIsAvailable = !!(vlansData && vlansData.data && vlansData.data.length > 0);
+  const isAllOnPageSelected = dataIsAvailable ? vlansData.data!.every(v => selectedIds.has(v.id)) : false;
+  const isSomeOnPageSelected = dataIsAvailable ? vlansData.data!.some(s => selectedIds.has(s.id)) : false;
 
   return (
     <>
@@ -147,7 +147,7 @@ function VlansView() {
           <CardDescription>您网络中所有已配置的VLAN。显示 {vlansData?.data.length || 0} 条，共 {vlansData?.totalCount || 0} 条VLAN。</CardDescription>
         </CardHeader>
         <CardContent>
-          {vlansData && vlansData.data.length > 0 ? (
+          {dataIsAvailable ? (
             <>
               <Table>
                 <TableHeader>
@@ -155,10 +155,10 @@ function VlansView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={dataIsAvailable && isAllOnPageSelected}
+                            checked={isAllOnPageSelected}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected}
+                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
@@ -169,8 +169,8 @@ function VlansView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vlansData.data.map((vlan) => (
-                    <TableRow key={vlan.id} data-state={selectedIds.has(vlan.id) && "selected"}>
+                  {vlansData!.data.map((vlan) => (
+                    <TableRow key={vlan.id} data-state={selectedIds.has(vlan.id) ? "selected" : ""}>
                       <TableCell>
                         {canDelete && (
                           <Checkbox
@@ -211,10 +211,10 @@ function VlansView() {
                   ))}
                 </TableBody>
               </Table>
-              {vlansData.totalPages > 1 && (
+              {vlansData!.totalPages > 1 && (
                 <PaginationControls
-                  currentPage={vlansData.currentPage}
-                  totalPages={vlansData.totalPages}
+                  currentPage={vlansData!.currentPage}
+                  totalPages={vlansData!.totalPages}
                   basePath={pathname}
                   currentQuery={searchParams}
                 />
@@ -239,6 +239,3 @@ export default function VlansPage() {
     </Suspense>
   );
 }
-
-    
-    

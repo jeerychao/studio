@@ -83,7 +83,6 @@ function AuditLogsView() {
   };
 
   const handleRowClick = (log: AuditLog, e: React.MouseEvent<HTMLTableRowElement, MouseEvent>) => {
-    // Prevent row click when clicking on checkbox or delete button inside the row
     const target = e.target as HTMLElement;
     if (target.closest('[role="checkbox"]') || target.closest('button[aria-label^="删除"]')) {
       return;
@@ -94,7 +93,7 @@ function AuditLogsView() {
   
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
-      const allIdsOnPage = logsData?.data?.map(log => log.id) || []; // Added optional chaining for logsData.data
+      const allIdsOnPage = logsData?.data?.map(log => log.id) || []; 
       setSelectedIds(new Set(allIdsOnPage));
     } else {
       setSelectedIds(new Set());
@@ -127,12 +126,10 @@ function AuditLogsView() {
 
   const canDeleteLog = hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
 
-  // Ensure logsData and logsData.data are available before accessing length or methods
-  const dataIsAvailable = logsData && logsData.data && logsData.data.length > 0;
+  const dataIsAvailable = !!(logsData && logsData.data && logsData.data.length > 0);
 
-  const isAllOnPageSelected = dataIsAvailable ? logsData.data.every(log => selectedIds.has(log.id)) : false;
-  const isSomeOnPageSelected = dataIsAvailable ? logsData.data.some(log => selectedIds.has(log.id)) : false;
-
+  const isAllOnPageSelected = dataIsAvailable ? logsData.data!.every(log => selectedIds.has(log.id)) : false;
+  const isSomeOnPageSelected = dataIsAvailable ? logsData.data!.some(log => selectedIds.has(log.id)) : false;
 
   const pageActionElement = canDeleteLog && selectedIds.size > 0 ? (
     <BatchDeleteConfirmationDialog
@@ -156,11 +153,11 @@ function AuditLogsView() {
           <CardTitle>系统活动日志</CardTitle>
           <CardDescription>
             IPAM 系统中执行操作的时间顺序记录。
-            显示 {logsData?.data?.length || 0} 条，共 {logsData?.totalCount || 0} 条日志。 {/* Safely access length */}
+            显示 {logsData?.data?.length || 0} 条，共 {logsData?.totalCount || 0} 条日志。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {logsData && logsData.data && logsData.data.length > 0 ? ( // Check logsData.data here as well
+          {dataIsAvailable ? ( 
             <>
               <Table>
                 <TableHeader>
@@ -168,10 +165,10 @@ function AuditLogsView() {
                     <TableHead className="w-[50px]">
                       {canDeleteLog && (
                         <Checkbox
-                            checked={dataIsAvailable && isAllOnPageSelected}
+                            checked={isAllOnPageSelected}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
-                            indeterminate={dataIsAvailable && isSomeOnPageSelected && !isAllOnPageSelected}
+                            indeterminate={isSomeOnPageSelected && !isAllOnPageSelected}
                         />
                       )}
                     </TableHead>
@@ -183,19 +180,19 @@ function AuditLogsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logsData.data.map((log) => (
+                  {logsData!.data.map((log) => (
                     <TableRow
                       key={log.id}
                       onClick={(e) => handleRowClick(log, e)}
                       className="cursor-pointer hover:bg-muted/50"
-                      data-state={selectedIds.has(log.id) ? "selected" : ""} // ensure data-state is always a string
+                      data-state={selectedIds.has(log.id) ? "selected" : ""} 
                     >
                       <TableCell>
                         {canDeleteLog && (
                            <Checkbox
                             checked={selectedIds.has(log.id)}
                             onCheckedChange={(checked) => handleSelectItem(log.id, checked)}
-                            onClick={(e) => e.stopPropagation()} // Prevent row click when clicking checkbox
+                            onClick={(e) => e.stopPropagation()} 
                             aria-label={`选择日志 ${log.id}`}
                           />
                         )}
@@ -229,10 +226,10 @@ function AuditLogsView() {
                   ))}
                 </TableBody>
               </Table>
-              {logsData.totalPages > 1 && (
+              {logsData!.totalPages > 1 && (
                 <PaginationControls
-                  currentPage={logsData.currentPage}
-                  totalPages={logsData.totalPages}
+                  currentPage={logsData!.currentPage}
+                  totalPages={logsData!.totalPages}
                   basePath={pathname}
                   currentQuery={searchParams}
                 />
