@@ -48,7 +48,7 @@ const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
   subnetId: z.string().optional(),
-  vlanId: z.string().optional(), 
+  vlanId: z.string().optional(),
   status: z.enum(["allocated", "free", "reserved"], { required_error: "状态是必需的"}),
   allocatedTo: z.string().max(100, "分配给对象过长").optional(),
   description: z.string().max(200, "描述过长").optional(),
@@ -70,14 +70,14 @@ const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
 const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
 
 
-export function IPAddressFormSheet({ 
-    ipAddress, 
-    subnets, 
-    vlans, 
-    currentSubnetId, 
-    children, 
+export function IPAddressFormSheet({
+    ipAddress,
+    subnets,
+    vlans,
+    currentSubnetId,
+    children,
     buttonProps,
-    onIpAddressChange 
+    onIpAddressChange
 }: IPAddressFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
@@ -88,7 +88,7 @@ export function IPAddressFormSheet({
     defaultValues: {
       ipAddress: "",
       subnetId: "",
-      vlanId: "", 
+      vlanId: "",
       status: "free",
       allocatedTo: "",
       description: "",
@@ -97,11 +97,8 @@ export function IPAddressFormSheet({
 
   React.useEffect(() => {
     if (isOpen) {
-        // Corrected logic for initialVlanIdForForm:
-        // It should only reflect the IP's *direct* vlanId or be an empty string
-        // if the IP has no direct VLAN assignment. Empty string maps to "Inherit/None".
-        let initialVlanIdForForm = ipAddress?.vlanId || ""; 
-        
+        let initialVlanIdForForm = ipAddress?.vlanId || "";
+
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
             subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""),
@@ -120,15 +117,15 @@ export function IPAddressFormSheet({
     try {
       const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
       // When "Inherit/None" (INHERIT_VLAN_SENTINEL) is selected, or if vlanId is an empty string from the form,
-      // vlanIdToSave becomes undefined. This undefined value is passed to the server action.
-      const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" ? undefined : data.vlanId;
+      // vlanIdToSave becomes null. This null value is passed to the server action.
+      const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" ? null : data.vlanId;
 
       const payload = {
         ...data,
         subnetId: effectiveSubnetId,
-        vlanId: vlanIdToSave,
+        vlanId: vlanIdToSave, // Now sends null if "Inherit/None" was selected
       };
-      
+
       if (isEditing && ipAddress) {
         response = await updateIPAddressAction(ipAddress.id, payload);
       } else {
@@ -136,9 +133,9 @@ export function IPAddressFormSheet({
       }
 
       if (response.success && response.data) {
-        toast({ 
-            title: isEditing ? "IP 地址已更新" : "IP 地址已创建", 
-            description: `IP ${response.data.ipAddress} 已成功${isEditing ? '更新' : '创建'}。` 
+        toast({
+            title: isEditing ? "IP 地址已更新" : "IP 地址已创建",
+            description: `IP ${response.data.ipAddress} 已成功${isEditing ? '更新' : '创建'}。`
         });
         setIsOpen(false);
         if (onIpAddressChange) onIpAddressChange();
@@ -230,14 +227,11 @@ export function IPAddressFormSheet({
             <FormField
               control={form.control}
               name="vlanId"
-              render={({ field }) => ( 
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>VLAN (可选)</FormLabel>
                   <Select
                     onValueChange={(value) => field.onChange(value === INHERIT_VLAN_SENTINEL ? "" : value)}
-                    // If field.value (from form state, based on initialVlanIdForForm) is an empty string,
-                    // it means "Inherit/None", so set Select's value to INHERIT_VLAN_SENTINEL.
-                    // Otherwise, use field.value if it exists, or default to INHERIT_VLAN_SENTINEL if it's null/undefined.
                     value={field.value === "" ? INHERIT_VLAN_SENTINEL : (field.value || INHERIT_VLAN_SENTINEL) }
                     disabled={vlans.length === 0 && field.value !== INHERIT_VLAN_SENTINEL}
                   >
@@ -325,5 +319,4 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
-
     
