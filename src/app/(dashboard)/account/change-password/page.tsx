@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { UserCircle2, Lock, Loader2 } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { PasswordChangeForm } from "@/components/settings/password-change-form";
-import { Label } from "@/components/ui/label"; // Ensure Label is imported if used, though it's not in the direct profile display
+// Label import is not strictly needed here as we are using span for labels in profile card.
 
 export default function ChangePasswordPage() {
   const { currentUser, isAuthLoading } = useCurrentUser();
@@ -51,29 +51,29 @@ export default function ChangePasswordPage() {
         description={texts.pageDescription}
         icon={<UserCircle2 className="h-6 w-6 text-primary" />}
       />
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><UserCircle2 className="h-5 w-5" /> {texts.profileTitle}</CardTitle>
             <CardDescription>{texts.profileDescription}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{texts.usernameLabel}</span>
-              <span className="font-medium">{currentUser?.username}</span>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-3 items-center gap-x-2">
+              <span className="col-span-1 text-sm text-muted-foreground">{texts.usernameLabel}</span>
+              <span className="col-span-2 text-sm font-medium truncate">{currentUser?.username}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{texts.emailLabel}</span>
-              <span className="font-medium">{currentUser?.email}</span>
+            <div className="grid grid-cols-3 items-center gap-x-2">
+              <span className="col-span-1 text-sm text-muted-foreground">{texts.emailLabel}</span>
+              <span className="col-span-2 text-sm font-medium truncate">{currentUser?.email}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{texts.roleLabel}</span>
-              <span className="font-medium">{currentUser?.roleName}</span>
+            <div className="grid grid-cols-3 items-center gap-x-2">
+              <span className="col-span-1 text-sm text-muted-foreground">{texts.roleLabel}</span>
+              <span className="col-span-2 text-sm font-medium truncate">{currentUser?.roleName}</span>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="md:col-span-2 lg:col-span-1"> {/* Adjusted spanning for layout */}
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> {texts.passwordTitle}</CardTitle>
             <CardDescription>{texts.passwordDescription}</CardDescription>
