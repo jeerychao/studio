@@ -140,6 +140,7 @@ export interface VlanQueryResult {
   description?: string;
   associatedSubnets: Array<{ id: string; cidr: string; description?: string }>;
   associatedDirectIPs: Array<{ id: string; ipAddress: string; description?: string }>;
+  resourceCount: number; // Total count of associated subnets and direct IPs
 }
 // For IP Address query, we can reuse AppIPAddressWithRelations from actions.ts
 
