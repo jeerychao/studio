@@ -41,19 +41,49 @@ import { GitBranch, Loader2, AlertCircle, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { VLAN, Subnet as AppSubnetType } from "@/types";
 import { batchDivideAndCreateSubnetsAction, type ActionResponse } from "@/lib/actions";
-import { getSubnetPropertiesFromCidr, getPrefixFromRequiredHosts, generateSubnetsFromParent } from "@/lib/ip-utils";
+import { getSubnetPropertiesFromCidr, getPrefixFromRequiredHosts, generateSubnetsFromParent, calculateNetworkAddress } from "@/lib/ip-utils";
 import type { SubnetProperties } from "@/lib/ip-utils";
 
 const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
 
+const parentMaskBitOptions = [
+  { value: 8, label: "/8 (255.0.0.0)" },
+  { value: 12, label: "/12 (255.240.0.0)" },
+  { value: 16, label: "/16 (255.255.0.0)" },
+  { value: 20, label: "/20 (255.255.240.0)" },
+  { value: 21, label: "/21 (255.255.248.0)" },
+  { value: 22, label: "/22 (255.255.252.0)" },
+  { value: 23, label: "/23 (255.255.254.0)" },
+  { value: 24, label: "/24 (255.255.255.0)" },
+  { value: 25, label: "/25 (255.255.255.128)" },
+  { value: 26, label: "/26 (255.255.255.192)" },
+  { value: 27, label: "/27 (255.255.255.224)" },
+  { value: 28, label: "/28 (255.255.255.240)" },
+  { value: 29, label: "/29 (255.255.255.248)" },
+  { value: 30, label: "/30 (255.255.255.252)" },
+];
+
+
 const subnetDivisionFormSchema = z.object({
-  parentCidr: z.string().min(7, "父网络 CIDR 无效 (例如 x.x.x.x/y)"),
-  requiredHostsPerSubnet: z.coerce.number().int().min(1, "每个子网至少需要1个可用主机").max(65534, "可用主机数过多 (对于 /16 以上的网络)"), // Adjusted max for practical limits
+  parentIpAddress: z.string().ip({ version: "v4", message: "父网络 IP 地址无效" }),
+  parentMaskBits: z.coerce.number().int().min(1).max(30, "父网络掩码位数必须在1-30之间"), // Max 30 for practical division
+  requiredHostsPerSubnet: z.coerce.number().int().min(1, "每个新子网至少需要1个可用主机。").max(65534),
   numberOfSubnets: z.coerce.number().int().min(1, "至少需要创建1个子网").optional(),
   vlanId: z.string().optional(),
   commonDescription: z.string().max(150, "通用描述过长").optional(),
+}).refine(data => {
+    // Validate that the entered parentIpAddress is actually a network address for the chosen parentMaskBits
+    try {
+        const calculatedNetworkAddr = calculateNetworkAddress(data.parentIpAddress, data.parentMaskBits);
+        return data.parentIpAddress === calculatedNetworkAddr;
+    } catch (e) {
+        return false; // Invalid IP or mask for calculation
+    }
+}, {
+    message: "提供的父网络 IP 地址不是所选掩码位数的有效网络地址。",
+    path: ["parentIpAddress"],
 });
-// Removed direct refinement for newSubnetPrefixLength vs parent prefix, as it's now calculated
+
 
 type SubnetDivisionFormValues = z.infer<typeof subnetDivisionFormSchema>;
 
@@ -68,7 +98,7 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
   const { toast } = useToast();
   const [previewSubnets, setPreviewSubnets] = React.useState<SubnetProperties[]>([]);
   const [maxCreatableSubnets, setMaxCreatableSubnets] = React.useState<number | null>(null);
-  const [calculatedPrefixForPreview, setCalculatedPrefixForPreview] = React.useState<number | null>(null);
+  const [calculatedNewSubnetPrefix, setCalculatedNewSubnetPrefix] = React.useState<number | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [isCalculatingPreview, setIsCalculatingPreview] = React.useState(false);
   const [submissionResult, setSubmissionResult] = React.useState<{success: boolean, message: string, errors?: string[]} | null>(null);
@@ -77,7 +107,8 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
   const form = useForm<SubnetDivisionFormValues>({
     resolver: zodResolver(subnetDivisionFormSchema),
     defaultValues: {
-      parentCidr: "",
+      parentIpAddress: "",
+      parentMaskBits: 24, // Default parent mask
       requiredHostsPerSubnet: undefined,
       numberOfSubnets: undefined,
       vlanId: NO_VLAN_SENTINEL_VALUE,
@@ -86,43 +117,54 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
   });
 
   const { watch, trigger, getValues } = form;
-  const parentCidr = watch("parentCidr");
-  const requiredHostsPerSubnet = watch("requiredHostsPerSubnet");
+  const parentIpAddress = watch("parentIpAddress");
+  const parentMaskBits = watch("parentMaskBits");
+  const requiredHosts = watch("requiredHostsPerSubnet");
   const numberOfSubnetsToCreate = watch("numberOfSubnets");
 
   const handlePreview = React.useCallback(async () => {
-    const isValid = await trigger(["parentCidr", "requiredHostsPerSubnet"]);
-    if (!isValid) {
+    const isValidForm = await trigger(); // Validate all fields
+    if (!isValidForm) {
       setPreviewSubnets([]);
       setMaxCreatableSubnets(null);
-      setCalculatedPrefixForPreview(null);
+      setCalculatedNewSubnetPrefix(null);
       setPreviewError("请修正表单中的错误。");
+      toast({ title: "表单验证失败", description: "请检查输入字段。", variant: "destructive" });
       return;
     }
     setIsCalculatingPreview(true);
     setPreviewError(null);
     setPreviewSubnets([]);
     setMaxCreatableSubnets(null);
-    setCalculatedPrefixForPreview(null);
+    setCalculatedNewSubnetPrefix(null);
 
     try {
-      const parentProps = getSubnetPropertiesFromCidr(parentCidr);
-      if (!parentProps) {
-        setPreviewError("父网络 CIDR 无效。");
-        setIsCalculatingPreview(false);
-        return;
+      const values = getValues();
+      const constructedParentCidr = `${values.parentIpAddress}/${values.parentMaskBits}`;
+
+      // Validate constructed parent CIDR (though schema refine should catch IP being network address)
+      const parentPropsTest = getSubnetPropertiesFromCidr(constructedParentCidr);
+      if (!parentPropsTest) {
+          setPreviewError("父网络 IP 地址和掩码位数组合无效。");
+          setIsCalculatingPreview(false);
+          return;
+      }
+      if (parentPropsTest.networkAddress !== values.parentIpAddress) {
+          setPreviewError(`提供的 IP ${values.parentIpAddress} 不是 /${values.parentMaskBits} 的网络地址。应为: ${parentPropsTest.networkAddress}`);
+          setIsCalculatingPreview(false);
+          return;
       }
 
-      const calculatedPrefix = getPrefixFromRequiredHosts(requiredHostsPerSubnet);
-      setCalculatedPrefixForPreview(calculatedPrefix);
+      const newSubnetPrefix = getPrefixFromRequiredHosts(values.requiredHostsPerSubnet);
+      setCalculatedNewSubnetPrefix(newSubnetPrefix);
 
-      if (calculatedPrefix <= parentProps.prefix) {
-        setPreviewError(`根据所需主机数计算出的子网前缀 /${calculatedPrefix} 无效或不小于父网络前缀 /${parentProps.prefix}。请减少所需主机数或检查父网络。`);
+      if (newSubnetPrefix <= values.parentMaskBits) {
+        setPreviewError(`根据所需主机数计算出的新子网前缀 /${newSubnetPrefix} 必须大于父网络前缀 /${values.parentMaskBits}。请减少所需主机数或增大父网络。`);
         setIsCalculatingPreview(false);
         return;
       }
       
-      const result = generateSubnetsFromParent(parentCidr, calculatedPrefix, numberOfSubnetsToCreate);
+      const result = generateSubnetsFromParent(constructedParentCidr, newSubnetPrefix, values.numberOfSubnets);
 
       if ("error" in result) {
         setPreviewError(result.error);
@@ -131,7 +173,7 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
       } else {
         setPreviewSubnets(result.generatedSubnets);
         setMaxCreatableSubnets(result.maxPossible);
-        if (result.generatedSubnets.length === 0 && numberOfSubnetsToCreate && numberOfSubnetsToCreate > 0) {
+        if (result.generatedSubnets.length === 0 && values.numberOfSubnets && values.numberOfSubnets > 0) {
             setPreviewError("无法根据指定数量生成子网，可能超出父网络容量或计算出的前缀不适用。");
         } else if (result.generatedSubnets.length === 0) {
             setPreviewError("无法生成任何子网。请检查输入。");
@@ -142,20 +184,23 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
     } finally {
       setIsCalculatingPreview(false);
     }
-  }, [parentCidr, requiredHostsPerSubnet, numberOfSubnetsToCreate, trigger]);
+  }, [trigger, getValues]);
 
 
   async function onSubmit(data: SubnetDivisionFormValues) {
-    if (previewSubnets.length === 0 || !calculatedPrefixForPreview) {
+    if (previewSubnets.length === 0 || !calculatedNewSubnetPrefix) {
       toast({ title: "无子网可创建", description: "请先正确生成并预览要创建的子网。", variant: "destructive" });
       return;
     }
-    // Double check prefix logic before submission, using latest form values
-    const parentProps = getSubnetPropertiesFromCidr(data.parentCidr);
-    if (!parentProps) {
-        toast({ title: "父网络错误", description: "父网络 CIDR 无效，无法提交。", variant: "destructive"});
+
+    const parentCidrForSubmission = `${data.parentIpAddress}/${data.parentMaskBits}`;
+    // Validate parentCidrForSubmission again briefly
+    const parentProps = getSubnetPropertiesFromCidr(parentCidrForSubmission);
+    if (!parentProps || parentProps.networkAddress !== data.parentIpAddress) {
+        toast({ title: "父网络错误", description: "父网络IP或掩码无效，无法提交。", variant: "destructive"});
         return;
     }
+
     let finalCalculatedPrefix: number;
     try {
         finalCalculatedPrefix = getPrefixFromRequiredHosts(data.requiredHostsPerSubnet);
@@ -164,12 +209,16 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
         return;
     }
 
-    if (finalCalculatedPrefix <= parentProps.prefix) {
-        toast({ title: "前缀错误", description: `计算出的子网前缀 /${finalCalculatedPrefix} 无效或不小于父网络前缀 /${parentProps.prefix}。`, variant: "destructive"});
+    if (finalCalculatedPrefix !== calculatedNewSubnetPrefix) {
+        toast({ title: "配置已更改", description: "表单数据与预览时不同，请重新预览。", variant: "destructive" });
         return;
     }
-    // Regenerate subnets based on current form values to ensure consistency before submission
-    const submissionPreviewResult = generateSubnetsFromParent(data.parentCidr, finalCalculatedPrefix, data.numberOfSubnets);
+    if (finalCalculatedPrefix <= data.parentMaskBits) {
+        toast({ title: "前缀错误", description: `计算出的新子网前缀 /${finalCalculatedPrefix} 无效或不小于父网络前缀 /${data.parentMaskBits}。`, variant: "destructive"});
+        return;
+    }
+    
+    const submissionPreviewResult = generateSubnetsFromParent(parentCidrForSubmission, finalCalculatedPrefix, data.numberOfSubnets);
     if ("error" in submissionPreviewResult || submissionPreviewResult.generatedSubnets.length === 0) {
         toast({ title: "预览不一致", description: "提交前重新计算预览失败，请重试预览步骤。", variant: "destructive" });
         setPreviewError(submissionPreviewResult.error || "提交前无法生成子网。");
@@ -182,12 +231,12 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
     const subnetsToCreate = submissionPreviewResult.generatedSubnets.map(subnetProps => ({
       cidr: `${subnetProps.networkAddress}/${subnetProps.prefix}`,
       vlanId: data.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : data.vlanId,
-      description: data.commonDescription ? `${data.commonDescription} (分割自 ${data.parentCidr})` : `分割自 ${data.parentCidr}`,
+      description: data.commonDescription ? `${data.commonDescription} (分割自 ${parentCidrForSubmission})` : `分割自 ${parentCidrForSubmission}`,
     }));
 
     try {
       const response = await batchDivideAndCreateSubnetsAction({
-        parentCidr: data.parentCidr,
+        parentCidr: parentCidrForSubmission,
         subnetsToCreate,
       });
 
@@ -200,7 +249,7 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
         form.reset();
         setPreviewSubnets([]);
         setMaxCreatableSubnets(null);
-        setCalculatedPrefixForPreview(null);
+        setCalculatedNewSubnetPrefix(null);
         if (onSubnetChange) onSubnetChange();
       } else {
         setSubmissionResult({ success: false, message: response.error?.userMessage || "批量创建失败。", errors: response.error?.details?.split(';') });
@@ -226,7 +275,7 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
         form.reset();
         setPreviewSubnets([]);
         setMaxCreatableSubnets(null);
-        setCalculatedPrefixForPreview(null);
+        setCalculatedNewSubnetPrefix(null);
         setPreviewError(null);
         setSubmissionResult(null);
     }
@@ -254,14 +303,39 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
               <div className="space-y-4 pb-4">
                 <FormField
                   control={form.control}
-                  name="parentCidr"
+                  name="parentIpAddress"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>父网络 CIDR</FormLabel>
+                      <FormLabel>父网络 IP 地址</FormLabel>
                       <FormControl>
-                        <Input placeholder="例如 192.168.0.0/16" {...field} />
+                        <Input placeholder="例如 192.168.0.0" {...field} />
                       </FormControl>
-                      <FormDescription>您想要从中划分子网的现有网络。</FormDescription>
+                      <FormDescription>您想要从中划分子网的父网络的网络地址。</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="parentMaskBits"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>父网络掩码位数</FormLabel>
+                      <Select onValueChange={(value) => field.onChange(parseInt(value, 10))} value={String(field.value)}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择父网络的掩码位数" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {parentMaskBitOptions.map((option) => (
+                            <SelectItem key={option.value} value={String(option.value)}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                       <FormDescription>父网络的子网掩码长度。</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -275,7 +349,7 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
                       <FormControl>
                         <Input type="number" placeholder="例如 30 (程序将计算最佳掩码)" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || undefined)} />
                       </FormControl>
-                      <FormDescription>程序将根据此数量计算出最合适的新子网掩码/前缀长度。</FormDescription>
+                      <FormDescription>输入您希望每个新划分出的子网能容纳的可用主机数量（已除去网络和广播地址）。</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -348,12 +422,12 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
                   </Alert>
                 )}
                 
-                {calculatedPrefixForPreview !== null && !previewError && (
+                {calculatedNewSubnetPrefix !== null && !previewError && (
                   <Alert variant="info" className="mt-4">
                     <Info className="h-4 w-4" />
                     <AlertTitle>计算提示</AlertTitle>
                     <AlertDescription>
-                      根据您要求的 {getValues("requiredHostsPerSubnet")} 个可用主机，将使用 <strong>/{calculatedPrefixForPreview}</strong> 的前缀长度进行划分。
+                      根据您要求的 {getValues("requiredHostsPerSubnet")} 个可用主机，将使用 <strong>/{calculatedNewSubnetPrefix}</strong> 的前缀长度进行划分。
                       {maxCreatableSubnets !== null && ` 最多可以创建 ${maxCreatableSubnets} 个这样的子网。`}
                       {numberOfSubnetsToCreate && maxCreatableSubnets !== null && numberOfSubnetsToCreate > maxCreatableSubnets && <span className="text-destructive"> (您请求的数量超出了最大值)</span>}
                     </AlertDescription>
@@ -409,7 +483,7 @@ export function SubnetSmartBatchFormSheet({ vlans, children, onSubnetChange }: S
               <SheetClose asChild>
                 <Button type="button" variant="outline">取消</Button>
               </SheetClose>
-              <Button type="submit" disabled={form.formState.isSubmitting || previewSubnets.length === 0 || isCalculatingPreview || !calculatedPrefixForPreview}>
+              <Button type="submit" disabled={form.formState.isSubmitting || previewSubnets.length === 0 || isCalculatingPreview || !calculatedNewSubnetPrefix}>
                 {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 创建 {previewSubnets.length > 0 ? `${previewSubnets.length} 个` : ''} 子网
               </Button>
