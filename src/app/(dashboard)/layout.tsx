@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useRouter, usePathname } from 'next/navigation';
 import * as React from "react";
-import { Network, Settings2, Loader2 } from "lucide-react"; // Added Loader2
+import { Network, Settings2, Loader2 } from "lucide-react"; 
 import {
   SidebarProvider,
   Sidebar,
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { PERMISSIONS } from "@/types"; 
 import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { logger } from "@/lib/logger";
 
 
 function ConditionalSettingsButton() {
@@ -59,13 +60,16 @@ export default function DashboardLayout({
   React.useEffect(() => {
     if (isAuthLoading) {
       setAuthStatus('loading');
+      logger.info("DashboardLayout: Auth status is loading (isAuthLoading true).");
       return;
     }
 
     if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setAuthStatus('authenticated');
+        logger.info(`DashboardLayout: User authenticated: ${currentUser.username} (ID: ${currentUser.id}).`);
     } else { 
       setAuthStatus('unauthenticated');
+      logger.warn(`DashboardLayout: User unauthenticated or guest. Current path: ${pathname}. Attempting redirect to /login if not already there.`);
       if (pathname !== '/login') {
         router.replace('/login');
       }
@@ -84,6 +88,7 @@ export default function DashboardLayout({
   if (authStatus === 'unauthenticated') {
     if (pathname !== '/login') {
         // Display a message while redirecting
+        logger.info("DashboardLayout: Rendering redirect message to /login.");
         return (
             <div className="flex flex-col items-center justify-center h-screen">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -94,10 +99,12 @@ export default function DashboardLayout({
     }
     // If already on login, or if for some reason redirect is not needed, render nothing from this layout.
     // This case should ideally not be hit if routing is correct, as /login has its own layout.
+    logger.info("DashboardLayout: Auth status unauthenticated, but already on /login or redirect not needed. Rendering null from layout.");
     return null; 
   }
 
   // authStatus === 'authenticated'
+  logger.info("DashboardLayout: Rendering authenticated layout.");
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">

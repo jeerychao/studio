@@ -33,10 +33,10 @@ const createGuestUser = async (): Promise<CurrentUserContextValue> => {
       PERMISSIONS.VIEW_VLAN,
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
-      PERMISSIONS.VIEW_QUERY_PAGE, // Added query page permission for guest for broader visibility by default
+      PERMISSIONS.VIEW_QUERY_PAGE, 
   ];
   let guestRoleName: RoleName = 'Viewer';
-
+  logger.info("useCurrentUser: Creating guest user object.");
   return {
       id: 'guest-fallback-id',
       username: 'Guest',
@@ -56,10 +56,19 @@ export function useCurrentUser(): UseCurrentUserReturn {
   const [isInitialized, setIsInitialized] = React.useState(false);
 
   React.useEffect(() => {
-    if (isInitialized) {
+    if (typeof window === "undefined") { // Ensure this runs only on client
+      logger.info("useCurrentUser Effect: window is undefined, skipping initialization (SSR).");
+      setIsAuthLoading(false); // Potentially set to false if not running on client
+      setIsInitialized(true); // Mark as initialized to prevent client re-run if possible
       return;
     }
 
+    if (isInitialized) {
+      logger.info("useCurrentUser Effect: Already initialized, skipping.");
+      return;
+    }
+
+    logger.info("useCurrentUser Effect: Starting initialization.");
     const initializeUser = async () => {
       setIsAuthLoading(true);
       try {
@@ -68,7 +77,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
           logger.info(`useCurrentUser: Found storedUserId: ${storedUserId}. Fetching details...`);
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
           if (userDetails) { 
-            logger.info(`useCurrentUser: User details fetched for ${storedUserId}: ${userDetails.username}`);
+            logger.info(`useCurrentUser: User details fetched for ${storedUserId}: ${userDetails.username}. Setting current user.`);
             setCurrentUser(userDetails);
           } else {
             logger.warn(`useCurrentUser: User details not found for stored ID "${storedUserId}" (it may be stale or invalid). Clearing this ID from localStorage and using guest user.`);
@@ -91,16 +100,29 @@ export function useCurrentUser(): UseCurrentUserReturn {
 
     initializeUser();
 
+    // Expose functions to window for debugging/testing mock user states
     (window as any).setCurrentMockUser = (userId: string) => {
-      logger.info(`setCurrentMockUser called with ID: ${userId}. Storing in localStorage and reloading.`);
-      localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
+      if (!userId) {
+        logger.warn("setCurrentMockUser called with null or empty userId. Clearing current user and reloading.");
+        localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+      } else {
+        logger.info(`setCurrentMockUser called with ID: ${userId}. Storing in localStorage and reloading.`);
+        localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
+      }
       setIsInitialized(false); // Force re-initialization on reload
+      window.location.reload();
+    };
+
+    (window as any).clearCurrentMockUser = () => {
+      logger.info("clearCurrentMockUser called. Removing user ID from localStorage and reloading.");
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+      setIsInitialized(false);
       window.location.reload();
     };
 
     (window as any).cycleMockUser = () => {
         const userCycleOrder = [
-            'seed_user_admin', // Corrected IDs to match seed data
+            'seed_user_admin', 
             'seed_user_operator',
             'seed_user_viewer'
         ];
@@ -118,17 +140,20 @@ export function useCurrentUser(): UseCurrentUserReturn {
         setIsInitialized(false); // Force re-initialization on reload
         window.location.reload();
     };
-  }, [isInitialized]);
+  }, [isInitialized]); // Dependency array only on isInitialized
 
   return {
-    currentUser: isInitialized ? currentUser : null,
-    isAuthLoading: !isInitialized || isAuthLoading
+    currentUser: isInitialized ? currentUser : null, // Return null until initialized
+    isAuthLoading: !isInitialized || isAuthLoading // Loading if not initialized OR if auth is actively loading
   };
 }
 
 export const hasPermission = (currentUser: CurrentUserContextValue | null, permissionId: PermissionId): boolean => {
   if (!currentUser) {
+    // logger.debug(`hasPermission check: No current user, returning false for permission '${permissionId}'.`);
     return false;
   }
-  return currentUser.permissions.includes(permissionId);
+  const userHasPermission = currentUser.permissions.includes(permissionId);
+  // logger.debug(`hasPermission check for user ${currentUser.username}: Permission '${permissionId}'? ${userHasPermission}. User permissions: ${currentUser.permissions.join(', ')}`);
+  return userHasPermission;
 };
