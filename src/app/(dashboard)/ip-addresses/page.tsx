@@ -74,6 +74,22 @@ function IPAddressesView() {
       setIpAddressesData(fetchedIpsResult);
       setSubnets(fetchedSubnetsResult.data); 
       setVlans(fetchedVlansResult.data);
+
+      // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
+      if (fetchedIpsResult.data.length === 0 && fetchedIpsResult.currentPage > 1) {
+        const newTargetPage = fetchedIpsResult.totalPages > 0 ? fetchedIpsResult.totalPages : 1;
+        const currentUrlPage = Number(searchParams.get('page')) || 1;
+        if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedIpsResult.totalPages) {
+            const params = new URLSearchParams(searchParams.toString());
+            // Preserve existing filters
+            if (selectedSubnetId) params.set("subnetId", selectedSubnetId); else params.delete("subnetId");
+            if (selectedStatus && selectedStatus !== 'all') params.set("status", selectedStatus); else params.delete("status");
+            params.set("page", String(newTargetPage));
+            router.push(`${pathname}?${params.toString()}`);
+            return; 
+        }
+      }
+
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
       setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
@@ -81,7 +97,7 @@ function IPAddressesView() {
       setIsLoading(false);
       setSelectedIds(new Set());
     }
-  }, [currentUser, isAuthLoading, toast, selectedSubnetId, selectedStatus, currentPage]);
+  }, [currentUser, isAuthLoading, toast, selectedSubnetId, selectedStatus, currentPage, router, pathname, searchParams]);
 
   React.useEffect(() => {
     fetchData();
@@ -106,7 +122,7 @@ function IPAddressesView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading) {
+  if (isAuthLoading || isLoading && !ipAddressesData) {
     return <LoadingIPAddressesPageContent />;
   }
 
@@ -177,6 +193,10 @@ function IPAddressesView() {
   const dataIsAvailable = !!(ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0);
   const isAllOnPageSelected = dataIsAvailable ? ipAddressesData.data!.every(ip => selectedIds.has(ip.id)) : false;
   const isSomeOnPageSelected = dataIsAvailable ? ipAddressesData.data!.some(s => selectedIds.has(s.id)) : false;
+  const finalCurrentPage = ipAddressesData?.currentPage || 1;
+  const finalTotalPages = ipAddressesData?.totalPages || 0;
+  const finalTotalCount = ipAddressesData?.totalCount || 0;
+  const ipsToDisplay = ipAddressesData?.data || [];
 
 
   return (
@@ -202,7 +222,7 @@ function IPAddressesView() {
               ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''} 内的IP地址`
               : "所有受管IP地址。"}
             {selectedStatus !== 'all' && ` (状态: ${ipAddressStatusLabels[selectedStatus as IPAddressStatus]})`}
-             显示 {ipAddressesData?.data.length || 0} 条，共 {ipAddressesData?.totalCount || 0} 条IP。
+             显示 {ipsToDisplay.length} 条，共 {finalTotalCount} 条IP。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -230,7 +250,7 @@ function IPAddressesView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ipAddressesData!.data.map((ip) => (
+                  {ipsToDisplay.map((ip) => (
                     <TableRow key={ip.id} data-state={selectedIds.has(ip.id) ? "selected" : ""}>
                       <TableCell>
                         {canDelete && (
@@ -283,10 +303,10 @@ function IPAddressesView() {
                   ))}
                 </TableBody>
               </Table>
-              {ipAddressesData!.totalPages > 1 && (
+              {finalTotalPages > 1 && (
                 <PaginationControls
-                    currentPage={ipAddressesData!.currentPage}
-                    totalPages={ipAddressesData!.totalPages}
+                    currentPage={finalCurrentPage}
+                    totalPages={finalTotalPages}
                     basePath={pathname}
                     currentQuery={searchParams}
                 />

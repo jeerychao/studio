@@ -45,12 +45,12 @@ function SubnetsView() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const page = Number(searchParams.get('page')) || 1;
+  const currentPage = Number(searchParams.get('page')) || 1;
 
   const fetchData = React.useCallback(async () => {
     if (isAuthLoading || !currentUser) {
       if (!isAuthLoading && !currentUser) {
-           setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+           setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: ITEMS_PER_PAGE });
            setVlans([]);
            setIsLoading(false);
       } else {
@@ -61,18 +61,32 @@ function SubnetsView() {
     setIsLoading(true);
     try {
       if (!hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
-          setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+          setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: ITEMS_PER_PAGE });
           setVlans([]);
           setIsLoading(false);
           return;
       }
 
       const [subnetsResponse, vlansResponse] = await Promise.all([
-        getSubnetsAction({ page, pageSize: ITEMS_PER_PAGE }),
+        getSubnetsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
         getVLANsAction(),
       ]);
       setSubnetsData(subnetsResponse);
       setVlans(vlansResponse.data || []);
+
+      // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
+      if (subnetsResponse.data.length === 0 && subnetsResponse.currentPage > 1) {
+        const newTargetPage = subnetsResponse.totalPages > 0 ? subnetsResponse.totalPages : 1;
+        const currentUrlPage = Number(searchParams.get('page')) || 1;
+        if (currentUrlPage !== newTargetPage && currentUrlPage > subnetsResponse.totalPages) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("page", String(newTargetPage));
+            router.push(`${pathname}?${params.toString()}`);
+            // Data for the new page will be fetched by the next effect run due to URL change
+            return; 
+        }
+      }
+
     } catch (error: any) {
       console.error("加载子网数据时出错:", error);
       toast({
@@ -80,13 +94,13 @@ function SubnetsView() {
         description: error.message || "无法加载子网和VLAN。",
         variant: "destructive",
       });
-      setSubnetsData({ data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       setVlans([]);
     } finally {
       setIsLoading(false);
-      setSelectedIds(new Set()); // Clear selection on data refresh
+      setSelectedIds(new Set()); 
     }
-  }, [page, toast, currentUser, isAuthLoading]);
+  }, [currentPage, toast, currentUser, isAuthLoading, router, pathname, searchParams]);
 
   React.useEffect(() => {
     fetchData();
@@ -111,7 +125,7 @@ function SubnetsView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading) {
+  if (isAuthLoading || isLoading && !subnetsData) { // Keep showing loading if subnetsData is null during initial load
     return <LoadingSubnetsPage />;
   }
 
@@ -125,20 +139,18 @@ function SubnetsView() {
     );
   }
 
-  if (!subnetsData) {
+  if (!subnetsData) { // Should be caught by isLoading check, but as a fallback
     return <p>准备子网数据时出错。请尝试刷新。</p>;
   }
 
-  const { data: subnets, totalCount, currentPage, totalPages } = subnetsData;
+  const { data: subnetsToDisplay, totalCount, currentPage: finalCurrentPage, totalPages } = subnetsData;
 
   const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
   const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
   const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
 
-  // Safe calculation for isAllOnPageSelected and isSomeOnPageSelected
-  // subnets is guaranteed to be an array here (even if empty)
-  const isAllOnPageSelected = subnets.length > 0 && subnets.every(s => selectedIds.has(s.id));
-  const isSomeOnPageSelected = subnets.length > 0 && subnets.some(s => selectedIds.has(s.id));
+  const isAllOnPageSelected = subnetsToDisplay.length > 0 && subnetsToDisplay.every(s => selectedIds.has(s.id));
+  const isSomeOnPageSelected = subnetsToDisplay.length > 0 && subnetsToDisplay.some(s => selectedIds.has(s.id));
 
 
   return (
@@ -163,7 +175,7 @@ function SubnetsView() {
                   selectedIds={selectedIds}
                   itemTypeDisplayName="子网"
                   batchDeleteAction={batchDeleteSubnetsAction}
-                  onBatchDeleted={fetchData}
+                  onBatchDeleted={fetchData} // fetchData will handle pagination adjustment
                 />
               )}
               {canCreate && <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} />}
@@ -174,7 +186,7 @@ function SubnetsView() {
           <CardHeader>
             <CardTitle>子网列表</CardTitle>
             <CardDescription>
-              显示 {subnets.length} 条，共 {totalCount} 条子网。
+              显示 {subnetsToDisplay.length} 条，共 {totalCount} 条子网。
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -198,7 +210,7 @@ function SubnetsView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subnets.map((subnet) => {
+                {subnetsToDisplay.map((subnet) => {
                   const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
                   return (
                     <TableRow key={subnet.id} data-state={selectedIds.has(subnet.id) && "selected"}>
@@ -235,7 +247,7 @@ function SubnetsView() {
                             <SubnetFormSheet
                               subnet={subnet}
                               vlans={vlans}
-                              onSubnetChange={fetchData}
+                              onSubnetChange={fetchData} // fetchData will handle pagination
                             >
                               <Button variant="ghost" size="icon" aria-label="编辑子网">
                                 <Edit className="h-4 w-4" />
@@ -247,7 +259,7 @@ function SubnetsView() {
                               itemId={subnet.id}
                               itemName={subnet.cidr}
                               deleteAction={deleteSubnetAction}
-                              onDeleted={fetchData}
+                              onDeleted={fetchData} // fetchData will handle pagination
                               dialogTitle="删除子网?"
                               dialogDescription={`您确定要删除子网 ${subnet.cidr} 吗？此操作无法撤销。`}
                               triggerButton={
@@ -262,7 +274,7 @@ function SubnetsView() {
                     </TableRow>
                   );
                 })}
-                {subnets.length === 0 && (
+                {subnetsToDisplay.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={(canEdit || canDelete) ? 6 : 5} className="text-center h-24 text-muted-foreground">
                       未找到子网。{canCreate && "尝试创建一个！"}
@@ -273,7 +285,7 @@ function SubnetsView() {
             </Table>
             {totalPages > 1 && (
               <PaginationControls
-                currentPage={currentPage}
+                currentPage={finalCurrentPage}
                 totalPages={totalPages}
                 basePath={pathname}
                 currentQuery={searchParams}

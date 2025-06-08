@@ -62,6 +62,18 @@ function AuditLogsView() {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
         const fetchedLogsResult = await getAuditLogsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
         setLogsData(fetchedLogsResult);
+
+        // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
+        if (fetchedLogsResult.data.length === 0 && fetchedLogsResult.currentPage > 1) {
+          const newTargetPage = fetchedLogsResult.totalPages > 0 ? fetchedLogsResult.totalPages : 1;
+          const currentUrlPage = Number(searchParams.get('page')) || 1;
+          if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedLogsResult.totalPages) {
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("page", String(newTargetPage));
+              router.push(`${pathname}?${params.toString()}`);
+              return; 
+          }
+        }
       } else {
         setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       }
@@ -72,7 +84,7 @@ function AuditLogsView() {
       setIsLoading(false);
       setSelectedIds(new Set());
     }
-  }, [currentUser, isAuthLoading, toast, currentPage]);
+  }, [currentUser, isAuthLoading, toast, currentPage, router, pathname, searchParams]);
 
   React.useEffect(() => {
     fetchData();
@@ -110,7 +122,7 @@ function AuditLogsView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading) {
+  if (isAuthLoading || isLoading && !logsData) {
     return <LoadingAuditLogsPage />;
   }
 
@@ -126,9 +138,14 @@ function AuditLogsView() {
 
   const canDeleteLog = hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
 
-  const dataIsAvailable = !!(logsData && logsData.data && logsData.data.length > 0);
-  const isAllOnPageSelected = dataIsAvailable ? logsData.data!.every(log => selectedIds.has(log.id)) : false;
-  const isSomeOnPageSelected = dataIsAvailable ? logsData.data!.some(log => selectedIds.has(log.id)) : false;
+  const logsToDisplay = logsData?.data || [];
+  const finalTotalCount = logsData?.totalCount || 0;
+  const finalCurrentPage = logsData?.currentPage || 1;
+  const finalTotalPages = logsData?.totalPages || 0;
+
+  const dataIsAvailable = logsToDisplay.length > 0;
+  const isAllOnPageSelected = dataIsAvailable ? logsToDisplay.every(log => selectedIds.has(log.id)) : false;
+  const isSomeOnPageSelected = dataIsAvailable ? logsToDisplay.some(log => selectedIds.has(log.id)) : false;
 
   const pageActionElement = canDeleteLog && selectedIds.size > 0 ? (
     <BatchDeleteConfirmationDialog
@@ -152,7 +169,7 @@ function AuditLogsView() {
           <CardTitle>系统活动日志</CardTitle>
           <CardDescription>
             IPAM 系统中执行操作的时间顺序记录。
-            显示 {logsData?.data?.length || 0} 条，共 {logsData?.totalCount || 0} 条日志。
+            显示 {logsToDisplay.length} 条，共 {finalTotalCount} 条日志。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -178,7 +195,7 @@ function AuditLogsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logsData!.data.map((log) => (
+                  {logsToDisplay.map((log) => (
                     <TableRow
                       key={log.id}
                       onClick={(e) => handleRowClick(log, e)}
@@ -224,10 +241,10 @@ function AuditLogsView() {
                   ))}
                 </TableBody>
               </Table>
-              {logsData!.totalPages > 1 && (
+              {finalTotalPages > 1 && (
                 <PaginationControls
-                  currentPage={logsData!.currentPage}
-                  totalPages={logsData!.totalPages}
+                  currentPage={finalCurrentPage}
+                  totalPages={finalTotalPages}
                   basePath={pathname}
                   currentQuery={searchParams}
                 />

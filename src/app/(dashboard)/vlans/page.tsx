@@ -52,6 +52,18 @@ function VlansView() {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
         const fetchedVlansResult = await getVLANsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
         setVlansData(fetchedVlansResult);
+
+        // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
+        if (fetchedVlansResult.data.length === 0 && fetchedVlansResult.currentPage > 1) {
+          const newTargetPage = fetchedVlansResult.totalPages > 0 ? fetchedVlansResult.totalPages : 1;
+          const currentUrlPage = Number(searchParams.get('page')) || 1;
+          if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedVlansResult.totalPages) {
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("page", String(newTargetPage));
+              router.push(`${pathname}?${params.toString()}`);
+              return; 
+          }
+        }
       } else {
         setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
       }
@@ -62,7 +74,7 @@ function VlansView() {
       setIsLoading(false);
       setSelectedIds(new Set());
     }
-  }, [currentUser, isAuthLoading, toast, currentPage]);
+  }, [currentUser, isAuthLoading, toast, currentPage, router, pathname, searchParams]);
 
   React.useEffect(() => {
     fetchData();
@@ -87,7 +99,7 @@ function VlansView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading) {
+  if (isAuthLoading || isLoading && !vlansData) {
      return <LoadingVlansPage />;
   }
 
@@ -131,6 +143,11 @@ function VlansView() {
   const dataIsAvailable = !!(vlansData && vlansData.data && vlansData.data.length > 0);
   const isAllOnPageSelected = dataIsAvailable ? vlansData.data!.every(v => selectedIds.has(v.id)) : false;
   const isSomeOnPageSelected = dataIsAvailable ? vlansData.data!.some(s => selectedIds.has(s.id)) : false;
+  const finalCurrentPage = vlansData?.currentPage || 1;
+  const finalTotalPages = vlansData?.totalPages || 0;
+  const finalTotalCount = vlansData?.totalCount || 0;
+  const vlansToDisplay = vlansData?.data || [];
+
 
   return (
     <>
@@ -144,7 +161,7 @@ function VlansView() {
       <Card>
         <CardHeader>
           <CardTitle>VLAN 列表</CardTitle>
-          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansData?.data.length || 0} 条，共 {vlansData?.totalCount || 0} 条VLAN。</CardDescription>
+          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansToDisplay.length} 条，共 {finalTotalCount} 条VLAN。</CardDescription>
         </CardHeader>
         <CardContent>
           {dataIsAvailable ? (
@@ -168,7 +185,7 @@ function VlansView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vlansData!.data.map((vlan) => (
+                  {vlansToDisplay.map((vlan) => (
                     <TableRow key={vlan.id} data-state={selectedIds.has(vlan.id) ? "selected" : ""}>
                       <TableCell>
                         {canDelete && (
@@ -210,10 +227,10 @@ function VlansView() {
                   ))}
                 </TableBody>
               </Table>
-              {vlansData!.totalPages > 1 && (
+              {finalTotalPages > 1 && (
                 <PaginationControls
-                  currentPage={vlansData!.currentPage}
-                  totalPages={vlansData!.totalPages}
+                  currentPage={finalCurrentPage}
+                  totalPages={finalTotalPages}
                   basePath={pathname}
                   currentQuery={searchParams}
                 />
