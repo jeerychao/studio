@@ -105,7 +105,7 @@ function QueryPageContent() {
   const [isVlanLoading, setIsVlanLoading] = React.useState(false);
   const [vlanError, setVlanError] = React.useState<string | null>(null);
   const [currentVlanPage, setCurrentVlanPage] = React.useState(activeTab === 'vlan' ? (Number(searchParams.get('page')) || 1) : 1);
-  const [selectedVlanDetails, setSelectedVlanDetails] = React.useState<VlanQueryResult | null>(null); // ADDED
+  const [selectedVlanDetails, setSelectedVlanDetails] = React.useState<VlanQueryResult | null>(null);
 
 
   // --- IP Address Query State ---
@@ -197,7 +197,7 @@ function QueryPageContent() {
 
   // Subnet details sheet logic
   const handleSubnetRowClick = async (subnetId: string) => {
-    setSelectedVlanDetails(null); // Clear VLAN details
+    setSelectedVlanDetails(null);
     setIsSubnetDetailsLoading(true);
     setSubnetDetailsError(null);
     try {
@@ -217,13 +217,13 @@ function QueryPageContent() {
     }
   };
 
-  // VLAN details sheet logic - NEW
+  // VLAN details sheet logic
   const handleVlanRowClick = (vlan: VlanQueryResult) => {
-    setSelectedSubnetDetails(null); // Clear subnet details
-    setSelectedVlanDetails(vlan);   // Set VLAN details
-    setSubnetDetailsError(null);  // Clear potential errors from subnet details
-    setIsSubnetDetailsLoading(false); // Ensure subnet loading state is false
-    setIsSubnetDetailsSheetOpen(true); // Open the (shared) sheet
+    setSelectedSubnetDetails(null);
+    setSelectedVlanDetails(vlan);
+    setSubnetDetailsError(null); 
+    setIsSubnetDetailsLoading(false);
+    setIsSubnetDetailsSheetOpen(true);
   };
 
   // IP details sheet logic
@@ -505,3 +505,4 @@ export default function QueryPage() {
     </Suspense>
   );
 }
+
