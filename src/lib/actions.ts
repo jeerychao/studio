@@ -14,6 +14,8 @@ import {
   doSubnetsOverlap,
   compareIpStrings,
   groupConsecutiveIpsToRanges,
+  calculatePrefixLengthFromRequiredHosts, // New import
+  generateSubnetCandidates, // New import
 } from "./ip-utils";
 import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
@@ -1229,3 +1231,122 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
   }
 }
 
+// --- Smart Batch Create Subnets ---
+export interface SmartBatchCreateSubnetsPayload {
+  supernetCidr: string;
+  numberOfSubnets: number;
+  minIpsPerSubnet: number;
+  commonDescription?: string;
+  vlanId?: string;
+}
+
+export interface SubnetCandidatePreview {
+  id: string; // Temporary client-side ID for the preview item
+  candidateCidr: string;
+  plannedPrefix: number;
+  plannedUsableIps: number;
+  status: 'ok' | 'overlap' | 'error';
+  message?: string; // e.g., "与现有子网 192.168.1.0/24 重叠" or "父网段空间不足"
+  overlappingWithCidr?: string;
+}
+
+export async function smartBatchCreateSubnetsAction(
+  payload: SmartBatchCreateSubnetsPayload,
+  mode: 'preview' | 'create' = 'preview', // Default to preview mode
+  performingUserId?: string
+): Promise<ActionResponse<{ preview?: SubnetCandidatePreview[], createdSubnets?: AppSubnet[], errors?: BatchOperationFailure[] }>> {
+  const actionName = 'smartBatchCreateSubnetsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+
+  try {
+    // --- Input Validation ---
+    validateCidrInput(payload.supernetCidr, 'supernetCidr');
+    if (payload.numberOfSubnets <= 0) {
+      throw new ValidationError("要划分的子网数量必须大于0。", 'numberOfSubnets', payload.numberOfSubnets);
+    }
+    if (payload.minIpsPerSubnet <= 0) {
+      throw new ValidationError("每个子网最少IP数必须大于0。", 'minIpsPerSubnet', payload.minIpsPerSubnet);
+    }
+    const supernetProps = getSubnetPropertiesFromCidr(payload.supernetCidr);
+    if (!supernetProps) {
+      throw new ValidationError("无效的父网段CIDR格式。", 'supernetCidr', payload.supernetCidr);
+    }
+    if (payload.vlanId) {
+      const vlanExists = await prisma.vLAN.findUnique({ where: { id: payload.vlanId } });
+      if (!vlanExists) {
+        throw new NotFoundError(`VLAN ID: ${payload.vlanId}`, `选择的VLAN不存在。`, 'vlanId');
+      }
+    }
+
+    // --- Calculate Child Subnet Prefix ---
+    const childPrefixLength = calculatePrefixLengthFromRequiredHosts(payload.minIpsPerSubnet);
+    if (childPrefixLength <= supernetProps.prefix) {
+      throw new ValidationError(`根据请求的IP数 (${payload.minIpsPerSubnet}) 计算出的子网掩码 (/` + childPrefixLength + `) 无效或不小于父网段掩码 (/` + supernetProps.prefix + `)。`, 'minIpsPerSubnet', payload.minIpsPerSubnet);
+    }
+
+    // --- Generate Candidate Subnet CIDRs ---
+    const candidateCidrsResult = generateSubnetCandidates(payload.supernetCidr, payload.numberOfSubnets, childPrefixLength);
+    if (typeof candidateCidrsResult === 'object' && 'error' in candidateCidrsResult) {
+      // This error is likely a validation error for the form fields related to capacity
+      throw new ValidationError(candidateCidrsResult.error, 'numberOfSubnets', payload.numberOfSubnets);
+    }
+    const candidateCidrs = candidateCidrsResult as string[];
+
+
+    // --- Preview Mode Logic ---
+    const previewResults: SubnetCandidatePreview[] = [];
+    const existingSubnets = await prisma.subnet.findMany();
+
+    for (let i = 0; i < candidateCidrs.length; i++) {
+      const candidateCidr = candidateCidrs[i];
+      const tempId = `candidate-${i}`;
+      const candidateProps = getSubnetPropertiesFromCidr(candidateCidr);
+      let isOverlapping = false;
+      let overlappingWithCidr: string | undefined = undefined;
+
+      if (!candidateProps) {
+        previewResults.push({ id: tempId, candidateCidr, plannedPrefix: childPrefixLength, plannedUsableIps: getUsableIpCount(childPrefixLength), status: 'error', message: '无法解析候选CIDR属性。' });
+        continue;
+      }
+
+      for (const existingSub of existingSubnets) {
+        const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
+        if (existingSubProps && doSubnetsOverlap(candidateProps, existingSubProps)) {
+          isOverlapping = true;
+          overlappingWithCidr = existingSub.cidr;
+          break;
+        }
+      }
+      previewResults.push({
+        id: tempId,
+        candidateCidr,
+        plannedPrefix: childPrefixLength,
+        plannedUsableIps: getUsableIpCount(childPrefixLength),
+        status: isOverlapping ? 'overlap' : 'ok',
+        message: isOverlapping ? `与现有子网 ${overlappingWithCidr} 重叠。` : undefined,
+        overlappingWithCidr,
+      });
+    }
+
+    if (mode === 'preview') {
+      return { success: true, data: { preview: previewResults } };
+    }
+
+    // --- Create Mode Logic (Placeholder for now) ---
+    if (mode === 'create') {
+      // TODO: Implement actual creation logic based on previewResults (only 'ok' status)
+      // This will involve iterating through previewResults, filtering for 'ok' status,
+      // and then creating them in the database, similar to createSubnetAction but in a loop/transaction.
+      // Also, handle commonDescription templating and vlanId association.
+      // For now, just return a "not implemented" to avoid accidental writes.
+      logger.info('智能批量创建子网的 "create" 模式被调用，但尚未实现。', payload, actionName);
+      return { success: false, error: createActionErrorResponse(new AppError("创建模式尚未实现。", 501, "NOT_IMPLEMENTED"), actionName) };
+    }
+
+    // Should not be reached if mode is correctly 'preview' or 'create'
+    return { success: false, error: createActionErrorResponse(new AppError("无效的操作模式。", 400, "INVALID_MODE"), actionName) };
+
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}

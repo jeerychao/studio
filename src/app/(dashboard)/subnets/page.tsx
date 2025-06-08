@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { NetworkIcon, Edit, Trash2, Loader2 } from "lucide-react";
+import { NetworkIcon, Edit, Trash2, Loader2, Brain } from "lucide-react"; // Added Brain icon
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
+import { SubnetSmartBatchFormSheet } from "./subnet-smart-batch-form-sheet"; // New import
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
@@ -105,9 +106,7 @@ function SubnetsView() {
   }, [fetchData]);
 
   const handleSubnetCreationSuccess = React.useCallback(async () => {
-    // After a subnet is successfully created, determine the new last page and navigate there.
     try {
-      // Fetch minimal data (e.g., page 1, 1 item) just to get the latest pagination info
       const paginationInfo = await getSubnetsAction({ page: 1, pageSize: 1 });
       const newTotalPages = paginationInfo.totalPages;
       const targetPage = newTotalPages > 0 ? newTotalPages : 1;
@@ -117,10 +116,7 @@ function SubnetsView() {
         const params = new URLSearchParams(searchParams.toString());
         params.set("page", String(targetPage));
         router.push(`${pathname}?${params.toString()}`);
-        // The useEffect hook watching searchParams will trigger fetchData with the new page.
       } else {
-        // If the target page is the current page (e.g., still only one page of results),
-        // just refresh the data for the current page.
         fetchData();
       }
     } catch (error) {
@@ -129,7 +125,7 @@ function SubnetsView() {
         description: "创建子网后无法导航到目标页面，正在刷新当前页面。",
         variant: "destructive",
       });
-      fetchData(); // Fallback to refreshing current page
+      fetchData(); 
     }
   }, [fetchData, router, pathname, searchParams, toast]);
 
@@ -197,7 +193,7 @@ function SubnetsView() {
           description="查看、创建和管理您的网络子网。"
           icon={<NetworkIcon className="h-6 w-6 text-primary" />}
           actionElement={
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               {canDelete && selectedIds.size > 0 && (
                 <BatchDeleteConfirmationDialog
                   selectedIds={selectedIds}
@@ -206,7 +202,16 @@ function SubnetsView() {
                   onBatchDeleted={fetchData}
                 />
               )}
-              {canCreate && <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} />}
+              {canCreate && (
+                <>
+                  <SubnetSmartBatchFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess}>
+                    <Button variant="outline" className="w-full sm:w-auto">
+                      <Brain className="mr-2 h-4 w-4" /> 智能批量添加
+                    </Button>
+                  </SubnetSmartBatchFormSheet>
+                  <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
+                </>
+              )}
             </div>
           }
         />

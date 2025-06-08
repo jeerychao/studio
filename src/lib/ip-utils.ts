@@ -233,3 +233,61 @@ export function groupConsecutiveIpsToRanges(ipNumbers: number[]): string[] {
   
   return ranges;
 }
+
+export function calculatePrefixLengthFromRequiredHosts(requiredHosts: number): number {
+  if (requiredHosts <= 0) {
+    return 32; // Smallest possible subnet for 0 or negative hosts
+  }
+  // We need 2^H >= requiredHosts + 2 (for network and broadcast addresses)
+  // except for /31 (2 hosts) and /32 (1 host)
+  if (requiredHosts === 1) return 32;
+  if (requiredHosts === 2) return 31;
+
+  const requiredTotalAddresses = requiredHosts + 2;
+  let hostBits = 0;
+  while (Math.pow(2, hostBits) < requiredTotalAddresses) {
+    hostBits++;
+    if (hostBits > 30) { // Max prefix for general subnets is /30 (4 total, 2 usable)
+        // if hostBits goes to 31, it means prefix 1, which is too large.
+        // if hostBits goes to 32, it means prefix 0.
+        // This situation implies an extremely large number of hosts requested.
+        throw new ValidationError("请求的每个子网的IP地址数量过大。", 'minIpsPerSubnet', requiredHosts, '请求的IP地址数量过多，无法划分。');
+    }
+  }
+  return 32 - hostBits;
+}
+
+export function generateSubnetCandidates(
+  supernetCidr: string,
+  numberOfSubnets: number,
+  childPrefixLength: number
+): string[] | { error: string } {
+  const supernetProps = getSubnetPropertiesFromCidr(supernetCidr);
+  if (!supernetProps) {
+    return { error: "无效的父网段CIDR。" };
+  }
+
+  if (childPrefixLength <= supernetProps.prefix) {
+    return { error: "子网掩码长度必须大于父网段的掩码长度。" };
+  }
+
+  const maxPossibleChildren = Math.pow(2, childPrefixLength - supernetProps.prefix);
+  if (numberOfSubnets > maxPossibleChildren) {
+    return { error: `父网段 ${supernetCidr} 最多只能划分为 ${maxPossibleChildren} 个 /${childPrefixLength} 的子网，请求了 ${numberOfSubnets} 个。` };
+  }
+
+  const candidates: string[] = [];
+  let currentNetworkNum = ipToNumber(supernetProps.networkAddress);
+  const childSubnetSize = Math.pow(2, 32 - childPrefixLength);
+
+  for (let i = 0; i < numberOfSubnets; i++) {
+    const candidateNetworkAddress = numberToIp(currentNetworkNum);
+    candidates.push(`${candidateNetworkAddress}/${childPrefixLength}`);
+    currentNetworkNum += childSubnetSize;
+    if (currentNetworkNum > ipToNumber(supernetProps.broadcastAddress)) {
+        // This should ideally be caught by maxPossibleChildren check, but as a safeguard.
+        return { error: `计算候选子网时超出父网段范围。在第 ${i+1} 个子网处。`};
+    }
+  }
+  return candidates;
+}
