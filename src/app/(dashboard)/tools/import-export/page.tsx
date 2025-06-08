@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
-import type { Subnet, VLAN, IPAddress } from "@/types"; // IPAddress type is not directly used for mapping here but kept for consistency
 import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
@@ -30,10 +29,7 @@ export default function ImportExportPage() {
     }
 
     setIsExporting(dataType);
-    let dataToExport: any[] = [];
-    let filename = `${dataType}_export.csv`;
     let csvContent = "";
-    let csvHeaders: string[] = [];
     const lineSeparator = "\r\n";
 
     const convertToCSV = (data: any[], headersToUse: string[]) => {
@@ -47,11 +43,10 @@ export default function ImportExportPage() {
     try {
       if (dataType === "all") {
         let combinedCsvContent = "";
-        filename = `ipam_lite_all_data_export.csv`;
         let subnetSequentialId = 1;
 
-        const subnetsResponse = await getSubnetsAction();
-        const allVlansForLookup = (await getVLANsAction()).data;
+        const subnetsResponse = await getSubnetsAction(); // Fetches all subnets, no pagination for export
+        const allVlansForLookup = (await getVLANsAction()).data; // Fetches all VLANs
 
         if (subnetsResponse.data.length > 0) {
           const subnetsForCsv = subnetsResponse.data.map(subnet => {
@@ -62,22 +57,21 @@ export default function ImportExportPage() {
               networkAddress: subnet.networkAddress,
               subnetMask: subnet.subnetMask,
               ipRange: subnet.ipRange || "",
-              vlanNumber: vlanDetails?.vlanNumber || "", // Keep vlanNumber
-              vlanName: vlanDetails?.name || "",       // Keep vlanName
+              vlanNumber: vlanDetails?.vlanNumber || "",
+              vlanName: vlanDetails?.name || "",
               description: subnet.description || "",
               utilization: subnet.utilization || 0,
             };
           });
-          // Remove 'vlanId' from headers for subnets part
           const subnetHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "vlanName", "description", "utilization"];
           combinedCsvContent += "# --- SUBNETS ---" + lineSeparator;
           combinedCsvContent += convertToCSV(subnetsForCsv, subnetHeaders) + lineSeparator + lineSeparator;
         }
 
-        const vlansResponse = await getVLANsAction();
+        const vlansResponse = await getVLANsAction(); // Fetches all VLANs
         if (vlansResponse.data.length > 0) {
           const vlansForCsv = vlansResponse.data.map(vlan => ({
-            id: vlan.id, // Keep original ID for VLANs
+            id: vlan.id,
             vlanNumber: vlan.vlanNumber,
             name: vlan.name || "",
             description: vlan.description || "",
@@ -88,7 +82,7 @@ export default function ImportExportPage() {
           combinedCsvContent += convertToCSV(vlansForCsv, vlanHeaders) + lineSeparator + lineSeparator;
         }
 
-        const ipsResponse = await getIPAddressesAction();
+        const ipsResponse = await getIPAddressesAction(); // Fetches all IPs
         if (ipsResponse.data.length > 0) {
           const ipsForCsv = ipsResponse.data.map(ip => {
               let vlanNumberStr = "";
@@ -101,11 +95,11 @@ export default function ImportExportPage() {
                   vlanNameStr = ip.subnet.vlan.name || "";
               }
               return {
-                  id: ip.id, // Keep original ID for IPs
+                  id: ip.id,
                   ipAddress: ip.ipAddress,
-                  subnetId: ip.subnetId || "", // Keep original subnetId for IPs
+                  subnetId: ip.subnetId || "",
                   subnetCidr: ip.subnet?.cidr || "",
-                  vlanId: ip.vlanId || "", // Keep original vlanId for IPs for referential integrity context
+                  vlanId: ip.vlanId || "",
                   vlanNumber: vlanNumberStr,
                   vlanName: vlanNameStr,
                   status: ip.status,
@@ -113,7 +107,6 @@ export default function ImportExportPage() {
                   description: ip.description || "",
               };
           });
-          // Keep vlanId in IP export as it's a foreign key
           const ipHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "vlanName", "status", "allocatedTo", "description"];
           combinedCsvContent += "# --- IP ADDRESSES ---" + lineSeparator;
           combinedCsvContent += convertToCSV(ipsForCsv, ipHeaders);
@@ -126,81 +119,93 @@ export default function ImportExportPage() {
         }
         csvContent = combinedCsvContent;
 
-      } else if (dataType === "subnets") {
+      } else { // Handling individual types: "subnets", "vlans", "ips"
+        let localDataToExport: any[] = [];
+        let localCsvHeaders: string[] = [];
+        let filenameFragment = dataType;
+
+        if (dataType === "subnets") {
           const subnetsResponse = await getSubnetsAction();
           const allVlansForLookup = (await getVLANsAction()).data;
           let sequentialId = 1;
-
           const subnetsForCsv = subnetsResponse.data.map(subnet => {
             const vlanDetails = subnet.vlanId ? allVlansForLookup.find(v => v.id === subnet.vlanId) : null;
             return {
-              id: sequentialId++, // Use sequential ID
+              id: sequentialId++,
               cidr: subnet.cidr,
               networkAddress: subnet.networkAddress,
               subnetMask: subnet.subnetMask,
               ipRange: subnet.ipRange || "",
-              // vlanId: subnet.vlanId || "", // REMOVE vlanId
               vlanNumber: vlanDetails?.vlanNumber || "",
               vlanName: vlanDetails?.name || "",
               description: subnet.description || "",
               utilization: subnet.utilization || 0,
             };
           });
-          dataToExport = subnetsForCsv;
-          // Updated headers: removed 'vlanId'
-          csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "vlanName", "description", "utilization"];
+          localDataToExport = subnetsForCsv;
+          localCsvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "vlanName", "description", "utilization"];
         } else if (dataType === "vlans") {
-            const vlansResponse = await getVLANsAction();
-            const vlansForCsv = vlansResponse.data.map(vlan => ({
-              id: vlan.id, // Keep original ID
-              vlanNumber: vlan.vlanNumber,
-              name: vlan.name || "",
-              description: vlan.description || "",
-              resourceCount: vlan.subnetCount || 0,
-            }));
-            dataToExport = vlansForCsv;
-            csvHeaders = ["id", "vlanNumber", "name", "description", "resourceCount"];
+          const vlansResponse = await getVLANsAction();
+          const vlansForCsv = vlansResponse.data.map(vlan => ({
+            id: vlan.id,
+            vlanNumber: vlan.vlanNumber,
+            name: vlan.name || "",
+            description: vlan.description || "",
+            resourceCount: vlan.subnetCount || 0,
+          }));
+          localDataToExport = vlansForCsv;
+          localCsvHeaders = ["id", "vlanNumber", "name", "description", "resourceCount"];
         } else if (dataType === "ips") {
-            const ipsResponse = await getIPAddressesAction();
-             const ipsForCsv = ipsResponse.data.map(ip => {
-                let vlanNumberStr = "";
-                let vlanNameStr = "";
-                if (ip.vlan?.vlanNumber) {
-                    vlanNumberStr = ip.vlan.vlanNumber.toString();
-                    vlanNameStr = ip.vlan.name || "";
-                } else if (ip.subnet?.vlan?.vlanNumber) {
-                    vlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
-                    vlanNameStr = ip.subnet.vlan.name || "";
-                }
-                return {
-                    id: ip.id, // Keep original ID
-                    ipAddress: ip.ipAddress,
-                    subnetId: ip.subnetId || "", // Keep original subnetId
-                    subnetCidr: ip.subnet?.cidr || "",
-                    vlanId: ip.vlanId || "", // Keep original vlanId
-                    vlanNumber: vlanNumberStr,
-                    vlanName: vlanNameStr,
-                    status: ip.status,
-                    allocatedTo: ip.allocatedTo || "",
-                    description: ip.description || "",
-                };
-            });
-            dataToExport = ipsForCsv;
-            // Keep vlanId here as it's an attribute of IPAddress linking to a VLAN
-            csvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "vlanName", "status", "allocatedTo", "description"];
+          filenameFragment = "ip_addresses";
+          const ipsResponse = await getIPAddressesAction();
+          const ipsForCsv = ipsResponse.data.map(ip => {
+              let vlanNumberStr = "";
+              let vlanNameStr = "";
+              if (ip.vlan?.vlanNumber) {
+                  vlanNumberStr = ip.vlan.vlanNumber.toString();
+                  vlanNameStr = ip.vlan.name || "";
+              } else if (ip.subnet?.vlan?.vlanNumber) {
+                  vlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
+                  vlanNameStr = ip.subnet.vlan.name || "";
+              }
+              return {
+                  id: ip.id,
+                  ipAddress: ip.ipAddress,
+                  subnetId: ip.subnetId || "",
+                  subnetCidr: ip.subnet?.cidr || "",
+                  vlanId: ip.vlanId || "",
+                  vlanNumber: vlanNumberStr,
+                  vlanName: vlanNameStr,
+                  status: ip.status,
+                  allocatedTo: ip.allocatedTo || "",
+                  description: ip.description || "",
+              };
+          });
+          localDataToExport = ipsForCsv;
+          localCsvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "vlanName", "status", "allocatedTo", "description"];
+        } else {
+          // Should not be reached due to TypeScript, but as a safeguard
+          toast({ title: "错误", description: "未知的数据类型导出请求。", variant: "destructive" });
+          setIsExporting(false);
+          return;
         }
 
-        if (dataType !== "all" && dataToExport.length === 0) {
+        if (localDataToExport.length === 0) {
             toast({ title: "无数据", description: `没有可用于导出的 ${dataType === "ips" ? "IP 地址" : dataType === "subnets" ? "子网" : "VLAN"} 数据。`});
             setIsExporting(false);
             return;
         }
-        if (dataType !== "all") {
-          csvContent = convertToCSV(dataToExport, csvHeaders);
-        }
+        csvContent = convertToCSV(localDataToExport, localCsvHeaders);
       }
 
-
+      // Final check to ensure csvContent is not empty before proceeding
+      if (!csvContent || (dataType === "all" && !csvContent.replace(/# --- [A-Z ]+ ---\r\n/g, '').replace(/\r\n/g, '').trim())) {
+          toast({ title: "无内容导出", description: "未能生成CSV内容或选定类型无数据。" });
+          setIsExporting(false);
+          return;
+      }
+      
+      const filename = `${dataType === "ips" ? "ip_addresses" : dataType}_export.csv`;
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement("a");
       if (link.download !== undefined) {
@@ -211,6 +216,7 @@ export default function ImportExportPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url); // Clean up the object URL
         toast({ title: "导出已开始", description: `${filename} 正在下载。` });
       } else {
           toast({ title: "导出失败", description: "浏览器不支持直接下载。", variant: "destructive"});
@@ -221,7 +227,7 @@ export default function ImportExportPage() {
     } finally {
         setIsExporting(false);
     }
-  };
+  }; // <= This was the problematic area. The semicolon for the function expression was needed.
 
   if (isAuthLoading) {
     return (
@@ -266,28 +272,28 @@ export default function ImportExportPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Button variant="outline" onClick={() => handleExport("subnets")} className="w-full" disabled={!canExport || isExporting === "subnets"}>
                 {isExporting === "subnets"
-                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" />
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : <Image src="/images/tool_icons/file_down_icon.png" alt="Export Subnets" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
                 }
                 导出子网 (CSV)
               </Button>
               <Button variant="outline" onClick={() => handleExport("vlans")} className="w-full" disabled={!canExport || isExporting === "vlans"}>
                 {isExporting === "vlans"
-                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" />
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : <Image src="/images/tool_icons/file_down_icon.png" alt="Export VLANs" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
                 }
                 导出VLAN (CSV)
               </Button>
               <Button variant="outline" onClick={() => handleExport("ips")} className="w-full" disabled={!canExport || isExporting === "ips"}>
                 {isExporting === "ips"
-                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" />
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : <Image src="/images/tool_icons/file_down_icon.png" alt="Export IPs" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
                 }
                 导出IP地址 (CSV)
               </Button>
               <Button variant="outline" onClick={() => handleExport("all")} className="w-full sm:col-span-2" disabled={!canExport || isExporting === "all"}>
                 {isExporting === "all"
-                  ? <Image src="/images/tool_icons/loader_icon.png" alt="Loading" width={16} height={16} className="mr-2 animate-spin" data-ai-hint="loading spinner icon" />
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : <Image src="/images/tool_icons/file_down_icon.png" alt="Export All" width={16} height={16} className="mr-2" data-ai-hint="download file icon" />
                 }
                 导出所有数据 (CSV)
@@ -299,5 +305,3 @@ export default function ImportExportPage() {
     </>
   );
 }
-
-    
