@@ -42,7 +42,7 @@ const navItemConfigs: NavItemConfig[] = [
   {
     href: "/ip-management", 
     label: "IP 管理",
-    icon: Network,
+    icon: Network, // No specific permission for the group itself, visibility depends on children
     subItems: [
       { href: "/vlans", label: "VLAN 管理", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
       { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
@@ -57,7 +57,7 @@ const navItemConfigs: NavItemConfig[] = [
   },
   {
     href: "/user-management", 
-    label: "用户和角色",
+    label: "用户和角色", // No specific permission for the group itself
     icon: Users,
     subItems: [
       { href: "/users", label: "用户管理", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
@@ -71,8 +71,7 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.PERFORM_TOOLS_EXPORT 
   },
   { href: "/audit-logs", label: "审计日志", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
-  // Note: Settings is typically handled by a button in the footer, not as a main nav item here.
-  // If it needs to be here, it would look like:
+  // Settings is handled by a separate button in SidebarFooter
   // { href: "/settings", label: "设置", icon: SettingsIconLucide, requiredPermission: PERMISSIONS.VIEW_SETTINGS },
 ];
 
@@ -80,15 +79,10 @@ export function SidebarNav() {
   const pathname = usePathname();
   const { currentUser, isAuthLoading } = useCurrentUser();
 
-  // logger.debug("[SidebarNav] Render. Pathname:", pathname, "isAuthLoading:", isAuthLoading);
-  // if (currentUser) {
-  //  logger.debug("[SidebarNav] currentUser on render:", { id: currentUser.id, username: currentUser.username, roleName: currentUser.roleName, permissions: currentUser.permissions, permissionsCount: currentUser.permissions?.length });
-  // } else {
-  //   logger.debug("[SidebarNav] currentUser is null on render");
-  // }
+  // logger.debug("[SidebarNav] Render. Pathname:", pathname, "isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : 'null');
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
-    // logger.debug("[filterNavItemsByPermission] Start filtering. User:", user ? user.username : "null", "User permissions:", user?.permissions);
+    // logger.debug("[filterNavItemsByPermission] Start filtering. User:", user ? user.username : "null", "User permissions (first 5):", user?.permissions?.slice(0,5));
     if (!user || !user.permissions || !Array.isArray(user.permissions)) {
       // logger.warn("[filterNavItemsByPermission] User is null or permissions array is invalid. Returning empty list.");
       return [];
@@ -118,7 +112,6 @@ export function SidebarNav() {
       }
       
       // If the item itself requires a permission and the user doesn't have it, hide it.
-      // This applies even if it's a parent item with sub-items; the parent itself might require a view permission.
       if (item.requiredPermission && !hasAccessToCurrentItem) {
         // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' access denied due to its own required permission. Hiding.`);
         return null;
@@ -135,7 +128,7 @@ export function SidebarNav() {
         // logger.debug("[SidebarNav useMemo accessibleNavItems] Auth loading or no current user, returning empty array for accessibleNavItems.");
         return [];
       }
-      // logger.debug("[SidebarNav useMemo accessibleNavItems] Calculating for user:", currentUser.username, "User Permissions:", currentUser.permissions);
+      // logger.debug("[SidebarNav useMemo accessibleNavItems] Calculating for user:", currentUser.username, "User Permissions (first 5):", currentUser.permissions?.slice(0,5));
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
       // logger.debug(`[SidebarNav useMemo accessibleNavItems] Final calculated items for user ${currentUser.username}:`, items.map(i=> ({label: i.label, href: i.href, subItemsCount: i.subItems?.length || 0 })));
       return items;
@@ -221,23 +214,22 @@ export function SidebarNav() {
   // logger.debug("[SidebarNav DEBUG Final Render Check] isAuthLoading:", isAuthLoading, "currentUser exists:", !!currentUser);
   // if(currentUser) {
   //   logger.debug("[SidebarNav DEBUG Final Render Check] currentUser.username:", currentUser.username, "currentUser.permissions (count):", currentUser.permissions?.length);
-  //   logger.debug("[SidebarNav DEBUG Final Render Check] currentUser.permissions (actual):", currentUser.permissions);
+  //   // logger.debug("[SidebarNav DEBUG Final Render Check] currentUser.permissions (actual):", currentUser.permissions);
   // }
   // logger.debug("[SidebarNav DEBUG Final Render Check] accessibleNavItems count:", accessibleNavItems?.length);
-  // logger.debug("[SidebarNav DEBUG Final Render Check] accessibleNavItems (actual):", accessibleNavItems?.map(i => i.label));
+  // logger.debug("[SidebarNav DEBUG Final Render Check] accessibleNavItems (actual labels):", accessibleNavItems?.map(i => i.label));
 
 
-  // Temporary UI Debug Info
   const TempDebugInfo = () => {
-    if (!currentUser) return <div className="p-2 text-xs text-red-400 bg-red-900">Debug: currentUser is NULL</div>;
+    if (!currentUser) return <div className="p-2 text-xs text-red-400 bg-red-900/50 rounded">调试: currentUser 为空</div>;
     return (
-      <div className="p-2 text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded mb-2">
+      <div className="p-2 mb-2 text-xs bg-gray-800/50 text-gray-300 border border-gray-700/50 rounded">
         <p><strong>临时调试信息:</strong></p>
         <p>用户: {currentUser.username}</p>
         <p>角色: {currentUser.roleName}</p>
         <p>权限数 (currentUser): {currentUser.permissions?.length || 0}</p>
         <p>可访问菜单项数: {accessibleNavItems?.length || 0}</p>
-        <p className="mt-1">权限列表 (前5项): {currentUser.permissions?.slice(0,5).join(', ') || '无'}...</p>
+        <p className="mt-1">权限 (前5): {currentUser.permissions?.slice(0,5).join(', ') || '无'}...</p>
         <p className="mt-1">可访问菜单: {accessibleNavItems?.map(item => item.label).join(', ') || '无'}</p>
       </div>
     );
@@ -248,23 +240,23 @@ export function SidebarNav() {
     // logger.debug("[SidebarNav] Render: Auth loading, showing loading message.");
     return (
       <>
-        {/* <TempDebugInfo /> Uncomment if needed even during loading */}
+        {/* <TempDebugInfo /> */}
         <div className="p-4 text-sm text-sidebar-foreground">加载导航...</div>
       </>
     );
   }
   if (!currentUser) {
-    // logger.warn("[SidebarNav] Render: No current user (still potentially initializing or truly no user), showing error message.");
+    // logger.warn("[SidebarNav] Render: No current user, showing error message.");
     return (
       <>
-        {/* <TempDebugInfo /> */}
+        <TempDebugInfo /> {/* Show debug info even if currentUser is null to see what it is */}
         <div className="p-4 text-sm text-sidebar-foreground">加载用户数据错误或用户未登录。</div>
       </>
     );
   }
   
   if (accessibleNavItems.length === 0 && currentUser.id !== 'guest-fallback-id') {
-    // logger.warn(`[SidebarNav] Render: No accessible nav items for user ${currentUser.username} (not guest). Permissions:`, currentUser.permissions);
+    // logger.warn(`[SidebarNav] Render: No accessible nav items for user ${currentUser.username} (not guest). Check permissions.`);
     return (
       <>
         <TempDebugInfo />

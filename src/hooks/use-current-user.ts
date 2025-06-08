@@ -37,7 +37,8 @@ const createGuestUser = async (): Promise<CurrentUserContextValue> => {
       avatar: '/images/avatars/default_avatar.png',
       lastLogin: undefined,
       roleName: 'Viewer',
-      permissions: [PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_QUERY_PAGE] // Minimal permissions for guest
+      // Minimal permissions for guest to allow basic page view without crashing SidebarNav
+      permissions: [PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_QUERY_PAGE] 
   };
 };
 
@@ -46,19 +47,20 @@ export function useCurrentUser(): UseCurrentUserReturn {
   const [currentUser, setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
   const [isInitialized, setIsInitialized] = React.useState(false);
-  // const router = useRouter();
-  // const pathname = usePathname();
+  // const router = useRouter(); // Not directly used in this effect's core logic
+  // const pathname = usePathname(); // Not directly used in this effect's core logic
 
   React.useEffect(() => {
     // logger.debug("[useCurrentUser Effect Outer] Running. isInitialized:", isInitialized);
     if (typeof window === "undefined") {
-      logger.debug("useCurrentUser Effect: window is undefined (SSR), skipping initialization.");
-      // Important: Still need to set loading to false and initialized to true for SSR consistency if needed,
-      // but client-side logic below will handle actual user fetching.
-      // For now, this path leads to `currentUser` being null and `isAuthLoading` true initially.
-      // This might be okay if SSR doesn't need the user, but could cause hydration issues
-      // if SSR content *depends* on the user state that then changes on client.
-      // Given our setup, user-dependent content is mostly client-rendered or in DashboardLayout checks.
+      // logger.debug("useCurrentUser Effect: window is undefined (SSR), skipping initialization.");
+      // On SSR, we typically don't have localStorage or a "current user" in this client-side sense.
+      // Set loading to false and initialized to true to avoid an infinite loading state on SSR.
+      // The actual user will be determined client-side.
+      if (!isInitialized) { // Only set these if not already initialized (e.g. by a previous client render)
+          setIsAuthLoading(false);
+          setIsInitialized(true);
+      }
       return;
     }
 
@@ -78,17 +80,15 @@ export function useCurrentUser(): UseCurrentUserReturn {
           logger.debug(`useCurrentUser initializeUser: Found storedUserId: ${storedUserId}. Fetching details...`);
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
           
-          // Log the raw userDetails received from the action
           logger.debug(`useCurrentUser initializeUser: Raw userDetails from fetchCurrentUserDetailsAction for ID ${storedUserId}:`, userDetails);
 
           if (userDetails) {
-            logger.debug(`useCurrentUser initializeUser: User details successfully fetched for ${storedUserId}: ${userDetails.username}. Role: ${userDetails.roleName}.`);
-            logger.debug(`useCurrentUser initializeUser: Permissions from userDetails for ${storedUserId}:`, userDetails.permissions);
+            logger.debug(`useCurrentUser initializeUser: User details successfully fetched for ${storedUserId}: ${userDetails.username}. Role: ${userDetails.roleName}. Permissions raw:`, userDetails.permissions);
             userToSet = {
               ...userDetails,
               permissions: userDetails.permissions || [], // Ensure permissions is always an array
             };
-            // logger.debug(`useCurrentUser initializeUser: User object to set for ${storedUserId}:`, userToSet);
+            logger.debug(`useCurrentUser initializeUser: User object to set for ${storedUserId}:`, { id: userToSet.id, username: userToSet.username, roleName: userToSet.roleName, permissions: userToSet.permissions.slice(0,5) });
           } else {
             logger.warn(`useCurrentUser initializeUser: User details not found for stored ID "${storedUserId}". Clearing localStorage and creating guest user.`);
             localStorage.removeItem(MOCK_USER_STORAGE_KEY);
@@ -109,7 +109,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
           userSet: userToSet ? userToSet.username : 'null', 
           isAuthLoading: false, 
           isInitialized: true,
-          finalPermissionsSet: userToSet ? userToSet.permissions : [],
+          finalPermissions: userToSet ? userToSet.permissions.slice(0,5) : [],
           finalPermissionsCount: userToSet ? userToSet.permissions.length : 0
         });
       }
@@ -162,7 +162,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
     return () => {
         // logger.debug("[useCurrentUser Cleanup Effect] Running. isInitialized:", isInitialized);
     };
-  }, [isInitialized]); // Dependency array only includes isInitialized
+  }, [isInitialized]); // Effect only runs when isInitialized changes
 
   return {
     currentUser: currentUser, // Return current state, could be null briefly during init

@@ -85,29 +85,32 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     return { success: false, message: "邮箱和密码是必需的。" };
   }
   try {
+    logger.debug(`[${actionName}] Attempting login for email: ${email}`, undefined, actionName);
     const userFromDb = await prisma.user.findUnique({
       where: { email },
       include: { role: { include: { permissions: true } } },
     });
 
     if (!userFromDb) {
-      logger.error('Login attempt failed: User not found', new AuthError(`User with email ${email} not found.`), { email }, actionName);
+      logger.error(`[${actionName}] Login attempt failed: User not found for email ${email}.`, new AuthError(`User with email ${email} not found.`), { email }, actionName);
       return { success: false, message: "邮箱或密码无效。" };
     }
+    logger.debug(`[${actionName}] User found in DB: ${userFromDb.username}`, { userId: userFromDb.id }, actionName);
+
 
     if (userFromDb.password !== password) {
-      logger.warn('Login attempt failed: Invalid password', new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName);
+      logger.warn(`[${actionName}] Login attempt failed: Invalid password for user ${userFromDb.username}.`, new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName);
       return { success: false, message: "邮箱或密码无效。" };
     }
 
     if (!userFromDb.role || !userFromDb.role.name) {
-        logger.error(`User ${userFromDb.id} is missing role or role name in database during login.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName);
+        logger.error(`[${actionName}] User ${userFromDb.id} (${userFromDb.username}) is missing role or role name in database during login.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName);
         return { success: false, message: "用户角色信息不完整。" };
     }
     
     // Detailed logging for permissions
     logger.debug(`[${actionName}] Raw userFromDb.role object for user ${userFromDb.username}:`, { roleId: userFromDb.role.id, roleName: userFromDb.role.name }, actionName);
-    logger.debug(`[${actionName}] Raw userFromDb.role.permissions for user ${userFromDb.username}:`, userFromDb.role.permissions, actionName);
+    logger.debug(`[${actionName}] Raw userFromDb.role.permissions for user ${userFromDb.username} (type: ${typeof userFromDb.role.permissions}, isArray: ${Array.isArray(userFromDb.role.permissions)}):`, userFromDb.role.permissions, actionName);
 
 
     // Robust check for permissions
@@ -139,7 +142,7 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
       permissions: permissionsList,
       lastLogin: userFromDb.lastLogin?.toISOString()
     };
-    logger.debug(`[${actionName}] LoggedInUser object prepared:`, { username: loggedInUser.username, permissionsCount: loggedInUser.permissions.length }, actionName);
+    logger.debug(`[${actionName}] LoggedInUser object prepared:`, { username: loggedInUser.username, permissionsCount: loggedInUser.permissions.length, permissions: loggedInUser.permissions.slice(0,5) }, actionName);
 
     await prisma.auditLog.create({
       data: {
@@ -151,7 +154,7 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     });
     return { success: true, user: loggedInUser };
   } catch (error) {
-    logger.error('Login action unexpected error', error as Error, { email }, actionName);
+    logger.error(`[${actionName}] Login action unexpected error`, error as Error, { email }, actionName);
     return { success: false, message: "登录过程中发生意外错误。" };
   }
 }
@@ -163,6 +166,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
     return null;
   }
   try {
+    logger.debug(`[${actionName}] Fetching details for userId: ${userId}`, undefined, actionName);
     const userFromDb = await prisma.user.findUnique({
       where: { id: userId },
       include: { role: { include: { permissions: true } } },
@@ -172,6 +176,8 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
       logger.warn(`[${actionName}] User not found for ID: ${userId}.`, undefined, { userId }, actionName);
       return null;
     }
+    logger.debug(`[${actionName}] User found in DB: ${userFromDb.username}`, { userId: userFromDb.id }, actionName);
+
     if (!userFromDb.role || !userFromDb.role.name) {
         logger.error(`[${actionName}] User ${userId} is missing valid role or role name in database.`, new AppError("User role data invalid"), { userId }, actionName);
         return null; 
@@ -179,7 +185,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
     
     // Detailed logging for permissions
     logger.debug(`[${actionName}] Raw userFromDb.role object for user ID ${userId}:`, { roleId: userFromDb.role.id, roleName: userFromDb.role.name }, actionName);
-    logger.debug(`[${actionName}] Raw userFromDb.role.permissions for user ID ${userId}:`, userFromDb.role.permissions, actionName);
+    logger.debug(`[${actionName}] Raw userFromDb.role.permissions for user ID ${userId} (type: ${typeof userFromDb.role.permissions}, isArray: ${Array.isArray(userFromDb.role.permissions)}):`, userFromDb.role.permissions, actionName);
 
     let permissionsList: AppPermissionIdType[] = [];
     if (Array.isArray(userFromDb.role.permissions)) {
@@ -204,11 +210,11 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
       permissions: permissionsList,
       lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
     };
-    logger.debug(`[${actionName}] FetchedUserDetails object prepared for ID ${userId}:`, { username: fetchedUser.username, permissionsCount: fetchedUser.permissions.length }, actionName);
+    logger.debug(`[${actionName}] FetchedUserDetails object prepared for ID ${userId}:`, { username: fetchedUser.username, permissionsCount: fetchedUser.permissions.length, permissions: fetchedUser.permissions.slice(0,5) }, actionName);
     return fetchedUser;
 
   } catch (error) {
-    logger.error(`Error in ${actionName}`, error as Error, { userId }, actionName);
+    logger.error(`[${actionName}] Error in fetchCurrentUserDetailsAction for userId ${userId}`, error as Error, { userId }, actionName);
     return null; 
   }
 }
