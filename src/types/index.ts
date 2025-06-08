@@ -75,6 +75,7 @@ export interface Subnet {
 export interface VLAN {
   id: string;
   vlanNumber: number;
+  name?: string; // Added VLAN name field
   description?: string;
   subnetCount?: number;
 }
@@ -127,20 +128,21 @@ export interface SubnetQueryResult {
   cidr: string;
   description?: string;
   vlanNumber?: number;
-  vlanDescription?: string;
+  vlanName?: string; // Changed from vlanDescription to vlanName
   totalUsableIPs: number;
-  allocatedIPsCount: number; // IPs marked 'allocated' in DB
-  dbFreeIPsCount: number;    // IPs marked 'free' in DB
-  reservedIPsCount: number;  // IPs marked 'reserved' in DB
+  allocatedIPsCount: number;
+  dbFreeIPsCount: number;
+  reservedIPsCount: number;
 }
 
 export interface VlanQueryResult {
   id: string;
   vlanNumber: number;
+  name?: string; // Added name field
   description?: string;
   associatedSubnets: Array<{ id: string; cidr: string; description?: string }>;
   associatedDirectIPs: Array<{ id: string; ipAddress: string; description?: string }>;
-  resourceCount: number; // Total count of associated subnets and direct IPs
+  resourceCount: number;
 }
 // For IP Address query, we can reuse AppIPAddressWithRelations from actions.ts
 
@@ -149,12 +151,11 @@ export interface VlanQueryResult {
 export interface SubnetFreeIpDetails {
   subnetId: string;
   subnetCidr: string;
-  totalUsableIPs: number;      // Mathematical total usable IPs in the subnet
-  dbAllocatedIPsCount: number; // Count of IPs marked 'allocated' in DB for this subnet
-  dbReservedIPsCount: number;  // Count of IPs marked 'reserved' in DB for this subnet
-  // dbFreeIPsInDbCount: number; // Count of IPs marked 'free' in DB for this subnet (might be less relevant than calculated)
-  calculatedAvailableIPsCount: number; // Count of IPs that are not allocated or reserved (includes those not in DB and those marked 'free' in DB)
-  calculatedAvailableIpRanges: string[]; // Formatted list of free IP ranges (e.g., ["10.0.1.1-10.0.1.6", "10.0.1.10"])
+  totalUsableIPs: number;
+  dbAllocatedIPsCount: number;
+  dbReservedIPsCount: number;
+  calculatedAvailableIPsCount: number;
+  calculatedAvailableIpRanges: string[];
 }
 
 export interface PaginatedResponse<T> {
@@ -167,8 +168,8 @@ export interface PaginatedResponse<T> {
 
 export interface BatchOperationFailure<TIdentifier = string> {
   id: TIdentifier;
-  itemIdentifier: string; // User-friendly identifier (e.g., CIDR, IP address, VLAN number)
-  error: string; // User-friendly error message
+  itemIdentifier: string;
+  error: string;
 }
 
 export interface BatchDeleteResult<TIdentifier = string> {

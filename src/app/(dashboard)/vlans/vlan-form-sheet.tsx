@@ -33,6 +33,7 @@ import { createVLANAction, updateVLANAction, type ActionResponse } from "@/lib/a
 
 const vlanFormSchema = z.object({
   vlanNumber: z.coerce.number().int().min(1, "VLAN 号码必须至少为 1").max(4094, "VLAN 号码不能超过 4094"),
+  name: z.string().max(100, "VLAN 名称过长").optional(),
   description: z.string().max(200, "描述过长").optional(),
 });
 
@@ -40,9 +41,9 @@ type VlanFormValues = z.infer<typeof vlanFormSchema>;
 
 interface VlanFormSheetProps {
   vlan?: VLAN;
-  children?: React.ReactNode; 
+  children?: React.ReactNode;
   buttonProps?: ButtonProps;
-  onVlanChange?: () => void; 
+  onVlanChange?: () => void;
 }
 
 export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: VlanFormSheetProps) {
@@ -54,6 +55,7 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
     resolver: zodResolver(vlanFormSchema),
     defaultValues: {
       vlanNumber: vlan?.vlanNumber || undefined,
+      name: vlan?.name || "",
       description: vlan?.description || "",
     },
   });
@@ -62,6 +64,7 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
     if (isOpen) {
         form.reset({
         vlanNumber: vlan?.vlanNumber || undefined,
+        name: vlan?.name || "",
         description: vlan?.description || "",
         });
         form.clearErrors();
@@ -72,20 +75,26 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
     form.clearErrors();
     let response: ActionResponse<VLAN>;
     try {
+      const payload = {
+        vlanNumber: data.vlanNumber,
+        name: data.name || undefined, // Send undefined if empty string for optional field
+        description: data.description || undefined, // Send undefined if empty string
+      };
+
       if (isEditing && vlan) {
-        response = await updateVLANAction(vlan.id, data);
+        response = await updateVLANAction(vlan.id, payload);
       } else {
-        response = await createVLANAction(data);
+        response = await createVLANAction(payload);
       }
 
       if (response.success && response.data) {
-        toast({ 
-            title: isEditing ? "VLAN 已更新" : "VLAN 已创建", 
-            description: `VLAN ${response.data.vlanNumber} 已成功${isEditing ? '更新' : '创建'}。` 
+        toast({
+            title: isEditing ? "VLAN 已更新" : "VLAN 已创建",
+            description: `VLAN ${response.data.vlanNumber} (${response.data.name || '无名称'}) 已成功${isEditing ? '更新' : '创建'}。`
         });
         setIsOpen(false);
         if (onVlanChange) onVlanChange();
-        form.reset({ vlanNumber: undefined, description: "" });
+        form.reset({ vlanNumber: undefined, name: "", description: "" });
       } else if (response.error) {
         toast({
           title: "操作失败",
@@ -99,7 +108,7 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
           });
         }
       }
-    } catch (error) { // Catch unexpected errors during the action call itself
+    } catch (error) {
       toast({
         title: "客户端错误",
         description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
@@ -107,7 +116,7 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
       });
     }
   }
-  
+
   const trigger = children ? (
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
@@ -138,6 +147,19 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
                   <FormLabel>VLAN 号码</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="例如 10" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>VLAN 名称 (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例如 办公网络" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -34,6 +34,7 @@ import { batchCreateVLANsAction, type ActionResponse, type BatchVlanCreationResu
 const vlanBatchFormSchema = z.object({
   startVlanNumber: z.coerce.number().int().min(1, "起始VLAN号码必须至少为1").max(4094, "起始VLAN号码不能超过4094"),
   endVlanNumber: z.coerce.number().int().min(1, "结束VLAN号码必须至少为1").max(4094, "结束VLAN号码不能超过4094"),
+  commonName: z.string().max(100, "通用名称过长").optional(),
   commonDescription: z.string().max(200, "描述过长").optional(),
 }).refine(data => data.startVlanNumber <= data.endVlanNumber, {
   message: "起始VLAN号码必须小于或等于结束VLAN号码。",
@@ -57,6 +58,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     defaultValues: {
       startVlanNumber: undefined,
       endVlanNumber: undefined,
+      commonName: "",
       commonDescription: "",
     },
   });
@@ -66,6 +68,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       form.reset({
         startVlanNumber: undefined,
         endVlanNumber: undefined,
+        commonName: "",
         commonDescription: "",
       });
       setSubmissionResult(null);
@@ -76,13 +79,14 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
   async function onSubmit(data: VlanBatchFormValues) {
     form.clearErrors();
-    setSubmissionResult(null); 
+    setSubmissionResult(null);
 
     const vlansToCreate = [];
     for (let i = data.startVlanNumber; i <= data.endVlanNumber; i++) {
-      vlansToCreate.push({ 
-        vlanNumber: i, 
-        description: data.commonDescription || undefined 
+      vlansToCreate.push({
+        vlanNumber: i,
+        name: data.commonName || undefined,
+        description: data.commonDescription || undefined
       });
     }
 
@@ -90,7 +94,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       toast({ title: "无VLAN可创建", description: "指定的范围为空或无效。", variant: "destructive" });
       return;
     }
-     if (vlansToCreate.length > 100) { 
+     if (vlansToCreate.length > 100) {
       toast({ title: "范围过大", description: "请分批创建VLAN (例如，每次最多100个)。", variant: "destructive" });
       return;
     }
@@ -105,7 +109,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           description: `${result.successCount} 个VLAN已成功创建。`,
         });
         if (onVlanChange) onVlanChange();
-        form.reset(); 
+        form.reset();
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
           title: "批量处理部分成功",
@@ -123,7 +127,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         toast({ title: "无操作", description: "没有VLAN被创建或失败。", variant: "default" });
       }
 
-    } catch (error) { 
+    } catch (error) {
       const actionError = (error as ActionResponse<any>)?.error;
       if (actionError) {
         toast({
@@ -147,7 +151,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message || "未知错误" }] });
     }
   }
-  
+
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -171,7 +175,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           <SheetTitle>批量添加VLAN (范围)</SheetTitle>
           <SheetDescription>
             输入起始和结束VLAN号码以创建VLAN范围。
-            可以为所有VLAN应用一个可选的通用描述。
+            可以为所有VLAN应用可选的通用名称和描述。
             VLAN号码必须在1到4094之间。
           </SheetDescription>
         </SheetHeader>
@@ -205,18 +209,31 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             />
             <FormField
               control={form.control}
-              name="commonDescription"
+              name="commonName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>通用描述 (可选)</FormLabel>
+                  <FormLabel>通用名称 (可选)</FormLabel>
                   <FormControl>
-                    <Input placeholder="例如 一楼用户VLAN" {...field} />
+                    <Input placeholder="例如 用户VLAN" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+            <FormField
+              control={form.control}
+              name="commonDescription"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>通用描述 (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例如 一楼用户区" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {submissionResult && (
               <div className="mt-4 space-y-3">
                 <h3 className="font-semibold">处理结果:</h3>
@@ -266,5 +283,3 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
-
-    

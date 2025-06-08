@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction, batchDeleteIPAddressesAction } from "@/lib/actions";
-import type { AppIPAddressWithRelations } from "@/lib/actions";
+import type { AppIPAddressWithRelations } from "@/lib/actions"; // This type already includes related VLAN/Subnet info
 import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
@@ -47,7 +47,7 @@ function IPAddressesView() {
 
   const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<AppIPAddressWithRelations> | null>(null);
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
-  const [vlans, setVlans] = React.useState<VLAN[]>([]);
+  const [vlans, setVlans] = React.useState<VLAN[]>([]); // VLAN now includes 'name'
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
@@ -68,25 +68,23 @@ function IPAddressesView() {
       }
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getSubnetsAction(), 
-        getVLANsAction(), 
+        getSubnetsAction(),
+        getVLANsAction(), // Fetches VLANs including their names
       ]);
       setIpAddressesData(fetchedIpsResult);
-      setSubnets(fetchedSubnetsResult.data); 
+      setSubnets(fetchedSubnetsResult.data);
       setVlans(fetchedVlansResult.data);
 
-      // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
       if (fetchedIpsResult.data.length === 0 && fetchedIpsResult.currentPage > 1) {
         const newTargetPage = fetchedIpsResult.totalPages > 0 ? fetchedIpsResult.totalPages : 1;
         const currentUrlPage = Number(searchParams.get('page')) || 1;
         if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedIpsResult.totalPages) {
             const params = new URLSearchParams(searchParams.toString());
-            // Preserve existing filters
             if (selectedSubnetId) params.set("subnetId", selectedSubnetId); else params.delete("subnetId");
             if (selectedStatus && selectedStatus !== 'all') params.set("status", selectedStatus); else params.delete("status");
             params.set("page", String(newTargetPage));
             router.push(`${pathname}?${params.toString()}`);
-            return; 
+            return;
         }
       }
 
@@ -159,10 +157,12 @@ function IPAddressesView() {
   const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "所有子网";
 
   const getVlanDisplayForIp = (ip: AppIPAddressWithRelations): string => {
-    if (ip.vlan?.vlanNumber) {
-        return `${ip.vlan.vlanNumber}`; 
-    } else if (ip.subnet?.vlan?.vlanNumber) {
-        return `${ip.subnet.vlan.vlanNumber} (继承)`; 
+    // AppIPAddressWithRelations includes ip.vlan (direct) and ip.subnet.vlan (inherited)
+    // Both `vlan` objects in AppIPAddressWithRelations should now have `name` if fetched correctly by getIPAddressesAction
+    if (ip.vlan?.vlanNumber) { // Directly assigned VLAN
+        return `VLAN ${ip.vlan.vlanNumber}${ip.vlan.name ? ` (${ip.vlan.name})` : ''}`;
+    } else if (ip.subnet?.vlan?.vlanNumber) { // Inherited from Subnet
+        return `VLAN ${ip.subnet.vlan.vlanNumber}${ip.subnet.vlan.name ? ` (${ip.subnet.vlan.name})` : ''} (继承)`;
     }
     return "无";
   };

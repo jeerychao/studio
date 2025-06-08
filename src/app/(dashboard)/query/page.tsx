@@ -83,7 +83,6 @@ function QueryPageContent() {
 
   const activeTab = searchParams.get('tab') || 'subnet';
 
-  // --- Subnet Query State ---
   const [subnetQuery, setSubnetQuery] = React.useState(activeTab === 'subnet' ? (searchParams.get('q_subnet') || '') : '');
   const [debouncedSubnetQuery, setDebouncedSubnetQuery] = React.useState(subnetQuery);
   const [subnetResultsData, setSubnetResultsData] = React.useState<PaginatedResponse<SubnetQueryResult> | null>(null);
@@ -91,14 +90,11 @@ function QueryPageContent() {
   const [subnetError, setSubnetError] = React.useState<string | null>(null);
   const [currentSubnetPage, setCurrentSubnetPage] = React.useState(activeTab === 'subnet' ? (Number(searchParams.get('page')) || 1) : 1);
 
-  // --- Subnet IP Details Sheet State ---
   const [isSubnetDetailsSheetOpen, setIsSubnetDetailsSheetOpen] = React.useState(false);
   const [selectedSubnetDetails, setSelectedSubnetDetails] = React.useState<SubnetFreeIpDetails | null>(null);
   const [isSubnetDetailsLoading, setIsSubnetDetailsLoading] = React.useState(false);
   const [subnetDetailsError, setSubnetDetailsError] = React.useState<string | null>(null);
 
-
-  // --- VLAN Query State ---
   const [vlanQuery, setVlanQuery] = React.useState(activeTab === 'vlan' ? (searchParams.get('q_vlan') || '') : '');
   const [debouncedVlanQuery, setDebouncedVlanQuery] = React.useState(vlanQuery);
   const [vlanResultsData, setVlanResultsData] = React.useState<PaginatedResponse<VlanQueryResult> | null>(null);
@@ -107,8 +103,6 @@ function QueryPageContent() {
   const [currentVlanPage, setCurrentVlanPage] = React.useState(activeTab === 'vlan' ? (Number(searchParams.get('page')) || 1) : 1);
   const [selectedVlanDetails, setSelectedVlanDetails] = React.useState<VlanQueryResult | null>(null);
 
-
-  // --- IP Address Query State ---
   const [ipQuery, setIpQuery] = React.useState(activeTab === 'ip_address' ? (searchParams.get('q_ip') || '') : '');
   const [ipQueryStatus, setIpQueryStatus] = React.useState<AppIPAddressStatusType | 'all'>(
     (activeTab === 'ip_address' ? searchParams.get('status') as (AppIPAddressStatusType | 'all') : null) || 'all'
@@ -120,19 +114,14 @@ function QueryPageContent() {
   const [isIpLoading, setIsIpLoading] = React.useState(false);
   const [ipError, setIpError] = React.useState<string | null>(null);
   const [currentIpPage, setCurrentIpPage] = React.useState(activeTab === 'ip_address' ? (Number(searchParams.get('page')) || 1) : 1);
-  
-  // IP Address Details Sheet State
+
   const [isIpDetailsSheetOpen, setIsIpDetailsSheetOpen] = React.useState(false);
   const [selectedIpDetails, setSelectedIpDetails] = React.useState<AppIPAddressWithRelations | null>(null);
 
-
-  // Debounce effects
   React.useEffect(() => { const handler = setTimeout(() => setDebouncedSubnetQuery(subnetQuery), DEBOUNCE_DELAY); return () => clearTimeout(handler); }, [subnetQuery]);
   React.useEffect(() => { const handler = setTimeout(() => setDebouncedVlanQuery(vlanQuery), DEBOUNCE_DELAY); return () => clearTimeout(handler); }, [vlanQuery]);
   React.useEffect(() => { const handler = setTimeout(() => { setDebouncedIpQuery(ipQuery); setDebouncedIpQueryStatus(ipQueryStatus); }, DEBOUNCE_DELAY); return () => clearTimeout(handler); }, [ipQuery, ipQueryStatus]);
 
-
-  // Data fetching functions
   const fetchSubnetData = React.useCallback(async (page = 1, queryToUse = debouncedSubnetQuery) => {
     const trimmedQuery = queryToUse.trim();
     if (!trimmedQuery) { setSubnetResultsData(null); setSubnetError(null); setIsSubnetLoading(false); return; }
@@ -169,18 +158,14 @@ function QueryPageContent() {
     finally { setIsIpLoading(false); }
   }, [toast, debouncedIpQuery, debouncedIpQueryStatus]);
 
-  // Effects for debounced queries and pagination
   React.useEffect(() => { if (activeTab === 'subnet') { if (debouncedSubnetQuery.trim()) fetchSubnetData(currentSubnetPage, debouncedSubnetQuery); else { setSubnetResultsData(null); setSubnetError(null); } } }, [currentSubnetPage, debouncedSubnetQuery, fetchSubnetData, activeTab]);
   React.useEffect(() => { if (activeTab === 'vlan') { if (debouncedVlanQuery.trim()) fetchVlanData(currentVlanPage, debouncedVlanQuery); else { setVlanResultsData(null); setVlanError(null); } } }, [currentVlanPage, debouncedVlanQuery, fetchVlanData, activeTab]);
   React.useEffect(() => { if (activeTab === 'ip_address') { if (debouncedIpQuery.trim() || debouncedIpQueryStatus !== 'all') fetchIpData(currentIpPage, debouncedIpQuery, debouncedIpQueryStatus); else { setIpResultsData(null); setIpError(null); } } }, [currentIpPage, debouncedIpQuery, debouncedIpQueryStatus, fetchIpData, activeTab]);
 
-
-  // Input change handlers
   const handleSubnetQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => { const newValue = e.target.value; setSubnetQuery(newValue); if (newValue.trim() !== debouncedSubnetQuery.trim()) { setCurrentSubnetPage(1); router.push(`${pathname}?tab=subnet&q_subnet=${encodeURIComponent(newValue)}&page=1`); } else if (!newValue.trim()) { router.push(`${pathname}?tab=subnet`); }};
   const handleVlanQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => { const newValue = e.target.value; setVlanQuery(newValue); if (newValue.trim() !== debouncedVlanQuery.trim()) { setCurrentVlanPage(1); router.push(`${pathname}?tab=vlan&q_vlan=${encodeURIComponent(newValue)}&page=1`); } else if (!newValue.trim()) { router.push(`${pathname}?tab=vlan`); }};
   const handleIpQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => { const newValue = e.target.value; setIpQuery(newValue); if (newValue.trim() !== debouncedIpQuery.trim() || ipQueryStatus !== debouncedIpQueryStatus) { setCurrentIpPage(1); router.push(`${pathname}?tab=ip_address&q_ip=${encodeURIComponent(newValue)}&status=${ipQueryStatus}&page=1`); } else if (!newValue.trim() && ipQueryStatus === 'all') { router.push(`${pathname}?tab=ip_address`); }};
   const handleIpStatusChange = (statusValue: AppIPAddressStatusType | 'all') => { setIpQueryStatus(statusValue); setCurrentIpPage(1); router.push(`${pathname}?tab=ip_address&q_ip=${encodeURIComponent(ipQuery)}&status=${statusValue}&page=1`); };
-
 
   const handleTabChange = (newTab: string) => {
     router.push(`${pathname}?tab=${newTab}`);
@@ -189,13 +174,10 @@ function QueryPageContent() {
     if (newTab !== 'ip_address') { setIpQuery(''); setIpQueryStatus('all'); setIpResultsData(null); setCurrentIpPage(1); setSelectedIpDetails(null); }
   };
 
-
-  // Submit handlers (for button click or Enter key)
   const handleSubnetQuerySubmitButton = () => { setDebouncedSubnetQuery(subnetQuery); setCurrentSubnetPage(1); router.push(`${pathname}?tab=subnet&q_subnet=${encodeURIComponent(subnetQuery)}&page=1`); };
   const handleVlanQuerySubmitButton = () => { setDebouncedVlanQuery(vlanQuery); setCurrentVlanPage(1); router.push(`${pathname}?tab=vlan&q_vlan=${encodeURIComponent(vlanQuery)}&page=1`);};
   const handleIpQuerySubmitButton = () => { setDebouncedIpQuery(ipQuery); setDebouncedIpQueryStatus(ipQueryStatus); setCurrentIpPage(1); router.push(`${pathname}?tab=ip_address&q_ip=${encodeURIComponent(ipQuery)}&status=${ipQueryStatus}&page=1`);};
 
-  // Subnet details sheet logic
   const handleSubnetRowClick = async (subnetId: string) => {
     setSelectedVlanDetails(null);
     setIsSubnetDetailsLoading(true);
@@ -217,27 +199,23 @@ function QueryPageContent() {
     }
   };
 
-  // VLAN details sheet logic
   const handleVlanRowClick = (vlan: VlanQueryResult) => {
     setSelectedSubnetDetails(null);
     setSelectedVlanDetails(vlan);
-    setSubnetDetailsError(null); 
+    setSubnetDetailsError(null);
     setIsSubnetDetailsLoading(false);
     setIsSubnetDetailsSheetOpen(true);
   };
 
-  // IP details sheet logic
   const handleIpRowClick = (ip: AppIPAddressWithRelations) => { setSelectedIpDetails(ip); setIsIpDetailsSheetOpen(true); };
 
-
-  const ipAddressStatusLabels: Record<AppIPAddressStatusType, string> = { allocated: "已分配", free: "空闲", reserved: "预留" };
   const getStatusBadgeVariant = (status: AppIPAddressStatusType) => {
     switch (status) { case "allocated": return "default"; case "free": return "secondary"; case "reserved": return "outline"; default: return "secondary"; }
   };
 
   if (isAuthLoading) return <div className="flex flex-col items-center justify-center h-full"><Loader2 className="h-16 w-16 animate-spin text-primary mb-4" /><h2 className="text-2xl font-semibold mb-2">加载查询工具...</h2></div>;
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_QUERY_PAGE)) return <div className="flex flex-col items-center justify-center h-full"><Search className="h-16 w-16 text-destructive mb-4" /><h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2><p className="text-muted-foreground">您没有权限查看信息查询页面。</p></div>;
-  
+
   const createPaginationQueryString = (baseParams: Record<string, string>): string => {
     const current = new URLSearchParams(searchParams);
     Object.entries(baseParams).forEach(([key, value]) => {
@@ -256,7 +234,6 @@ function QueryPageContent() {
           <TabsTrigger value="ip_address">IP地址查询</TabsTrigger>
         </TabsList>
 
-        {/* Subnet Query Tab */}
         <TabsContent value="subnet">
           <Card>
             <CardHeader>
@@ -282,7 +259,7 @@ function QueryPageContent() {
                         <TableRow key={subnet.id} onClick={() => handleSubnetRowClick(subnet.id)} className="cursor-pointer hover:bg-muted/50">
                           <TableCell className="font-medium text-primary hover:underline">{subnet.cidr}</TableCell>
                           <TableCell>{subnet.description || "无"}</TableCell>
-                          <TableCell>{subnet.vlanNumber ? `VLAN ${subnet.vlanNumber} (${subnet.vlanDescription || '无'})` : "无"}</TableCell>
+                          <TableCell>{subnet.vlanNumber ? `VLAN ${subnet.vlanNumber} (${subnet.vlanName || '无名称'})` : "无"}</TableCell>
                           <TableCell>{subnet.totalUsableIPs}</TableCell><TableCell>{subnet.allocatedIPsCount}</TableCell><TableCell>{subnet.dbFreeIPsCount}</TableCell><TableCell>{subnet.reservedIPsCount}</TableCell>
                         </TableRow>
                       ))}
@@ -295,16 +272,15 @@ function QueryPageContent() {
           </Card>
         </TabsContent>
 
-        {/* VLAN Query Tab */}
         <TabsContent value="vlan">
           <Card>
             <CardHeader>
               <CardTitle>VLAN查询</CardTitle>
-              <CardDescription>按VLAN号码 (精确) 或描述 (模糊) 查询。结果将自动更新。</CardDescription>
+              <CardDescription>按VLAN号码 (精确) 或名称/描述 (模糊) 查询。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Input placeholder="例如 10 或 生产网" value={vlanQuery} onChange={handleVlanQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleVlanQuerySubmitButton()} />
+                <Input placeholder="例如 10, Office, 或 生产网" value={vlanQuery} onChange={handleVlanQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleVlanQuerySubmitButton()} />
                 <Button onClick={handleVlanQuerySubmitButton} disabled={isVlanLoading && vlanQuery === debouncedVlanQuery}>
                   {(isVlanLoading && vlanQuery === debouncedVlanQuery) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
                 </Button>
@@ -315,11 +291,12 @@ function QueryPageContent() {
               {!isVlanLoading && !vlanError && vlanResultsData && vlanResultsData.data.length > 0 && (
                 <>
                  <Table>
-                    <TableHeader><TableRow><TableHead>VLAN号码 (点击查看详情)</TableHead><TableHead>描述</TableHead><TableHead>关联资源数</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>VLAN号码 (点击查看详情)</TableHead><TableHead>名称</TableHead><TableHead>描述</TableHead><TableHead>关联资源数</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {vlanResultsData.data.map((vlan) => (
                         <TableRow key={vlan.id} onClick={() => handleVlanRowClick(vlan)} className="cursor-pointer hover:bg-muted/50">
                           <TableCell className="font-medium text-primary hover:underline">{vlan.vlanNumber}</TableCell>
+                          <TableCell>{vlan.name || "无"}</TableCell>
                           <TableCell>{vlan.description || "无"}</TableCell>
                           <TableCell>{vlan.resourceCount}</TableCell>
                         </TableRow>
@@ -333,12 +310,11 @@ function QueryPageContent() {
           </Card>
         </TabsContent>
 
-        {/* IP Address Query Tab */}
         <TabsContent value="ip_address">
           <Card>
             <CardHeader>
               <CardTitle>查询IP地址</CardTitle>
-              <CardDescription>按IP地址、分配对象或描述模糊查询。结果将自动更新。可按状态筛选。</CardDescription>
+              <CardDescription>按IP地址、分配对象或描述模糊查询。可按状态筛选。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
@@ -364,16 +340,19 @@ function QueryPageContent() {
               {!isIpLoading && !ipError && ipResultsData && ipResultsData.data.length > 0 && (
                 <>
                   <Table>
-                    <TableHeader><TableRow><TableHead>IP地址 (点击查看详情)</TableHead><TableHead>状态</TableHead><TableHead>分配给</TableHead><TableHead>描述</TableHead><TableHead>子网</TableHead><TableHead>VLAN (直接/继承)</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>IP地址 (点击查看详情)</TableHead><TableHead>状态</TableHead><TableHead>分配给</TableHead><TableHead>描述</TableHead><TableHead>子网</TableHead><TableHead>VLAN</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {ipResultsData.data.map((ip) => (
                         <TableRow key={ip.id} onClick={() => handleIpRowClick(ip)} className="cursor-pointer hover:bg-muted/50">
                           <TableCell className="font-medium text-primary hover:underline">{ip.ipAddress}</TableCell>
-                          <TableCell><Badge variant={getStatusBadgeVariant(ip.status)}>{ipAddressStatusLabels[ip.status]}</Badge></TableCell>
+                          <TableCell><Badge variant={getStatusBadgeVariant(ip.status)}>{ipAddressStatusDisplayLabels[ip.status]}</Badge></TableCell>
                           <TableCell>{ip.allocatedTo || "无"}</TableCell>
                           <TableCell>{ip.description || "无"}</TableCell>
                           <TableCell>{ip.subnet ? `${ip.subnet.cidr}` : "全局/无"}</TableCell>
-                          <TableCell>{ip.vlan ? `VLAN ${ip.vlan.vlanNumber} (直接)` : (ip.subnet?.vlan ? `VLAN ${ip.subnet.vlan.vlanNumber} (继承自子网)` : "无")}</TableCell>
+                          <TableCell>
+                            {ip.vlan?.vlanNumber ? `VLAN ${ip.vlan.vlanNumber} (${ip.vlan.name || '无名称'})` : 
+                             (ip.subnet?.vlan ? `VLAN ${ip.subnet.vlan.vlanNumber} (${ip.subnet.vlan.name || '无名称'}) (继承)` : "无")}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -386,11 +365,10 @@ function QueryPageContent() {
         </TabsContent>
       </Tabs>
 
-      {/* Subnet/VLAN Details Sheet - Shared */}
       <Sheet open={isSubnetDetailsSheetOpen} onOpenChange={setIsSubnetDetailsSheetOpen}>
         <SheetContent className="sm:max-w-xl w-full flex flex-col">
           <SheetHeader>
-            <SheetTitle>{selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} 关联资源` : (selectedSubnetDetails ? '子网 IP 使用详情' : '详情')}</SheetTitle>
+            <SheetTitle>{selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} (${selectedVlanDetails.name || '无名称'}) 关联资源` : (selectedSubnetDetails ? '子网 IP 使用详情' : '详情')}</SheetTitle>
             {selectedSubnetDetails && <SheetDescription>CIDR: {selectedSubnetDetails.subnetCidr}</SheetDescription>}
             {selectedVlanDetails && <SheetDescription>描述: {selectedVlanDetails.description || '无'}</SheetDescription>}
           </SheetHeader>
@@ -398,8 +376,7 @@ function QueryPageContent() {
             {isSubnetDetailsLoading && selectedSubnetDetails && <LoadingSpinner message="加载子网详情中..." />}
             {subnetDetailsError && selectedSubnetDetails && <QueryErrorDisplay message={subnetDetailsError} />}
             
-            {/* Subnet Details View */}
-            {!isSubnetDetailsLoading && !subnetDetailsError && selectedSubnetDetails && (
+            {selectedSubnetDetails && (
               <div className="space-y-4 h-full flex flex-col">
                 <Card><CardHeader className="pb-2 pt-4"><CardTitle className="text-lg">统计信息</CardTitle></CardHeader>
                   <CardContent className="text-sm space-y-1">
@@ -418,7 +395,6 @@ function QueryPageContent() {
                 </div>
               </div>
             )}
-            {/* VLAN Details View */}
             {selectedVlanDetails && (
                 <div className="space-y-3">
                     <h4 className="font-semibold text-md">关联子网 ({selectedVlanDetails.associatedSubnets.length}):</h4>
@@ -451,7 +427,6 @@ function QueryPageContent() {
         </SheetContent>
       </Sheet>
       
-      {/* IP Address Details Sheet (New) */}
       <IpDetailsSheet isOpen={isIpDetailsSheetOpen} onOpenChange={setIsIpDetailsSheetOpen} ipDetails={selectedIpDetails} />
 
     </>
@@ -467,9 +442,9 @@ interface IpDetailsSheetProps {
 function IpDetailsSheet({ isOpen, onOpenChange, ipDetails }: IpDetailsSheetProps) {
   if (!ipDetails) return null;
 
-  const getVlanDisplayForIp = (ip: AppIPAddressWithRelations): string => {
-    if (ip.vlan?.vlanNumber) return `${ip.vlan.vlanNumber} (直接指定)`;
-    if (ip.subnet?.vlan?.vlanNumber) return `${ip.subnet.vlan.vlanNumber} (继承自子网)`;
+  const getVlanDisplayForIpSheet = (ip: AppIPAddressWithRelations): string => {
+    if (ip.vlan?.vlanNumber) return `VLAN ${ip.vlan.vlanNumber} (${ip.vlan.name || '无名称'}) (直接指定)`;
+    if (ip.subnet?.vlan?.vlanNumber) return `VLAN ${ip.subnet.vlan.vlanNumber} (${ip.subnet.vlan.name || '无名称'}) (继承自子网)`;
     return "无";
   };
   const statusLabel = ipAddressStatusDisplayLabels[ipDetails.status] || ipDetails.status;
@@ -487,7 +462,7 @@ function IpDetailsSheet({ isOpen, onOpenChange, ipDetails }: IpDetailsSheetProps
           <div className="flex justify-between"><span className="text-muted-foreground">分配给:</span> <span>{ipDetails.allocatedTo || "N/A"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">描述:</span> <span>{ipDetails.description || "N/A"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">子网:</span> <span>{ipDetails.subnet?.cidr || "全局/无"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">VLAN:</span> <Badge variant="outline">{getVlanDisplayForIp(ipDetails)}</Badge></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">VLAN:</span> <Badge variant="outline">{getVlanDisplayForIpSheet(ipDetails)}</Badge></div>
         </div>
         <SheetFooter>
           <SheetClose asChild><Button variant="outline">关闭</Button></SheetClose>
@@ -500,9 +475,8 @@ function IpDetailsSheet({ isOpen, onOpenChange, ipDetails }: IpDetailsSheetProps
 
 export default function QueryPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-3 text-lg">加载查询页面...</p></div>}> 
+    <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-3 text-lg">加载查询页面...</p></div>}>
       <QueryPageContent />
     </Suspense>
   );
 }
-

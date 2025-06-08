@@ -56,10 +56,6 @@ async function main() {
       id: appPermId as string
     }));
 
-    // Use update to set permissions. This ensures that if a role exists,
-    // its permissions are overwritten with what's in seedRolesData.
-    // If a role is defined in seedRolesData with no permissions,
-    // this will clear any existing permissions for that role.
     await prisma.role.update({
         where: { id: roleData.id },
         data: {
@@ -162,10 +158,11 @@ async function main() {
 
     await prisma.vLAN.upsert({
       where: { id: vlanData.id },
-      update: { vlanNumber: vlanData.vlanNumber, description: vlanData.description },
+      update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
       create: {
         id: vlanData.id,
         vlanNumber: vlanData.vlanNumber,
+        name: vlanData.name, // Added name
         description: vlanData.description,
       },
     });
@@ -289,5 +286,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    

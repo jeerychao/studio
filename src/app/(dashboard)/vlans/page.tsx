@@ -50,18 +50,17 @@ function VlansView() {
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
-        const fetchedVlansResult = await getVLANsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
-        setVlansData(fetchedVlansResult);
+        const fetchedResult = await getVLANsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
+        setVlansData(fetchedResult);
 
-        // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
-        if (fetchedVlansResult.data.length === 0 && fetchedVlansResult.currentPage > 1) {
-          const newTargetPage = fetchedVlansResult.totalPages > 0 ? fetchedVlansResult.totalPages : 1;
+        if (fetchedResult.data.length === 0 && fetchedResult.currentPage > 1) {
+          const newTargetPage = fetchedResult.totalPages > 0 ? fetchedResult.totalPages : 1;
           const currentUrlPage = Number(searchParams.get('page')) || 1;
-          if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedVlansResult.totalPages) {
+          if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedResult.totalPages) {
               const params = new URLSearchParams(searchParams.toString());
               params.set("page", String(newTargetPage));
               router.push(`${pathname}?${params.toString()}`);
-              return; 
+              return;
           }
         }
       } else {
@@ -179,6 +178,7 @@ function VlansView() {
                       )}
                     </TableHead>
                     <TableHead>VLAN 号码</TableHead>
+                    <TableHead>VLAN 名称</TableHead>
                     <TableHead>描述</TableHead>
                     <TableHead>关联资源数</TableHead>
                     {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
@@ -197,6 +197,7 @@ function VlansView() {
                         )}
                       </TableCell>
                       <TableCell className="font-medium">{vlan.vlanNumber}</TableCell>
+                      <TableCell className="max-w-xs truncate">{vlan.name || "无"}</TableCell>
                       <TableCell className="max-w-md truncate">{vlan.description || "无"}</TableCell>
                       <TableCell>{vlan.subnetCount ?? 0}</TableCell>
                       {(canEdit || canDelete) && (
@@ -211,7 +212,7 @@ function VlansView() {
                           {canDelete && (
                               <DeleteConfirmationDialog
                               itemId={vlan.id}
-                              itemName={`VLAN ${vlan.vlanNumber}`}
+                              itemName={`VLAN ${vlan.vlanNumber} (${vlan.name || '无名称'})`}
                               deleteAction={deleteVLANAction}
                               onDeleted={fetchData}
                               triggerButton={

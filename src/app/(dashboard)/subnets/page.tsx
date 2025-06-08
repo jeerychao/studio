@@ -35,7 +35,7 @@ function LoadingSubnetsPage() {
 
 function SubnetsView() {
   const [subnetsData, setSubnetsData] = React.useState<PaginatedResponse<Subnet> | null>(null);
-  const [vlans, setVlans] = React.useState<VLAN[]>([]);
+  const [vlans, setVlans] = React.useState<VLAN[]>([]); // Now VLAN includes 'name'
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
@@ -69,12 +69,11 @@ function SubnetsView() {
 
       const [subnetsResponse, vlansResponse] = await Promise.all([
         getSubnetsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getVLANsAction(),
+        getVLANsAction(), // Fetches all VLANs, including their names
       ]);
       setSubnetsData(subnetsResponse);
       setVlans(vlansResponse.data || []);
 
-      // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
       if (subnetsResponse.data.length === 0 && subnetsResponse.currentPage > 1) {
         const newTargetPage = subnetsResponse.totalPages > 0 ? subnetsResponse.totalPages : 1;
         const currentUrlPage = Number(searchParams.get('page')) || 1;
@@ -82,8 +81,7 @@ function SubnetsView() {
             const params = new URLSearchParams(searchParams.toString());
             params.set("page", String(newTargetPage));
             router.push(`${pathname}?${params.toString()}`);
-            // Data for the new page will be fetched by the next effect run due to URL change
-            return; 
+            return;
         }
       }
 
@@ -98,7 +96,7 @@ function SubnetsView() {
       setVlans([]);
     } finally {
       setIsLoading(false);
-      setSelectedIds(new Set()); 
+      setSelectedIds(new Set());
     }
   }, [currentPage, toast, currentUser, isAuthLoading, router, pathname, searchParams]);
 
@@ -125,7 +123,7 @@ function SubnetsView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading && !subnetsData) { // Keep showing loading if subnetsData is null during initial load
+  if (isAuthLoading || isLoading && !subnetsData) {
     return <LoadingSubnetsPage />;
   }
 
@@ -139,7 +137,7 @@ function SubnetsView() {
     );
   }
 
-  if (!subnetsData) { // Should be caught by isLoading check, but as a fallback
+  if (!subnetsData) {
     return <p>准备子网数据时出错。请尝试刷新。</p>;
   }
 
@@ -175,7 +173,7 @@ function SubnetsView() {
                   selectedIds={selectedIds}
                   itemTypeDisplayName="子网"
                   batchDeleteAction={batchDeleteSubnetsAction}
-                  onBatchDeleted={fetchData} // fetchData will handle pagination adjustment
+                  onBatchDeleted={fetchData}
                 />
               )}
               {canCreate && <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} />}
@@ -212,6 +210,9 @@ function SubnetsView() {
               <TableBody>
                 {subnetsToDisplay.map((subnet) => {
                   const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
+                  const vlanDisplay = vlanInfo
+                    ? `VLAN ${vlanInfo.vlanNumber}${vlanInfo.name ? ` (${vlanInfo.name})` : ''}`
+                    : <span className="text-muted-foreground text-xs">无</span>;
                   return (
                     <TableRow key={subnet.id} data-state={selectedIds.has(subnet.id) && "selected"}>
                       <TableCell>
@@ -230,9 +231,9 @@ function SubnetsView() {
                       </TableCell>
                       <TableCell>
                         {vlanInfo ? (
-                          <Badge variant="outline">VLAN {vlanInfo.vlanNumber}</Badge>
+                          <Badge variant="outline">{vlanDisplay}</Badge>
                         ) : (
-                          <span className="text-muted-foreground text-xs">无</span>
+                          vlanDisplay
                         )}
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{subnet.description || "无"}</TableCell>
@@ -247,7 +248,7 @@ function SubnetsView() {
                             <SubnetFormSheet
                               subnet={subnet}
                               vlans={vlans}
-                              onSubnetChange={fetchData} // fetchData will handle pagination
+                              onSubnetChange={fetchData}
                             >
                               <Button variant="ghost" size="icon" aria-label="编辑子网">
                                 <Edit className="h-4 w-4" />
@@ -259,7 +260,7 @@ function SubnetsView() {
                               itemId={subnet.id}
                               itemName={subnet.cidr}
                               deleteAction={deleteSubnetAction}
-                              onDeleted={fetchData} // fetchData will handle pagination
+                              onDeleted={fetchData}
                               dialogTitle="删除子网?"
                               dialogDescription={`您确定要删除子网 ${subnet.cidr} 吗？此操作无法撤销。`}
                               triggerButton={
