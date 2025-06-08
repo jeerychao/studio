@@ -16,6 +16,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
 import { MOCK_USER_STORAGE_KEY, useCurrentUser, hasPermission } from "@/hooks/use-current-user"; 
 import { PERMISSIONS } from "@/types";
+import { ThemeToggle } from "@/components/settings/theme-toggle"; // Added import for ThemeToggle
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
@@ -62,6 +63,7 @@ export function Header() {
       )}
 
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
+        <ThemeToggle /> {/* ThemeToggle added here */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="rounded-full h-10 w-10 p-0 flex items-center justify-center">
