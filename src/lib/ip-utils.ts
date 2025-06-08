@@ -129,9 +129,14 @@ export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | nu
 
   const calculatedNetworkAddress = calculateNetworkAddress(inputIp, prefix);
   
+  // Ensure the input IP for SubnetProperties is the *actual* network address.
+  // This is important if a user provides, e.g., 192.168.1.10/24, the `inputIp` should still reflect 192.168.1.0 for calculations.
+  // However, for display or user context, the original input might be useful, so we keep it as inputIp.
+  // The `networkAddress` field *will* be the canonical one.
+  
   const subnetMask = prefixToSubnetMask(prefix);
-  const broadcastAddress = calculateBroadcastAddress(calculatedNetworkAddress, prefix); 
-  const ipRangeString = calculateIpRange(calculatedNetworkAddress, prefix); 
+  const broadcastAddress = calculateBroadcastAddress(calculatedNetworkAddress, prefix); // Use calculated network address
+  const ipRangeString = calculateIpRange(calculatedNetworkAddress, prefix); // Use calculated network address
 
   let firstUsableIp: string | undefined;
   let lastUsableIp: string | undefined;
@@ -143,9 +148,9 @@ export function getSubnetPropertiesFromCidr(cidr: string): SubnetProperties | nu
   }
 
   return {
-    inputIp, 
+    inputIp, // The IP part of the original CIDR string provided by the user
     prefix,
-    networkAddress: calculatedNetworkAddress, 
+    networkAddress: calculatedNetworkAddress, // The true network address
     subnetMask,
     broadcastAddress,
     firstUsableIp,
@@ -189,10 +194,12 @@ export function isIpInCidrRange(ipAddress: string, cidrDetails: SubnetProperties
   if (cidrDetails.prefix === 32) {
       return ipNum === networkNum;
   }
+  // For /31, both IPs are considered "usable" in point-to-point, and within the range
   if (cidrDetails.prefix === 31) {
       return ipNum === networkNum || ipNum === broadcastNum; 
   }
-  return ipNum >= networkNum && ipNum <= broadcastNum;
+  // For standard subnets (/1 to /30), usable IPs are between network and broadcast
+  return ipNum > networkNum && ipNum < broadcastNum;
 }
 
 export function groupConsecutiveIpsToRanges(ipNumbers: number[]): string[] {
@@ -229,125 +236,6 @@ export function groupConsecutiveIpsToRanges(ipNumbers: number[]): string[] {
   return ranges;
 }
 
-export function getPrefixFromRequiredHosts(requiredUsableHosts: number): number {
-  if (requiredUsableHosts <= 0) {
-    throw new ValidationError("期望可用主机数必须大于 0。", "requiredHostsPerSubnet", requiredUsableHosts, "期望可用主机数必须大于零。");
-  }
-
-  if (requiredUsableHosts === 1) {
-    return 32; // /32 provides 1 usable IP.
-  }
-  // For point-to-point links, /31 is often used, providing 2 usable IPs.
-  // However, if user means 2 usable IPs in the traditional sense (excluding network and broadcast),
-  // they need a /30 (4 total IPs - 2 usable).
-  if (requiredUsableHosts === 2) {
-    return 30; 
-  }
-  
-  // For requiredUsableHosts > 2, we need space for network addr, broadcast addr, AND the hosts.
-  const totalAddressesNeeded = requiredUsableHosts + 2;
-
-  let power = 0;
-  while (Math.pow(2, power) < totalAddressesNeeded) {
-    power++;
-    if (power > 30) { 
-      throw new ValidationError('期望可用主机数量过大 (' + requiredUsableHosts + ')，无法分配有效的子网。', "requiredHostsPerSubnet", requiredUsableHosts, "期望可用主机数过大。");
-    }
-  }
-  
-  const prefix = 32 - power;
-
-  if (prefix < 1 ) { 
-      throw new ValidationError("期望可用主机数量过大，已超出IPv4地址空间或导致无效前缀。", "requiredHostsPerSubnet", requiredUsableHosts, "期望可用主机数过大。");
-  }
-  // Standard networks (prefix <= 30) must fit network and broadcast.
-  // /31 (2 usable), /32 (1 usable) are handled above.
-  if (prefix > 30 && requiredUsableHosts > 2) { // This check needs to be careful with /31
-     throw new ValidationError('根据期望主机数 (' + requiredUsableHosts + ') 计算出的前缀 /' + prefix + ' 无效。请检查主机数。', "requiredHostsPerSubnet", requiredUsableHosts, "所需主机数导致了无效的网络前缀计算。");
-  }
-  return prefix;
-}
-
-export function generateSubnetsFromParent(
-  parentCidr: string,
-  newSubnetPrefixLength: number,
-  count?: number
-): { generatedSubnets: SubnetProperties[]; maxPossible: number } | { error: string } {
-  const parentProps = getSubnetPropertiesFromCidr(parentCidr);
-  if (!parentProps) {
-    return { error: "无效的父网络 CIDR。" };
-  }
-
-  if (newSubnetPrefixLength < parentProps.prefix) {
-    return { error: "新子网前缀长度 /" + newSubnetPrefixLength + " 不能小于父网络前缀长度 /" + parentProps.prefix + " (即网络更大)。" };
-  }
-  if (newSubnetPrefixLength > 32) { 
-    return { error: "新子网前缀长度不能大于 32。" };
-  }
-
-  const parentNetworkNum = ipToNumber(parentProps.networkAddress);
-  const parentBroadcastNum = ipToNumber(parentProps.broadcastAddress);
-
-  if (newSubnetPrefixLength === parentProps.prefix) {
-    // If the new prefix is the same as parent, only one "subnet" can be generated, which is the parent itself.
-    const subnetDetail = getSubnetPropertiesFromCidr(`${parentProps.networkAddress}/${parentProps.prefix}`);
-    if (subnetDetail) {
-        // Verify if this single subnet can actually provide the number of hosts that led to this prefix calculation.
-        // This check is implicitly handled by how getPrefixFromRequiredHosts works.
-        return { generatedSubnets: [subnetDetail], maxPossible: 1 };
-    } else {
-        return { error: "无法为父网络本身生成子网详情。父CIDR: " + parentCidr };
-    }
-  }
-
-
-  const newSubnetSize = Math.pow(2, 32 - newSubnetPrefixLength);
-  const maxPossibleSubnets = Math.pow(2, newSubnetPrefixLength - parentProps.prefix);
-
-  const generatedSubnets: SubnetProperties[] = [];
-  let currentNetworkNum = parentNetworkNum;
-  let subnetsGenerated = 0;
-
-  while (currentNetworkNum <= parentBroadcastNum) {
-    const currentSubnetEndRange = currentNetworkNum + newSubnetSize - 1;
-
-    if (currentSubnetEndRange > parentBroadcastNum || currentSubnetEndRange < currentNetworkNum ) {
-        break; 
-    }
-
-    if (count && subnetsGenerated >= count) {
-      break;
-    }
-
-    const currentSubnetIp = numberToIp(currentNetworkNum);
-    const subnetDetail = getSubnetPropertiesFromCidr(`${currentSubnetIp}/${newSubnetPrefixLength}`);
-    
-    if (subnetDetail) {
-        if (ipToNumber(subnetDetail.networkAddress) >= parentNetworkNum && 
-            ipToNumber(subnetDetail.broadcastAddress) <= parentBroadcastNum) {
-            generatedSubnets.push(subnetDetail);
-            subnetsGenerated++;
-        } else {
-            break;
-        }
-    } else {
-        return { error: '无法为 ' + currentSubnetIp + '/' + newSubnetPrefixLength + ' 生成子网详情。'};
-    }
-    
-    if (newSubnetSize === 0 && newSubnetPrefixLength === 32) { // Only break if it's /32 and size is 0 effectively (1 IP)
-      if (currentNetworkNum >= parentBroadcastNum) break; // Stop if we processed the last IP of parent
-    } else if (newSubnetSize === 0) { // Should not happen for prefix < 32
-      break;
-    }
-    
-    const nextNetworkNum = currentNetworkNum + newSubnetSize;
-    if (nextNetworkNum <= currentNetworkNum && newSubnetSize > 0) { 
-        break;
-    }
-    currentNetworkNum = nextNetworkNum;
-  }
-
-  return { generatedSubnets, maxPossible: maxPossibleSubnets };
-}
+// Removed getPrefixFromRequiredHosts and generateSubnetsFromParent functions
 
     
