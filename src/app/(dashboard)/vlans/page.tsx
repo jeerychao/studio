@@ -79,6 +79,32 @@ function VlansView() {
     fetchData();
   }, [fetchData]);
 
+  const handleVlanCreationSuccess = React.useCallback(async () => {
+    try {
+      const paginationInfo = await getVLANsAction({ page: 1, pageSize: 1 }); // Fetch minimal to get totalPages
+      const newTotalPages = paginationInfo.totalPages;
+      const targetPage = newTotalPages > 0 ? newTotalPages : 1;
+      const currentUrlPage = Number(searchParams.get('page')) || 1;
+
+      if (targetPage !== currentUrlPage) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("page", String(targetPage));
+        router.push(`${pathname}?${params.toString()}`);
+        // fetchData will be triggered by useEffect watching searchParams
+      } else {
+        fetchData(); // Refresh current page if target is the same
+      }
+    } catch (error) {
+      toast({
+        title: "刷新错误",
+        description: "创建VLAN后无法导航到目标页面，正在刷新当前页面。",
+        variant: "destructive",
+      });
+      fetchData(); // Fallback to refreshing current page
+    }
+  }, [fetchData, router, pathname, searchParams, toast]);
+
+
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
       const allIdsOnPage = vlansData?.data.map(v => v.id) || [];
@@ -128,12 +154,12 @@ function VlansView() {
       )}
       {canCreate && (
         <>
-          <VlanBatchFormSheet onVlanChange={fetchData}>
+          <VlanBatchFormSheet onVlanChange={handleVlanCreationSuccess}>
             <Button variant="outline">
               <PlusCircle className="mr-2 h-4 w-4" /> 批量添加VLAN
             </Button>
           </VlanBatchFormSheet>
-          <VlanFormSheet onVlanChange={fetchData} />
+          <VlanFormSheet onVlanChange={handleVlanCreationSuccess} />
         </>
       )}
     </div>
@@ -240,7 +266,7 @@ function VlansView() {
           ) : (
              <div className="text-center py-10">
               <p className="text-muted-foreground">未找到VLAN。</p>
-              {canCreate && <VlanFormSheet onVlanChange={fetchData} buttonProps={{className: "mt-4"}} />}
+              {canCreate && <VlanFormSheet onVlanChange={handleVlanCreationSuccess} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>

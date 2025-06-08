@@ -101,6 +101,37 @@ function IPAddressesView() {
     fetchData();
   }, [fetchData]);
 
+  const handleIpAddressCreationSuccess = React.useCallback(async () => {
+    try {
+      const paginationInfo = await getIPAddressesAction({
+        page: 1,
+        pageSize: 1,
+        subnetId: selectedSubnetId, // Preserve current filter
+        status: selectedStatus,     // Preserve current filter
+      });
+      const newTotalPages = paginationInfo.totalPages;
+      const targetPage = newTotalPages > 0 ? newTotalPages : 1;
+      const currentUrlPage = Number(searchParams.get('page')) || 1;
+
+      if (targetPage !== currentUrlPage) {
+        const params = new URLSearchParams(searchParams.toString());
+        if (selectedSubnetId) params.set("subnetId", selectedSubnetId); else params.delete("subnetId");
+        if (selectedStatus && selectedStatus !== 'all') params.set("status", selectedStatus); else params.delete("status");
+        params.set("page", String(targetPage));
+        router.push(`${pathname}?${params.toString()}`);
+      } else {
+        fetchData(); // Refresh current page if target is the same
+      }
+    } catch (error) {
+      toast({
+        title: "刷新错误",
+        description: "创建IP地址后无法导航到目标页面，正在刷新当前页面。",
+        variant: "destructive",
+      });
+      fetchData(); // Fallback
+    }
+  }, [fetchData, router, pathname, searchParams, toast, selectedSubnetId, selectedStatus]);
+
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
       const allIdsOnPage = ipAddressesData?.data.map(ip => ip.id) || [];
@@ -157,11 +188,9 @@ function IPAddressesView() {
   const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "所有子网";
 
   const getVlanDisplayForIp = (ip: AppIPAddressWithRelations): string => {
-    // AppIPAddressWithRelations includes ip.vlan (direct) and ip.subnet.vlan (inherited)
-    // Both `vlan` objects in AppIPAddressWithRelations should now have `name` if fetched correctly by getIPAddressesAction
-    if (ip.vlan?.vlanNumber) { // Directly assigned VLAN
+    if (ip.vlan?.vlanNumber) { 
         return `VLAN ${ip.vlan.vlanNumber}${ip.vlan.name ? ` (${ip.vlan.name})` : ''}`;
-    } else if (ip.subnet?.vlan?.vlanNumber) { // Inherited from Subnet
+    } else if (ip.subnet?.vlan?.vlanNumber) { 
         return `VLAN ${ip.subnet.vlan.vlanNumber}${ip.subnet.vlan.name ? ` (${ip.subnet.vlan.name})` : ''} (继承)`;
     }
     return "无";
@@ -179,12 +208,18 @@ function IPAddressesView() {
       )}
       {canCreate && (
         <>
-        <IPBatchFormSheet subnets={subnets} vlans={vlans} onIpAddressChange={fetchData}>
+        <IPBatchFormSheet subnets={subnets} vlans={vlans} onIpAddressChange={handleIpAddressCreationSuccess}>
           <Button variant="outline" className="w-full sm:w-auto">
             <PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP
           </Button>
         </IPBatchFormSheet>
-        <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "w-full sm:w-auto"}} />
+        <IPAddressFormSheet 
+            subnets={subnets} 
+            vlans={vlans} 
+            currentSubnetId={selectedSubnetId} 
+            onIpAddressChange={handleIpAddressCreationSuccess} 
+            buttonProps={{className: "w-full sm:w-auto"}} 
+        />
         </>
       )}
     </div>
@@ -278,7 +313,13 @@ function IPAddressesView() {
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (
-                              <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}>
+                              <IPAddressFormSheet 
+                                ipAddress={ip} 
+                                subnets={subnets} 
+                                vlans={vlans} 
+                                currentSubnetId={selectedSubnetId} 
+                                onIpAddressChange={fetchData} // Edit calls plain fetchData
+                              >
                               <Button variant="ghost" size="icon" aria-label="编辑IP地址">
                                   <Edit className="h-4 w-4" />
                               </Button>
@@ -317,7 +358,14 @@ function IPAddressesView() {
               <p className="text-muted-foreground">
                 {selectedSubnetId || selectedStatus !== 'all' ? "未找到符合当前筛选条件的IP地址。" : "未找到IP地址。选择一个子网或添加新的IP。"}
               </p>
-              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData} buttonProps={{className: "mt-4"}} />}
+              {canCreate && 
+                <IPAddressFormSheet 
+                    subnets={subnets} 
+                    vlans={vlans} 
+                    currentSubnetId={selectedSubnetId} 
+                    onIpAddressChange={handleIpAddressCreationSuccess} 
+                    buttonProps={{className: "mt-4"}} 
+                />}
             </div>
           )}
         </CardContent>
