@@ -14,6 +14,8 @@ import {
   doSubnetsOverlap,
   compareIpStrings,
   groupConsecutiveIpsToRanges,
+  generateSubnetsFromParent, // New import
+  getPrefixFromRequiredHosts, // New import
 } from "./ip-utils";
 import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
@@ -503,6 +505,163 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
   logger.info(`批量删除子网完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
+
+// Batch Divide and Create Subnets Action
+interface SubnetToCreatePayload {
+  cidr: string;
+  vlanId?: string;
+  description?: string;
+}
+interface BatchDivideSubnetsPayload {
+  parentCidr: string; // For context/logging, actual division logic relies on subnetsToCreate
+  subnetsToCreate: SubnetToCreatePayload[];
+}
+interface BatchDivideSubnetsResult {
+  createdCount: number;
+  failedCreations: Array<{ cidrAttempted: string; error: string }>;
+}
+
+export async function batchDivideAndCreateSubnetsAction(
+  payload: BatchDivideSubnetsPayload,
+  performingUserId?: string
+): Promise<ActionResponse<BatchDivideSubnetsResult>> {
+  const actionName = 'batchDivideAndCreateSubnetsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  const { subnetsToCreate } = payload;
+
+  if (!subnetsToCreate || subnetsToCreate.length === 0) {
+    return { success: false, error: createActionErrorResponse(new ValidationError("没有提供要创建的子网。"), actionName) };
+  }
+
+  const createdSubnets: AppSubnet[] = [];
+  const failedCreations: Array<{ cidrAttempted: string; error: string }> = [];
+  let createdCount = 0;
+
+  const allExistingDbSubnets = await prisma.subnet.findMany();
+
+  for (const subnetData of subnetsToCreate) {
+    try {
+      validateCidrInput(subnetData.cidr, 'cidr');
+      const newSubnetProperties = getSubnetPropertiesFromCidr(subnetData.cidr);
+      if (!newSubnetProperties) {
+        throw new AppError(`无法解析提供的 CIDR ${subnetData.cidr} 的属性。`);
+      }
+
+      // Check for exact CIDR match
+      const existingSubnetByCidr = allExistingDbSubnets.find(s => s.cidr === subnetData.cidr);
+      if (existingSubnetByCidr) {
+        throw new ResourceError(`子网 ${subnetData.cidr} 已存在。`, 'SUBNET_ALREADY_EXISTS');
+      }
+
+      // Check for overlap with other existing subnets
+      for (const existingDbSub of allExistingDbSubnets) {
+        const existingDbSubProps = getSubnetPropertiesFromCidr(existingDbSub.cidr);
+        if (existingDbSubProps && doSubnetsOverlap(newSubnetProperties, existingDbSubProps)) {
+          throw new ResourceError(`提供的子网 ${subnetData.cidr} 与现有子网 ${existingDbSub.cidr} 重叠。`, 'SUBNET_OVERLAP_ERROR');
+        }
+      }
+      // Also check for overlap among the subnets being created in this batch
+      for (const alreadyProcessedSubnet of createdSubnets) {
+          const alreadyProcessedProps = getSubnetPropertiesFromCidr(alreadyProcessedSubnet.cidr);
+          if(alreadyProcessedProps && doSubnetsOverlap(newSubnetProperties, alreadyProcessedProps)){
+              throw new ResourceError(`提供的子网 ${subnetData.cidr} 与此批次中另一个待创建的子网 ${alreadyProcessedSubnet.cidr} 重叠。`, 'SUBNET_OVERLAP_WITHIN_BATCH');
+          }
+      }
+
+
+      const createPayloadPrisma: Prisma.SubnetCreateInput = {
+        cidr: subnetData.cidr,
+        networkAddress: newSubnetProperties.networkAddress,
+        subnetMask: newSubnetProperties.subnetMask,
+        ipRange: newSubnetProperties.ipRange || null,
+        description: subnetData.description || null,
+      };
+
+      if (subnetData.vlanId) {
+        const vlanExists = await prisma.vLAN.findUnique({ where: { id: subnetData.vlanId } });
+        if (!vlanExists) {
+          throw new NotFoundError(`VLAN ID: ${subnetData.vlanId}`, `为子网 ${subnetData.cidr} 选择的 VLAN 不存在。`);
+        }
+        createPayloadPrisma.vlan = { connect: { id: subnetData.vlanId } };
+      }
+      
+      // Temporarily add to createdSubnets for intra-batch overlap check *before* DB operation
+      // This isn't perfect for atomicity if DB fails later, but helps catch logical errors earlier.
+      // A more robust solution would involve a pre-check of all proposed subnets against each other first.
+      createdSubnets.push({
+        id: `temp-${createdCount}`, // Temporary ID for intra-batch check
+        cidr: subnetData.cidr,
+        networkAddress: newSubnetProperties.networkAddress,
+        subnetMask: newSubnetProperties.subnetMask,
+      });
+
+
+    } catch (error: unknown) {
+      const errorResponse = createActionErrorResponse(error, `${actionName}_validation`);
+      failedCreations.push({ cidrAttempted: subnetData.cidr, error: errorResponse.userMessage });
+    }
+  }
+  
+  // If any validation errors occurred during the pre-check loop, stop before DB operations
+  if (failedCreations.length > 0) {
+    const overallErrorMessage = `在批量创建子网前发现 ${failedCreations.length} 个错误。请检查详情。`;
+    const errorDetailsString = failedCreations.map(f => `${f.cidrAttempted}: ${f.error}`).join('; ');
+    return { 
+        success: false, 
+        error: { userMessage: overallErrorMessage, code: 'BATCH_SUBNET_VALIDATION_ERROR', details: errorDetailsString },
+        data: { createdCount: 0, failedCreations }
+    };
+  }
+
+  // If all validations passed, proceed with database transaction
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const subnetData of subnetsToCreate) { // Re-iterate with actual DB creation
+        // Properties are already validated, re-fetch for prisma create
+        const newSubnetProperties = getSubnetPropertiesFromCidr(subnetData.cidr)!; // Should not be null here
+        
+        const createPayloadPrisma: Prisma.SubnetCreateInput = {
+          cidr: subnetData.cidr,
+          networkAddress: newSubnetProperties.networkAddress,
+          subnetMask: newSubnetProperties.subnetMask,
+          ipRange: newSubnetProperties.ipRange || null,
+          description: subnetData.description || null,
+        };
+        if (subnetData.vlanId) {
+          createPayloadPrisma.vlan = { connect: { id: subnetData.vlanId } };
+        }
+        await tx.subnet.create({ data: createPayloadPrisma });
+        createdCount++;
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: auditUser.userId,
+        username: auditUser.username,
+        action: 'batch_divide_create_subnets',
+        details: `从父网络 ${payload.parentCidr} 批量创建了 ${createdCount} 个子网。失败 ${failedCreations.length} 个。`
+      }
+    });
+    revalidatePath("/subnets");
+    revalidatePath("/dashboard");
+    revalidatePath("/query");
+    logger.info(`批量划分子网成功，创建了 ${createdCount} 个子网。`, { parentCidr: payload.parentCidr, createdCount }, actionName);
+    return { success: true, data: { createdCount, failedCreations } };
+
+  } catch (error: unknown) { // Catch errors during $transaction
+    const errorResponse = createActionErrorResponse(error, actionName);
+    logger.error(`批量划分子网数据库事务失败`, error as Error, { parentCidr: payload.parentCidr }, actionName);
+    // It's hard to know which specific subnet failed in a transaction without more complex logic
+    // Return a general error for the batch. The pre-check should catch most individual errors.
+    return { 
+        success: false, 
+        error: { userMessage: `数据库事务处理失败: ${errorResponse.userMessage}`, code: 'BATCH_SUBNET_TRANSACTION_ERROR' },
+        data: { createdCount: 0, failedCreations: subnetsToCreate.map(s => ({ cidrAttempted: s.cidr, error: "事务失败" })) } 
+    };
+  }
+}
+
 
 // VLAN Actions
 export async function getVLANsAction(params?: FetchParams): Promise<PaginatedResponse<AppVLAN>> {
@@ -1394,3 +1553,5 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
   }
 }
 
+
+    

@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { NetworkIcon, Edit, Trash2, Loader2, PlusCircle } from "lucide-react"; 
+import { NetworkIcon, Edit, Trash2, Loader2, PlusCircle, GitBranch } from "lucide-react"; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
-// Removed: import { SubnetSmartBatchFormSheet } from "./subnet-smart-batch-form-sheet"; 
+import { SubnetSmartBatchFormSheet } from "./subnet-smart-batch-form-sheet"; 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
@@ -203,7 +203,14 @@ function SubnetsView() {
                 />
               )}
               {canCreate && (
-                <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
+                <>
+                  <SubnetSmartBatchFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess}>
+                    <Button variant="outline" className="w-full sm:w-auto">
+                        <GitBranch className="mr-2 h-4 w-4" /> 划分子网
+                    </Button>
+                  </SubnetSmartBatchFormSheet>
+                  <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
+                </>
               )}
             </div>
           }
@@ -334,6 +341,8 @@ export default function SubnetsPage() {
     </Suspense>
   );
 }
+    
+
     
 
     

@@ -231,6 +231,107 @@ export function groupConsecutiveIpsToRanges(ipNumbers: number[]): string[] {
   return ranges;
 }
 
+/**
+ * Calculates the smallest subnet prefix length that can accommodate a given number of usable host IP addresses.
+ * Accounts for network and broadcast addresses.
+ * @param requiredHosts The number of usable host IP addresses required.
+ * @returns The prefix length (e.g., 24 for a /24 network).
+ * @throws Error if the number of hosts is invalid or too large.
+ */
+export function getPrefixFromRequiredHosts(requiredHosts: number): number {
+  if (requiredHosts <= 0) {
+    throw new Error("所需主机数量必须大于 0。");
+  }
+
+  // Add 2 to account for network and broadcast addresses
+  const totalAddressesNeeded = requiredHosts + 2;
+
+  // Find the smallest power of 2 greater than or equal to totalAddressesNeeded
+  let power = 0;
+  while (Math.pow(2, power) < totalAddressesNeeded) {
+    power++;
+  }
+
+  if (power > 32) { // Technically, for IPv4, power can't be > 32. Max prefix is /0 (2^32 hosts)
+    throw new Error("所需主机数量过大，无法分配有效的子网。");
+  }
+  
+  const prefix = 32 - power;
+
+  if (prefix < 0 ) { // e.g. if more than 2^32 hosts are asked for.
+      throw new Error("所需主机数量过大，已超出IPv4地址空间。");
+  }
+  // Smallest networks for point-to-point usually /30 (2 usable hosts) or /31 (2 total IPs, both usable in some contexts)
+  // This function aims for standard usable counts.
+  return prefix;
+}
+
+/**
+ * Generates a list of subnets by dividing a parent CIDR.
+ * @param parentCidr The parent network in CIDR notation (e.g., "192.168.0.0/16").
+ * @param newSubnetPrefixLength The desired prefix length for the new, smaller subnets (e.g., 24 for /24).
+ * @param count Optional. The number of new subnets to generate. If not provided, generates all possible subnets.
+ * @returns An object containing the list of generated SubnetProperties and the maximum possible subnets, or an error object.
+ */
+export function generateSubnetsFromParent(
+  parentCidr: string,
+  newSubnetPrefixLength: number,
+  count?: number
+): { generatedSubnets: SubnetProperties[]; maxPossible: number } | { error: string } {
+  const parentProps = getSubnetPropertiesFromCidr(parentCidr);
+  if (!parentProps) {
+    return { error: "无效的父网络 CIDR。" };
+  }
+
+  if (newSubnetPrefixLength <= parentProps.prefix) {
+    return { error: "新子网前缀长度必须大于父网络前缀长度 (即网络更小)。" };
+  }
+  if (newSubnetPrefixLength > 30 && newSubnetPrefixLength !== 32) { // Allowing /32 for single host, but not /31 for simplicity here
+    return { error: "新子网前缀长度通常不应大于 /30 (除非是 /32)。" };
+  }
+
+  const parentNetworkNum = ipToNumber(parentProps.networkAddress);
+  const parentBroadcastNum = ipToNumber(parentProps.broadcastAddress);
+
+  const newSubnetSize = Math.pow(2, 32 - newSubnetPrefixLength);
+  const maxPossibleSubnets = Math.pow(2, newSubnetPrefixLength - parentProps.prefix);
+
+  const generatedSubnets: SubnetProperties[] = [];
+  let currentNetworkNum = parentNetworkNum;
+  let subnetsGenerated = 0;
+
+  while (currentNetworkNum < parentBroadcastNum && currentNetworkNum + newSubnetSize -1 <= parentBroadcastNum) {
+    if (count && subnetsGenerated >= count) {
+      break;
+    }
+
+    const currentSubnetIp = numberToIp(currentNetworkNum);
+    const subnetDetail = getSubnetPropertiesFromCidr(`${currentSubnetIp}/${newSubnetPrefixLength}`);
+    if (subnetDetail) {
+      // Ensure the generated subnet is actually within the parent (should be by calculation)
+      if (ipToNumber(subnetDetail.networkAddress) >= parentNetworkNum && ipToNumber(subnetDetail.broadcastAddress) <= parentBroadcastNum) {
+        generatedSubnets.push(subnetDetail);
+        subnetsGenerated++;
+      } else {
+        // This case should ideally not be hit if logic is correct
+        console.warn("Generated subnet somehow out of parent bounds:", subnetDetail, parentProps);
+        break;
+      }
+    } else {
+        // Should not happen if newSubnetPrefixLength is valid
+        return { error: `无法为 ${currentSubnetIp}/${newSubnetPrefixLength} 生成子网详情。`};
+    }
+    
+    currentNetworkNum += newSubnetSize;
+    if (currentNetworkNum === 0) { // Overflow protection for uint32 if newSubnetSize is huge
+        break;
+    }
+  }
+
+  return { generatedSubnets, maxPossible: maxPossibleSubnets };
+}
+
+
 // Removed calculatePrefixLengthFromRequiredHosts and generateSubnetCandidates
 
     
