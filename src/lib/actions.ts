@@ -1916,18 +1916,21 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     }
 
     const orConditions: Prisma.SubnetWhereInput[] = [
-      { cidr: { contains: queryString } }, // mode: 'insensitive' removed for CIDR
-      { description: { contains: queryString, mode: 'insensitive' } },
-      { networkAddress: { contains: queryString } }, // mode: 'insensitive' removed for networkAddress
+      { cidr: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite compatibility
+      { description: { contains: queryString } }, // Removed mode: 'insensitive'
+      { networkAddress: { contains: queryString } }, // Removed mode: 'insensitive'
     ];
     
-    let whereClause: Prisma.SubnetWhereInput = { OR: orConditions };
-    if (orConditions.length === 0) { // Should not happen if queryString is not empty, but as a safeguard
+    let whereClause: Prisma.SubnetWhereInput = {};
+    if (orConditions.length > 0) {
+        whereClause = { OR: orConditions };
+    } else {
+        // Fallback if queryString was somehow non-empty but generated no conditions
         whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET" };
     }
 
     const totalCount = await prisma.subnet.count({ where: whereClause });
-    const totalPages = Math.ceil(totalCount / pageSize);
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const subnetsFromDb = await prisma.subnet.findMany({
       where: whereClause,
@@ -1986,14 +1989,14 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
       if (!isNaN(potentialVlanNumber) && potentialVlanNumber.toString() === queryString) {
         whereClause = { vlanNumber: potentialVlanNumber };
       } else {
-        whereClause = { description: { contains: queryString, mode: 'insensitive' } };
+        whereClause = { description: { contains: queryString } }; // Removed mode: 'insensitive'
       }
     } else {
         return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
 
     const totalCount = await prisma.vLAN.count({ where: whereClause });
-    const totalPages = Math.ceil(totalCount / pageSize);
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const vlansFromDb = await prisma.vLAN.findMany({
       where: whereClause,
@@ -2038,7 +2041,6 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const trimmedSearchTerm = params.searchTerm?.trim();
     const statusFilter = params.status;
 
-    let whereClause: Prisma.IPAddressWhereInput = {};
     const andConditions: Prisma.IPAddressWhereInput[] = [];
 
     if (trimmedSearchTerm) {
@@ -2053,7 +2055,7 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       for (const pattern of ipWildcardPatterns) {
         const match = trimmedSearchTerm.match(pattern.regex);
         if (match) {
-          orConditionsForSearchTerm.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } }); // mode: 'insensitive' removed
+          orConditionsForSearchTerm.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } }); // Removed mode
           matchedIpPattern = true;
           break;
         }
@@ -2061,19 +2063,19 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
 
       if (!matchedIpPattern) {
         // For non-wildcard IP searches, or general text search
-        const isPotentiallyIpSegment = /[\d]/.test(trimmedSearchTerm) && !/^[^\d][a-zA-Z\s]+$/.test(trimmedSearchTerm) && !/^[\s.]*$/.test(trimmedSearchTerm) && trimmedSearchTerm.length <= 15 && trimmedSearchTerm.includes('.');
-        if (isPotentiallyIpSegment || /^\d+$/.test(trimmedSearchTerm)) { // If it's numeric or contains dots, try startsWith on IP
-             orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } }); // mode: 'insensitive' removed
+        const isPotentiallyIpSegment = /[\d.]/.test(trimmedSearchTerm) && !/^[^\d.]+$/.test(trimmedSearchTerm) && !/^[\s.]*$/.test(trimmedSearchTerm) && trimmedSearchTerm.length <= 15 && (trimmedSearchTerm.includes('.') || /^\d+$/.test(trimmedSearchTerm));
+        if (isPotentiallyIpSegment) {
+             orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } }); // Removed mode
         }
-        // Always search allocatedTo and description for general text
-        orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm, mode: 'insensitive' } });
-        orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm, mode: 'insensitive' } });
       }
+      // Always search allocatedTo and description for general text, regardless of IP pattern match
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); // Removed mode
+      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } }); // Removed mode
       
       if (orConditionsForSearchTerm.length > 0) {
         andConditions.push({ OR: orConditionsForSearchTerm });
       } else {
-        // Search term was provided but yielded no valid OR conditions (e.g., invalid pattern like "...")
+        // Search term was provided but yielded no valid OR conditions
         andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
       }
     }
@@ -2082,15 +2084,22 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       andConditions.push({ status: statusFilter as AppIPAddressStatusType });
     }
 
+    let whereClause: Prisma.IPAddressWhereInput = {};
     if (andConditions.length > 0) {
       whereClause = { AND: andConditions };
+    } else if (trimmedSearchTerm || (statusFilter && statusFilter !== 'all')) {
+      // This case implies search term was present but invalid, or only status filter which is fine
+      // If only status filter, andConditions would have 1 element.
+      // If search term was present but invalid, andConditions has the IMPOSSIBLE_ID.
+      // If both are present and search term is invalid, it also has IMPOSSIBLE_ID.
+      // This seems okay. However, if NO filters AT ALL are active, we should return empty.
     } else {
-      // No search term and no status filter, return empty as per UI spec for query tool
-      return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
+        // No search term and no status filter (or status is 'all')
+        return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
     
     const totalCount = await prisma.iPAddress.count({ where: whereClause });
-    const totalPages = Math.ceil(totalCount / pageSize) || 1; // Ensure totalPages is at least 1 if totalCount is 0
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const includeClauseForQuery = {
         subnet: { include: { vlan: true } },
@@ -2220,3 +2229,5 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
+    
