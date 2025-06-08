@@ -7,7 +7,7 @@ import {
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
-  ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
+  ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID, // Constant name remains the same for clarity in seed script
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
@@ -36,13 +36,13 @@ async function main() {
   for (const roleData of seedRolesData) {
     const prismaRoleName = roleData.name as string;
     await prisma.role.upsert({
-      where: { id: roleData.id },
+      where: { id: roleData.id }, // Uses the new ID format from mockRoles
       update: {
         name: prismaRoleName,
         description: roleData.description,
       },
       create: {
-        id: roleData.id,
+        id: roleData.id, // Uses the new ID format from mockRoles
         name: prismaRoleName,
         description: roleData.description,
       },
@@ -57,7 +57,7 @@ async function main() {
     }));
 
     await prisma.role.update({
-        where: { id: roleData.id },
+        where: { id: roleData.id }, // Uses the new ID format from mockRoles
         data: {
         permissions: {
             set: mappedPermissions,
@@ -69,26 +69,26 @@ async function main() {
 
   const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar' | 'permissions'> & { password: string; avatarPath: string }> = [
     {
-      id: 'user-admin-seed',
+      id: 'seed_user_admin', // Updated ID
       username: 'admin',
       email: 'admin@example.com',
-      roleId: SEED_ADMIN_ROLE_ID,
+      roleId: SEED_ADMIN_ROLE_ID, // Constant still points to the new ID format for Admin role
       password: 'admin',
       avatarPath: '/images/avatars/admin_avatar.png',
     },
     {
-      id: 'user-operator-seed',
+      id: 'seed_user_operator', // Updated ID
       username: 'operator',
       email: 'operator@example.com',
-      roleId: SEED_OPERATOR_ROLE_ID,
+      roleId: SEED_OPERATOR_ROLE_ID, // Constant still points to the new ID format for Operator role
       password: 'operator',
       avatarPath: '/images/avatars/operator_avatar.png',
     },
     {
-      id: 'user-viewer-seed',
+      id: 'seed_user_viewer', // Updated ID
       username: 'viewer',
       email: 'viewer@example.com',
-      roleId: SEED_VIEWER_ROLE_ID,
+      roleId: SEED_VIEWER_ROLE_ID, // Constant still points to the new ID format for Viewer role
       password: 'viewer',
       avatarPath: '/images/avatars/viewer_avatar.png',
     },
@@ -97,8 +97,9 @@ async function main() {
   console.log('Seeding Users with new credentials and local avatars...');
   for (const userData of initialUsersToSeed) {
     await prisma.user.upsert({
-      where: { email: userData.email },
+      where: { email: userData.email }, // Email is unique
       update: {
+        id: userData.id, // Ensure ID is updated if record exists by email but with old ID
         username: userData.username,
         password: userData.password,
         roleId: userData.roleId,
@@ -106,7 +107,7 @@ async function main() {
         lastLogin: new Date(),
       },
       create: {
-        id: userData.id,
+        id: userData.id, // Use new ID format
         username: userData.username,
         email: userData.email,
         password: userData.password,
@@ -124,7 +125,7 @@ async function main() {
       where: {
         vlanNumber: vlanData.vlanNumber,
         NOT: {
-          id: vlanData.id,
+          id: vlanData.id, // Use new ID format
         },
       },
     });
@@ -157,12 +158,12 @@ async function main() {
     }
 
     await prisma.vLAN.upsert({
-      where: { id: vlanData.id },
+      where: { id: vlanData.id }, // Use new ID format
       update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
       create: {
-        id: vlanData.id,
+        id: vlanData.id, // Use new ID format
         vlanNumber: vlanData.vlanNumber,
-        name: vlanData.name, // Added name
+        name: vlanData.name,
         description: vlanData.description,
       },
     });
@@ -175,7 +176,7 @@ async function main() {
         where: {
             cidr: subnetData.cidr,
             NOT: {
-                id: subnetData.id,
+                id: subnetData.id, // Use new ID format
             },
         },
     });
@@ -205,23 +206,23 @@ async function main() {
     }
 
     await prisma.subnet.upsert({
-      where: { id: subnetData.id },
+      where: { id: subnetData.id }, // Use new ID format
       update: {
         cidr: subnetData.cidr,
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
         description: subnetData.description,
-        vlanId: subnetData.vlanId,
+        vlanId: subnetData.vlanId, // This ID must match a new VLAN ID format if linked
       },
       create: {
-        id: subnetData.id,
+        id: subnetData.id, // Use new ID format
         cidr: subnetData.cidr,
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
         description: subnetData.description,
-        vlanId: subnetData.vlanId,
+        vlanId: subnetData.vlanId, // This ID must match a new VLAN ID format if linked
       },
     });
   }
@@ -230,23 +231,23 @@ async function main() {
   console.log('Seeding IP Addresses...');
   for (const ipData of seedIPsData) {
     await prisma.iPAddress.upsert({
-      where: { id: ipData.id },
+      where: { id: ipData.id }, // Use new ID format
       update: {
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
         allocatedTo: ipData.allocatedTo,
         description: ipData.description,
-        subnetId: ipData.subnetId,
-        vlanId: ipData.vlanId,
+        subnetId: ipData.subnetId, // This ID must match a new Subnet ID format if linked
+        vlanId: ipData.vlanId,     // This ID must match a new VLAN ID format if linked
       },
       create: {
-        id: ipData.id,
+        id: ipData.id, // Use new ID format
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
         allocatedTo: ipData.allocatedTo,
         description: ipData.description,
-        subnetId: ipData.subnetId,
-        vlanId: ipData.vlanId,
+        subnetId: ipData.subnetId, // This ID must match a new Subnet ID format if linked
+        vlanId: ipData.vlanId,     // This ID must match a new VLAN ID format if linked
       },
     });
   }
@@ -254,16 +255,17 @@ async function main() {
 
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {
-    const userToLink = initialUsersToSeed.find(u => u.username === logData.username);
-    const validUserId = userToLink ? userToLink.id : undefined;
+    // Find user by new ID format for linking in audit log
+    const userToLink = initialUsersToSeed.find(u => u.username === logData.username); // username is still the same
+    const validUserId = userToLink ? userToLink.id : undefined; // will use new 'seed_user_xxx' format
     const validUsername = userToLink ? userToLink.username : logData.username;
 
 
-    const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id }});
+    const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id }}); // Use new log ID format
     if (!existingLog) {
         await prisma.auditLog.create({
         data: {
-            id: logData.id,
+            id: logData.id, // Use new log ID format
             userId: validUserId,
             username: validUsername,
             action: logData.action,
@@ -286,3 +288,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
