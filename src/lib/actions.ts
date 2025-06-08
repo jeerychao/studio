@@ -78,6 +78,7 @@ interface LoginResponse {
 }
 
 export async function loginAction(payload: LoginPayload): Promise<LoginResponse> {
+  const actionName = 'loginAction';
   const { email, password } = payload;
 
   if (!email || !password) {
@@ -90,32 +91,37 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     });
 
     if (!userFromDb) {
-      logger.error('Login attempt failed: User not found', new AuthError(`User with email ${email} not found.`), { email });
+      logger.error('Login attempt failed: User not found', new AuthError(`User with email ${email} not found.`), { email }, actionName);
       return { success: false, message: "邮箱或密码无效。" };
     }
 
     if (userFromDb.password !== password) {
-      logger.warn('Login attempt failed: Invalid password', new AuthError('Invalid password attempt.'), { userId: userFromDb.id });
+      logger.warn('Login attempt failed: Invalid password', new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName);
       return { success: false, message: "邮箱或密码无效。" };
     }
 
     if (!userFromDb.role || !userFromDb.role.name) {
-        logger.error(`User ${userFromDb.id} is missing role or role name in database during login.`, new AppError('User role data incomplete'), { userId: userFromDb.id });
+        logger.error(`User ${userFromDb.id} is missing role or role name in database during login.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName);
         return { success: false, message: "用户角色信息不完整。" };
     }
+    
+    // Detailed logging for permissions
+    logger.debug(`[${actionName}] Raw userFromDb.role object for user ${userFromDb.username}:`, { roleId: userFromDb.role.id, roleName: userFromDb.role.name }, actionName);
+    logger.debug(`[${actionName}] Raw userFromDb.role.permissions for user ${userFromDb.username}:`, userFromDb.role.permissions, actionName);
+
 
     // Robust check for permissions
     let permissionsList: AppPermissionIdType[] = [];
     if (Array.isArray(userFromDb.role.permissions)) {
       permissionsList = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
+      logger.debug(`[${actionName}] Mapped permissionsList for user ${userFromDb.username}:`, permissionsList, actionName);
     } else {
       logger.error(
-        `User ${userFromDb.id}'s role (${userFromDb.role.name}) is missing a valid permissions array in database during login. Defaulting to empty permissions. This is a data integrity issue.`,
+        `[${actionName}] User ${userFromDb.id}'s role (${userFromDb.role.name}) is missing a valid permissions array in database during login. Defaulting to empty permissions. This is a data integrity issue.`,
         new AppError('User role permissions data incomplete or malformed'),
-        { userId: userFromDb.id, roleId: userFromDb.role.id, permissionsData: userFromDb.role.permissions }
+        { userId: userFromDb.id, roleId: userFromDb.role.id, permissionsDataFromDb: userFromDb.role.permissions },
+        actionName
       );
-      // Depending on strictness, you might want to return an error here instead of defaulting:
-      // return { success: false, message: "用户角色权限信息不完整或损坏。" };
     }
 
     await prisma.user.update({
@@ -133,6 +139,7 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
       permissions: permissionsList,
       lastLogin: userFromDb.lastLogin?.toISOString()
     };
+    logger.debug(`[${actionName}] LoggedInUser object prepared:`, { username: loggedInUser.username, permissionsCount: loggedInUser.permissions.length }, actionName);
 
     await prisma.auditLog.create({
       data: {
@@ -144,36 +151,50 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     });
     return { success: true, user: loggedInUser };
   } catch (error) {
-    logger.error('Login action unexpected error', error as Error, { email });
+    logger.error('Login action unexpected error', error as Error, { email }, actionName);
     return { success: false, message: "登录过程中发生意外错误。" };
   }
 }
 
 export async function fetchCurrentUserDetailsAction(userId: string): Promise<FetchedUserDetails | null> {
-  if (!userId) return null;
+  const actionName = 'fetchCurrentUserDetailsAction';
+  if (!userId) {
+    logger.warn(`[${actionName}] Called with null or empty userId.`, undefined, undefined, actionName);
+    return null;
+  }
   try {
     const userFromDb = await prisma.user.findUnique({
       where: { id: userId },
       include: { role: { include: { permissions: true } } },
     });
-    if (!userFromDb) return null;
-    if (!userFromDb.role || !userFromDb.role.name) {
-        logger.error(`User ${userId} is missing valid role or role name in database during fetchCurrentUserDetailsAction.`, new AppError("User role data invalid"), { userId });
-        return null; // Or throw an error indicating critical data missing
+
+    if (!userFromDb) {
+      logger.warn(`[${actionName}] User not found for ID: ${userId}.`, undefined, { userId }, actionName);
+      return null;
     }
+    if (!userFromDb.role || !userFromDb.role.name) {
+        logger.error(`[${actionName}] User ${userId} is missing valid role or role name in database.`, new AppError("User role data invalid"), { userId }, actionName);
+        return null; 
+    }
+    
+    // Detailed logging for permissions
+    logger.debug(`[${actionName}] Raw userFromDb.role object for user ID ${userId}:`, { roleId: userFromDb.role.id, roleName: userFromDb.role.name }, actionName);
+    logger.debug(`[${actionName}] Raw userFromDb.role.permissions for user ID ${userId}:`, userFromDb.role.permissions, actionName);
 
     let permissionsList: AppPermissionIdType[] = [];
     if (Array.isArray(userFromDb.role.permissions)) {
         permissionsList = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
+        logger.debug(`[${actionName}] Mapped permissionsList for user ID ${userId}:`, permissionsList, actionName);
     } else {
         logger.error(
-            `User ${userFromDb.id}'s role (${userFromDb.role.name}) is missing a valid permissions array in fetchCurrentUserDetailsAction. Defaulting to empty permissions. This is a data integrity issue.`,
-            new AppError('User role permissions data incomplete or malformed for fetchCurrentUserDetailsAction'),
-            { userId: userFromDb.id, roleId: userFromDb.role.id, permissionsData: userFromDb.role.permissions }
+            `[${actionName}] User ${userFromDb.id}'s role (${userFromDb.role.name}) is missing a valid permissions array. Defaulting to empty permissions. This is a data integrity issue.`,
+            new AppError('User role permissions data incomplete or malformed'),
+            { userId: userFromDb.id, roleId: userFromDb.role.id, permissionsDataFromDb: userFromDb.role.permissions },
+            actionName
         );
     }
 
-    return {
+    const fetchedUser: FetchedUserDetails = {
       id: userFromDb.id,
       username: userFromDb.username,
       email: userFromDb.email,
@@ -183,9 +204,12 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
       permissions: permissionsList,
       lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
     };
+    logger.debug(`[${actionName}] FetchedUserDetails object prepared for ID ${userId}:`, { username: fetchedUser.username, permissionsCount: fetchedUser.permissions.length }, actionName);
+    return fetchedUser;
+
   } catch (error) {
-    logger.error('Error in fetchCurrentUserDetailsAction', error as Error, { userId });
-    return null; // Or rethrow / handle more gracefully
+    logger.error(`Error in ${actionName}`, error as Error, { userId }, actionName);
+    return null; 
   }
 }
 

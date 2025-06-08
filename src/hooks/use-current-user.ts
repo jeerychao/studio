@@ -37,7 +37,7 @@ const createGuestUser = async (): Promise<CurrentUserContextValue> => {
       avatar: '/images/avatars/default_avatar.png',
       lastLogin: undefined,
       roleName: 'Viewer',
-      permissions: [PERMISSIONS.VIEW_DASHBOARD] // Minimal permissions for guest
+      permissions: [PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_QUERY_PAGE] // Minimal permissions for guest
   };
 };
 
@@ -50,55 +50,67 @@ export function useCurrentUser(): UseCurrentUserReturn {
   // const pathname = usePathname();
 
   React.useEffect(() => {
+    // logger.debug("[useCurrentUser Effect Outer] Running. isInitialized:", isInitialized);
     if (typeof window === "undefined") {
       logger.debug("useCurrentUser Effect: window is undefined (SSR), skipping initialization.");
-      setIsAuthLoading(false);
-      setIsInitialized(true);
+      // Important: Still need to set loading to false and initialized to true for SSR consistency if needed,
+      // but client-side logic below will handle actual user fetching.
+      // For now, this path leads to `currentUser` being null and `isAuthLoading` true initially.
+      // This might be okay if SSR doesn't need the user, but could cause hydration issues
+      // if SSR content *depends* on the user state that then changes on client.
+      // Given our setup, user-dependent content is mostly client-rendered or in DashboardLayout checks.
       return;
     }
 
     if (isInitialized) {
-      logger.debug("useCurrentUser Effect: Already initialized, skipping.");
+      // logger.debug("useCurrentUser Effect: Already initialized, skipping actual user fetch logic.");
       return;
     }
 
-    logger.debug("useCurrentUser Effect: Starting initialization.");
+    // logger.debug("useCurrentUser Effect: Starting initialization (isInitialized=false).");
     const initializeUser = async () => {
+      // logger.debug("useCurrentUser initializeUser: Setting isAuthLoading to true.");
       setIsAuthLoading(true);
       let userToSet: CurrentUserContextValue | null = null;
       try {
         const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
         if (storedUserId) {
-          logger.debug(`useCurrentUser: Found storedUserId: ${storedUserId}. Fetching details...`);
+          logger.debug(`useCurrentUser initializeUser: Found storedUserId: ${storedUserId}. Fetching details...`);
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
+          
+          // Log the raw userDetails received from the action
+          logger.debug(`useCurrentUser initializeUser: Raw userDetails from fetchCurrentUserDetailsAction for ID ${storedUserId}:`, userDetails);
+
           if (userDetails) {
-            logger.debug(`useCurrentUser: User details fetched for ${storedUserId}: ${userDetails.username}. Role: ${userDetails.roleName}. Permissions raw:`, userDetails.permissions);
+            logger.debug(`useCurrentUser initializeUser: User details successfully fetched for ${storedUserId}: ${userDetails.username}. Role: ${userDetails.roleName}.`);
+            logger.debug(`useCurrentUser initializeUser: Permissions from userDetails for ${storedUserId}:`, userDetails.permissions);
             userToSet = {
               ...userDetails,
               permissions: userDetails.permissions || [], // Ensure permissions is always an array
             };
-            logger.debug(`useCurrentUser: User object to set:`, userToSet);
+            // logger.debug(`useCurrentUser initializeUser: User object to set for ${storedUserId}:`, userToSet);
           } else {
-            logger.warn(`useCurrentUser: User details not found for stored ID "${storedUserId}". Clearing localStorage and creating guest user.`);
+            logger.warn(`useCurrentUser initializeUser: User details not found for stored ID "${storedUserId}". Clearing localStorage and creating guest user.`);
             localStorage.removeItem(MOCK_USER_STORAGE_KEY);
             userToSet = await createGuestUser();
           }
         } else {
-          logger.debug("useCurrentUser: No storedUserId found. Creating guest user.");
+          logger.debug("useCurrentUser initializeUser: No storedUserId found. Creating guest user.");
           userToSet = await createGuestUser();
         }
       } catch (error) {
-        logger.error("useCurrentUser: Error initializing current user, creating guest user.", error as Error);
+        logger.error("useCurrentUser initializeUser: Error during user initialization. Creating guest user.", error as Error);
         userToSet = await createGuestUser();
       } finally {
         setCurrentUser(userToSet);
         setIsAuthLoading(false);
-        setIsInitialized(true);
-        logger.debug("useCurrentUser: Initialization complete.", { 
+        setIsInitialized(true); // Mark as initialized
+        logger.debug("useCurrentUser initializeUser: Initialization complete.", { 
           userSet: userToSet ? userToSet.username : 'null', 
           isAuthLoading: false, 
           isInitialized: true,
-          finalPermissions: userToSet ? userToSet.permissions : []
+          finalPermissionsSet: userToSet ? userToSet.permissions : [],
+          finalPermissionsCount: userToSet ? userToSet.permissions.length : 0
         });
       }
     };
@@ -114,7 +126,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
         logger.debug(`setCurrentMockUser: Storing user ID ${userId} in localStorage.`);
         localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
       }
-      setIsInitialized(false);
+      setIsInitialized(false); // Reset initialization flag to force re-fetch
       logger.debug("setCurrentMockUser: Reloading window to re-initialize user state.");
       window.location.reload();
     };
@@ -122,7 +134,7 @@ export function useCurrentUser(): UseCurrentUserReturn {
     (window as any).clearCurrentMockUser = () => {
       logger.debug("Global clearCurrentMockUser called. Removing user ID from localStorage and reloading.");
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      setIsInitialized(false);
+      setIsInitialized(false); // Reset initialization flag
       window.location.reload();
     };
 
@@ -143,18 +155,18 @@ export function useCurrentUser(): UseCurrentUserReturn {
         }
         logger.debug(`Global cycleMockUser: Cycling to ID: ${nextUserId}. Storing and reloading.`);
         localStorage.setItem(MOCK_USER_STORAGE_KEY, nextUserId);
-        setIsInitialized(false);
+        setIsInitialized(false); // Reset initialization flag
         window.location.reload();
     };
     
     return () => {
-        // logger.debug("[useCurrentUser Cleanup Effect]", { path: pathname });
+        // logger.debug("[useCurrentUser Cleanup Effect] Running. isInitialized:", isInitialized);
     };
-  }, [isInitialized]);
+  }, [isInitialized]); // Dependency array only includes isInitialized
 
   return {
-    currentUser: isInitialized ? currentUser : null, 
-    isAuthLoading: !isInitialized || isAuthLoading 
+    currentUser: currentUser, // Return current state, could be null briefly during init
+    isAuthLoading: isAuthLoading || !isInitialized // Consider loading if not yet initialized OR explicitly loading
   };
 }
 
