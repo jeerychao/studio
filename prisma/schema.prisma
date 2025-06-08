@@ -1,105 +1,111 @@
 
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
+generator client {
+  provider = "prisma-client-js"
+}
+
 model Subnet {
   id             String      @id @default(cuid())
-  cidr           String      @unique // e.g., 192.168.1.0/24
-  networkAddress String      // e.g., 192.168.1.0
-  subnetMask     String      // e.g., 255.255.255.0
-  ipRange        String?     // e.g., 192.168.1.1 - 192.168.1.254
+  cidr           String      @unique // e.g., "192.168.1.0/24"
+  networkAddress String      // e.g., "192.168.1.0"
+  subnetMask     String      // e.g., "255.255.255.0"
+  ipRange        String?     // e.g., "192.168.1.1 - 192.168.1.254"
   description    String?
   vlanId         String?
-  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: Cascade) // Cascade delete if VLAN is deleted
   ipAddresses    IPAddress[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 }
 
 model VLAN {
-  id            String    @id @default(cuid())
-  vlanNumber    Int       @unique // 1-4094
-  name          String?   // New field for VLAN Name
-  description   String?
-  subnets       Subnet[]
-  ipAddresses   IPAddress[] @relation("IPAddressToVLAN") // Explicit relation name for IP-specific VLAN
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String      @id @default(cuid())
+  vlanNumber  Int         @unique // 1-4094
+  name        String?
+  description String?
+  subnets     Subnet[]
+  ipAddresses IPAddress[] // IPs directly assigned to this VLAN, not via subnet
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model IPAddress {
-  id           String  @id @default(cuid())
-  ipAddress    String  // e.g., 192.168.1.100
-  subnetId     String?
-  subnet       Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull, onUpdate: Cascade) // onDelete: SetNull if IP can exist without subnet
-  vlanId       String? // For IP-specific VLAN assignment, overriding subnet's VLAN
-  vlan         VLAN?   @relation("IPAddressToVLAN", fields: [vlanId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  status       String  // e.g., "allocated", "free", "reserved"
-  allocatedTo  String? // e.g., "John's PC", "Server-01"
+  id           String    @id @default(cuid())
+  ipAddress    String    // e.g., "192.168.1.100"
+  status       String    // "allocated", "free", "reserved"
+  allocatedTo  String?   // Device name, user, etc.
   description  String?
-  lastSeen     DateTime?
+  lastSeen     DateTime? // For potential future use (e.g., ping checks)
+  subnetId     String?
+  subnet       Subnet?   @relation(fields: [subnetId], references: [id], onDelete: SetNull) // SetNull if subnet is deleted
+  vlanId       String?   // Direct VLAN assignment (overrides subnet's VLAN if set)
+  vlan         VLAN?     @relation(fields: [vlanId], references: [id], onDelete: SetNull) // SetNull if VLAN is deleted
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([ipAddress, subnetId]) // An IP must be unique within its subnet, or globally if no subnet
-  // If an IP can be globally unique regardless of subnet, then @@unique([ipAddress])
+  // Ensure unique IP within a subnet, or unique globally if no subnet
+  @@unique([ipAddress, subnetId])
 }
 
 model User {
   id          String     @id @default(cuid())
   username    String     @unique
   email       String     @unique
-  password    String // In a real app, this would be a hash
-  avatar      String?
+  password    String     // Store hashed password in a real app
+  avatar      String?    // URL or path to avatar image
   roleId      String
   role        Role       @relation(fields: [roleId], references: [id])
-  lastLogin   DateTime?
   auditLogs   AuditLog[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastLogin   DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 model Role {
-  id          String       @id
-  name        String       @unique
+  id          String       @id @default(cuid())
+  name        String       @unique // e.g., "Administrator", "Operator", "Viewer"
   description String?
   users       User[]
-  permissions Permission[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  permissions Permission[] @relation("RolePermissions")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Permission {
-  id          String  @id // e.g., "subnet.create"
-  name        String  @unique // e.g., "Create Subnets"
-  group       String  // e.g., "Subnet Management"
+  id          String   @id // e.g., "subnet.create", "user.delete"
+  name        String   @unique // e.g., "Create Subnets"
+  group       String   // e.g., "Subnet Management"
   description String?
-  roles       Role[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  roles       Role[]   @relation("RolePermissions")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String? // Can be null for system actions
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  username  String?  // Denormalized username for easier display, even if user is deleted
-  action    String   // e.g., "create_subnet", "user_login"
-  details   String?  // e.g., "Created subnet 192.168.1.0/24"
+  username  String?  // Denormalized username for easier display if user is deleted
+  action    String   // e.g., "create_subnet", "login_failed"
+  details   String?  // Additional details, can be JSON string
   timestamp DateTime @default(now())
+  ipAddress String?  // IP of the user performing the action
 }
+
+model SystemSetting {
+  key       String   @id // e.g., "auditLogRetentionPeriod"
+  value     String   // e.g., "90" (days) or "forever"
+  updatedAt DateTime @updatedAt
+}
+
+// Example of how to model settings if you had more complex ones
+// model SystemSettings {
+//   id                    String @id @default("global_settings") // Singleton row
+//   auditLogRetentionDays Int    @default(90) // -1 for forever
+//   // Add other settings here
+//   updatedAt             DateTime @updatedAt
+// }

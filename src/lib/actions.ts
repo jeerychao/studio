@@ -14,8 +14,6 @@ import {
   doSubnetsOverlap,
   compareIpStrings,
   groupConsecutiveIpsToRanges,
-  // Removed: calculatePrefixLengthFromRequiredHosts, 
-  // Removed: generateSubnetCandidates, 
 } from "./ip-utils";
 import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
@@ -25,6 +23,7 @@ import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from
 import { Prisma, type IPAddress as PrismaIPAddress, type Subnet as PrismaSubnet, type VLAN as PrismaVLAN } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
+import { fetchCurrentUserDetailsAction as getCurrentUserServer } from './actions'; // Assuming this is how you get current user on server
 
 export interface ActionResponse<TData = unknown> {
   success: boolean;
@@ -37,14 +36,19 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
     const user = await prisma.user.findUnique({ where: { id: performingUserId } });
     if (user) return { userId: user.id, username: user.username };
   }
+  // Fallback to a system-like user if no performingUserId or user not found
+  // This could be a dedicated system user ID or a generic string.
+  // For now, let's try to find an admin if no specific user is passed.
   const adminUser = await prisma.user.findFirst({
-    where: { role: { name: "Administrator" } },
+    where: { role: { name: "Administrator" } }, // Assuming 'Administrator' is the exact role name
   });
   if (adminUser) {
     return { userId: adminUser.id, username: adminUser.username };
   }
+  // If no admin found, default to "系统"
   return { userId: undefined, username: '系统' };
 }
+
 
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_QUERY_PAGE_SIZE = 10;
@@ -158,6 +162,7 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
   };
 }
 
+// Subnet Actions
 export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedResponse<AppSubnet>> {
   const actionName = 'getSubnetsAction';
   try {
@@ -442,6 +447,7 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
+// VLAN Actions
 export async function getVLANsAction(params?: FetchParams): Promise<PaginatedResponse<AppVLAN>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -591,6 +597,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
+// IP Address Actions
 type PrismaIPAddressWithRelations = Prisma.IPAddressGetPayload<{ include: { subnet: { include: { vlan: true } }; vlan: true; }; }>;
 export type AppIPAddressWithRelations = AppIPAddress & {
   subnet?: { id: string; cidr: string; networkAddress: string; vlan?: { vlanNumber: number; name?: string; } | null } | null;
@@ -817,6 +824,7 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
+// User Actions
 export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -894,7 +902,7 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
     if (!payload.newPassword) { throw new ValidationError("新密码是必需的。", "newPassword"); }
     await prisma.user.update({ where: { id: userId }, data: { password: payload.newPassword } });
     await prisma.auditLog.create({ data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了自己的密码。` } });
-    revalidatePath("/settings");
+    revalidatePath("/account/change-password"); // Updated path
     logger.info('用户密码更新成功', { userId }, actionName);
     return { success: true, data: { message: "密码已成功更新。" } };
   } catch (error: unknown) {
@@ -920,6 +928,8 @@ export async function deleteUserAction(id: string, performingUserId?: string): P
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
+// Role Actions
 export async function getRolesAction(params?: FetchParams): Promise<PaginatedResponse<AppRole>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -967,6 +977,8 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
 }
 export async function createRoleAction(data: any): Promise<ActionResponse<AppRole>> { logger.warn('Attempted to call createRoleAction, which is disabled.', undefined, { inputData: data }); throw new AppError("不允许创建新角色。角色是固定的 (Administrator, Operator, Viewer)。", 403, 'ROLE_CREATION_NOT_ALLOWED'); }
 export async function deleteRoleAction(id: string): Promise<ActionResponse> { const role = await prisma.role.findUnique({where: {id}}); if (role && (role.name === "Administrator" || role.name === "Operator" || role.name === "Viewer" )) { logger.warn(`Attempted to delete fixed role: ${role.name}`, undefined, { roleId: id }); throw new AppError("不允许删除固定角色 (Administrator, Operator, Viewer)。", 403, 'FIXED_ROLE_DELETION_NOT_ALLOWED'); } logger.warn(`Attempted to delete non-fixed or non-existent role.`, undefined, { roleId: id }); throw new NotFoundError(`角色 ID: ${id}`, "未找到角色或不允许删除。"); }
+
+// Audit Log Actions
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -1017,8 +1029,144 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
   logger.info(`批量删除审计日志完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
+
+// System Settings Actions
+const AUDIT_LOG_RETENTION_KEY = "auditLogRetentionPeriod";
+type AuditLogRetentionValue = "30d" | "90d" | "180d" | "365d" | "forever";
+
+export async function getAuditLogRetentionSettingAction(
+  performingUserId?: string
+): Promise<ActionResponse<{ period: AuditLogRetentionValue }>> {
+  const actionName = 'getAuditLogRetentionSettingAction';
+  try {
+    // Permission check might be needed here if not handled by page access
+    // const currentUser = await getCurrentUserServer(performingUserId); // Assuming this function exists
+    // if (!currentUser || !currentUser.permissions.includes(PERMISSIONS.VIEW_SETTINGS)) {
+    //   throw new AuthError("您没有权限查看此设置。");
+    // }
+
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: AUDIT_LOG_RETENTION_KEY },
+    });
+    const currentValue = (setting?.value as AuditLogRetentionValue) || "90d"; // Default to 90d if not set
+    return { success: true, data: { period: currentValue } };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function updateAuditLogRetentionSettingAction(
+  payload: { period: AuditLogRetentionValue },
+  performingUserId?: string
+): Promise<ActionResponse<{ period: AuditLogRetentionValue }>> {
+  const actionName = 'updateAuditLogRetentionSettingAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    // Permission check - ensure user has VIEW_SETTINGS (as settings page is gated by it)
+    // const currentUser = await getCurrentUserServer(performingUserId);
+    // if (!currentUser || !currentUser.permissions.includes(PERMISSIONS.VIEW_SETTINGS)) {
+    //   throw new AuthError("您没有权限修改此设置。");
+    // }
+    
+    const { period } = payload;
+    if (!["30d", "90d", "180d", "365d", "forever"].includes(period)) {
+        throw new ValidationError("无效的保留期限值。", "period", period);
+    }
+
+    await prisma.systemSetting.upsert({
+      where: { key: AUDIT_LOG_RETENTION_KEY },
+      update: { value: period },
+      create: { key: AUDIT_LOG_RETENTION_KEY, value: period },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: auditUser.userId,
+        username: auditUser.username,
+        action: 'update_audit_log_retention',
+        details: `审计日志保留期限已更新为 ${period}。`,
+      },
+    });
+    revalidatePath("/settings");
+    logger.info(`审计日志保留策略更新为: ${period}`, { period }, actionName);
+    return { success: true, data: { period } };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function cleanupAuditLogsAction(
+  performingUserId?: string
+): Promise<ActionResponse<{ deletedCount: number }>> {
+  const actionName = 'cleanupAuditLogsAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    // Permission check
+    // const currentUser = await getCurrentUserServer(performingUserId);
+    // if (!currentUser || !currentUser.permissions.includes(PERMISSIONS.VIEW_SETTINGS)) { // Or a more specific permission like DELETE_AUDIT_LOG
+    //   throw new AuthError("您没有权限执行此操作。");
+    // }
+
+    const retentionSetting = await prisma.systemSetting.findUnique({
+      where: { key: AUDIT_LOG_RETENTION_KEY },
+    });
+
+    const retentionPeriod = (retentionSetting?.value as AuditLogRetentionValue) || "90d";
+
+    if (retentionPeriod === "forever") {
+      logger.info("审计日志保留设置为永久，不执行清理。", undefined, actionName);
+      return { success: true, data: { deletedCount: 0 } };
+    }
+
+    let daysToKeep: number;
+    switch (retentionPeriod) {
+      case "30d": daysToKeep = 30; break;
+      case "90d": daysToKeep = 90; break;
+      case "180d": daysToKeep = 180; break;
+      case "365d": daysToKeep = 365; break;
+      default:
+        logger.warn(`未知的审计日志保留期限: ${retentionPeriod}。默认为90天。`, undefined, actionName);
+        daysToKeep = 90;
+    }
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+    const result = await prisma.auditLog.deleteMany({
+      where: {
+        timestamp: {
+          lt: cutoffDate,
+        },
+        // IMPORTANT: Do not delete the cleanup log entry itself if it falls within the range by mistake
+        // This can be tricky. A common way is to ensure cleanup logs have a specific action type
+        // and exclude that type, or rely on the fact that it's just created.
+        // For simplicity now, we won't add complex exclusion logic.
+      },
+    });
+
+    const deletedCount = result.count;
+    await prisma.auditLog.create({
+      data: {
+        userId: auditUser.userId,
+        username: auditUser.username,
+        action: 'cleanup_audit_logs_manual',
+        details: `手动触发审计日志清理。删除了 ${deletedCount} 条早于 ${cutoffDate.toISOString().split('T')[0]} (保留 ${daysToKeep} 天) 的日志。`,
+      },
+    });
+
+    revalidatePath("/audit-logs");
+    logger.info(`手动清理审计日志完成。删除了 ${deletedCount} 条记录。`, { deletedCount, cutoffDate }, actionName);
+    return { success: true, data: { deletedCount } };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+
+// Permission Actions
 export async function getAllPermissionsAction(): Promise<AppPermission[]> { return mockPermissions.map(p => ({ ...p, description: p.description || undefined })); }
 
+// Query Tool Actions
 interface QueryToolParams { page?: number; pageSize?: number; queryString?: string; searchTerm?: string; status?: AppIPAddressStatusType | 'all'; }
 
 export async function querySubnetsAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<SubnetQueryResult>>> {
@@ -1219,8 +1367,3 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-
-// Removed SmartBatchCreateSubnetsPayload, SubnetCandidatePreview types and smartBatchCreateSubnetsAction function
-
-
-    
