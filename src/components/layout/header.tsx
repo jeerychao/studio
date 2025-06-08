@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide, KeyRound } from "lucide-react";
+import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide, KeyRound, Sun, Moon, Laptop } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,17 +10,22 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
 import { MOCK_USER_STORAGE_KEY, useCurrentUser, hasPermission } from "@/hooks/use-current-user"; 
 import { PERMISSIONS } from "@/types";
-import { ThemeToggle } from "@/components/settings/theme-toggle"; // Added import for ThemeToggle
+import { useTheme } from "next-themes"; // Import useTheme
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const { currentUser, isAuthLoading } = useCurrentUser(); 
+  const { setTheme } = useTheme(); // Use the useTheme hook
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -63,7 +68,7 @@ export function Header() {
       )}
 
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
-        <ThemeToggle /> {/* ThemeToggle added here */}
+        {/* ThemeToggle component removed from here */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="rounded-full h-10 w-10 p-0 flex items-center justify-center">
@@ -88,6 +93,29 @@ export function Header() {
                 </Link>
               </DropdownMenuItem>
             )}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Sun className="mr-2 h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute mr-2 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span className="ml-0.5">切换主题</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={() => setTheme("light")}>
+                    <Sun className="mr-2 h-4 w-4" />
+                    浅色模式
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTheme("dark")}>
+                    <Moon className="mr-2 h-4 w-4" />
+                    深色模式
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTheme("system")}>
+                    <Laptop className="mr-2 h-4 w-4" />
+                    跟随系统
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
           </DropdownMenuContent>
