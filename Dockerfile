@@ -1,66 +1,74 @@
-
-# Stage 1: Install dependencies and build Prisma Client
-FROM node:18-slim AS deps
+# Base stage for common setup
+FROM node:18-slim AS base
+LABEL maintainer="leejie2017@gmail.com"
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN apt-get update -y && \
+    apt-get install -y openssl curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+RUN corepack enable
 WORKDIR /app
 
+# Dependencies stage
+FROM base AS dependencies
+WORKDIR /app
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma/
 RUN npm install --frozen-lockfile
+# RUN pnpm install --frozen-lockfile # If using pnpm
 
-# Stage 2: Builder stage - Build the application and seed the database
-FROM node:18-slim AS builder
+# Builder stage
+FROM base AS builder
 WORKDIR /app
-
-# Copy dependencies (node_modules) from the 'deps' stage
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-# Ensure Prisma Client is generated
-RUN npx prisma generate
-
-# Set a temporary DATABASE_URL for build-time db operations (push & seed)
-# This assumes dev.db will be created in ./prisma/ relative to the Dockerfile context (copied from .)
-ENV DATABASE_URL="file:./prisma/dev.db"
-
-# Apply schema to the database (creates dev.db if it doesn't exist)
-# --skip-generate because we already ran generate
+# Ensure prisma/dev.db is created and seeded within the builder stage.
+# The DATABASE_URL here is temporary for the build process.
+# The actual DATABASE_URL for runtime will be set via docker-compose.yml or environment.
+ENV DATABASE_URL="file:/app/prisma/dev.db"
 RUN npm run prisma:db:push -- --skip-generate
-
-# Seed the database
+RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed in builder after push"
 RUN npm run prisma:db:seed
+RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed in builder after seed"
 
-# Build the Next.js application
+# Make sure logs directory exists and is owned by node user before build
+RUN mkdir -p /app/logs && chown node:node /app/logs
+
 RUN npm run build
 
-# Stage 3: Production runner stage
-FROM node:18-slim AS runner
+# Runner stage (final production image)
+FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
-# Set HOSTNAME to 0.0.0.0 to accept connections from any IP address.
-ENV HOSTNAME=0.0.0.0
-# PORT is set by docker-compose, but good to have a default here too.
-ENV PORT=3000
+ENV NODE_ENV production
+# The DATABASE_URL for runtime will be injected by docker-compose or the deployment environment
+# ENV DATABASE_URL="file:/app/prisma/dev.db" (This is an example, actual value from env)
 
-# Next.js standalone output copies necessary node_modules, so we don't need a full npm install here.
-# However, we still need package.json for `npm start` to work correctly and potentially for Prisma runtime.
-COPY --from=builder /app/package.json ./package.json
+# Copy only necessary production dependencies
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/package.json ./package.json
 
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/health-check.sh ./health-check.sh
+# Copy built artifacts and public assets
+# Use --chown=node:node to ensure files are owned by the non-root node user
+COPY --from=builder --chown=node:node /app/.next ./.next
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/prisma ./prisma
+COPY --from=builder --chown=node:node /app/health-check.sh ./health-check.sh
 RUN chmod +x ./health-check.sh
 
-# Create a non-root user for security
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-USER nextjs
+# Copy other necessary files like next.config.js, etc.
+COPY --chown=node:node next.config.js ./
+# If you have a custom server.js or similar, copy it too:
+# COPY --chown=node:node server.js ./
 
+# The 'node' user is provided by the base node:18-slim image.
+# We don't need to create it again.
+USER node
+
+# Expose the port the app runs on
 EXPOSE 3000
 
-# The start script from package.json should be `node .next/standalone/server.js`
-# which is suitable for the standalone output.
+# Start the app
 CMD ["npm", "start"]
