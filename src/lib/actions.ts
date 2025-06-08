@@ -14,8 +14,8 @@ import {
   doSubnetsOverlap,
   compareIpStrings,
   groupConsecutiveIpsToRanges,
-  calculatePrefixLengthFromRequiredHosts, // New import
-  generateSubnetCandidates, // New import
+  // Removed: calculatePrefixLengthFromRequiredHosts, 
+  // Removed: generateSubnetCandidates, 
 } from "./ip-utils";
 import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
@@ -181,12 +181,11 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       });
 
     const appSubnets: AppSubnet[] = await Promise.all(subnetsFromDb.map(async (subnet) => {
-      // Robust check for subnet.cidr before processing
       if (!subnet.cidr || typeof subnet.cidr !== 'string' || subnet.cidr.trim() === "") {
         logger.warn(`[${actionName}] Subnet ID ${subnet.id} has invalid or missing CIDR ('${subnet.cidr}') in database. Returning with default/DB values.`, undefined, { subnetId: subnet.id, cidrFromDb: subnet.cidr });
         return {
           id: subnet.id,
-          cidr: subnet.cidr || "Invalid/Missing CIDR", // Indicate the issue
+          cidr: subnet.cidr || "Invalid/Missing CIDR", 
           networkAddress: subnet.networkAddress || "N/A",
           subnetMask: subnet.subnetMask || "N/A",
           ipRange: subnet.ipRange || undefined,
@@ -198,9 +197,9 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
 
       const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
       let utilization = 0;
-      let networkAddress = subnet.networkAddress; // Use DB value as fallback
-      let subnetMask = subnet.subnetMask;     // Use DB value as fallback
-      let ipRange: string | null = subnet.ipRange; // Use DB value as fallback
+      let networkAddress = subnet.networkAddress; 
+      let subnetMask = subnet.subnetMask;     
+      let ipRange: string | null = subnet.ipRange; 
 
       if (subnetProperties && typeof subnetProperties.prefix === 'number') {
         const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
@@ -374,7 +373,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
 
 async function calculateSubnetUtilization(subnetId: string): Promise<number> {
     const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } });
-    if (!subnet || !subnet.cidr) return 0; // Added check for subnet.cidr
+    if (!subnet || !subnet.cidr) return 0; 
     const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
     if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
     const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
@@ -1035,13 +1034,13 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     }
 
     const orConditions: Prisma.SubnetWhereInput[] = [
-      { cidr: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite
-      { description: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite
-      { networkAddress: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite
+      { cidr: { contains: queryString } }, 
+      { description: { contains: queryString } }, 
+      { networkAddress: { contains: queryString } }, 
     ];
 
     let whereClause: Prisma.SubnetWhereInput = { OR: orConditions };
-     if (orConditions.length === 0) { // Should not happen if queryString is present and non-empty
+     if (orConditions.length === 0) { 
         whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET" };
     }
 
@@ -1088,7 +1087,6 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
       if (!isNaN(potentialVlanNumber) && potentialVlanNumber.toString() === queryString) {
         whereClause = { vlanNumber: potentialVlanNumber };
       } else {
-        // Search name OR description, without mode: 'insensitive' for SQLite
         whereClause = { OR: [ { name: { contains: queryString } }, { description: { contains: queryString } } ] };
       }
     } else {
@@ -1137,36 +1135,31 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       for (const pattern of ipWildcardPatterns) {
         const match = trimmedSearchTerm.match(pattern.regex);
         if (match) {
-          orConditionsForSearchTerm.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } }); // Removed mode: 'insensitive'
+          orConditionsForSearchTerm.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } }); 
           matchedIpPattern = true;
           break;
         }
       }
 
-      // Check if it's potentially an IP segment (contains numbers and optionally dots, not just text)
-      // and not already matched by a wildcard pattern.
       const isPotentiallyIpSegment = !matchedIpPattern &&
                                     trimmedSearchTerm.length > 0 &&
-                                    trimmedSearchTerm.length <= 15 && // Max IP length
-                                    /[\d]/.test(trimmedSearchTerm) && // Must contain at least one digit
-                                    /^[0-9.*]+$/.test(trimmedSearchTerm) && // Allow digits, dots, and asterisks only if it's part of a pattern
-                                    !/^\.+$/.test(trimmedSearchTerm) && // Not just dots
-                                    !/^\*+$/.test(trimmedSearchTerm); // Not just asterisks
+                                    trimmedSearchTerm.length <= 15 && 
+                                    /[\d]/.test(trimmedSearchTerm) && 
+                                    /^[0-9.*]+$/.test(trimmedSearchTerm) && 
+                                    !/^\.+$/.test(trimmedSearchTerm) && 
+                                    !/^\*+$/.test(trimmedSearchTerm); 
 
 
-      if (isPotentiallyIpSegment && !matchedIpPattern) { // Only add if not already handled by wildcard
-         orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } }); // Removed mode: 'insensitive'
+      if (isPotentiallyIpSegment && !matchedIpPattern) { 
+         orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } }); 
       }
-      // Always search by allocatedTo and description for any non-empty search term
-      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); // Removed mode: 'insensitive'
-      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } }); // Removed mode: 'insensitive'
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } }); 
     }
 
     if (orConditionsForSearchTerm.length > 0) {
       andConditions.push({ OR: orConditionsForSearchTerm });
     } else if (trimmedSearchTerm) {
-      // If searchTerm was provided but yielded no OR conditions (e.g., invalid search term like "...")
-      // then we should ensure no results are returned from this part of the query.
       andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
     }
 
@@ -1178,13 +1171,9 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     if (andConditions.length > 0) {
       whereClause = { AND: andConditions };
     } else if (!trimmedSearchTerm && (!statusFilter || statusFilter === 'all')) {
-      // No search term and no status filter means no active query, return empty.
       return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
-    // If andConditions is empty but there *was* a statusFilter, whereClause will be {}
-    // which is fine if statusFilter was the only criteria.
-    // If andConditions is empty because searchTerm was invalid, the IMPOSSIBLE_ID will take care of it.
-
+    
     const totalCount = await prisma.iPAddress.count({ where: whereClause });
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const includeClauseForQuery = { subnet: { include: { vlan: { select: { vlanNumber: true, name: true } } } }, vlan: { select: {vlanNumber: true, name: true} } };
@@ -1231,122 +1220,5 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
   }
 }
 
-// --- Smart Batch Create Subnets ---
-export interface SmartBatchCreateSubnetsPayload {
-  supernetCidr: string;
-  numberOfSubnets: number;
-  minIpsPerSubnet: number;
-  commonDescription?: string;
-  vlanId?: string;
-}
+// Removed SmartBatchCreateSubnetsPayload, SubnetCandidatePreview types and smartBatchCreateSubnetsAction function
 
-export interface SubnetCandidatePreview {
-  id: string; // Temporary client-side ID for the preview item
-  candidateCidr: string;
-  plannedPrefix: number;
-  plannedUsableIps: number;
-  status: 'ok' | 'overlap' | 'error';
-  message?: string; // e.g., "与现有子网 192.168.1.0/24 重叠" or "父网段空间不足"
-  overlappingWithCidr?: string;
-}
-
-export async function smartBatchCreateSubnetsAction(
-  payload: SmartBatchCreateSubnetsPayload,
-  mode: 'preview' | 'create' = 'preview', // Default to preview mode
-  performingUserId?: string
-): Promise<ActionResponse<{ preview?: SubnetCandidatePreview[], createdSubnets?: AppSubnet[], errors?: BatchOperationFailure[] }>> {
-  const actionName = 'smartBatchCreateSubnetsAction';
-  const auditUser = await getAuditUserInfo(performingUserId);
-
-  try {
-    // --- Input Validation ---
-    validateCidrInput(payload.supernetCidr, 'supernetCidr');
-    if (payload.numberOfSubnets <= 0) {
-      throw new ValidationError("要划分的子网数量必须大于0。", 'numberOfSubnets', payload.numberOfSubnets);
-    }
-    if (payload.minIpsPerSubnet <= 0) {
-      throw new ValidationError("每个子网最少IP数必须大于0。", 'minIpsPerSubnet', payload.minIpsPerSubnet);
-    }
-    const supernetProps = getSubnetPropertiesFromCidr(payload.supernetCidr);
-    if (!supernetProps) {
-      throw new ValidationError("无效的父网段CIDR格式。", 'supernetCidr', payload.supernetCidr);
-    }
-    if (payload.vlanId) {
-      const vlanExists = await prisma.vLAN.findUnique({ where: { id: payload.vlanId } });
-      if (!vlanExists) {
-        throw new NotFoundError(`VLAN ID: ${payload.vlanId}`, `选择的VLAN不存在。`, 'vlanId');
-      }
-    }
-
-    // --- Calculate Child Subnet Prefix ---
-    const childPrefixLength = calculatePrefixLengthFromRequiredHosts(payload.minIpsPerSubnet);
-    if (childPrefixLength <= supernetProps.prefix) {
-      throw new ValidationError(`根据请求的IP数 (${payload.minIpsPerSubnet}) 计算出的子网掩码 (/` + childPrefixLength + `) 无效或不小于父网段掩码 (/` + supernetProps.prefix + `)。`, 'minIpsPerSubnet', payload.minIpsPerSubnet);
-    }
-
-    // --- Generate Candidate Subnet CIDRs ---
-    const candidateCidrsResult = generateSubnetCandidates(payload.supernetCidr, payload.numberOfSubnets, childPrefixLength);
-    if (typeof candidateCidrsResult === 'object' && 'error' in candidateCidrsResult) {
-      // This error is likely a validation error for the form fields related to capacity
-      throw new ValidationError(candidateCidrsResult.error, 'numberOfSubnets', payload.numberOfSubnets);
-    }
-    const candidateCidrs = candidateCidrsResult as string[];
-
-
-    // --- Preview Mode Logic ---
-    const previewResults: SubnetCandidatePreview[] = [];
-    const existingSubnets = await prisma.subnet.findMany();
-
-    for (let i = 0; i < candidateCidrs.length; i++) {
-      const candidateCidr = candidateCidrs[i];
-      const tempId = `candidate-${i}`;
-      const candidateProps = getSubnetPropertiesFromCidr(candidateCidr);
-      let isOverlapping = false;
-      let overlappingWithCidr: string | undefined = undefined;
-
-      if (!candidateProps) {
-        previewResults.push({ id: tempId, candidateCidr, plannedPrefix: childPrefixLength, plannedUsableIps: getUsableIpCount(childPrefixLength), status: 'error', message: '无法解析候选CIDR属性。' });
-        continue;
-      }
-
-      for (const existingSub of existingSubnets) {
-        const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
-        if (existingSubProps && doSubnetsOverlap(candidateProps, existingSubProps)) {
-          isOverlapping = true;
-          overlappingWithCidr = existingSub.cidr;
-          break;
-        }
-      }
-      previewResults.push({
-        id: tempId,
-        candidateCidr,
-        plannedPrefix: childPrefixLength,
-        plannedUsableIps: getUsableIpCount(childPrefixLength),
-        status: isOverlapping ? 'overlap' : 'ok',
-        message: isOverlapping ? `与现有子网 ${overlappingWithCidr} 重叠。` : undefined,
-        overlappingWithCidr,
-      });
-    }
-
-    if (mode === 'preview') {
-      return { success: true, data: { preview: previewResults } };
-    }
-
-    // --- Create Mode Logic (Placeholder for now) ---
-    if (mode === 'create') {
-      // TODO: Implement actual creation logic based on previewResults (only 'ok' status)
-      // This will involve iterating through previewResults, filtering for 'ok' status,
-      // and then creating them in the database, similar to createSubnetAction but in a loop/transaction.
-      // Also, handle commonDescription templating and vlanId association.
-      // For now, just return a "not implemented" to avoid accidental writes.
-      logger.info('智能批量创建子网的 "create" 模式被调用，但尚未实现。', payload, actionName);
-      return { success: false, error: createActionErrorResponse(new AppError("创建模式尚未实现。", 501, "NOT_IMPLEMENTED"), actionName) };
-    }
-
-    // Should not be reached if mode is correctly 'preview' or 'create'
-    return { success: false, error: createActionErrorResponse(new AppError("无效的操作模式。", 400, "INVALID_MODE"), actionName) };
-
-  } catch (error: unknown) {
-    return { success: false, error: createActionErrorResponse(error, actionName) };
-  }
-}
