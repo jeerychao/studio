@@ -169,23 +169,36 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     const subnetsFromDb = params?.page && params?.pageSize ?
       await prisma.subnet.findMany({
           where: whereClause,
-          include: { vlan: { select: { vlanNumber: true, name: true } } }, // Include VLAN name
           orderBy: { cidr: 'asc' },
           skip,
           take: pageSize,
       }) :
       await prisma.subnet.findMany({
           where: whereClause,
-          include: { vlan: { select: { vlanNumber: true, name: true } } }, // Include VLAN name
           orderBy: { cidr: 'asc' },
       });
 
     const appSubnets: AppSubnet[] = await Promise.all(subnetsFromDb.map(async (subnet) => {
+      // Robust check for subnet.cidr before processing
+      if (!subnet.cidr || typeof subnet.cidr !== 'string' || subnet.cidr.trim() === "") {
+        logger.warn(`[${actionName}] Subnet ID ${subnet.id} has invalid or missing CIDR ('${subnet.cidr}') in database. Returning with default/DB values.`, undefined, { subnetId: subnet.id, cidrFromDb: subnet.cidr });
+        return {
+          id: subnet.id,
+          cidr: subnet.cidr || "Invalid/Missing CIDR", // Indicate the issue
+          networkAddress: subnet.networkAddress || "N/A",
+          subnetMask: subnet.subnetMask || "N/A",
+          ipRange: subnet.ipRange || undefined,
+          vlanId: subnet.vlanId || undefined,
+          description: subnet.description || undefined,
+          utilization: 0,
+        };
+      }
+
       const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
       let utilization = 0;
-      let networkAddress = subnet.networkAddress;
-      let subnetMask = subnet.subnetMask;
-      let ipRange: string | null = subnet.ipRange;
+      let networkAddress = subnet.networkAddress; // Use DB value as fallback
+      let subnetMask = subnet.subnetMask;     // Use DB value as fallback
+      let ipRange: string | null = subnet.ipRange; // Use DB value as fallback
 
       if (subnetProperties && typeof subnetProperties.prefix === 'number') {
         const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
@@ -199,12 +212,13 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         subnetMask = subnetProperties.subnetMask;
         ipRange = subnetProperties.ipRange !== undefined ? subnetProperties.ipRange : null;
       } else {
-        logger.warn(`[${actionName}] Could not parse CIDR properties for '${subnet.cidr}' from DB for subnet ID ${subnet.id}. Using DB values or defaults.`, undefined, { subnetId: subnet.id, cidr: subnet.cidr });
+        logger.warn(`[${actionName}] Could not parse CIDR properties for '${subnet.cidr}' for subnet ID ${subnet.id}. Using DB values or defaults.`, undefined, { subnetId: subnet.id, cidr: subnet.cidr });
+        networkAddress = subnet.networkAddress || "N/A";
+        subnetMask = subnet.subnetMask || "N/A";
+        ipRange = subnet.ipRange || null;
       }
       return {
         ...subnet,
-        // Ensure vlan property exists on the returned AppSubnet if vlan is present
-        vlan: subnet.vlan ? { id: subnet.vlanId!, vlanNumber: subnet.vlan.vlanNumber, name: subnet.vlan.name || undefined } : undefined,
         networkAddress,
         subnetMask,
         ipRange: ipRange || undefined,
@@ -273,7 +287,7 @@ export async function createSubnetAction(
     const newSubnetPrisma = await prisma.subnet.create({ data: createPayload, include: { vlan: true } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_subnet', details: `创建了子网 ${newSubnetPrisma.cidr}` } });
     revalidatePath("/subnets"); revalidatePath("/dashboard"); revalidatePath("/ip-addresses"); revalidatePath("/query");
-    const appSubnet: AppSubnet = { ...newSubnetPrisma, vlanId: newSubnetPrisma.vlanId || undefined, description: newSubnetPrisma.description || undefined, utilization: 0, ipRange: newSubnetPrisma.ipRange || undefined, vlan: newSubnetPrisma.vlan ? { ...newSubnetPrisma.vlan, name: newSubnetPrisma.vlan.name || undefined, description: newSubnetPrisma.vlan.description || undefined } : undefined };
+    const appSubnet: AppSubnet = { ...newSubnetPrisma, vlanId: newSubnetPrisma.vlanId || undefined, description: newSubnetPrisma.description || undefined, utilization: 0, ipRange: newSubnetPrisma.ipRange || undefined };
     logger.info('子网创建成功', { subnetId: appSubnet.id, cidr: appSubnet.cidr }, actionName);
     return { success: true, data: appSubnet };
   } catch (error: unknown) {
@@ -347,7 +361,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_subnet', details: `更新了子网 ID ${id} (旧 CIDR: ${originalCidrForLog}, 新 CIDR: ${newCanonicalCidrForLog})` } });
     revalidatePath("/subnets"); revalidatePath("/dashboard"); revalidatePath("/ip-addresses"); revalidatePath("/query");
     const utilization = await calculateSubnetUtilization(updatedSubnetPrisma.id);
-    const appSubnet: AppSubnet = { ...updatedSubnetPrisma, vlanId: updatedSubnetPrisma.vlanId || undefined, description: updatedSubnetPrisma.description || undefined, ipRange: updatedSubnetPrisma.ipRange || undefined, utilization, vlan: updatedSubnetPrisma.vlan ? { ...updatedSubnetPrisma.vlan, name: updatedSubnetPrisma.vlan.name || undefined, description: updatedSubnetPrisma.vlan.description || undefined } : undefined };
+    const appSubnet: AppSubnet = { ...updatedSubnetPrisma, vlanId: updatedSubnetPrisma.vlanId || undefined, description: updatedSubnetPrisma.description || undefined, ipRange: updatedSubnetPrisma.ipRange || undefined, utilization };
     logger.info('子网更新成功', { subnetId: appSubnet.id }, actionName);
     return { success: true, data: appSubnet };
   } catch (error: unknown) {
@@ -358,7 +372,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
 
 async function calculateSubnetUtilization(subnetId: string): Promise<number> {
     const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } });
-    if (!subnet) return 0;
+    if (!subnet || !subnet.cidr) return 0; // Added check for subnet.cidr
     const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
     if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
     const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
@@ -579,7 +593,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
 type PrismaIPAddressWithRelations = Prisma.IPAddressGetPayload<{ include: { subnet: { include: { vlan: true } }; vlan: true; }; }>;
 export type AppIPAddressWithRelations = AppIPAddress & {
   subnet?: { id: string; cidr: string; networkAddress: string; vlan?: { vlanNumber: number; name?: string; } | null } | null;
-  vlan?: { vlanNumber: number; name?: string; } | null; // Direct VLAN on IP
+  vlan?: { vlanNumber: number; name?: string; } | null;
 };
 
 export async function getIPAddressesAction(params?: FetchParams): Promise<PaginatedResponse<AppIPAddressWithRelations>> {
@@ -802,8 +816,6 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
-// User and Role actions remain largely unchanged by VLAN name addition
-// ... (User and Role actions as before) ...
 export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> {
   const page = params?.page || 1;
   const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
@@ -1021,22 +1033,23 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     }
 
     const orConditions: Prisma.SubnetWhereInput[] = [
-      { cidr: { contains: queryString } },
-      { description: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite compatibility
-      { networkAddress: { contains: queryString } },
+      { cidr: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite
+      { description: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite
+      { networkAddress: { contains: queryString } }, // Removed mode: 'insensitive' for SQLite
     ];
 
     let whereClause: Prisma.SubnetWhereInput = { OR: orConditions };
-    if (orConditions.length === 0) { // Should not happen if queryString is present, but as safeguard
+     if (orConditions.length === 0) { // Should not happen if queryString is present and non-empty
         whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET" };
     }
+
 
     const totalCount = await prisma.subnet.count({ where: whereClause });
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const subnetsFromDb = await prisma.subnet.findMany({
       where: whereClause,
-      include: { vlan: { select: { vlanNumber: true, name: true } } }, // Include VLAN name
+      include: { vlan: { select: { vlanNumber: true, name: true } } },
       orderBy: { cidr: 'asc' },
       skip,
       take: pageSize,
@@ -1073,7 +1086,8 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
       if (!isNaN(potentialVlanNumber) && potentialVlanNumber.toString() === queryString) {
         whereClause = { vlanNumber: potentialVlanNumber };
       } else {
-        whereClause = { OR: [ { name: { contains: queryString } }, { description: { contains: queryString } } ] }; // Search name OR description
+        // Search name OR description, without mode: 'insensitive' for SQLite
+        whereClause = { OR: [ { name: { contains: queryString } }, { description: { contains: queryString } } ] };
       }
     } else {
       return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
@@ -1107,29 +1121,67 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const skip = (page - 1) * pageSize;
     const trimmedSearchTerm = params.searchTerm?.trim();
     const statusFilter = params.status;
+
     const andConditions: Prisma.IPAddressWhereInput[] = [];
+    const orConditionsForSearchTerm: Prisma.IPAddressWhereInput[] = [];
 
     if (trimmedSearchTerm) {
-      const orConditionsForSearchTerm: Prisma.IPAddressWhereInput[] = [];
-      const ipWildcardPatterns = [ { regex: /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` }, { regex: /^(\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` }, { regex: /^(\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` } ];
+      const ipWildcardPatterns = [
+        { regex: /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
+        { regex: /^(\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
+        { regex: /^(\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` }
+      ];
       let matchedIpPattern = false;
       for (const pattern of ipWildcardPatterns) {
         const match = trimmedSearchTerm.match(pattern.regex);
-        if (match) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } }); matchedIpPattern = true; break; }
+        if (match) {
+          orConditionsForSearchTerm.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } }); // Removed mode: 'insensitive'
+          matchedIpPattern = true;
+          break;
+        }
       }
-      const isPotentiallyIpSegment = !matchedIpPattern && /[\d.]/.test(trimmedSearchTerm) && !/^[^\d.]+$/.test(trimmedSearchTerm) && !/^[\s.]*$/.test(trimmedSearchTerm) && trimmedSearchTerm.length <= 15 && trimmedSearchTerm.includes('.') || /^\d+$/.test(trimmedSearchTerm);
-      if (isPotentiallyIpSegment) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } }); }
-      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
-      if (orConditionsForSearchTerm.length > 0) { andConditions.push({ OR: orConditionsForSearchTerm }); }
-      else { andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" }); }
+
+      // Check if it's potentially an IP segment (contains numbers and optionally dots, not just text)
+      // and not already matched by a wildcard pattern.
+      const isPotentiallyIpSegment = !matchedIpPattern &&
+                                    trimmedSearchTerm.length > 0 &&
+                                    trimmedSearchTerm.length <= 15 && // Max IP length
+                                    /[\d]/.test(trimmedSearchTerm) && // Must contain at least one digit
+                                    /^[0-9.*]+$/.test(trimmedSearchTerm) && // Allow digits, dots, and asterisks only if it's part of a pattern
+                                    !/^\.+$/.test(trimmedSearchTerm) && // Not just dots
+                                    !/^\*+$/.test(trimmedSearchTerm); // Not just asterisks
+
+
+      if (isPotentiallyIpSegment && !matchedIpPattern) { // Only add if not already handled by wildcard
+         orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } }); // Removed mode: 'insensitive'
+      }
+      // Always search by allocatedTo and description for any non-empty search term
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); // Removed mode: 'insensitive'
+      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } }); // Removed mode: 'insensitive'
     }
 
-    if (statusFilter && statusFilter !== 'all') { andConditions.push({ status: statusFilter as AppIPAddressStatusType }); }
+    if (orConditionsForSearchTerm.length > 0) {
+      andConditions.push({ OR: orConditionsForSearchTerm });
+    } else if (trimmedSearchTerm) {
+      // If searchTerm was provided but yielded no OR conditions (e.g., invalid search term like "...")
+      // then we should ensure no results are returned from this part of the query.
+      andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
+    }
+
+    if (statusFilter && statusFilter !== 'all') {
+      andConditions.push({ status: statusFilter as AppIPAddressStatusType });
+    }
 
     let whereClause: Prisma.IPAddressWhereInput = {};
-    if (andConditions.length > 0) { whereClause = { AND: andConditions }; }
-    else if (!trimmedSearchTerm && (!statusFilter || statusFilter === 'all')) { return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } }; }
+    if (andConditions.length > 0) {
+      whereClause = { AND: andConditions };
+    } else if (!trimmedSearchTerm && (!statusFilter || statusFilter === 'all')) {
+      // No search term and no status filter means no active query, return empty.
+      return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
+    }
+    // If andConditions is empty but there *was* a statusFilter, whereClause will be {}
+    // which is fine if statusFilter was the only criteria.
+    // If andConditions is empty because searchTerm was invalid, the IMPOSSIBLE_ID will take care of it.
 
     const totalCount = await prisma.iPAddress.count({ where: whereClause });
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
@@ -1176,3 +1228,4 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
