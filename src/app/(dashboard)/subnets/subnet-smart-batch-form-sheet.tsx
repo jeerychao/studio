@@ -37,11 +37,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Brain, Lightbulb, Loader2, AlertCircle, CheckCircle2, PlusCircle, Eye } from "lucide-react";
+import { PlusCircle, Lightbulb, Loader2, AlertCircle, CheckCircle2, Eye } from "lucide-react"; // Changed Brain to PlusCircle
 import { useToast } from "@/hooks/use-toast";
 import type { VLAN } from "@/types";
 import { smartBatchCreateSubnetsAction, type SmartBatchCreateSubnetsPayload, type SubnetCandidatePreview, type ActionResponse } from "@/lib/actions";
 import { logger } from "@/lib/logger";
+import { getSubnetPropertiesFromCidr, calculatePrefixLengthFromRequiredHosts, getUsableIpCount } from "@/lib/ip-utils"; // Import necessary utils
+import { ValidationError } from "@/lib/errors"; // Import ValidationError for type checking
 
 const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
 
@@ -75,6 +77,7 @@ export function SubnetSmartBatchFormSheet({
   const [previewResults, setPreviewResults] = React.useState<SubnetCandidatePreview[] | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [creationResult, setCreationResult] = React.useState<{createdCount: number, errors: any[] } | null>(null);
+  const [maxSubnetsHint, setMaxSubnetsHint] = React.useState<string | null>(null);
 
 
   const form = useForm<SmartBatchSubnetFormValues>({
@@ -96,8 +99,61 @@ export function SubnetSmartBatchFormSheet({
       setIsPreviewing(false);
       setIsCreating(false);
       setCreationResult(null);
+      setMaxSubnetsHint(null);
     }
   }, [isOpen, form]);
+
+  React.useEffect(() => {
+    const supernetCidrValue = form.watch('supernetCidr');
+    const minIpsValue = form.watch('minIpsPerSubnet');
+  
+    if (supernetCidrValue && minIpsValue > 0) {
+      try {
+        // Basic CIDR format check before calling getSubnetPropertiesFromCidr
+        const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/(\d{1,2})$/;
+        if (!cidrRegex.test(supernetCidrValue)) {
+          setMaxSubnetsHint("父网段 CIDR 格式无效。");
+          return;
+        }
+        const supernetProps = getSubnetPropertiesFromCidr(supernetCidrValue);
+        if (!supernetProps) {
+          setMaxSubnetsHint("父网段 CIDR 格式无效。");
+          return;
+        }
+  
+        const childPrefix = calculatePrefixLengthFromRequiredHosts(minIpsValue);
+        if (childPrefix <= supernetProps.prefix) {
+          setMaxSubnetsHint(`所需 IP 数 (${minIpsValue.toLocaleString()}) 过多，无法从父网段 /${supernetProps.prefix} 中划分出更小的子网。`);
+          return;
+        }
+        if (childPrefix > 32 || childPrefix < 0){
+           setMaxSubnetsHint(`根据所需 IP 数 (${minIpsValue.toLocaleString()}) 计算出的子网掩码 /${childPrefix} 无效。`);
+           return;
+        }
+  
+        const maxPossibleChildren = Math.pow(2, childPrefix - supernetProps.prefix);
+        if (maxPossibleChildren === Infinity || isNaN(maxPossibleChildren) || maxPossibleChildren > Number.MAX_SAFE_INTEGER) {
+          setMaxSubnetsHint("无法计算最大子网数量，可能父网段过大或子网过小。");
+          return;
+        }
+        setMaxSubnetsHint(`提示：此父网段最多可划分为 ${maxPossibleChildren.toLocaleString()} 个 /${childPrefix} 的子网。`);
+  
+      } catch (e) { 
+        if (e instanceof ValidationError) {
+          setMaxSubnetsHint(e.userMessage || "计算子网参数时出错。");
+        } else if (e instanceof Error && e.message.includes("Invalid prefix length")) {
+          setMaxSubnetsHint("父网段 CIDR 或计算的子网前缀无效。");
+        }
+        else {
+          setMaxSubnetsHint("计算最大子网数时发生未知错误。");
+          logger.warn("Error calculating max subnets hint", e);
+        }
+      }
+    } else {
+      setMaxSubnetsHint(null); 
+    }
+  }, [form.watch('supernetCidr'), form.watch('minIpsPerSubnet'), form]);
+
 
   const handlePreview = async (values: SmartBatchSubnetFormValues) => {
     setIsPreviewing(true);
@@ -152,14 +208,11 @@ export function SubnetSmartBatchFormSheet({
     const formValues = form.getValues();
     const payload: SmartBatchCreateSubnetsPayload = {
         supernetCidr: formValues.supernetCidr,
-        numberOfSubnets: formValues.numberOfSubnets, // This might need to be adjusted if only 'ok' candidates are sent
+        numberOfSubnets: formValues.numberOfSubnets, 
         minIpsPerSubnet: formValues.minIpsPerSubnet,
         commonDescription: formValues.commonDescription || undefined,
         vlanId: formValues.vlanId === NO_VLAN_SENTINEL_VALUE ? undefined : formValues.vlanId,
     };
-
-    // TODO: In a real scenario, you might send only the 'ok' candidates or a confirmation based on the preview.
-    // For now, the 'create' mode in the action is a placeholder. This call will currently return "not implemented".
     
     try {
         const response = await smartBatchCreateSubnetsAction(payload, 'create');
@@ -187,7 +240,7 @@ export function SubnetSmartBatchFormSheet({
     React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
   ) : (
     <Button variant="outline" onClick={() => setIsOpen(true)} {...buttonProps}>
-      <Brain className="mr-2 h-4 w-4" /> 智能批量添加
+      <PlusCircle className="mr-2 h-4 w-4" /> 批量添加子网
     </Button>
   );
   
@@ -199,8 +252,8 @@ export function SubnetSmartBatchFormSheet({
       <SheetContent className="sm:max-w-2xl w-full flex flex-col p-0">
         <SheetHeader className="p-6 pb-4 border-b">
           <SheetTitle className="flex items-center gap-2">
-            <Brain className="h-6 w-6 text-primary" />
-            智能批量添加子网
+            <PlusCircle className="h-6 w-6 text-primary" />
+            批量添加子网
           </SheetTitle>
           <SheetDescription>
             输入父网段、期望的子网数量以及每个子网大致需要的IP数量。系统将尝试为您规划子网。
@@ -254,6 +307,11 @@ export function SubnetSmartBatchFormSheet({
                     )}
                     />
                 </div>
+                {maxSubnetsHint && (
+                  <FormDescription className="text-sm text-primary mt-1 bg-primary/10 p-2 rounded-md">
+                    <Lightbulb className="inline-block mr-1 h-4 w-4" /> {maxSubnetsHint}
+                  </FormDescription>
+                )}
                 <FormField
                   control={form.control}
                   name="commonDescription"

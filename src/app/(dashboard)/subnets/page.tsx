@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { NetworkIcon, Edit, Trash2, Loader2, Brain } from "lucide-react"; // Added Brain icon
+import { NetworkIcon, Edit, Trash2, Loader2, PlusCircle } from "lucide-react"; // Changed Brain to PlusCircle
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
-import { SubnetSmartBatchFormSheet } from "./subnet-smart-batch-form-sheet"; // New import
+import { SubnetSmartBatchFormSheet } from "./subnet-smart-batch-form-sheet"; 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
@@ -206,7 +206,7 @@ function SubnetsView() {
                 <>
                   <SubnetSmartBatchFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess}>
                     <Button variant="outline" className="w-full sm:w-auto">
-                      <Brain className="mr-2 h-4 w-4" /> 智能批量添加
+                      <PlusCircle className="mr-2 h-4 w-4" /> 批量添加子网
                     </Button>
                   </SubnetSmartBatchFormSheet>
                   <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
