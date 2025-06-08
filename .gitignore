@@ -1,55 +1,60 @@
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# dependencies
 /node_modules
 /.pnp
 .pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
 
-# Testing
+# testing
 /coverage
 
-# Next.js build files
+# next.js
 /.next/
 /out/
 
-# Production
+# production
 /build
 
-# Misc
+# misc
 .DS_Store
 *.pem
+*.log
+logs
+*.sentryclirc
 
-# Debug files
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+profile.*.json
+*.stackdump
 
-# Local environment variables
-.env
+# local env files
 .env*.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env
 
-# Prisma
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma - SQLite specific
 prisma/dev.db
 prisma/dev.db-journal
-# Potentially prisma/generated-client if you don't want to commit it,
-# but it's often included. For Docker builds, it's generated in the image.
+# If you are NOT committing migrations (e.g. only using db push for dev)
+# prisma/migrations/
 
-# Turborepo
-.turbo
+# Editors
+.vscode/
+.idea/
 
-# IDE
-.idea
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
-
-# Docker specific (if you don't want them in repo, but usually they are)
-# Dockerfile
-# .dockerignore
-# docker-compose.yml
-# production.env
+# OS generated files
+ehthumbs.db
+Thumbs.db

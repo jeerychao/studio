@@ -35,6 +35,50 @@ async function main() {
   console.log('Seeding Roles (Pass 1: Create roles without permissions)...');
   for (const roleData of seedRolesData) {
     const prismaRoleName = roleData.name as string;
+
+    // Check for conflicting role by name (but different ID)
+    const conflictingRoleByName = await prisma.role.findFirst({
+      where: {
+        name: roleData.name,
+        NOT: {
+          id: roleData.id,
+        },
+      },
+    });
+
+    if (conflictingRoleByName) {
+      console.warn(
+        `Conflict: Role name "${roleData.name}" (intended for ID ${roleData.id}) is already used by a different role (ID ${conflictingRoleByName.id}).`
+      );
+      const usersWithConflictingRole = await prisma.user.count({
+        where: { roleId: conflictingRoleByName.id },
+      });
+
+      if (usersWithConflictingRole > 0) {
+        throw new Error(
+          `Cannot automatically resolve role seed conflict for name "${roleData.name}". ` +
+          `This name is used by role ID ${conflictingRoleByName.id}, which is assigned to ${usersWithConflictingRole} user(s). ` +
+          `Please manually reassign these users or reset the database using 'npm run prisma:migrate:reset'.`
+        );
+      } else {
+        console.warn(
+          `The conflicting role (ID: ${conflictingRoleByName.id}, Name: ${roleData.name}) is not used by any users. Attempting to delete it.`
+        );
+        // Disconnect permissions from the conflicting role before deleting, if any were attached
+        try {
+            await prisma.role.update({
+                where: { id: conflictingRoleByName.id },
+                data: { permissions: { set: [] } },
+            });
+        } catch (updateError) {
+            console.warn(`Could not disconnect permissions from conflicting role ID ${conflictingRoleByName.id}: ${(updateError as Error).message}`);
+            // Continue, as the role might not have permissions or the relation might be an issue db push is fixing
+        }
+        await prisma.role.delete({ where: { id: conflictingRoleByName.id } });
+        console.log(`Conflicting role ID ${conflictingRoleByName.id} (Name: ${roleData.name}) deleted.`);
+      }
+    }
+
     await prisma.role.upsert({
       where: { id: roleData.id }, // Uses the new ID format from mockRoles
       update: {
