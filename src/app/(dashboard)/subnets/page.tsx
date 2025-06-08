@@ -35,7 +35,7 @@ function LoadingSubnetsPage() {
 
 function SubnetsView() {
   const [subnetsData, setSubnetsData] = React.useState<PaginatedResponse<Subnet> | null>(null);
-  const [vlans, setVlans] = React.useState<VLAN[]>([]); // Now VLAN includes 'name'
+  const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
@@ -69,7 +69,7 @@ function SubnetsView() {
 
       const [subnetsResponse, vlansResponse] = await Promise.all([
         getSubnetsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-        getVLANsAction(), // Fetches all VLANs, including their names
+        getVLANsAction(),
       ]);
       setSubnetsData(subnetsResponse);
       setVlans(vlansResponse.data || []);
@@ -103,6 +103,36 @@ function SubnetsView() {
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleSubnetCreationSuccess = React.useCallback(async () => {
+    // After a subnet is successfully created, determine the new last page and navigate there.
+    try {
+      // Fetch minimal data (e.g., page 1, 1 item) just to get the latest pagination info
+      const paginationInfo = await getSubnetsAction({ page: 1, pageSize: 1 });
+      const newTotalPages = paginationInfo.totalPages;
+      const targetPage = newTotalPages > 0 ? newTotalPages : 1;
+      const currentUrlPage = Number(searchParams.get('page')) || 1;
+
+      if (targetPage !== currentUrlPage) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("page", String(targetPage));
+        router.push(`${pathname}?${params.toString()}`);
+        // The useEffect hook watching searchParams will trigger fetchData with the new page.
+      } else {
+        // If the target page is the current page (e.g., still only one page of results),
+        // just refresh the data for the current page.
+        fetchData();
+      }
+    } catch (error) {
+      toast({
+        title: "刷新错误",
+        description: "创建子网后无法导航到目标页面，正在刷新当前页面。",
+        variant: "destructive",
+      });
+      fetchData(); // Fallback to refreshing current page
+    }
+  }, [fetchData, router, pathname, searchParams, toast]);
+
 
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
@@ -176,7 +206,7 @@ function SubnetsView() {
                   onBatchDeleted={fetchData}
                 />
               )}
-              {canCreate && <SubnetFormSheet vlans={vlans} onSubnetChange={fetchData} />}
+              {canCreate && <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} />}
             </div>
           }
         />
@@ -248,7 +278,7 @@ function SubnetsView() {
                             <SubnetFormSheet
                               subnet={subnet}
                               vlans={vlans}
-                              onSubnetChange={fetchData}
+                              onSubnetChange={fetchData} // Edit still uses plain fetchData
                             >
                               <Button variant="ghost" size="icon" aria-label="编辑子网">
                                 <Edit className="h-4 w-4" />
@@ -306,3 +336,4 @@ export default function SubnetsPage() {
     </Suspense>
   );
 }
+    
