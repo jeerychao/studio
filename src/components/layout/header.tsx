@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide, KeyRound } from "lucide-react"; // Added KeyRound
+import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,7 +14,8 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"; 
+import { MOCK_USER_STORAGE_KEY, useCurrentUser, hasPermission } from "@/hooks/use-current-user"; 
+import { PERMISSIONS } from "@/types";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
@@ -26,6 +27,8 @@ export function Header() {
       window.location.href = '/login'; 
     }
   };
+
+  const canViewSettings = currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -75,12 +78,14 @@ export function Header() {
                 修改密码
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/settings" className="flex items-center">
-                <SettingsIconLucide className="mr-2 h-4 w-4" />
-                设置
-              </Link>
-            </DropdownMenuItem>
+            {canViewSettings && (
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="flex items-center">
+                  <SettingsIconLucide className="mr-2 h-4 w-4" />
+                  设置
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
           </DropdownMenuContent>
