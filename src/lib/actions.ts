@@ -623,7 +623,7 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
       successCount++;
     } catch (error: unknown) {
       const errorResponse = createActionErrorResponse(error, `${actionName}_single`);
-      const itemIdentifier = (error instanceof AppError && error.field === 'id') ? `ID ${id}` : (await prisma.subnet.findUnique({ where: { id } }))?.cidr || `ID ${id}`;
+      const itemIdentifier = (await prisma.subnet.findUnique({ where: { id } }))?.cidr || `ID ${id}`;
       failureDetails.push({ id, itemIdentifier, error: errorResponse.userMessage });
     }
   }
@@ -797,11 +797,11 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
     }
 
     if (Object.keys(updatePayload).length === 0) {
-      logger.info('No changes detected for VLAN update.', { vlanId: id, inputData: data }, actionName);
-      const subnetCount = await prisma.subnet.count({ where: { vlanId: id } });
-      const directIpCount = await prisma.iPAddress.count({ where: { vlanId: id }});
-      const currentVLANApp: AppVLAN = { ...vlanToUpdate, description: vlanToUpdate.description || undefined, subnetCount: subnetCount + directIpCount };
-      return { success: true, data: currentVLANApp };
+        logger.info('No changes detected for VLAN update.', { vlanId: id, inputData: data }, actionName);
+        const subnetCount = await prisma.subnet.count({ where: { vlanId: id } });
+        const directIpCount = await prisma.iPAddress.count({ where: { vlanId: id }});
+        const currentVLANApp: AppVLAN = { ...vlanToUpdate, description: vlanToUpdate.description || undefined, subnetCount: subnetCount + directIpCount };
+        return { success: true, data: currentVLANApp };
     }
 
     const updatedVLAN = await prisma.vLAN.update({ where: { id }, data: updatePayload });
@@ -947,12 +947,12 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   }
 
   const includeClause = {
-    subnet: {
-      include: {
+    subnet: { // Include the full Subnet object related to the IPAddress
+      include: { // And within that Subnet object, include its related VLAN object
         vlan: true,
       },
     },
-    vlan: true,
+    vlan: true, // Include the full VLAN object directly related to the IPAddress
   };
 
   let paginatedDbItems: PrismaIPAddressWithRelations[];
@@ -971,8 +971,14 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   } else {
     const orderByClause: Prisma.IPAddressOrderByWithRelationInput[] = [
       { subnet: { networkAddress: 'asc' } }, // Sort by subnet first
-      { ipAddress: 'asc' }, // Then by IP address numerically
+      // Prisma doesn't directly support sorting by IP address string numerically in a cross-db way easily.
+      // If this becomes an issue, we might need to fetch then sort in JS, or add raw SQL for specific DBs.
+      // For now, we rely on string sort or the order they come from DB if subnet is null.
+      // For IPs within the same subnet (or null subnet), sorting by 'ipAddress' (string) is lexicographical.
+      // This is generally acceptable for display but not perfectly numeric.
+      { ipAddress: 'asc' },
     ];
+
 
     if (params?.page && params?.pageSize) {
         finalTotalCount = await prisma.iPAddress.count({ where: whereClause });
@@ -1945,15 +1951,32 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     const page = params.page || 1;
     const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
-    const queryString = params.queryString;
+    const queryString = params.queryString?.trim(); // Trim whitespace
 
-    const whereClause: Prisma.SubnetWhereInput = queryString ? {
-      OR: [
+    let whereClause: Prisma.SubnetWhereInput = {};
+
+    if (queryString) {
+      const orConditions: Prisma.SubnetWhereInput[] = [
         { cidr: { contains: queryString, mode: 'insensitive' } },
         { description: { contains: queryString, mode: 'insensitive' } },
         { networkAddress: { contains: queryString, mode: 'insensitive' } },
-      ],
-    } : {};
+      ];
+      // To prevent Prisma error P2009: "Failed to validate the query: `The condition provided in the where argument is invalid.`"
+      // when OR is an empty list, which can happen if for some reason all conditions are filtered out.
+      // Here, it's less likely for subnets unless queryString becomes unexpectedly empty after some processing.
+      // But as a safeguard:
+      if (orConditions.length > 0) {
+        whereClause.OR = orConditions;
+      } else {
+        // If queryString was provided but resulted in no valid OR conditions,
+        // make the query effectively return no results rather than all or erroring.
+        whereClause.id = "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET";
+      }
+    } else {
+      // No query string, return empty paginated response as per UI behavior
+      return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
+    }
+
 
     const totalCount = await prisma.subnet.count({ where: whereClause });
     const totalPages = Math.ceil(totalCount / pageSize);
@@ -2006,20 +2029,21 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const page = params.page || 1;
     const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
-    const queryString = params.queryString;
+    const queryString = params.queryString?.trim();
 
     let whereClause: Prisma.VLANWhereInput = {};
 
     if (queryString) {
       const potentialVlanNumber = parseInt(queryString, 10);
-      if (!isNaN(potentialVlanNumber) && potentialVlanNumber.toString() === queryString.trim()) {
-        // If queryString is a valid number, search by vlanNumber (exact match)
+      if (!isNaN(potentialVlanNumber) && potentialVlanNumber.toString() === queryString) {
         whereClause = { vlanNumber: potentialVlanNumber };
       } else {
-        // Otherwise, search by description (fuzzy match)
         whereClause = { description: { contains: queryString, mode: 'insensitive' } };
       }
+    } else {
+        return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
+
 
     const totalCount = await prisma.vLAN.count({ where: whereClause });
     const totalPages = Math.ceil(totalCount / pageSize);
@@ -2064,55 +2088,67 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const page = params.page || 1;
     const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
-    const searchTerm = params.searchTerm;
+    const trimmedSearchTerm = params.searchTerm?.trim();
     const statusFilter = params.status;
-
-    if (!searchTerm || searchTerm.trim() === "") {
-        if (!statusFilter || statusFilter === 'all') { // If no search term and no status filter, return empty
-            return { success: true, data: { data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize } };
-        }
-    }
 
     let whereClause: Prisma.IPAddressWhereInput = {};
     const orConditions: Prisma.IPAddressWhereInput[] = [];
 
-    if (searchTerm && searchTerm.trim() !== "") {
-        const ipWildcardPatterns = [
-          { regex: /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
-          { regex: /^(\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
-          { regex: /^(\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
+    if (trimmedSearchTerm) {
+      // Try IP wildcard patterns first
+      const ipWildcardPatterns = [
+        { regex: /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
+        { regex: /^(\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
+        { regex: /^(\d{1,3})\.\*$/, prefixBuilder: (match: RegExpMatchArray) => `${match[1]}.` },
+      ];
+      let matchedIpPattern = false;
+      for (const pattern of ipWildcardPatterns) {
+        const match = trimmedSearchTerm.match(pattern.regex);
+        if (match) {
+          orConditions.push({ ipAddress: { startsWith: pattern.prefixBuilder(match), mode: 'insensitive' } });
+          matchedIpPattern = true;
+          break;
+        }
+      }
+
+      // If not a wildcard, or if it is but we also want to search other fields
+      if (!matchedIpPattern) {
+        orConditions.push({ allocatedTo: { contains: trimmedSearchTerm, mode: 'insensitive' } });
+        orConditions.push({ description: { contains: trimmedSearchTerm, mode: 'insensitive' } });
+        
+        // More robust check for potential IP segment
+        const isPotentiallyIpSegment = /[\d]/.test(trimmedSearchTerm) && !/^[^\d.]+$/.test(trimmedSearchTerm) && !/^[\s.]*$/.test(trimmedSearchTerm) && trimmedSearchTerm.length <= 15;
+        if (isPotentiallyIpSegment) {
+            orConditions.push({ ipAddress: { startsWith: trimmedSearchTerm, mode: 'insensitive' } });
+        }
+      }
+    }
+
+    const statusCondition: Prisma.IPAddressWhereInput | null = (statusFilter && statusFilter !== 'all')
+      ? { status: statusFilter as AppIPAddressStatusType }
+      : null;
+
+    if (orConditions.length > 0) {
+      if (statusCondition) {
+        whereClause.AND = [ // Ensure status is ANDed with the OR conditions
+          { OR: orConditions },
+          statusCondition
         ];
-
-        let matchedIpPattern = false;
-        for (const pattern of ipWildcardPatterns) {
-          const match = searchTerm.match(pattern.regex);
-          if (match) {
-            orConditions.push({ ipAddress: { startsWith: pattern.prefixBuilder(match) } });
-            matchedIpPattern = true;
-            break;
-          }
-        }
-
-        if (!matchedIpPattern) {
-            orConditions.push({ allocatedTo: { contains: searchTerm, mode: 'insensitive' } });
-            orConditions.push({ description: { contains: searchTerm, mode: 'insensitive' } });
-            if (/^[\d.]+$/.test(searchTerm)) { // If it looks like an IP or part of an IP
-                orConditions.push({ ipAddress: { startsWith: searchTerm } });
-            }
-        }
+      } else {
         whereClause.OR = orConditions;
+      }
+    } else if (statusCondition) {
+      whereClause = statusCondition;
+    } else {
+      // No search term, no status filter means return empty (as per UI spec)
+      return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
     
-    if (statusFilter && statusFilter !== 'all') {
-        if (whereClause.OR && whereClause.OR.length > 0) {
-            // If OR conditions exist, we need to AND the status with each OR condition
-            // This is complex with Prisma's structure. A simpler way is to apply status as a top-level AND.
-            // This means items must match (one of the ORs) AND the status.
-             whereClause.status = statusFilter as AppIPAddressStatusType;
-        } else {
-            // No OR conditions, just filter by status
-            whereClause = { status: statusFilter as AppIPAddressStatusType };
-        }
+    // If after all processing, orConditions is empty AND there's no status filter,
+    // this means the search term was non-empty but invalid.
+    // We make the query return no results instead of all or erroring.
+    if (trimmedSearchTerm && orConditions.length === 0 && !statusCondition) {
+        whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP" };
     }
 
 
@@ -2120,11 +2156,7 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const totalPages = Math.ceil(totalCount / pageSize);
 
     const includeClauseForQuery = {
-        subnet: {
-          include: {
-            vlan: true,
-          },
-        },
+        subnet: { include: { vlan: true } },
         vlan: true,
     };
 
@@ -2251,3 +2283,5 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
+    
