@@ -34,6 +34,7 @@ import { batchCreateVLANsAction, type ActionResponse, type BatchVlanCreationResu
 const vlanBatchFormSchema = z.object({
   startVlanNumber: z.coerce.number().int().min(1, "起始VLAN号码必须至少为1").max(4094, "起始VLAN号码不能超过4094"),
   endVlanNumber: z.coerce.number().int().min(1, "结束VLAN号码必须至少为1").max(4094, "结束VLAN号码不能超过4094"),
+  step: z.coerce.number().int().min(1, "步长必须至少为1").optional().default(1),
   commonName: z.string().max(100, "通用名称过长").optional(),
   commonDescription: z.string().max(200, "描述过长").optional(),
 }).refine(data => data.startVlanNumber <= data.endVlanNumber, {
@@ -58,6 +59,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     defaultValues: {
       startVlanNumber: undefined,
       endVlanNumber: undefined,
+      step: 1,
       commonName: "",
       commonDescription: "",
     },
@@ -68,6 +70,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       form.reset({
         startVlanNumber: undefined,
         endVlanNumber: undefined,
+        step: 1,
         commonName: "",
         commonDescription: "",
       });
@@ -82,7 +85,9 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     setSubmissionResult(null);
 
     const vlansToCreate = [];
-    for (let i = data.startVlanNumber; i <= data.endVlanNumber; i++) {
+    const stepValue = data.step || 1; // Ensure step is at least 1
+
+    for (let i = data.startVlanNumber; i <= data.endVlanNumber; i += stepValue) {
       vlansToCreate.push({
         vlanNumber: i,
         name: data.commonName || undefined,
@@ -91,11 +96,11 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     }
 
     if (vlansToCreate.length === 0) {
-      toast({ title: "无VLAN可创建", description: "指定的范围为空或无效。", variant: "destructive" });
+      toast({ title: "无VLAN可创建", description: "指定的范围和步长未产生任何VLAN号码。", variant: "destructive" });
       return;
     }
-     if (vlansToCreate.length > 100) {
-      toast({ title: "范围过大", description: "请分批创建VLAN (例如，每次最多100个)。", variant: "destructive" });
+     if (vlansToCreate.length > 200) { // Adjusted limit, can be fine-tuned
+      toast({ title: "范围过大", description: `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`, variant: "destructive" });
       return;
     }
 
@@ -174,7 +179,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         <SheetHeader>
           <SheetTitle>批量添加VLAN (范围)</SheetTitle>
           <SheetDescription>
-            输入起始和结束VLAN号码以创建VLAN范围。
+            输入起始和结束VLAN号码及步长以创建VLAN序列。
             可以为所有VLAN应用可选的通用名称和描述。
             VLAN号码必须在1到4094之间。
           </SheetDescription>
@@ -202,6 +207,19 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                   <FormLabel>结束VLAN号码</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="例如 110" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="step"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>步长 (可选, 默认为1)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="例如 1 或 10" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
