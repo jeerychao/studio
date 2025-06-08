@@ -45,8 +45,8 @@ const navItemConfigs: NavItemConfig[] = [
     icon: Network,
     requiredPermission: PERMISSIONS.VIEW_SUBNET, // Broad permission for the group
     subItems: [
-      { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
       { href: "/vlans", label: "VLAN 管理", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
+      { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
       { href: "/ip-addresses", label: "IP 地址管理", icon: Globe, requiredPermission: PERMISSIONS.VIEW_IPADDRESS },
     ],
   },
