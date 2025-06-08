@@ -99,12 +99,14 @@ function QueryPageContent() {
 
 
   // --- VLAN Query State ---
-  const [vlanQuery, setVlanQuery] = React.useState(activeTab === 'vlan' ? (searchParams.get('q_vlan') || '') : ''); // string for ID or description
+  const [vlanQuery, setVlanQuery] = React.useState(activeTab === 'vlan' ? (searchParams.get('q_vlan') || '') : '');
   const [debouncedVlanQuery, setDebouncedVlanQuery] = React.useState(vlanQuery);
   const [vlanResultsData, setVlanResultsData] = React.useState<PaginatedResponse<VlanQueryResult> | null>(null);
   const [isVlanLoading, setIsVlanLoading] = React.useState(false);
   const [vlanError, setVlanError] = React.useState<string | null>(null);
   const [currentVlanPage, setCurrentVlanPage] = React.useState(activeTab === 'vlan' ? (Number(searchParams.get('page')) || 1) : 1);
+  const [selectedVlanDetails, setSelectedVlanDetails] = React.useState<VlanQueryResult | null>(null); // ADDED
+
 
   // --- IP Address Query State ---
   const [ipQuery, setIpQuery] = React.useState(activeTab === 'ip_address' ? (searchParams.get('q_ip') || '') : '');
@@ -182,10 +184,9 @@ function QueryPageContent() {
 
   const handleTabChange = (newTab: string) => {
     router.push(`${pathname}?tab=${newTab}`);
-    // Reset query states for other tabs when switching
-    if (newTab !== 'subnet') { setSubnetQuery(''); setSubnetResultsData(null); setCurrentSubnetPage(1); }
-    if (newTab !== 'vlan') { setVlanQuery(''); setVlanResultsData(null); setCurrentVlanPage(1); }
-    if (newTab !== 'ip_address') { setIpQuery(''); setIpQueryStatus('all'); setIpResultsData(null); setCurrentIpPage(1); }
+    if (newTab !== 'subnet') { setSubnetQuery(''); setSubnetResultsData(null); setCurrentSubnetPage(1); setSelectedSubnetDetails(null); }
+    if (newTab !== 'vlan') { setVlanQuery(''); setVlanResultsData(null); setCurrentVlanPage(1); setSelectedVlanDetails(null); }
+    if (newTab !== 'ip_address') { setIpQuery(''); setIpQueryStatus('all'); setIpResultsData(null); setCurrentIpPage(1); setSelectedIpDetails(null); }
   };
 
 
@@ -195,7 +196,35 @@ function QueryPageContent() {
   const handleIpQuerySubmitButton = () => { setDebouncedIpQuery(ipQuery); setDebouncedIpQueryStatus(ipQueryStatus); setCurrentIpPage(1); router.push(`${pathname}?tab=ip_address&q_ip=${encodeURIComponent(ipQuery)}&status=${ipQueryStatus}&page=1`);};
 
   // Subnet details sheet logic
-  const handleSubnetRowClick = async (subnetId: string) => { /* ... existing logic ... */ };
+  const handleSubnetRowClick = async (subnetId: string) => {
+    setSelectedVlanDetails(null); // Clear VLAN details
+    setIsSubnetDetailsLoading(true);
+    setSubnetDetailsError(null);
+    try {
+      const response = await getSubnetFreeIpDetailsAction(subnetId);
+      if (response.success && response.data) {
+        setSelectedSubnetDetails(response.data);
+      } else {
+        setSubnetDetailsError(response.error?.userMessage || "获取子网详情失败。");
+        toast({ title: "获取详情失败", description: response.error?.userMessage, variant: "destructive" });
+      }
+    } catch (e) {
+      setSubnetDetailsError("获取子网详情时发生意外错误。");
+      toast({ title: "获取详情错误", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setIsSubnetDetailsLoading(false);
+      setIsSubnetDetailsSheetOpen(true);
+    }
+  };
+
+  // VLAN details sheet logic - NEW
+  const handleVlanRowClick = (vlan: VlanQueryResult) => {
+    setSelectedSubnetDetails(null); // Clear subnet details
+    setSelectedVlanDetails(vlan);   // Set VLAN details
+    setSubnetDetailsError(null);  // Clear potential errors from subnet details
+    setIsSubnetDetailsLoading(false); // Ensure subnet loading state is false
+    setIsSubnetDetailsSheetOpen(true); // Open the (shared) sheet
+  };
 
   // IP details sheet logic
   const handleIpRowClick = (ip: AppIPAddressWithRelations) => { setSelectedIpDetails(ip); setIsIpDetailsSheetOpen(true); };
@@ -289,7 +318,7 @@ function QueryPageContent() {
                     <TableHeader><TableRow><TableHead>VLAN号码 (点击查看详情)</TableHead><TableHead>描述</TableHead><TableHead>关联资源数</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {vlanResultsData.data.map((vlan) => (
-                        <TableRow key={vlan.id} onClick={() => { setSelectedSubnetDetails(null); setIsSubnetDetailsSheetOpen(true); /* Placeholder for VLAN details sheet logic if different */ }} className="cursor-pointer hover:bg-muted/50">
+                        <TableRow key={vlan.id} onClick={() => handleVlanRowClick(vlan)} className="cursor-pointer hover:bg-muted/50">
                           <TableCell className="font-medium text-primary hover:underline">{vlan.vlanNumber}</TableCell>
                           <TableCell>{vlan.description || "无"}</TableCell>
                           <TableCell>{vlan.resourceCount}</TableCell>
@@ -357,17 +386,17 @@ function QueryPageContent() {
         </TabsContent>
       </Tabs>
 
-      {/* Subnet IP Details Sheet (Existing) */}
+      {/* Subnet/VLAN Details Sheet - Shared */}
       <Sheet open={isSubnetDetailsSheetOpen} onOpenChange={setIsSubnetDetailsSheetOpen}>
         <SheetContent className="sm:max-w-xl w-full flex flex-col">
           <SheetHeader>
-            <SheetTitle>{selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} 关联资源` : '子网 IP 使用详情'}</SheetTitle>
+            <SheetTitle>{selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} 关联资源` : (selectedSubnetDetails ? '子网 IP 使用详情' : '详情')}</SheetTitle>
             {selectedSubnetDetails && <SheetDescription>CIDR: {selectedSubnetDetails.subnetCidr}</SheetDescription>}
             {selectedVlanDetails && <SheetDescription>描述: {selectedVlanDetails.description || '无'}</SheetDescription>}
           </SheetHeader>
           <div className="flex-grow overflow-hidden py-4">
-            {isSubnetDetailsLoading && <LoadingSpinner message="加载子网详情中..." />}
-            {subnetDetailsError && <QueryErrorDisplay message={subnetDetailsError} />}
+            {isSubnetDetailsLoading && selectedSubnetDetails && <LoadingSpinner message="加载子网详情中..." />}
+            {subnetDetailsError && selectedSubnetDetails && <QueryErrorDisplay message={subnetDetailsError} />}
             
             {/* Subnet Details View */}
             {!isSubnetDetailsLoading && !subnetDetailsError && selectedSubnetDetails && (
@@ -389,21 +418,27 @@ function QueryPageContent() {
                 </div>
               </div>
             )}
-            {/* VLAN Details View (Placeholder - can be expanded) */}
+            {/* VLAN Details View */}
             {selectedVlanDetails && (
                 <div className="space-y-3">
-                    <h4 className="font-semibold text-md">关联子网:</h4>
+                    <h4 className="font-semibold text-md">关联子网 ({selectedVlanDetails.associatedSubnets.length}):</h4>
                     {selectedVlanDetails.associatedSubnets.length > 0 ? (
-                        <ul className="list-disc list-inside pl-4 text-sm">
-                            {selectedVlanDetails.associatedSubnets.map(s => <li key={s.id}>{s.cidr} ({s.description || '无描述'})</li>)}
-                        </ul>
+                        <ScrollArea className="h-auto max-h-[150px] rounded-md border p-2">
+                            <ul className="list-disc list-inside pl-2 text-sm">
+                                {selectedVlanDetails.associatedSubnets.map(s => <li key={s.id}>{s.cidr} ({s.description || '无描述'})</li>)}
+                            </ul>
+                        </ScrollArea>
                     ) : <p className="text-sm text-muted-foreground">无关联子网。</p>}
-                    <h4 className="font-semibold text-md mt-3">直接关联IP地址:</h4>
+                    
+                    <h4 className="font-semibold text-md mt-3">直接关联IP地址 ({selectedVlanDetails.associatedDirectIPs.length}):</h4>
                     {selectedVlanDetails.associatedDirectIPs.length > 0 ? (
-                         <ul className="list-disc list-inside pl-4 text-sm">
-                            {selectedVlanDetails.associatedDirectIPs.map(ip => <li key={ip.id}>{ip.ipAddress} ({ip.description || '无描述'})</li>)}
-                        </ul>
+                         <ScrollArea className="h-auto max-h-[150px] rounded-md border p-2">
+                            <ul className="list-disc list-inside pl-2 text-sm">
+                                {selectedVlanDetails.associatedDirectIPs.map(ip => <li key={ip.id}>{ip.ipAddress} ({ip.description || '无描述'})</li>)}
+                            </ul>
+                        </ScrollArea>
                     ) : <p className="text-sm text-muted-foreground">无直接关联IP地址。</p>}
+
                     {selectedVlanDetails.resourceCount === 0 && <p className="text-sm text-muted-foreground mt-2">此 VLAN 当前未被任何子网或 IP 地址直接使用。</p>}
                 </div>
             )}
