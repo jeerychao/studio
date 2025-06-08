@@ -1,3 +1,4 @@
+
 "use client"
 
 // Inspired by react-hot-toast library
@@ -9,7 +10,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 1000000 // Delay for removing from state array after visual dismissal
 
 type ToasterToast = ToastProps & {
   id: string
@@ -41,7 +42,7 @@ type Action =
     }
   | {
       type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast>
+      toast: Partial<ToasterToast> // For updates, not all fields are needed
     }
   | {
       type: ActionType["DISMISS_TOAST"]
@@ -56,7 +57,8 @@ interface State {
   toasts: ToasterToast[]
 }
 
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>() // For TOAST_REMOVE_DELAY
+const dismissTimeouts = new Map<string, ReturnType<typeof setTimeout>>() // For explicit dismiss based on duration
 
 const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
@@ -93,14 +95,22 @@ export const reducer = (state: State, action: Action): State => {
     case "DISMISS_TOAST": {
       const { toastId } = action
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId)
+        // Clear any pending explicit dismiss timeout if one was set
+        if (dismissTimeouts.has(toastId)) {
+          clearTimeout(dismissTimeouts.get(toastId)!);
+          dismissTimeouts.delete(toastId);
+        }
       } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id)
-        })
+        // Dismiss all toasts
+        state.toasts.forEach((t) => {
+          addToRemoveQueue(t.id);
+          if (dismissTimeouts.has(t.id)) {
+            clearTimeout(dismissTimeouts.get(t.id)!);
+            dismissTimeouts.delete(t.id);
+          }
+        });
       }
 
       return {
@@ -142,27 +152,49 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+function toast({ ...props }: Toast) { // props includes 'duration'
   const id = genId()
 
-  const update = (props: ToasterToast) =>
+  // It's important that `update` takes Partial props as you won't resend `id`
+  const update = (newToastProps: Partial<Toast>) => // newToastProps won't have id
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: { ...newToastProps, id }, // id is added here
     })
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  const dismiss = () => {
+    // Clear any pending explicit dismiss timeout for this toast
+    if (dismissTimeouts.has(id)) {
+      clearTimeout(dismissTimeouts.get(id)!);
+      dismissTimeouts.delete(id);
+    }
+    dispatch({ type: "DISMISS_TOAST", toastId: id });
+  };
 
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...props, // props from the call site, including 'duration'
       id,
       open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss()
+      onOpenChange: (open) => { // This is Radix's onOpenChange
+        if (!open) {
+          // If Radix closes it (e.g., swipe, or if its internal duration somehow worked),
+          // ensure our dismiss logic (including clearing explicit timeout) is called.
+          dismiss();
+        }
       },
     },
   })
+
+  // If a duration is provided, set a timeout to explicitly dismiss the toast
+  // This makes our hook control the dismissal time.
+  if (props.duration && props.duration > 0) {
+    const dismissTimeoutInstance = setTimeout(() => {
+      dismiss(); // This will dispatch DISMISS_TOAST
+    }, props.duration);
+    dismissTimeouts.set(id, dismissTimeoutInstance);
+  }
 
   return {
     id: id,
@@ -187,7 +219,9 @@ function useToast() {
   return {
     ...state,
     toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+    dismiss: (toastId?: string) => {
+      dispatch({ type: "DISMISS_TOAST", toastId })
+    },
   }
 }
 
