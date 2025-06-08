@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide } from "lucide-react"; // Renamed Settings to avoid conflict
+import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide, KeyRound } from "lucide-react"; // Added KeyRound
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -61,7 +61,6 @@ export function Header() {
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            {/* Modified Button for UserCircle to be larger */}
             <Button variant="ghost" className="rounded-full h-10 w-10 p-0 flex items-center justify-center">
               <UserCircle className="h-8 w-8" /> 
               <span className="sr-only">切换用户菜单</span>
@@ -70,6 +69,12 @@ export function Header() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/account/change-password" className="flex items-center">
+                <KeyRound className="mr-2 h-4 w-4" />
+                修改密码
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/settings" className="flex items-center">
                 <SettingsIconLucide className="mr-2 h-4 w-4" />

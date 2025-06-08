@@ -4,33 +4,24 @@
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, Palette, Lock, UserCircle2, Loader2 } from "lucide-react";
+import { Settings, Palette, Loader2 } from "lucide-react"; // Removed Lock, UserCircle2
 import { useCurrentUser } from "@/hooks/use-current-user";
-// PERMISSIONS import is no longer needed for the primary page access check here
-// import { PERMISSIONS } from "@/types"; 
-// import { hasPermission } from "@/hooks/use-current-user"; // hasPermission no longer needed here
 import { ThemeToggle } from "@/components/settings/theme-toggle";
-import { PasswordChangeForm } from "@/components/settings/password-change-form";
+// import { PasswordChangeForm } from "@/components/settings/password-change-form"; // Removed
 import { Label } from "@/components/ui/label";
 
 export default function SettingsPage() {
   const { currentUser, isAuthLoading } = useCurrentUser();
   
   const texts = {
-    pageTitle: "系统设置",
-    pageDescription: "管理系统范围的配置和个人偏好。",
+    pageTitle: "应用设置", // Changed title to be more general
+    pageDescription: "管理应用范围的偏好设置。", // Changed description
     themeTitle: "主题定制",
     themeDescription: "选择您偏好的应用主题。",
     selectThemeLabel: "选择主题",
-    profileTitle: "用户资料",
-    profileDescription: "您当前的账户详情。",
-    usernameLabel: "用户名:",
-    emailLabel: "邮箱:",
-    roleLabel: "角色:",
-    passwordTitle: "更改密码",
-    passwordDescription: "更新您的账户密码。",
-    accessDeniedTitle: "访问被拒绝", // This might become unused or used differently
-    accessDeniedMessage: "您没有权限查看此页面。", // This might become unused
+    // Removed profile and password related texts
+    accessDeniedTitle: "访问被拒绝",
+    accessDeniedMessage: "您没有权限查看此页面。",
     loadingMessage: "加载设置中...",
   };
 
@@ -43,10 +34,7 @@ export default function SettingsPage() {
     );
   }
 
-  // All authenticated users (not guest) should be able to access their own settings (theme, password)
-  // The PERMISSIONS.VIEW_SETTINGS check is removed for general page access.
   if (!currentUser || (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-    // This message is for users who somehow bypass DashboardLayout's auth check or are guests.
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Settings className="h-16 w-16 text-destructive mb-4" />
@@ -75,37 +63,21 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><UserCircle2 className="h-5 w-5" /> {texts.profileTitle}</CardTitle>
-            <CardDescription>{texts.profileDescription}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{texts.usernameLabel}</span>
-              <span className="font-medium">{currentUser?.username}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{texts.emailLabel}</span>
-              <span className="font-medium">{currentUser?.email}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{texts.roleLabel}</span>
-              <span className="font-medium">{currentUser?.roleName}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* User Profile Card Removed */}
+        {/* Password Change Card Removed */}
         
-        <Card className="md:col-span-2 lg:col-span-1">
+        {/* Placeholder for future system-wide settings */}
+        {/* 
+        <Card className="md:col-span-2 lg:col-span-3">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> {texts.passwordTitle}</CardTitle>
-            <CardDescription>{texts.passwordDescription}</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" /> 系统级配置 (示例)</CardTitle>
+            <CardDescription>此处未来可能包含影响整个应用的全局设置。</CardDescription>
           </CardHeader>
           <CardContent>
-            <PasswordChangeForm />
+            <p className="text-muted-foreground">暂无系统级配置项。</p>
           </CardContent>
         </Card>
-        
+        */}
       </div>
     </>
   );
