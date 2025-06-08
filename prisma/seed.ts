@@ -68,9 +68,11 @@ async function main() {
         try {
             await prisma.role.update({
                 where: { id: conflictingRoleByName.id },
-                data: { permissions: { set: [] } },
+                data: { permissions: { set: [] } }, // Disconnect all permissions
             });
         } catch (updateError) {
+            // This might fail if the _RolePermissions table was just created and is empty, or other relation issues.
+            // It's a best-effort cleanup before delete.
             console.warn(`Could not disconnect permissions from conflicting role ID ${conflictingRoleByName.id}: ${(updateError as Error).message}`);
             // Continue, as the role might not have permissions or the relation might be an issue db push is fixing
         }
@@ -332,5 +334,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
     
