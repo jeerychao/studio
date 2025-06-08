@@ -203,10 +203,7 @@ function SubnetsView() {
                 />
               )}
               {canCreate && (
-                <>
-                  {/* Removed SubnetSmartBatchFormSheet button */}
-                  <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
-                </>
+                <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
               )}
             </div>
           }
@@ -337,4 +334,6 @@ export default function SubnetsPage() {
     </Suspense>
   );
 }
+    
+
     
