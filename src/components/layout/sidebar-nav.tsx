@@ -39,10 +39,10 @@ interface NavItemConfig {
 const navItemConfigs: NavItemConfig[] = [
   { href: "/dashboard", label: "仪表盘", icon: LayoutDashboard, requiredPermission: PERMISSIONS.VIEW_DASHBOARD },
   {
-    href: "/ip-management",
+    href: "/ip-management", // This is a group identifier, not a direct link if it has subItems
     label: "IP 管理",
     icon: Network,
-    requiredPermission: PERMISSIONS.VIEW_SUBNET, // Parent group might need a base permission, or rely on sub-items
+    // No requiredPermission here, access depends on subItems
     subItems: [
       { href: "/vlans", label: "VLAN 管理", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
       { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
@@ -56,10 +56,10 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_QUERY_PAGE,
   },
   {
-    href: "/user-management",
+    href: "/user-management", // Group identifier
     label: "用户和角色",
     icon: Users,
-    requiredPermission: PERMISSIONS.VIEW_USER, // Parent group
+    // No requiredPermission here, access depends on subItems
     subItems: [
       { href: "/users", label: "用户管理", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
       { href: "/roles", label: "角色管理", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
@@ -69,7 +69,7 @@ const navItemConfigs: NavItemConfig[] = [
     href: "/tools/import-export",
     label: "数据导出",
     icon: FileDown,
-    requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT
+    requiredPermission: PERMISSIONS.PERFORM_TOOLS_EXPORT // Changed to PERFORM_TOOLS_EXPORT as VIEW_TOOLS_IMPORT_EXPORT might be too broad if it allows viewing only
   },
   { href: "/audit-logs", label: "审计日志", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
 ];
@@ -80,56 +80,58 @@ export function SidebarNav() {
 
   // logger.debug("[SidebarNav] Render. Pathname:", pathname, "isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : 'null');
   // if (currentUser) {
-  // logger.debug("[SidebarNav] currentUser.permissions:", currentUser.permissions);
+  //   logger.debug("[SidebarNav] currentUser.permissions:", currentUser.permissions);
   // }
 
-
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
+    // logger.debug("[filterNavItemsByPermission] Start filtering. User:", user ? user.username : "null");
     if (!user || !user.permissions || !Array.isArray(user.permissions)) {
-      // logger.debug("[SidebarNav filterNavItemsByPermission] No user or invalid permissions array, returning empty.", { userId: user?.id, hasPermissionsProp: !!user?.permissions, isPermissionsArray: Array.isArray(user?.permissions) });
+      logger.warn("[filterNavItemsByPermission] User is null or permissions array is invalid. Returning empty list.");
       return [];
     }
-    // logger.debug(`[SidebarNav filterNavItemsByPermission] Filtering for user: ${user.username}, permissions: ${user.permissions.join(', ')}`);
 
     return items.map(item => {
-      const hasAccessToItem = item.requiredPermission ? hasPermission(user, item.requiredPermission) : true;
-      // logger.debug(`[SidebarNav filterNavItemsByPermission] Item: ${item.label}, Required: ${item.requiredPermission}, HasAccess: ${hasAccessToItem}`);
+      // logger.debug(`[filterNavItemsByPermission] Processing item: ${item.label}, Href: ${item.href}, RequiredPerm: ${item.requiredPermission}`);
       
-      if (!hasAccessToItem) return null;
+      let hasAccessToCurrentItem = true; // Default to true for parent group items unless they have a specific permission
+      if (item.requiredPermission) {
+        hasAccessToCurrentItem = hasPermission(user, item.requiredPermission);
+        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' requires '${item.requiredPermission}'. User has permission: ${hasAccessToCurrentItem}`);
+      }
 
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems && item.subItems.length > 0) {
+        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' has subItems. Filtering them...`);
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        // A parent group should only be hidden if it has NO accessible sub-items
-        // AND it's a "management" type group that doesn't have its own direct page to navigate to.
-        // If a group like "IP Management" has a requiredPermission itself, it should be shown if user has that perm,
-        // even if sub-items are all filtered out (though usually the parent perm implies some sub-item perms).
-        // The current logic: if filteredSubItems is empty AND it's a "management" group, hide it.
-        // This seems reasonable if the parent group itself isn't a navigable link.
-        if (filteredSubItems.length === 0 && item.href.includes("-management")) { // Or a more generic check if it's a non-navigable group
-          // logger.debug(`[SidebarNav filterNavItemsByPermission] Management group ${item.label} has no accessible sub-items, hiding group.`);
-           return null;
+        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' - Filtered subItems count: ${filteredSubItems.length}`);
+        
+        // If the parent item itself doesn't have a required permission (it's just a grouper),
+        // its visibility depends on whether it has any visible children.
+        if (!item.requiredPermission && filteredSubItems.length === 0) {
+          // logger.debug(`[filterNavItemsByPermission] Grouper item '${item.label}' has no required perm and no visible children. Hiding group.`);
+          return null; // Hide the parent group if it has no permission and no visible children
         }
       }
+      
+      // If the item itself requires a permission and user doesn't have it, hide it (and its children implicitly won't be processed further if we return null here).
+      if (item.requiredPermission && !hasAccessToCurrentItem) {
+        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' access denied due to its own required permission. Hiding.`);
+        return null;
+      }
+
       return { ...item, subItems: filteredSubItems };
     }).filter(item => item !== null) as NavItemConfig[];
   }, []);
 
+
   const accessibleNavItems = React.useMemo(() => {
+      // logger.debug("[SidebarNav useMemo accessibleNavItems] Calculating accessibleNavItems. isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : "null");
       if (isAuthLoading || !currentUser) {
-        // logger.debug("[SidebarNav useMemo accessibleNavItems] Auth loading or no current user, returning empty array.", { isAuthLoading, hasCurrentUser: !!currentUser });
+        // logger.debug("[SidebarNav useMemo accessibleNavItems] Auth loading or no current user, returning empty array.");
         return [];
       }
-      // logger.debug("[SidebarNav useMemo accessibleNavItems] Calculating for user:", currentUser.username, "Permissions:", currentUser.permissions);
+      // logger.debug("[SidebarNav useMemo accessibleNavItems] Calculating for user:", currentUser.username, "Permissions:", currentUser.permissions ? `[${currentUser.permissions.join(', ')}]` : "undefined/null");
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
-      // This secondary filter seems redundant if filterNavItemsByPermission already handles the subItems length check for management groups correctly.
-      // items = items.filter(item => {
-      //   if (item.subItems && item.subItems.length === 0 && item.href.includes("-management")) {
-      //       // logger.debug(`[SidebarNav useMemo accessibleNavItems] Filtering out empty management group: ${item.label}`);
-      //       return false;
-      //   }
-      //   return true;
-      // });
       // logger.debug("[SidebarNav useMemo accessibleNavItems] Final calculated items:", items.map(i => i.label));
       return items;
   }, [currentUser, isAuthLoading, filterNavItemsByPermission]);
@@ -211,6 +213,9 @@ export function SidebarNav() {
     );
   };
 
+  // console.log("[SidebarNav DEBUG] Rendering. isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : "null", "AccessibleNavItems:", accessibleNavItems.map(i => i.label));
+
+
   if (isAuthLoading) {
     // logger.debug("[SidebarNav] Render: Auth loading, showing loading message.");
     return <div className="p-4 text-sm text-sidebar-foreground">加载导航...</div>;
@@ -219,12 +224,12 @@ export function SidebarNav() {
     // logger.warn("[SidebarNav] Render: No current user (still potentially initializing or truly no user), showing error message.");
     return <div className="p-4 text-sm text-sidebar-foreground">加载用户数据错误或用户未登录。</div>;
   }
-  // Check after currentUser is confirmed to be not null
-  if (accessibleNavItems.length === 0 && currentUser.id !== 'guest-fallback-id') {
+  
+  if (accessibleNavItems.length === 0 && currentUser.id !== 'guest-fallback-id' && currentUser.username !== 'Guest') {
     // logger.warn(`[SidebarNav] Render: No accessible nav items for user ${currentUser.username} (not guest). Permissions: ${currentUser.permissions?.join(', ')}`);
     return <div className="p-4 text-sm text-sidebar-foreground">没有可访问的导航项。请检查用户权限。</div>;
   }
-   if (accessibleNavItems.length === 0 && currentUser.id === 'guest-fallback-id') {
+   if (accessibleNavItems.length === 0 && (currentUser.id === 'guest-fallback-id' || currentUser.username === 'Guest')) {
     // logger.info(`[SidebarNav] Render: No accessible nav items for GUEST user.`);
     return <div className="p-4 text-sm text-sidebar-foreground">访客无导航项。</div>;
   }
