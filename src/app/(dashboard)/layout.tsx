@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useRouter, usePathname } from 'next/navigation';
 import * as React from "react";
-import { Network, Settings2 } from "lucide-react";
+import { Network, Settings2, Loader2 } from "lucide-react"; // Added Loader2
 import {
   SidebarProvider,
   Sidebar,
@@ -28,7 +28,6 @@ function ConditionalSettingsButton() {
     return null;
   }
 
-  // Only show settings button if user has the specific permission
   if (!hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS)) {
     return null;
   }
@@ -76,16 +75,29 @@ export default function DashboardLayout({
   if (authStatus === 'loading' || isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <Network className="h-12 w-12 animate-spin text-primary" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg">加载应用中...</p>
       </div>
     );
   }
 
   if (authStatus === 'unauthenticated') {
-    return null;
+    if (pathname !== '/login') {
+        // Display a message while redirecting
+        return (
+            <div className="flex flex-col items-center justify-center h-screen">
+                <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                <p className="text-lg text-muted-foreground">会话无效或已过期。</p>
+                <p className="text-md text-muted-foreground">正在重定向到登录页面...</p>
+            </div>
+        );
+    }
+    // If already on login, or if for some reason redirect is not needed, render nothing from this layout.
+    // This case should ideally not be hit if routing is correct, as /login has its own layout.
+    return null; 
   }
 
+  // authStatus === 'authenticated'
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
