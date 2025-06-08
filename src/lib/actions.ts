@@ -23,7 +23,7 @@ import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from
 import { Prisma, type IPAddress as PrismaIPAddress, type Subnet as PrismaSubnet, type VLAN as PrismaVLAN } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
-import { fetchCurrentUserDetailsAction as getCurrentUserServer } from './actions'; // Assuming this is how you get current user on server
+// Removed: import { fetchCurrentUserDetailsAction as getCurrentUserServer } from './actions'; // Assuming this is how you get current user on server
 
 export interface ActionResponse<TData = unknown> {
   success: boolean;
@@ -36,16 +36,12 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
     const user = await prisma.user.findUnique({ where: { id: performingUserId } });
     if (user) return { userId: user.id, username: user.username };
   }
-  // Fallback to a system-like user if no performingUserId or user not found
-  // This could be a dedicated system user ID or a generic string.
-  // For now, let's try to find an admin if no specific user is passed.
   const adminUser = await prisma.user.findFirst({
-    where: { role: { name: "Administrator" } }, // Assuming 'Administrator' is the exact role name
+    where: { role: { name: "Administrator" } },
   });
   if (adminUser) {
     return { userId: adminUser.id, username: adminUser.username };
   }
-  // If no admin found, default to "系统"
   return { userId: undefined, username: '系统' };
 }
 
@@ -108,6 +104,20 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
         return { success: false, message: "用户角色信息不完整。" };
     }
 
+    // Robust check for permissions
+    let permissionsList: AppPermissionIdType[] = [];
+    if (Array.isArray(userFromDb.role.permissions)) {
+      permissionsList = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+      logger.error(
+        `User ${userFromDb.id}'s role (${userFromDb.role.name}) is missing a valid permissions array in database during login. Defaulting to empty permissions. This is a data integrity issue.`,
+        new AppError('User role permissions data incomplete or malformed'),
+        { userId: userFromDb.id, roleId: userFromDb.role.id, permissionsData: userFromDb.role.permissions }
+      );
+      // Depending on strictness, you might want to return an error here instead of defaulting:
+      // return { success: false, message: "用户角色权限信息不完整或损坏。" };
+    }
+
     await prisma.user.update({
       where: { id: userFromDb.id },
       data: { lastLogin: new Date() },
@@ -120,7 +130,7 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
       roleId: userFromDb.roleId,
       roleName: userFromDb.role.name as AppRoleNameType,
       avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
-      permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
+      permissions: permissionsList,
       lastLogin: userFromDb.lastLogin?.toISOString()
     };
 
@@ -141,25 +151,42 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
 
 export async function fetchCurrentUserDetailsAction(userId: string): Promise<FetchedUserDetails | null> {
   if (!userId) return null;
-  const userFromDb = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { role: { include: { permissions: true } } },
-  });
-  if (!userFromDb) return null;
-  if (!userFromDb.role || !userFromDb.role.name) {
-      logger.error(`User ${userId} is missing valid role or role name in database.`, new AppError("User role data invalid"), { userId });
-      return null;
+  try {
+    const userFromDb = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: { include: { permissions: true } } },
+    });
+    if (!userFromDb) return null;
+    if (!userFromDb.role || !userFromDb.role.name) {
+        logger.error(`User ${userId} is missing valid role or role name in database during fetchCurrentUserDetailsAction.`, new AppError("User role data invalid"), { userId });
+        return null; // Or throw an error indicating critical data missing
+    }
+
+    let permissionsList: AppPermissionIdType[] = [];
+    if (Array.isArray(userFromDb.role.permissions)) {
+        permissionsList = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+        logger.error(
+            `User ${userFromDb.id}'s role (${userFromDb.role.name}) is missing a valid permissions array in fetchCurrentUserDetailsAction. Defaulting to empty permissions. This is a data integrity issue.`,
+            new AppError('User role permissions data incomplete or malformed for fetchCurrentUserDetailsAction'),
+            { userId: userFromDb.id, roleId: userFromDb.role.id, permissionsData: userFromDb.role.permissions }
+        );
+    }
+
+    return {
+      id: userFromDb.id,
+      username: userFromDb.username,
+      email: userFromDb.email,
+      roleId: userFromDb.roleId,
+      roleName: userFromDb.role.name as AppRoleNameType,
+      avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
+      permissions: permissionsList,
+      lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
+    };
+  } catch (error) {
+    logger.error('Error in fetchCurrentUserDetailsAction', error as Error, { userId });
+    return null; // Or rethrow / handle more gracefully
   }
-  return {
-    id: userFromDb.id,
-    username: userFromDb.username,
-    email: userFromDb.email,
-    roleId: userFromDb.roleId,
-    roleName: userFromDb.role.name as AppRoleNameType,
-    avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
-    permissions: userFromDb.role.permissions.map(p => p.id as AppPermissionIdType),
-    lastLogin: userFromDb.lastLogin?.toISOString() || undefined,
-  };
 }
 
 // Subnet Actions
@@ -835,12 +862,48 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   const usersFromDb = params?.page && params?.pageSize ?
     await prisma.user.findMany({ where: whereClause, include: { role: { include: { permissions: true } } }, orderBy: { username: 'asc'}, skip, take: pageSize }) :
     await prisma.user.findMany({ where: whereClause, include: { role: { include: { permissions: true } } }, orderBy: { username: 'asc'} });
+  
   const appUsers: FetchedUserDetails[] = usersFromDb.map(user => {
-    if (!user.role || !user.role.name) { logger.error(`User ${user.id} has missing role or role name in getUsersAction.`, new AppError("User role data invalid"), {userId: user.id}); return { id: user.id, username: user.username, email: user.email, roleId: user.roleId, roleName: 'Viewer' as AppRoleNameType, avatar: user.avatar || '/images/avatars/default_avatar.png', lastLogin: user.lastLogin?.toISOString() || undefined, permissions: [] }; }
-    return { id: user.id, username: user.username, email: user.email, roleId: user.roleId, roleName: user.role.name as AppRoleNameType, avatar: user.avatar || '/images/avatars/default_avatar.png', lastLogin: user.lastLogin?.toISOString() || undefined, permissions: user.role.permissions.map(p => p.id as AppPermissionIdType) };
+    if (!user.role || !user.role.name) { 
+      logger.error(`User ${user.id} has missing role or role name in getUsersAction.`, new AppError("User role data invalid"), {userId: user.id}); 
+      // Provide a default valid role structure if critical role data is missing
+      return { 
+        id: user.id, 
+        username: user.username, 
+        email: user.email, 
+        roleId: user.roleId, // This might be an invalid ID if role is missing
+        roleName: 'Viewer' as AppRoleNameType, // Default to a safe role name
+        avatar: user.avatar || '/images/avatars/default_avatar.png', 
+        lastLogin: user.lastLogin?.toISOString() || undefined, 
+        permissions: [] // Default to no permissions
+      }; 
+    }
+    
+    let permissionsList: AppPermissionIdType[] = [];
+    if (Array.isArray(user.role.permissions)) {
+        permissionsList = user.role.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+        logger.error(
+            `User ${user.id}'s role (${user.role.name}) is missing a valid permissions array in getUsersAction. Defaulting to empty permissions.`,
+            new AppError('User role permissions data malformed in getUsersAction'),
+            { userId: user.id, roleId: user.role.id, permissionsData: user.role.permissions }
+        );
+    }
+
+    return { 
+      id: user.id, 
+      username: user.username, 
+      email: user.email, 
+      roleId: user.roleId, 
+      roleName: user.role.name as AppRoleNameType, 
+      avatar: user.avatar || '/images/avatars/default_avatar.png', 
+      lastLogin: user.lastLogin?.toISOString() || undefined, 
+      permissions: permissionsList
+    };
   });
   return { data: appUsers, totalCount: params?.page && params?.pageSize ? totalCount : appUsers.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
 }
+
 export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
   const actionName = 'createUserAction';
   try {
@@ -851,15 +914,25 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
     if (!roleExists || !roleExists.name) { throw new NotFoundError(`角色 ID: ${data.roleId}`, `选择的角色不存在或无效。`, 'roleId'); }
     const createPayload: Prisma.UserCreateInput = { username: data.username, email: data.email, password: data.password, avatar: data.avatar || '/images/avatars/default_avatar.png', lastLogin: new Date(), role: { connect: { id: data.roleId } } };
     const newUser = await prisma.user.create({ data: createPayload, include: { role: { include: { permissions: true } } } });
+    
+    if (!newUser.role || !newUser.role.name) { throw new AppError("创建用户后，角色信息无效。", 500, 'USER_ROLE_INVALID_POST_CREATE'); }
+    let permissionsList: AppPermissionIdType[] = [];
+    if(Array.isArray(newUser.role.permissions)){
+        permissionsList = newUser.role.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+        logger.error(`Newly created user ${newUser.id} has missing role permissions array. Defaulting to empty.`, new AppError("Role permissions missing post-create"), {userId: newUser.id});
+    }
+
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}，角色为 ${roleExists.name}。` } });
     revalidatePath("/users"); revalidatePath("/roles");
-    const appUser: FetchedUserDetails = { ...newUser, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, lastLogin: newUser.lastLogin?.toISOString(), permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType) };
+    const appUser: FetchedUserDetails = { ...newUser, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, lastLogin: newUser.lastLogin?.toISOString(), permissions: permissionsList };
     logger.info('用户创建成功', { userId: appUser.id, username: appUser.username }, actionName);
     return { success: true, data: appUser };
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
   const actionName = 'updateUserAction';
   try {
@@ -878,19 +951,34 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     }
     if (data.hasOwnProperty('avatar')) { updateData.avatar = (data.avatar === "" || data.avatar === undefined) ? '/images/avatars/default_avatar.png' : data.avatar; }
     if (data.password && data.password.length > 0) { updateData.password = data.password; }
-    if (Object.keys(updateData).length === 0) { const currentUserDetails = await fetchCurrentUserDetailsAction(id); if (!currentUserDetails) throw new AppError("Failed to fetch current user details after no-op update."); return { success: true, data: currentUserDetails }; }
+    
+    if (Object.keys(updateData).length === 0) { 
+        const currentUserDetails = await fetchCurrentUserDetailsAction(id); 
+        if (!currentUserDetails) throw new AppError("Failed to fetch current user details after no-op update."); 
+        return { success: true, data: currentUserDetails }; 
+    }
+
     const updatedUser = await prisma.user.update({ where: { id }, data: updateData, include: { role: { include: {permissions: true} } } });
     if (!updatedUser.role || !updatedUser.role.name) { throw new AppError("更新用户后，角色信息无效。", 500, 'USER_ROLE_INVALID_POST_UPDATE'); }
+    
+    let permissionsList: AppPermissionIdType[] = [];
+    if(Array.isArray(updatedUser.role.permissions)){
+        permissionsList = updatedUser.role.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+        logger.error(`Updated user ${updatedUser.id} has missing role permissions array. Defaulting to empty.`, new AppError("Role permissions missing post-update"), {userId: updatedUser.id});
+    }
+
     let auditDetails = `用户 ${updatedUser.username} 的详细信息已由 ${auditUser.username || '系统'} 更新。`; if (data.password && data.password.length > 0) auditDetails = `用户 ${updatedUser.username} 的密码已由 ${auditUser.username || '系统'} 更改。`;
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_user_details', details: auditDetails } });
     revalidatePath("/users"); revalidatePath("/roles");
-    const appUser: FetchedUserDetails = { ...updatedUser, roleName: updatedUser.role.name as AppRoleNameType, avatar: updatedUser.avatar || undefined, lastLogin: updatedUser.lastLogin?.toISOString(), permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType) };
+    const appUser: FetchedUserDetails = { ...updatedUser, roleName: updatedUser.role.name as AppRoleNameType, avatar: updatedUser.avatar || undefined, lastLogin: updatedUser.lastLogin?.toISOString(), permissions: permissionsList };
     logger.info('用户更新成功', { userId: appUser.id }, actionName);
     return { success: true, data: appUser };
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 interface UpdateOwnPasswordPayload { currentPassword?: string; newPassword?: string; }
 export async function updateOwnPasswordAction(userId: string, payload: UpdateOwnPasswordPayload): Promise<ActionResponse<{ message: string }>> {
   const actionName = 'updateOwnPasswordAction';
@@ -902,13 +990,14 @@ export async function updateOwnPasswordAction(userId: string, payload: UpdateOwn
     if (!payload.newPassword) { throw new ValidationError("新密码是必需的。", "newPassword"); }
     await prisma.user.update({ where: { id: userId }, data: { password: payload.newPassword } });
     await prisma.auditLog.create({ data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了自己的密码。` } });
-    revalidatePath("/account/change-password"); // Updated path
+    revalidatePath("/account/change-password");
     logger.info('用户密码更新成功', { userId }, actionName);
     return { success: true, data: { message: "密码已成功更新。" } };
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 export async function deleteUserAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteUserAction';
   try {
@@ -940,12 +1029,28 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
   const rolesFromDb = params?.page && params?.pageSize ?
     await prisma.role.findMany({ where: whereClause, include: { _count: { select: { users: true } }, permissions: { orderBy: { id: 'asc' } } }, orderBy: { name: 'asc'}, skip, take: pageSize }) :
     await prisma.role.findMany({ where: whereClause, include: { _count: { select: { users: true } }, permissions: { orderBy: { id: 'asc' } } }, orderBy: { name: 'asc'} });
+  
   const appRoles = rolesFromDb.map(role => {
-    if (!role.name) { logger.error(`Role ${role.id} has a missing name in getRolesAction.`, new AppError("Role name missing"), {roleId: role.id}); return { id: role.id, name: 'Viewer' as AppRoleNameType, description: role.description || undefined, userCount: role._count.users, permissions: role.permissions.map(p => p.id as AppPermissionIdType) }; }
-    return { id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, userCount: role._count.users, permissions: role.permissions.map(p => p.id as AppPermissionIdType) };
+    if (!role.name) { 
+      logger.error(`Role ${role.id} has a missing name in getRolesAction.`, new AppError("Role name missing"), {roleId: role.id});
+      return { id: role.id, name: 'Viewer' as AppRoleNameType, description: role.description || undefined, userCount: role._count.users, permissions: [] }; 
+    }
+    
+    let permissionsList: AppPermissionIdType[] = [];
+    if (Array.isArray(role.permissions)) {
+        permissionsList = role.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+        logger.error(
+            `Role ${role.id} (${role.name}) is missing a valid permissions array in getRolesAction. Defaulting to empty permissions.`,
+            new AppError('Role permissions data malformed in getRolesAction'),
+            { roleId: role.id, roleName: role.name, permissionsData: role.permissions }
+        );
+    }
+    return { id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, userCount: role._count.users, permissions: permissionsList };
   });
   return { data: appRoles, totalCount: params?.page && params?.pageSize ? totalCount : appRoles.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
 }
+
 export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "id" | "userCount" | "name">> & { permissions?: AppPermissionIdType[] }, performingUserId?: string): Promise<ActionResponse<AppRole>> {
   const actionName = 'updateRoleAction';
   try {
@@ -962,19 +1067,41 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
       const prismaPermissions = data.permissions.map(appPermId => ({ id: appPermId as string }));
       updateData.permissions = { set: prismaPermissions };
     } else if (data.permissions && roleToUpdate.id === ADMIN_ROLE_ID) { logger.warn('Attempted to set permissions for ADMIN_ROLE_ID in updateRoleAction despite check.', undefined, { roleId: id, permissionsAttempted: data.permissions }); }
-    if (Object.keys(updateData).length === 0) { const currentRole = await prisma.role.findUnique({where: {id}, include: {_count: {select: {users:true}}, permissions: true}}); if (!currentRole || !currentRole.name) throw new AppError("Failed to fetch current role details after no-op update."); const currentRoleApp: AppRole = { id: currentRole.id, name: currentRole.name as AppRoleNameType, description: currentRole.description || undefined, userCount: currentRole._count.users, permissions: currentRole.permissions.map(p => p.id as AppPermissionIdType) }; return { success: true, data: currentRoleApp }; }
+    
+    if (Object.keys(updateData).length === 0) { 
+        const currentRole = await prisma.role.findUnique({where: {id}, include: {_count: {select: {users:true}}, permissions: true}}); 
+        if (!currentRole || !currentRole.name) throw new AppError("Failed to fetch current role details after no-op update."); 
+        let permissionsList: AppPermissionIdType[] = [];
+        if(Array.isArray(currentRole.permissions)){
+            permissionsList = currentRole.permissions.map(p => p.id as AppPermissionIdType);
+        } else {
+             logger.error(`Role ${currentRole.id} is missing valid permissions array after no-op update. Defaulting to empty.`, new AppError("Role permissions malformed"), {roleId: currentRole.id});
+        }
+        const currentRoleApp: AppRole = { id: currentRole.id, name: currentRole.name as AppRoleNameType, description: currentRole.description || undefined, userCount: currentRole._count.users, permissions: permissionsList }; 
+        return { success: true, data: currentRoleApp }; 
+    }
+
     const updatedRole = await prisma.role.update({ where: { id }, data: updateData, include: { permissions: true, _count: { select: { users: true } } } });
     if (!updatedRole.name) { throw new AppError("更新角色后，角色名称信息无效。", 500, 'ROLE_NAME_INVALID_POST_UPDATE'); }
+    
+    let updatedPermissionsList: AppPermissionIdType[] = [];
+    if(Array.isArray(updatedRole.permissions)){
+        updatedPermissionsList = updatedRole.permissions.map(p => p.id as AppPermissionIdType);
+    } else {
+        logger.error(`Updated role ${updatedRole.id} has missing permissions array. Defaulting to empty.`, new AppError("Role permissions malformed post-update"), {roleId: updatedRole.id});
+    }
+
     let auditDetails = `更新了角色 ${updatedRole.name}。`; if (data.hasOwnProperty('description')) auditDetails += ` 描述 ${data.description ? '已更改' : '已清除/未更改'}。`; if (data.permissions && roleToUpdate.id !== ADMIN_ROLE_ID) auditDetails += ` 权限 ${data.permissions.length > 0 ? '已更改' : '已清除/未更改'}。`;
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_role', details: auditDetails } });
     revalidatePath("/roles"); revalidatePath("/users");
-    const appRole: AppRole = { id: updatedRole.id, name: updatedRole.name as AppRoleNameType, description: updatedRole.description || undefined, userCount: updatedRole._count.users, permissions: updatedRole.permissions.map(p => p.id as AppPermissionIdType) };
+    const appRole: AppRole = { id: updatedRole.id, name: updatedRole.name as AppRoleNameType, description: updatedRole.description || undefined, userCount: updatedRole._count.users, permissions: updatedPermissionsList };
     logger.info('角色更新成功', { roleId: appRole.id }, actionName);
     return { success: true, data: appRole };
   } catch (error: unknown) {
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 export async function createRoleAction(data: any): Promise<ActionResponse<AppRole>> { logger.warn('Attempted to call createRoleAction, which is disabled.', undefined, { inputData: data }); throw new AppError("不允许创建新角色。角色是固定的 (Administrator, Operator, Viewer)。", 403, 'ROLE_CREATION_NOT_ALLOWED'); }
 export async function deleteRoleAction(id: string): Promise<ActionResponse> { const role = await prisma.role.findUnique({where: {id}}); if (role && (role.name === "Administrator" || role.name === "Operator" || role.name === "Viewer" )) { logger.warn(`Attempted to delete fixed role: ${role.name}`, undefined, { roleId: id }); throw new AppError("不允许删除固定角色 (Administrator, Operator, Viewer)。", 403, 'FIXED_ROLE_DELETION_NOT_ALLOWED'); } logger.warn(`Attempted to delete non-fixed or non-existent role.`, undefined, { roleId: id }); throw new NotFoundError(`角色 ID: ${id}`, "未找到角色或不允许删除。"); }
 
@@ -992,6 +1119,7 @@ export async function getAuditLogsAction(params?: FetchParams): Promise<Paginate
   const appLogs = logsFromDb.map(log => ({ id: log.id, userId: log.userId || "system", username: log.username || (log.user ? log.user.username : (log.userId ? '未知用户' : '系统')), action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
   return { data: appLogs, totalCount: params?.page && params?.pageSize ? totalCount : appLogs.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
 }
+
 export async function deleteAuditLogAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteAuditLogAction';
   try {
@@ -1007,6 +1135,7 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteAuditLogsAction';
   const auditUser = await getAuditUserInfo(performingUserId);
@@ -1029,15 +1158,6 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
   logger.info(`批量删除审计日志完成：成功 ${successCount}，失败 ${failureDetails.length}`, { successCount, failureCount: failureDetails.length }, actionName);
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
-
-// System Settings Actions - REMOVED
-// const AUDIT_LOG_RETENTION_KEY = "auditLogRetentionPeriod"; // Removed
-// type AuditLogRetentionValue = "30d" | "90d" | "180d" | "365d" | "forever"; // Removed
-
-// export async function getAuditLogRetentionSettingAction(...) { ... } // Removed
-// export async function updateAuditLogRetentionSettingAction(...) { ... } // Removed
-// export async function cleanupAuditLogsAction(...) { ... } // Removed
-
 
 // Permission Actions
 export async function getAllPermissionsAction(): Promise<AppPermission[]> { return mockPermissions.map(p => ({ ...p, description: p.description || undefined })); }
@@ -1243,3 +1363,4 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
