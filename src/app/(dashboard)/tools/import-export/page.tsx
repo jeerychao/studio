@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
-import type { Subnet, VLAN, IPAddress } from "@/types";
+import type { Subnet, VLAN, IPAddress } from "@/types"; // IPAddress type is not directly used for mapping here but kept for consistency
 import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
@@ -48,48 +48,44 @@ export default function ImportExportPage() {
       if (dataType === "all") {
         let combinedCsvContent = "";
         filename = `ipam_lite_all_data_export.csv`;
+        let subnetSequentialId = 1;
 
-        // Fetch all subnets with associated VLAN details (including name)
-        const subnetsResponse = await getSubnetsAction(); // This action should now fetch vlan.name
+        const subnetsResponse = await getSubnetsAction();
+        const allVlansForLookup = (await getVLANsAction()).data;
+
         if (subnetsResponse.data.length > 0) {
           const subnetsForCsv = subnetsResponse.data.map(subnet => {
-            const associatedVlan = subnet.vlanId ? (subnetsResponse.data.find(s => s.id === subnet.id) as any)?.vlan : null;
-            // The getSubnetsAction itself now includes vlan data with name.
-            // We need to ensure the VLANs are fetched with their names for this.
-            // This part of logic might need refinement if getSubnetsAction doesn't directly return vlan.name for each subnet.
-            // Assuming getSubnetsAction is modified to include vlan.name
-             const vlanFromFullList = vlansForCsvAll?.find(v => v.id === subnet.vlanId);
-
+            const vlanDetails = subnet.vlanId ? allVlansForLookup.find(v => v.id === subnet.vlanId) : null;
             return {
-              id: subnet.id,
+              id: subnetSequentialId++, // Use sequential ID for export
               cidr: subnet.cidr,
               networkAddress: subnet.networkAddress,
               subnetMask: subnet.subnetMask,
               ipRange: subnet.ipRange || "",
-              vlanId: subnet.vlanId || "",
-              vlanNumber: vlanFromFullList?.vlanNumber || "",
-              vlanName: vlanFromFullList?.name || "",
+              vlanNumber: vlanDetails?.vlanNumber || "", // Keep vlanNumber
+              vlanName: vlanDetails?.name || "",       // Keep vlanName
               description: subnet.description || "",
               utilization: subnet.utilization || 0,
             };
           });
-          const subnetHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "vlanNumber", "vlanName", "description", "utilization"];
+          // Remove 'vlanId' from headers for subnets part
+          const subnetHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "vlanName", "description", "utilization"];
           combinedCsvContent += "# --- SUBNETS ---" + lineSeparator;
-          combinedCsvContent += convertToCSV(subnetsForCsv, subnetHeaders) + lineSeparator;
+          combinedCsvContent += convertToCSV(subnetsForCsv, subnetHeaders) + lineSeparator + lineSeparator;
         }
 
         const vlansResponse = await getVLANsAction();
-        const vlansForCsvAll = vlansResponse.data.map(vlan => ({ // Store for subnet lookup
-            id: vlan.id,
+        if (vlansResponse.data.length > 0) {
+          const vlansForCsv = vlansResponse.data.map(vlan => ({
+            id: vlan.id, // Keep original ID for VLANs
             vlanNumber: vlan.vlanNumber,
             name: vlan.name || "",
             description: vlan.description || "",
-            resourceCount: vlan.subnetCount || 0, // Renamed from subnetCount to resourceCount
-        }));
-        if (vlansForCsvAll.length > 0) {
+            resourceCount: vlan.subnetCount || 0,
+          }));
           const vlanHeaders = ["id", "vlanNumber", "name", "description", "resourceCount"];
           combinedCsvContent += "# --- VLANS ---" + lineSeparator;
-          combinedCsvContent += convertToCSV(vlansForCsvAll, vlanHeaders) + lineSeparator;
+          combinedCsvContent += convertToCSV(vlansForCsv, vlanHeaders) + lineSeparator + lineSeparator;
         }
 
         const ipsResponse = await getIPAddressesAction();
@@ -97,19 +93,19 @@ export default function ImportExportPage() {
           const ipsForCsv = ipsResponse.data.map(ip => {
               let vlanNumberStr = "";
               let vlanNameStr = "";
-              if (ip.vlan?.vlanNumber) { // Direct VLAN
+              if (ip.vlan?.vlanNumber) {
                   vlanNumberStr = ip.vlan.vlanNumber.toString();
                   vlanNameStr = ip.vlan.name || "";
-              } else if (ip.subnet?.vlan?.vlanNumber) { // Inherited VLAN
+              } else if (ip.subnet?.vlan?.vlanNumber) {
                   vlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
                   vlanNameStr = ip.subnet.vlan.name || "";
               }
               return {
-                  id: ip.id,
+                  id: ip.id, // Keep original ID for IPs
                   ipAddress: ip.ipAddress,
-                  subnetId: ip.subnetId || "",
+                  subnetId: ip.subnetId || "", // Keep original subnetId for IPs
                   subnetCidr: ip.subnet?.cidr || "",
-                  vlanId: ip.vlanId || "",
+                  vlanId: ip.vlanId || "", // Keep original vlanId for IPs for referential integrity context
                   vlanNumber: vlanNumberStr,
                   vlanName: vlanNameStr,
                   status: ip.status,
@@ -117,69 +113,71 @@ export default function ImportExportPage() {
                   description: ip.description || "",
               };
           });
+          // Keep vlanId in IP export as it's a foreign key
           const ipHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "vlanName", "status", "allocatedTo", "description"];
           combinedCsvContent += "# --- IP ADDRESSES ---" + lineSeparator;
           combinedCsvContent += convertToCSV(ipsForCsv, ipHeaders);
         }
 
-        if (combinedCsvContent.trim() === "") {
+        if (combinedCsvContent.trim() === "" || combinedCsvContent.replace(/# --- SUBNETS ---\r\n/g, '').replace(/# --- VLANS ---\r\n/g, '').replace(/# --- IP ADDRESSES ---\r\n/g, '').replace(/\r\n/g, '').trim() === "") {
             toast({ title: "无数据", description: "系统中没有可导出的数据。" });
             setIsExporting(false);
             return;
         }
         csvContent = combinedCsvContent;
 
-      } else {
-        if (dataType === "subnets") {
-            const subnetsResponse = await getSubnetsAction();
-            const allVlansForLookup = (await getVLANsAction()).data; // Fetch all VLANs for name lookup
+      } else if (dataType === "subnets") {
+          const subnetsResponse = await getSubnetsAction();
+          const allVlansForLookup = (await getVLANsAction()).data;
+          let sequentialId = 1;
 
-            const subnetsForCsv = subnetsResponse.data.map(subnet => {
-              const vlanDetails = subnet.vlanId ? allVlansForLookup.find(v => v.id === subnet.vlanId) : null;
-              return {
-                id: subnet.id,
-                cidr: subnet.cidr,
-                networkAddress: subnet.networkAddress,
-                subnetMask: subnet.subnetMask,
-                ipRange: subnet.ipRange || "",
-                vlanId: subnet.vlanId || "",
-                vlanNumber: vlanDetails?.vlanNumber || "",
-                vlanName: vlanDetails?.name || "",
-                description: subnet.description || "",
-                utilization: subnet.utilization || 0,
-              };
-            });
-            dataToExport = subnetsForCsv;
-            csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanId", "vlanNumber", "vlanName", "description", "utilization"];
+          const subnetsForCsv = subnetsResponse.data.map(subnet => {
+            const vlanDetails = subnet.vlanId ? allVlansForLookup.find(v => v.id === subnet.vlanId) : null;
+            return {
+              id: sequentialId++, // Use sequential ID
+              cidr: subnet.cidr,
+              networkAddress: subnet.networkAddress,
+              subnetMask: subnet.subnetMask,
+              ipRange: subnet.ipRange || "",
+              // vlanId: subnet.vlanId || "", // REMOVE vlanId
+              vlanNumber: vlanDetails?.vlanNumber || "",
+              vlanName: vlanDetails?.name || "",
+              description: subnet.description || "",
+              utilization: subnet.utilization || 0,
+            };
+          });
+          dataToExport = subnetsForCsv;
+          // Updated headers: removed 'vlanId'
+          csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "vlanNumber", "vlanName", "description", "utilization"];
         } else if (dataType === "vlans") {
             const vlansResponse = await getVLANsAction();
             const vlansForCsv = vlansResponse.data.map(vlan => ({
-              id: vlan.id,
+              id: vlan.id, // Keep original ID
               vlanNumber: vlan.vlanNumber,
               name: vlan.name || "",
               description: vlan.description || "",
-              resourceCount: vlan.subnetCount || 0, // Assuming subnetCount now means resourceCount
+              resourceCount: vlan.subnetCount || 0,
             }));
             dataToExport = vlansForCsv;
             csvHeaders = ["id", "vlanNumber", "name", "description", "resourceCount"];
         } else if (dataType === "ips") {
-            const ipsResponse = await getIPAddressesAction(); // getIPAddressesAction should fetch vlan.name now
+            const ipsResponse = await getIPAddressesAction();
              const ipsForCsv = ipsResponse.data.map(ip => {
                 let vlanNumberStr = "";
                 let vlanNameStr = "";
-                if (ip.vlan?.vlanNumber) { // Direct VLAN
+                if (ip.vlan?.vlanNumber) {
                     vlanNumberStr = ip.vlan.vlanNumber.toString();
                     vlanNameStr = ip.vlan.name || "";
-                } else if (ip.subnet?.vlan?.vlanNumber) { // Inherited VLAN
+                } else if (ip.subnet?.vlan?.vlanNumber) {
                     vlanNumberStr = ip.subnet.vlan.vlanNumber.toString();
                     vlanNameStr = ip.subnet.vlan.name || "";
                 }
                 return {
-                    id: ip.id,
+                    id: ip.id, // Keep original ID
                     ipAddress: ip.ipAddress,
-                    subnetId: ip.subnetId || "",
+                    subnetId: ip.subnetId || "", // Keep original subnetId
                     subnetCidr: ip.subnet?.cidr || "",
-                    vlanId: ip.vlanId || "",
+                    vlanId: ip.vlanId || "", // Keep original vlanId
                     vlanNumber: vlanNumberStr,
                     vlanName: vlanNameStr,
                     status: ip.status,
@@ -188,15 +186,18 @@ export default function ImportExportPage() {
                 };
             });
             dataToExport = ipsForCsv;
+            // Keep vlanId here as it's an attribute of IPAddress linking to a VLAN
             csvHeaders = ["id", "ipAddress", "subnetId", "subnetCidr", "vlanId", "vlanNumber", "vlanName", "status", "allocatedTo", "description"];
         }
 
-        if (dataToExport.length === 0) {
+        if (dataType !== "all" && dataToExport.length === 0) {
             toast({ title: "无数据", description: `没有可用于导出的 ${dataType === "ips" ? "IP 地址" : dataType === "subnets" ? "子网" : "VLAN"} 数据。`});
             setIsExporting(false);
             return;
         }
-        csvContent = convertToCSV(dataToExport, csvHeaders);
+        if (dataType !== "all") {
+          csvContent = convertToCSV(dataToExport, csvHeaders);
+        }
       }
 
 
@@ -298,3 +299,5 @@ export default function ImportExportPage() {
     </>
   );
 }
+
+    
