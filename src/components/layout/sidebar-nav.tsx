@@ -220,27 +220,10 @@ export function SidebarNav() {
   // logger.debug("[SidebarNav DEBUG Final Render Check] accessibleNavItems (actual labels):", accessibleNavItems?.map(i => i.label));
 
 
-  const TempDebugInfo = () => {
-    if (!currentUser) return <div className="p-2 text-xs text-red-400 bg-red-900/50 rounded">调试: currentUser 为空</div>;
-    return (
-      <div className="p-2 mb-2 text-xs bg-gray-800/50 text-gray-300 border border-gray-700/50 rounded">
-        <p><strong>临时调试信息:</strong></p>
-        <p>用户: {currentUser.username}</p>
-        <p>角色: {currentUser.roleName}</p>
-        <p>权限数 (currentUser): {currentUser.permissions?.length || 0}</p>
-        <p>可访问菜单项数: {accessibleNavItems?.length || 0}</p>
-        <p className="mt-1">权限 (前5): {currentUser.permissions?.slice(0,5).join(', ') || '无'}...</p>
-        <p className="mt-1">可访问菜单: {accessibleNavItems?.map(item => item.label).join(', ') || '无'}</p>
-      </div>
-    );
-  };
-
-
   if (isAuthLoading) {
     // logger.debug("[SidebarNav] Render: Auth loading, showing loading message.");
     return (
       <>
-        {/* <TempDebugInfo /> */}
         <div className="p-4 text-sm text-sidebar-foreground">加载导航...</div>
       </>
     );
@@ -249,7 +232,6 @@ export function SidebarNav() {
     // logger.warn("[SidebarNav] Render: No current user, showing error message.");
     return (
       <>
-        <TempDebugInfo /> {/* Show debug info even if currentUser is null to see what it is */}
         <div className="p-4 text-sm text-sidebar-foreground">加载用户数据错误或用户未登录。</div>
       </>
     );
@@ -259,7 +241,6 @@ export function SidebarNav() {
     // logger.warn(`[SidebarNav] Render: No accessible nav items for user ${currentUser.username} (not guest). Check permissions.`);
     return (
       <>
-        <TempDebugInfo />
         <div className="p-4 text-sm text-sidebar-foreground">没有可访问的导航项。请检查用户权限。</div>
       </>
     );
@@ -268,7 +249,6 @@ export function SidebarNav() {
     // logger.info(`[SidebarNav] Render: No accessible nav items for GUEST user.`);
     return (
         <>
-          <TempDebugInfo />
           <div className="p-4 text-sm text-sidebar-foreground">访客无导航项。</div>
         </>
     );
@@ -276,7 +256,6 @@ export function SidebarNav() {
 
   return (
     <>
-      <TempDebugInfo />
       <Accordion
         type="multiple"
         className="w-full"
@@ -288,4 +267,3 @@ export function SidebarNav() {
     </>
   );
 }
-
