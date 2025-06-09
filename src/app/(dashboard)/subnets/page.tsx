@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { NetworkIcon, Edit, Trash2, Loader2, PlusCircle } from "lucide-react"; 
+import { NetworkIcon, Edit, Trash2, Loader2, PlusCircle, CheckCircle, XCircle } from "lucide-react"; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,6 @@ import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
-// Removed: import { SubnetSmartBatchFormSheet } from "./subnet-smart-batch-form-sheet"; 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
@@ -203,10 +202,7 @@ function SubnetsView() {
                 />
               )}
               {canCreate && (
-                <>
-                  {/* Removed SubnetSmartBatchFormSheet component and button */}
-                  <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
-                </>
+                <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
               )}
             </div>
           }
@@ -232,7 +228,9 @@ function SubnetsView() {
                     )}
                   </TableHead>
                   <TableHead>CIDR</TableHead>
+                  <TableHead>名称</TableHead>
                   <TableHead>VLAN</TableHead>
+                  <TableHead>DHCP</TableHead>
                   <TableHead>描述</TableHead>
                   <TableHead>利用率</TableHead>
                   {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
@@ -260,11 +258,19 @@ function SubnetsView() {
                           {subnet.cidr}
                         </Link>
                       </TableCell>
+                      <TableCell className="max-w-[150px] truncate text-sm">{subnet.name || "无"}</TableCell>
                       <TableCell>
                         {vlanInfo ? (
                           <Badge variant="outline">{vlanDisplay}</Badge>
                         ) : (
                           vlanDisplay
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {subnet.dhcpEnabled ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-muted-foreground" />
                         )}
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{subnet.description || "无"}</TableCell>
@@ -279,7 +285,7 @@ function SubnetsView() {
                             <SubnetFormSheet
                               subnet={subnet}
                               vlans={vlans}
-                              onSubnetChange={fetchData} // Edit still uses plain fetchData
+                              onSubnetChange={fetchData}
                             >
                               <Button variant="ghost" size="icon" aria-label="编辑子网">
                                 <Edit className="h-4 w-4" />
@@ -289,11 +295,11 @@ function SubnetsView() {
                           {canDelete && (
                             <DeleteConfirmationDialog
                               itemId={subnet.id}
-                              itemName={subnet.cidr}
+                              itemName={`${subnet.name || subnet.cidr}`}
                               deleteAction={deleteSubnetAction}
                               onDeleted={fetchData}
                               dialogTitle="删除子网?"
-                              dialogDescription={`您确定要删除子网 ${subnet.cidr} 吗？此操作无法撤销。`}
+                              dialogDescription={`您确定要删除子网 ${subnet.name || subnet.cidr} 吗？此操作无法撤销。`}
                               triggerButton={
                                 <Button variant="ghost" size="icon" aria-label="删除子网">
                                   <Trash2 className="h-4 w-4" />
@@ -308,7 +314,7 @@ function SubnetsView() {
                 })}
                 {subnetsToDisplay.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={(canEdit || canDelete) ? 6 : 5} className="text-center h-24 text-muted-foreground">
+                    <TableCell colSpan={(canEdit || canDelete) ? 8 : 7} className="text-center h-24 text-muted-foreground">
                       未找到子网。{canCreate && "尝试创建一个！"}
                     </TableCell>
                   </TableRow>
@@ -342,3 +348,4 @@ export default function SubnetsPage() {
     
 
     
+

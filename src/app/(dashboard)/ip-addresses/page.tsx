@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, Edit, Trash2, PlusCircle, Loader2 } from "lucide-react";
+import { Globe, Edit, Trash2, PlusCircle, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getIPAddressesAction, getSubnetsAction, deleteIPAddressAction, getVLANsAction, batchDeleteIPAddressesAction } from "@/lib/actions";
-import type { AppIPAddressWithRelations } from "@/lib/actions"; // This type already includes related VLAN/Subnet info
+import type { AppIPAddressWithRelations } from "@/lib/actions";
 import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
@@ -47,7 +47,7 @@ function IPAddressesView() {
 
   const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<AppIPAddressWithRelations> | null>(null);
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
-  const [vlans, setVlans] = React.useState<VLAN[]>([]); // VLAN now includes 'name'
+  const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
@@ -69,7 +69,7 @@ function IPAddressesView() {
       const [fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
         getSubnetsAction(),
-        getVLANsAction(), // Fetches VLANs including their names
+        getVLANsAction(),
       ]);
       setIpAddressesData(fetchedIpsResult);
       setSubnets(fetchedSubnetsResult.data);
@@ -106,8 +106,8 @@ function IPAddressesView() {
       const paginationInfo = await getIPAddressesAction({
         page: 1,
         pageSize: 1,
-        subnetId: selectedSubnetId, // Preserve current filter
-        status: selectedStatus,     // Preserve current filter
+        subnetId: selectedSubnetId,
+        status: selectedStatus,
       });
       const newTotalPages = paginationInfo.totalPages;
       const targetPage = newTotalPages > 0 ? newTotalPages : 1;
@@ -120,7 +120,7 @@ function IPAddressesView() {
         params.set("page", String(targetPage));
         router.push(`${pathname}?${params.toString()}`);
       } else {
-        fetchData(); // Refresh current page if target is the same
+        fetchData();
       }
     } catch (error) {
       toast({
@@ -128,7 +128,7 @@ function IPAddressesView() {
         description: "创建IP地址后无法导航到目标页面，正在刷新当前页面。",
         variant: "destructive",
       });
-      fetchData(); // Fallback
+      fetchData();
     }
   }, [fetchData, router, pathname, searchParams, toast, selectedSubnetId, selectedStatus]);
 
@@ -185,11 +185,11 @@ function IPAddressesView() {
     reserved: "预留",
   };
 
-  const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.networkAddress : "所有子网";
+  const currentSubnetName = selectedSubnetId ? subnets.find(s => s.id === selectedSubnetId)?.cidr : "所有子网";
 
   const getVlanDisplayForIp = (ip: AppIPAddressWithRelations): string => {
-    if (ip.vlan?.vlanNumber) { 
-        return `VLAN ${ip.vlan.vlanNumber}${ip.vlan.name ? ` (${ip.vlan.name})` : ''}`;
+    if (ip.directVlan?.vlanNumber) { 
+        return `VLAN ${ip.directVlan.vlanNumber}${ip.directVlan.name ? ` (${ip.directVlan.name})` : ''} (直接)`;
     } else if (ip.subnet?.vlan?.vlanNumber) { 
         return `VLAN ${ip.subnet.vlan.vlanNumber}${ip.subnet.vlan.name ? ` (${ip.subnet.vlan.name})` : ''} (继承)`;
     }
@@ -254,7 +254,7 @@ function IPAddressesView() {
           <CardTitle>IP 地址列表</CardTitle>
           <CardDescription>
             {selectedSubnetId
-              ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.networkAddress || ''} 内的IP地址`
+              ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.cidr || ''} 内的IP地址`
               : "所有受管IP地址。"}
             {selectedStatus !== 'all' && ` (状态: ${ipAddressStatusLabels[selectedStatus as IPAddressStatus]})`}
              显示 {ipsToDisplay.length} 条，共 {finalTotalCount} 条IP。
@@ -277,7 +277,11 @@ function IPAddressesView() {
                     </TableHead>
                     <TableHead>IP 地址</TableHead>
                     <TableHead>状态</TableHead>
+                    <TableHead>网关?</TableHead>
                     <TableHead>分配给</TableHead>
+                    <TableHead>使用单位</TableHead>
+                    <TableHead>联系人</TableHead>
+                    <TableHead>电话</TableHead>
                     <TableHead>子网</TableHead>
                     <TableHead>VLAN</TableHead>
                     <TableHead>描述</TableHead>
@@ -302,7 +306,13 @@ function IPAddressesView() {
                           {ipAddressStatusLabels[ip.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell>{ip.allocatedTo || "无"}</TableCell>
+                      <TableCell className="text-center">
+                        {ip.isGateway ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-muted-foreground" />}
+                      </TableCell>
+                      <TableCell className="max-w-[120px] truncate">{ip.allocatedTo || "无"}</TableCell>
+                      <TableCell className="max-w-[120px] truncate">{ip.usageUnit || "无"}</TableCell>
+                      <TableCell className="max-w-[100px] truncate">{ip.contactPerson || "无"}</TableCell>
+                      <TableCell className="max-w-[100px] truncate">{ip.phone || "无"}</TableCell>
                       <TableCell>
                         {ip.subnet?.cidr || "无"}
                       </TableCell>
@@ -318,7 +328,7 @@ function IPAddressesView() {
                                 subnets={subnets} 
                                 vlans={vlans} 
                                 currentSubnetId={selectedSubnetId} 
-                                onIpAddressChange={fetchData} // Edit calls plain fetchData
+                                onIpAddressChange={fetchData}
                               >
                               <Button variant="ghost" size="icon" aria-label="编辑IP地址">
                                   <Edit className="h-4 w-4" />
@@ -381,3 +391,4 @@ export default function IPAddressesPage() {
     </Suspense>
   );
 }
+

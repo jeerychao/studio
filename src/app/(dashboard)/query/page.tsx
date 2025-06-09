@@ -13,11 +13,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, AlertCircle, Loader2, Info } from "lucide-react";
+import { Search, AlertCircle, Loader2, Info, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS, type PaginatedResponse, type SubnetFreeIpDetails, type IPAddressStatus as AppIPAddressStatusType } from "@/types";
-import type { SubnetQueryResult, VlanQueryResult } from "@/types";
+import type { SubnetQueryResult, VlanQueryResult } from "@/types"; // SubnetQueryResult will be implicitly updated by actions.ts
 import type { AppIPAddressWithRelations } from "@/lib/actions";
 import { querySubnetsAction, queryVlansAction, queryIpAddressesAction, getSubnetFreeIpDetailsAction } from "@/lib/actions";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -91,7 +91,8 @@ function QueryPageContent() {
   const [currentSubnetPage, setCurrentSubnetPage] = React.useState(activeTab === 'subnet' ? (Number(searchParams.get('page')) || 1) : 1);
 
   const [isSubnetDetailsSheetOpen, setIsSubnetDetailsSheetOpen] = React.useState(false);
-  const [selectedSubnetDetails, setSelectedSubnetDetails] = React.useState<SubnetFreeIpDetails | null>(null);
+  const [selectedSubnetForSheet, setSelectedSubnetForSheet] = React.useState<SubnetQueryResult | null>(null); // For basic subnet info display
+  const [selectedSubnetFreeIpDetails, setSelectedSubnetFreeIpDetails] = React.useState<SubnetFreeIpDetails | null>(null); // For free IP details
   const [isSubnetDetailsLoading, setIsSubnetDetailsLoading] = React.useState(false);
   const [subnetDetailsError, setSubnetDetailsError] = React.useState<string | null>(null);
 
@@ -169,7 +170,7 @@ function QueryPageContent() {
 
   const handleTabChange = (newTab: string) => {
     router.push(`${pathname}?tab=${newTab}`);
-    if (newTab !== 'subnet') { setSubnetQuery(''); setSubnetResultsData(null); setCurrentSubnetPage(1); setSelectedSubnetDetails(null); }
+    if (newTab !== 'subnet') { setSubnetQuery(''); setSubnetResultsData(null); setCurrentSubnetPage(1); setSelectedSubnetForSheet(null); setSelectedSubnetFreeIpDetails(null); }
     if (newTab !== 'vlan') { setVlanQuery(''); setVlanResultsData(null); setCurrentVlanPage(1); setSelectedVlanDetails(null); }
     if (newTab !== 'ip_address') { setIpQuery(''); setIpQueryStatus('all'); setIpResultsData(null); setCurrentIpPage(1); setSelectedIpDetails(null); }
   };
@@ -178,20 +179,22 @@ function QueryPageContent() {
   const handleVlanQuerySubmitButton = () => { setDebouncedVlanQuery(vlanQuery); setCurrentVlanPage(1); router.push(`${pathname}?tab=vlan&q_vlan=${encodeURIComponent(vlanQuery)}&page=1`);};
   const handleIpQuerySubmitButton = () => { setDebouncedIpQuery(ipQuery); setDebouncedIpQueryStatus(ipQueryStatus); setCurrentIpPage(1); router.push(`${pathname}?tab=ip_address&q_ip=${encodeURIComponent(ipQuery)}&status=${ipQueryStatus}&page=1`);};
 
-  const handleSubnetRowClick = async (subnetId: string) => {
+  const handleSubnetRowClick = async (subnetResult: SubnetQueryResult) => {
+    setSelectedSubnetForSheet(subnetResult); // Store basic info for immediate display
     setSelectedVlanDetails(null);
     setIsSubnetDetailsLoading(true);
     setSubnetDetailsError(null);
+    setSelectedSubnetFreeIpDetails(null); 
     try {
-      const response = await getSubnetFreeIpDetailsAction(subnetId);
+      const response = await getSubnetFreeIpDetailsAction(subnetResult.id);
       if (response.success && response.data) {
-        setSelectedSubnetDetails(response.data);
+        setSelectedSubnetFreeIpDetails(response.data);
       } else {
-        setSubnetDetailsError(response.error?.userMessage || "获取子网详情失败。");
+        setSubnetDetailsError(response.error?.userMessage || "获取子网可用IP详情失败。");
         toast({ title: "获取详情失败", description: response.error?.userMessage, variant: "destructive" });
       }
     } catch (e) {
-      setSubnetDetailsError("获取子网详情时发生意外错误。");
+      setSubnetDetailsError("获取子网可用IP详情时发生意外错误。");
       toast({ title: "获取详情错误", description: (e as Error).message, variant: "destructive" });
     } finally {
       setIsSubnetDetailsLoading(false);
@@ -200,11 +203,12 @@ function QueryPageContent() {
   };
 
   const handleVlanRowClick = (vlan: VlanQueryResult) => {
-    setSelectedSubnetDetails(null);
+    setSelectedSubnetForSheet(null);
+    setSelectedSubnetFreeIpDetails(null);
     setSelectedVlanDetails(vlan);
     setSubnetDetailsError(null);
     setIsSubnetDetailsLoading(false);
-    setIsSubnetDetailsSheetOpen(true);
+    setIsSubnetDetailsSheetOpen(true); // Reusing the same sheet for simplicity
   };
 
   const handleIpRowClick = (ip: AppIPAddressWithRelations) => { setSelectedIpDetails(ip); setIsIpDetailsSheetOpen(true); };
@@ -238,11 +242,11 @@ function QueryPageContent() {
           <Card>
             <CardHeader>
               <CardTitle>查询子网</CardTitle>
-              <CardDescription>按CIDR、描述或网络地址模糊查询子网。</CardDescription>
+              <CardDescription>按CIDR、名称、描述或网络地址模糊查询子网。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Input placeholder="例如 192.168.1.0/24 或 Main Office" value={subnetQuery} onChange={handleSubnetQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleSubnetQuerySubmitButton()} />
+                <Input placeholder="例如 192.168.1.0/24, 办公网络A区" value={subnetQuery} onChange={handleSubnetQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleSubnetQuerySubmitButton()} />
                 <Button onClick={handleSubnetQuerySubmitButton} disabled={isSubnetLoading && subnetQuery === debouncedSubnetQuery}>
                   {(isSubnetLoading && subnetQuery === debouncedSubnetQuery) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
                 </Button>
@@ -253,13 +257,15 @@ function QueryPageContent() {
               {!isSubnetLoading && !subnetError && subnetResultsData && subnetResultsData.data.length > 0 && (
                 <>
                   <Table>
-                    <TableHeader><TableRow><TableHead>CIDR (点击查看可用IP)</TableHead><TableHead>描述</TableHead><TableHead>VLAN</TableHead><TableHead>总可用IP</TableHead><TableHead>已分配(DB)</TableHead><TableHead>空闲(DB)</TableHead><TableHead>预留(DB)</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>CIDR (点看可用IP)</TableHead><TableHead>名称</TableHead><TableHead>VLAN</TableHead><TableHead>DHCP</TableHead><TableHead>描述</TableHead><TableHead>总可用</TableHead><TableHead>已分配</TableHead><TableHead>空闲</TableHead><TableHead>预留</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {subnetResultsData.data.map((subnet) => (
-                        <TableRow key={subnet.id} onClick={() => handleSubnetRowClick(subnet.id)} className="cursor-pointer hover:bg-muted/50">
+                        <TableRow key={subnet.id} onClick={() => handleSubnetRowClick(subnet)} className="cursor-pointer hover:bg-muted/50">
                           <TableCell className="font-medium text-primary hover:underline">{subnet.cidr}</TableCell>
-                          <TableCell>{subnet.description || "无"}</TableCell>
+                          <TableCell className="max-w-[150px] truncate">{subnet.name || "无"}</TableCell>
                           <TableCell>{subnet.vlanNumber ? `VLAN ${subnet.vlanNumber} (${subnet.vlanName || '无名称'})` : "无"}</TableCell>
+                          <TableCell className="text-center">{subnet.dhcpEnabled ? <CheckCircle className="h-5 w-5 text-green-500 inline-block" /> : <XCircle className="h-5 w-5 text-muted-foreground inline-block" />}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{subnet.description || "无"}</TableCell>
                           <TableCell>{subnet.totalUsableIPs}</TableCell><TableCell>{subnet.allocatedIPsCount}</TableCell><TableCell>{subnet.dbFreeIPsCount}</TableCell><TableCell>{subnet.reservedIPsCount}</TableCell>
                         </TableRow>
                       ))}
@@ -291,7 +297,7 @@ function QueryPageContent() {
               {!isVlanLoading && !vlanError && vlanResultsData && vlanResultsData.data.length > 0 && (
                 <>
                  <Table>
-                    <TableHeader><TableRow><TableHead>VLAN号码 (点击查看详情)</TableHead><TableHead>名称</TableHead><TableHead>描述</TableHead><TableHead>关联资源数</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>VLAN号码 (点看详情)</TableHead><TableHead>名称</TableHead><TableHead>描述</TableHead><TableHead>关联资源数</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {vlanResultsData.data.map((vlan) => (
                         <TableRow key={vlan.id} onClick={() => handleVlanRowClick(vlan)} className="cursor-pointer hover:bg-muted/50">
@@ -314,11 +320,11 @@ function QueryPageContent() {
           <Card>
             <CardHeader>
               <CardTitle>查询IP地址</CardTitle>
-              <CardDescription>按IP地址、分配对象或描述模糊查询。可按状态筛选。</CardDescription>
+              <CardDescription>按IP、分配对象、使用单位、联系人、电话或描述模糊查询。可按状态筛选。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                <Input className="flex-grow" placeholder="例如 Server01, 10.0.1.*, 或 192.168.1.10" value={ipQuery} onChange={handleIpQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleIpQuerySubmitButton()} />
+                <Input className="flex-grow" placeholder="例如 Server01, 10.0.1.*, 市场部, 张三" value={ipQuery} onChange={handleIpQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleIpQuerySubmitButton()} />
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Label htmlFor="ip-status-filter" className="text-sm shrink-0">状态:</Label>
                   <Select value={ipQueryStatus} onValueChange={handleIpStatusChange}>
@@ -340,17 +346,21 @@ function QueryPageContent() {
               {!isIpLoading && !ipError && ipResultsData && ipResultsData.data.length > 0 && (
                 <>
                   <Table>
-                    <TableHeader><TableRow><TableHead>IP地址 (点击查看详情)</TableHead><TableHead>状态</TableHead><TableHead>分配给</TableHead><TableHead>描述</TableHead><TableHead>子网</TableHead><TableHead>VLAN</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>IP地址 (点看详情)</TableHead><TableHead>状态</TableHead><TableHead>网关</TableHead><TableHead>分配给</TableHead><TableHead>使用单位</TableHead><TableHead>联系人</TableHead><TableHead>电话</TableHead><TableHead>描述</TableHead><TableHead>子网</TableHead><TableHead>VLAN</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {ipResultsData.data.map((ip) => (
                         <TableRow key={ip.id} onClick={() => handleIpRowClick(ip)} className="cursor-pointer hover:bg-muted/50">
                           <TableCell className="font-medium text-primary hover:underline">{ip.ipAddress}</TableCell>
                           <TableCell><Badge variant={getStatusBadgeVariant(ip.status)}>{ipAddressStatusDisplayLabels[ip.status]}</Badge></TableCell>
-                          <TableCell>{ip.allocatedTo || "无"}</TableCell>
-                          <TableCell>{ip.description || "无"}</TableCell>
+                          <TableCell className="text-center">{ip.isGateway ? <CheckCircle className="h-5 w-5 text-green-500 inline-block" /> : <XCircle className="h-5 w-5 text-muted-foreground inline-block" />}</TableCell>
+                          <TableCell className="max-w-[100px] truncate">{ip.allocatedTo || "无"}</TableCell>
+                          <TableCell className="max-w-[100px] truncate">{ip.usageUnit || "无"}</TableCell>
+                          <TableCell className="max-w-[80px] truncate">{ip.contactPerson || "无"}</TableCell>
+                          <TableCell className="max-w-[100px] truncate">{ip.phone || "无"}</TableCell>
+                          <TableCell className="max-w-[150px] truncate">{ip.description || "无"}</TableCell>
                           <TableCell>{ip.subnet ? `${ip.subnet.cidr}` : "全局/无"}</TableCell>
                           <TableCell>
-                            {ip.vlan?.vlanNumber ? `VLAN ${ip.vlan.vlanNumber} (${ip.vlan.name || '无名称'})` : 
+                            {ip.directVlan?.vlanNumber ? `VLAN ${ip.directVlan.vlanNumber} (${ip.directVlan.name || '无名称'}) (直接)` : 
                              (ip.subnet?.vlan ? `VLAN ${ip.subnet.vlan.vlanNumber} (${ip.subnet.vlan.name || '无名称'}) (继承)` : "无")}
                           </TableCell>
                         </TableRow>
@@ -365,31 +375,39 @@ function QueryPageContent() {
         </TabsContent>
       </Tabs>
 
+      {/* Sheet for Subnet Details and VLAN Details */}
       <Sheet open={isSubnetDetailsSheetOpen} onOpenChange={setIsSubnetDetailsSheetOpen}>
         <SheetContent className="sm:max-w-xl w-full flex flex-col">
           <SheetHeader>
-            <SheetTitle>{selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} (${selectedVlanDetails.name || '无名称'}) 关联资源` : (selectedSubnetDetails ? '子网 IP 使用详情' : '详情')}</SheetTitle>
-            {selectedSubnetDetails && <SheetDescription>CIDR: {selectedSubnetDetails.subnetCidr}</SheetDescription>}
+             <SheetTitle>
+              {selectedSubnetForSheet ? `子网详情: ${selectedSubnetForSheet.name || selectedSubnetForSheet.cidr}` : 
+               (selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} (${selectedVlanDetails.name || '无名称'}) 关联资源` : '详情')}
+            </SheetTitle>
+            {selectedSubnetForSheet && (
+              <SheetDescription>
+                CIDR: {selectedSubnetForSheet.cidr} | DHCP: {selectedSubnetForSheet.dhcpEnabled ? '启用' : '禁用'} | VLAN: {selectedSubnetForSheet.vlanNumber ? `VLAN ${selectedSubnetForSheet.vlanNumber} (${selectedSubnetForSheet.vlanName || '无名称'})` : "无"}
+              </SheetDescription>
+            )}
             {selectedVlanDetails && <SheetDescription>描述: {selectedVlanDetails.description || '无'}</SheetDescription>}
           </SheetHeader>
           <div className="flex-grow overflow-hidden py-4">
-            {isSubnetDetailsLoading && selectedSubnetDetails && <LoadingSpinner message="加载子网详情中..." />}
-            {subnetDetailsError && selectedSubnetDetails && <QueryErrorDisplay message={subnetDetailsError} />}
+            {isSubnetDetailsLoading && selectedSubnetForSheet && <LoadingSpinner message="加载子网可用IP详情中..." />}
+            {subnetDetailsError && selectedSubnetForSheet && <QueryErrorDisplay message={subnetDetailsError} />}
             
-            {selectedSubnetDetails && (
+            {selectedSubnetForSheet && selectedSubnetFreeIpDetails && (
               <div className="space-y-4 h-full flex flex-col">
                 <Card><CardHeader className="pb-2 pt-4"><CardTitle className="text-lg">统计信息</CardTitle></CardHeader>
                   <CardContent className="text-sm space-y-1">
-                    <p>总可用 IP (理论): {selectedSubnetDetails.totalUsableIPs}</p>
-                    <p>已分配 IP (数据库记录): {selectedSubnetDetails.dbAllocatedIPsCount}</p>
-                    <p>已预留 IP (数据库记录): {selectedSubnetDetails.dbReservedIPsCount}</p>
-                    <p>实际可用 IP (未分配/未预留): <strong className="text-green-600">{selectedSubnetDetails.calculatedAvailableIPsCount}</strong></p>
+                    <p>总可用 IP (理论): {selectedSubnetFreeIpDetails.totalUsableIPs}</p>
+                    <p>已分配 IP (数据库记录): {selectedSubnetFreeIpDetails.dbAllocatedIPsCount}</p>
+                    <p>已预留 IP (数据库记录): {selectedSubnetFreeIpDetails.dbReservedIPsCount}</p>
+                    <p>实际可用 IP (未分配/未预留): <strong className="text-green-600">{selectedSubnetFreeIpDetails.calculatedAvailableIPsCount}</strong></p>
                   </CardContent></Card>
                 <div className="flex-grow min-h-0">
-                  <h4 className="font-semibold mb-2 text-md">可用 IP 地址列表 ({selectedSubnetDetails.calculatedAvailableIpRanges.length} 个条目/范围):</h4>
-                  {selectedSubnetDetails.calculatedAvailableIpRanges.length > 0 ? (
-                    <ScrollArea className="h-full max-h-[calc(100vh-300px)] md:max-h-[400px] rounded-md border p-3 bg-muted/30">
-                      <ul className="space-y-1 text-sm font-mono">{selectedSubnetDetails.calculatedAvailableIpRanges.map((range, index) => (<li key={index} className="px-2 py-1 rounded bg-background shadow-sm">{range}</li>))}</ul>
+                  <h4 className="font-semibold mb-2 text-md">可用 IP 地址列表 ({selectedSubnetFreeIpDetails.calculatedAvailableIpRanges.length} 个条目/范围):</h4>
+                  {selectedSubnetFreeIpDetails.calculatedAvailableIpRanges.length > 0 ? (
+                    <ScrollArea className="h-full max-h-[calc(100vh-350px)] md:max-h-[350px] rounded-md border p-3 bg-muted/30">
+                      <ul className="space-y-1 text-sm font-mono">{selectedSubnetFreeIpDetails.calculatedAvailableIpRanges.map((range, index) => (<li key={index} className="px-2 py-1 rounded bg-background shadow-sm">{range}</li>))}</ul>
                     </ScrollArea>
                   ) : (<p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/30">此子网中没有可用的 IP 地址。</p>)}
                 </div>
@@ -401,7 +419,7 @@ function QueryPageContent() {
                     {selectedVlanDetails.associatedSubnets.length > 0 ? (
                         <ScrollArea className="h-auto max-h-[150px] rounded-md border p-2">
                             <ul className="list-disc list-inside pl-2 text-sm">
-                                {selectedVlanDetails.associatedSubnets.map(s => <li key={s.id}>{s.cidr} ({s.description || '无描述'})</li>)}
+                                {selectedVlanDetails.associatedSubnets.map(s => <li key={s.id}>{s.cidr} ({s.name || s.description || '无描述'})</li>)}
                             </ul>
                         </ScrollArea>
                     ) : <p className="text-sm text-muted-foreground">无关联子网。</p>}
@@ -419,7 +437,7 @@ function QueryPageContent() {
                 </div>
             )}
 
-            {!isSubnetDetailsLoading && !subnetDetailsError && !selectedSubnetDetails && !selectedVlanDetails && (
+            {!isSubnetDetailsLoading && !subnetDetailsError && !selectedSubnetForSheet && !selectedVlanDetails && (
                 <div className="text-center py-10"><Info className="mx-auto h-10 w-10 text-muted-foreground mb-2" /><p>没有可显示的详情。</p></div>
             )}
           </div>
@@ -443,7 +461,7 @@ function IpDetailsSheet({ isOpen, onOpenChange, ipDetails }: IpDetailsSheetProps
   if (!ipDetails) return null;
 
   const getVlanDisplayForIpSheet = (ip: AppIPAddressWithRelations): string => {
-    if (ip.vlan?.vlanNumber) return `VLAN ${ip.vlan.vlanNumber} (${ip.vlan.name || '无名称'}) (直接指定)`;
+    if (ip.directVlan?.vlanNumber) return `VLAN ${ip.directVlan.vlanNumber} (${ip.directVlan.name || '无名称'}) (直接指定)`;
     if (ip.subnet?.vlan?.vlanNumber) return `VLAN ${ip.subnet.vlan.vlanNumber} (${ip.subnet.vlan.name || '无名称'}) (继承自子网)`;
     return "无";
   };
@@ -456,15 +474,25 @@ function IpDetailsSheet({ isOpen, onOpenChange, ipDetails }: IpDetailsSheetProps
           <SheetTitle>IP 地址详情: {ipDetails.ipAddress}</SheetTitle>
           <SheetDescription>查看所选 IP 地址的详细信息。</SheetDescription>
         </SheetHeader>
-        <div className="py-6 space-y-3">
-          <div className="flex justify-between"><span className="text-muted-foreground">IP 地址:</span> <span className="font-medium">{ipDetails.ipAddress}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">状态:</span> <Badge variant={ipDetails.status === 'allocated' ? 'default' : ipDetails.status === 'free' ? 'secondary' : 'outline'} className="capitalize">{statusLabel}</Badge></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">分配给:</span> <span>{ipDetails.allocatedTo || "N/A"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">描述:</span> <span>{ipDetails.description || "N/A"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">子网:</span> <span>{ipDetails.subnet?.cidr || "全局/无"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">VLAN:</span> <Badge variant="outline">{getVlanDisplayForIpSheet(ipDetails)}</Badge></div>
-        </div>
-        <SheetFooter>
+        <ScrollArea className="h-[calc(100vh-150px)]">
+          <div className="py-6 space-y-3 pr-6">
+            <div className="flex justify-between"><span className="text-muted-foreground">IP 地址:</span> <span className="font-medium">{ipDetails.ipAddress}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">状态:</span> <Badge variant={ipDetails.status === 'allocated' ? 'default' : ipDetails.status === 'free' ? 'secondary' : 'outline'} className="capitalize">{statusLabel}</Badge></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">是否网关:</span> <span>{ipDetails.isGateway ? '是' : '否'}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">子网:</span> <span>{ipDetails.subnet?.cidr || "全局/无"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">VLAN:</span> <Badge variant="outline">{getVlanDisplayForIpSheet(ipDetails)}</Badge></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">分配给:</span> <span className="truncate max-w-[60%] text-right">{ipDetails.allocatedTo || "N/A"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">使用单位:</span> <span className="truncate max-w-[60%] text-right">{ipDetails.usageUnit || "N/A"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">联系人:</span> <span className="truncate max-w-[60%] text-right">{ipDetails.contactPerson || "N/A"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">电话:</span> <span className="truncate max-w-[60%] text-right">{ipDetails.phone || "N/A"}</span></div>
+            <div>
+              <span className="text-muted-foreground">描述:</span>
+              <p className="text-sm mt-1 break-words">{ipDetails.description || "无描述"}</p>
+            </div>
+             <div className="flex justify-between pt-2 border-t"><span className="text-muted-foreground">最后更新:</span> <span className="text-xs">{ipDetails.lastSeen ? new Date(ipDetails.lastSeen).toLocaleString() : '未知'}</span></div>
+          </div>
+        </ScrollArea>
+        <SheetFooter className="border-t pt-4">
           <SheetClose asChild><Button variant="outline">关闭</Button></SheetClose>
         </SheetFooter>
       </SheetContent>
@@ -480,3 +508,4 @@ export default function QueryPage() {
     </Suspense>
   );
 }
+

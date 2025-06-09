@@ -19,6 +19,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -32,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PlusCircle } from "lucide-react";
@@ -40,7 +42,7 @@ import type { Subnet, VLAN, IPAddressStatus } from "@/types";
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 
-const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
+const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
 const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const;
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
   allocated: "已分配",
@@ -53,14 +55,18 @@ const ipBatchFormSchema = z.object({
   startIp: z.string().ip({ version: "v4", message: "无效的起始 IPv4 地址" }),
   endIp: z.string().ip({ version: "v4", message: "无效的结束 IPv4 地址" }),
   subnetId: z.string().min(1, "子网是必需的"),
-  vlanId: z.string().optional(),
-  commonDescription: z.string().max(200, "描述过长").optional(),
+  directVlanId: z.string().optional(), // Renamed from vlanId
   status: z.enum(ipAddressStatusOptions, { required_error: "状态是必需的"}),
+  commonDescription: z.string().max(200, "描述过长").optional(),
+  commonIsGateway: z.boolean().optional(),
+  commonUsageUnit: z.string().max(100, "使用单位过长").optional(),
+  commonContactPerson: z.string().max(50, "联系人姓名过长").optional(),
+  commonPhone: z.string().max(30, "电话号码过长").optional(),
 }).refine(data => {
     try {
         return ipToNumber(data.startIp) <= ipToNumber(data.endIp);
     } catch (e) {
-        return false; // Should be caught by individual IP validation first
+        return false; 
     }
 }, {
   message: "起始IP必须小于或等于结束IP。",
@@ -71,7 +77,7 @@ type IpBatchFormValues = z.infer<typeof ipBatchFormSchema>;
 
 interface IPBatchFormSheetProps {
   subnets: Subnet[];
-  vlans: VLAN[];
+  vlans: VLAN[]; // directVlans
   children?: React.ReactNode;
   onIpAddressChange?: () => void;
 }
@@ -87,9 +93,13 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
       startIp: "",
       endIp: "",
       subnetId: subnets.length > 0 ? subnets[0].id : "",
-      vlanId: INHERIT_VLAN_SENTINEL,
-      commonDescription: "",
+      directVlanId: NO_DIRECT_VLAN_SENTINEL, // Renamed
       status: "free",
+      commonDescription: "",
+      commonIsGateway: false,
+      commonUsageUnit: "",
+      commonContactPerson: "",
+      commonPhone: "",
     },
   });
 
@@ -99,9 +109,13 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
             startIp: "",
             endIp: "",
             subnetId: subnets.length > 0 ? subnets[0].id : "",
-            vlanId: INHERIT_VLAN_SENTINEL,
-            commonDescription: "",
+            directVlanId: NO_DIRECT_VLAN_SENTINEL, // Renamed
             status: "free",
+            commonDescription: "",
+            commonIsGateway: false,
+            commonUsageUnit: "",
+            commonContactPerson: "",
+            commonPhone: "",
         });
         setSubmissionResult(null);
         form.clearErrors();
@@ -113,22 +127,26 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
     form.clearErrors();
     setSubmissionResult(null);
 
-    const vlanIdToSubmit = data.vlanId === INHERIT_VLAN_SENTINEL ? undefined : data.vlanId;
+    const directVlanIdToSubmit = data.directVlanId === NO_DIRECT_VLAN_SENTINEL ? undefined : data.directVlanId;
 
     const payload = {
         startIp: data.startIp,
         endIp: data.endIp,
         subnetId: data.subnetId,
-        vlanId: vlanIdToSubmit,
+        directVlanId: directVlanIdToSubmit,
         description: data.commonDescription || undefined,
         status: data.status,
+        isGateway: data.commonIsGateway,
+        usageUnit: data.commonUsageUnit || undefined,
+        contactPerson: data.commonContactPerson || undefined,
+        phone: data.commonPhone || undefined,
     };
 
     const startNum = ipToNumber(data.startIp);
     const endNum = ipToNumber(data.endIp);
     const numToCreate = endNum - startNum + 1;
 
-    if (numToCreate > 256) { // Limit batch size
+    if (numToCreate > 256) {
         toast({ title: "范围过大", description: "请分批创建IP地址 (例如，每次最多256个)。", variant: "destructive" });
         return;
     }
@@ -208,7 +226,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
           <SheetTitle>批量添加IP地址 (范围)</SheetTitle>
           <SheetDescription>
             输入起始和结束IP地址以创建范围。选择一个子网。
-            其他字段是可选的或有默认值。
+            其他字段是可选的或有默认值，将应用于范围内所有创建的IP。
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -263,7 +281,7 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                         <SelectContent>
                           {subnets.map((subnet) => (
                             <SelectItem key={subnet.id} value={subnet.id}>
-                              {subnet.cidr} ({subnet.description || "无描述"})
+                              {subnet.cidr} ({subnet.name || subnet.description || "无描述"})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -274,25 +292,25 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                 />
                 <FormField
                   control={form.control}
-                  name="vlanId"
+                  name="directVlanId" // Renamed
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>VLAN (可选)</FormLabel>
+                      <FormLabel>直接关联 VLAN (可选, 通用)</FormLabel>
                       <Select
                         onValueChange={(value) => field.onChange(value)}
-                        value={field.value || INHERIT_VLAN_SENTINEL}
-                        disabled={vlans.length === 0 && field.value !== INHERIT_VLAN_SENTINEL}
+                        value={field.value || NO_DIRECT_VLAN_SENTINEL} // Renamed
+                        disabled={vlans.length === 0 && field.value !== NO_DIRECT_VLAN_SENTINEL} // Renamed
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或继承" : "无可用VLAN"} />
+                            <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或无" : "无可用VLAN"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承或无</SelectItem>
+                          <SelectItem value={NO_DIRECT_VLAN_SENTINEL}>无直接VLAN</SelectItem>
                           {vlans.map((vlan) => (
                             <SelectItem key={vlan.id} value={vlan.id}>
-                              VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
+                              VLAN {vlan.vlanNumber} ({vlan.name || vlan.description || "无描述"})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -327,12 +345,72 @@ export function IPBatchFormSheet({ subnets, vlans, children, onIpAddressChange }
                 />
                 <FormField
                   control={form.control}
+                  name="commonIsGateway"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>是否网关 (通用)</FormLabel>
+                        <FormDescription>
+                          范围内所有创建的 IP 是否都标记为网关?
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="commonDescription"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>通用描述 (可选)</FormLabel>
                       <FormControl>
                         <Input placeholder="例如 批量创建的设备" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="commonUsageUnit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>通用使用单位 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 市场部" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="commonContactPerson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>通用联系人 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 王经理" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="commonPhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>通用电话 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 010-12345678" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

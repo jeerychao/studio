@@ -19,6 +19,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -33,13 +34,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch"; // Import Switch
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
-import { createSubnetAction, updateSubnetAction, type ActionResponse, type UpdateSubnetData, type CreateSubnetData } from "@/lib/actions"; // Import ActionResponse & UpdateSubnetData
+import { createSubnetAction, updateSubnetAction, type ActionResponse, type UpdateSubnetData, type CreateSubnetData } from "@/lib/actions";
 
 const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)"),
+  name: z.string().max(100, "子网名称过长").optional(), // New field
+  dhcpEnabled: z.boolean().optional(), // New field
   vlanId: z.string().optional(),
   description: z.string().max(200, "描述过长").optional(),
 });
@@ -64,9 +68,11 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
   const form = useForm<SubnetFormValues>({
     resolver: zodResolver(subnetFormSchema),
     defaultValues: {
-      cidr: subnet?.cidr || "",
-      vlanId: subnet?.vlanId || "",
-      description: subnet?.description || "",
+      cidr: "",
+      name: "", // Default for new field
+      dhcpEnabled: false, // Default for new field
+      vlanId: "",
+      description: "",
     },
   });
 
@@ -74,6 +80,8 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
+        name: subnet?.name || "", // Reset new field
+        dhcpEnabled: subnet?.dhcpEnabled || false, // Reset new field
         vlanId: subnet?.vlanId || "",
         description: subnet?.description || "",
       });
@@ -89,28 +97,25 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
       ? null
       : values.vlanId;
 
-    const descriptionForAction =
-      values.description === "" || values.description === undefined
-      ? null
-      : values.description;
+    const nameForAction = values.name === "" || values.name === undefined ? null : values.name;
+    const descriptionForAction = values.description === "" || values.description === undefined ? null : values.description;
 
     let response: ActionResponse<Subnet>;
     try {
       if (isEditing && subnet) {
         const updatePayload: UpdateSubnetData = {
             cidr: values.cidr,
-            vlanId: vlanIdForAction, // string | null (compatible with string | null | undefined)
-            description: descriptionForAction, // string | null (compatible with string | null | undefined)
+            name: nameForAction,
+            dhcpEnabled: values.dhcpEnabled,
+            vlanId: vlanIdForAction,
+            description: descriptionForAction,
         };
         response = await updateSubnetAction(subnet.id, updatePayload);
       } else {
         const createPayload: CreateSubnetData = {
             cidr: values.cidr,
-            // createSubnetAction expects vlanId as string | null | undefined.
-            // If vlanIdForAction is null, it's passed as null.
-            // If it's string, it's passed as string.
-            // If it needs to be undefined when null, adjust here or in action.
-            // Current action `createSubnetAction` handles `vlanId?: string | null | undefined`.
+            name: nameForAction,
+            dhcpEnabled: values.dhcpEnabled,
             vlanId: vlanIdForAction,
             description: descriptionForAction,
         };
@@ -195,6 +200,19 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
             />
             <FormField
               control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>子网名称 (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例如 办公网络A区" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="vlanId"
               render={({ field }) => (
                 <FormItem>
@@ -214,11 +232,32 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                       <SelectItem value={NO_VLAN_SENTINEL_VALUE}>无 VLAN</SelectItem>
                       {vlans.map((vlan) => (
                         <SelectItem key={vlan.id} value={vlan.id}>
-                          VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
+                          VLAN {vlan.vlanNumber} ({vlan.name || vlan.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="dhcpEnabled"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <FormLabel>DHCP 启用</FormLabel>
+                    <FormDescription>
+                      此子网是否启用 DHCP 自动分配 IP 地址？
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -230,7 +269,7 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
                 <FormItem>
                   <FormLabel>描述 (可选)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="子网的简要描述" {...field} />
+                    <Textarea placeholder="子网的详细描述或备注" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -252,5 +291,4 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
-
     

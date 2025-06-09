@@ -19,6 +19,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -33,10 +34,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch"; // Import Switch
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types";
-import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions"; // Import UpdateIPAddressData
+import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
@@ -48,9 +50,13 @@ const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
   subnetId: z.string().optional(),
-  vlanId: z.string().optional(),
+  directVlanId: z.string().optional(), // Renamed from vlanId for clarity
   status: z.enum(["allocated", "free", "reserved"], { required_error: "状态是必需的"}),
+  isGateway: z.boolean().optional(), // New field
   allocatedTo: z.string().max(100, "分配给对象过长").optional(),
+  usageUnit: z.string().max(100, "使用单位过长").optional(), // New field
+  contactPerson: z.string().max(50, "联系人姓名过长").optional(), // New field
+  phone: z.string().max(30, "电话号码过长").optional(), // New field
   description: z.string().max(200, "描述过长").optional(),
 });
 
@@ -59,7 +65,7 @@ type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
 interface IPAddressFormSheetProps {
   ipAddress?: IPAddress;
   subnets: Subnet[];
-  vlans: VLAN[];
+  vlans: VLAN[]; // directVlans
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
@@ -67,12 +73,12 @@ interface IPAddressFormSheetProps {
 }
 
 const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
-const INHERIT_VLAN_SENTINEL = "__INHERIT_VLAN_INTERNAL__";
+const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__"; // Renamed from INHERIT_VLAN_SENTINEL
 
 export function IPAddressFormSheet({
     ipAddress,
     subnets,
-    vlans,
+    vlans, // directVlans
     currentSubnetId,
     children,
     buttonProps,
@@ -87,23 +93,29 @@ export function IPAddressFormSheet({
     defaultValues: {
       ipAddress: "",
       subnetId: "",
-      vlanId: "",
+      directVlanId: "", // Renamed
       status: "free",
+      isGateway: false, // Default for new field
       allocatedTo: "",
+      usageUnit: "", // Default for new field
+      contactPerson: "", // Default for new field
+      phone: "", // Default for new field
       description: "",
     },
   });
 
   React.useEffect(() => {
     if (isOpen) {
-        let initialVlanIdForForm = ipAddress?.vlanId || "";
-
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
             subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""),
-            vlanId: initialVlanIdForForm,
+            directVlanId: ipAddress?.directVlanId || "", // Renamed
             status: ipAddress?.status || "free",
+            isGateway: ipAddress?.isGateway || false, // Reset new field
             allocatedTo: ipAddress?.allocatedTo || "",
+            usageUnit: ipAddress?.usageUnit || "", // Reset new field
+            contactPerson: ipAddress?.contactPerson || "", // Reset new field
+            phone: ipAddress?.phone || "", // Reset new field
             description: ipAddress?.description || "",
         });
         form.clearErrors();
@@ -115,26 +127,33 @@ export function IPAddressFormSheet({
     let response: ActionResponse<IPAddress>;
     try {
       const effectiveSubnetId = data.subnetId === NO_SUBNET_SELECTED_SENTINEL ? undefined : (data.subnetId || undefined);
-      const vlanIdToSave = data.vlanId === INHERIT_VLAN_SENTINEL || data.vlanId === "" || data.vlanId === undefined ? null : data.vlanId;
+      const directVlanIdToSave = data.directVlanId === NO_DIRECT_VLAN_SENTINEL || data.directVlanId === "" || data.directVlanId === undefined ? null : data.directVlanId;
+
+      const commonPayload = {
+        ipAddress: data.ipAddress,
+        subnetId: effectiveSubnetId,
+        directVlanId: directVlanIdToSave, // string | null
+        status: data.status,
+        isGateway: data.isGateway,
+        allocatedTo: data.allocatedTo || null,
+        usageUnit: data.usageUnit || null,
+        contactPerson: data.contactPerson || null,
+        phone: data.phone || null,
+        description: data.description || null,
+      };
 
       if (isEditing && ipAddress) {
-        const payloadForUpdate: UpdateIPAddressData = {
-            ipAddress: data.ipAddress,
-            subnetId: effectiveSubnetId,
-            vlanId: vlanIdToSave, // string | null (compatible with string | null | undefined)
-            status: data.status,
-            allocatedTo: data.allocatedTo || null, // Pass null if empty/undefined
-            description: data.description || null, // Pass null if empty/undefined
-        };
+        const payloadForUpdate: UpdateIPAddressData = commonPayload;
         response = await updateIPAddressAction(ipAddress.id, payloadForUpdate);
       } else {
         const payloadForCreate: Omit<IPAddress, "id"> = {
-            ipAddress: data.ipAddress,
-            subnetId: effectiveSubnetId,
-            vlanId: vlanIdToSave === null ? undefined : vlanIdToSave, // createIPAddress expects string | undefined for vlanId
-            status: data.status,
-            allocatedTo: data.allocatedTo || undefined,
-            description: data.description || undefined,
+            ...commonPayload,
+            directVlanId: commonPayload.directVlanId === null ? undefined : commonPayload.directVlanId, // create expects string | undefined
+            allocatedTo: commonPayload.allocatedTo === null ? undefined : commonPayload.allocatedTo,
+            usageUnit: commonPayload.usageUnit === null ? undefined : commonPayload.usageUnit,
+            contactPerson: commonPayload.contactPerson === null ? undefined : commonPayload.contactPerson,
+            phone: commonPayload.phone === null ? undefined : commonPayload.phone,
+            description: commonPayload.description === null ? undefined : commonPayload.description,
         };
         response = await createIPAddressAction(payloadForCreate);
       }
@@ -222,7 +241,7 @@ export function IPAddressFormSheet({
                        <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>无子网 / 全局池</SelectItem>
                       {subnets.map((subnet) => (
                         <SelectItem key={subnet.id} value={subnet.id}>
-                          {subnet.cidr} ({subnet.description || "无描述"})
+                          {subnet.cidr} ({subnet.name || subnet.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -233,29 +252,30 @@ export function IPAddressFormSheet({
             />
             <FormField
               control={form.control}
-              name="vlanId"
+              name="directVlanId" // Renamed
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>VLAN (可选)</FormLabel>
+                  <FormLabel>直接关联 VLAN (可选)</FormLabel>
                   <Select
-                    onValueChange={(value) => field.onChange(value === INHERIT_VLAN_SENTINEL ? "" : value)}
-                    value={field.value === "" || field.value === null || field.value === undefined ? INHERIT_VLAN_SENTINEL : field.value }
-                    disabled={vlans.length === 0 && field.value !== INHERIT_VLAN_SENTINEL && field.value !== ""}
+                    onValueChange={(value) => field.onChange(value === NO_DIRECT_VLAN_SENTINEL ? "" : value)} // Renamed
+                    value={field.value === "" || field.value === null || field.value === undefined ? NO_DIRECT_VLAN_SENTINEL : field.value } // Renamed
+                    disabled={vlans.length === 0 && field.value !== NO_DIRECT_VLAN_SENTINEL && field.value !== ""} // Renamed
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或继承" : "无可用VLAN"} />
+                        <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或无" : "无可用VLAN"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={INHERIT_VLAN_SENTINEL}>从子网继承或无</SelectItem>
+                      <SelectItem value={NO_DIRECT_VLAN_SENTINEL}>无直接VLAN</SelectItem> 
                       {vlans.map((vlan) => (
                         <SelectItem key={vlan.id} value={vlan.id}>
-                          VLAN {vlan.vlanNumber} ({vlan.description || "无描述"})
+                          VLAN {vlan.vlanNumber} ({vlan.name || vlan.description || "无描述"})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormDescription>IP直接属于此VLAN，独立于其子网的VLAN设置。</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -286,12 +306,72 @@ export function IPAddressFormSheet({
             />
             <FormField
               control={form.control}
+              name="isGateway"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <FormLabel>是否网关</FormLabel>
+                    <FormDescription>
+                      此IP地址是否作为其子网的网关地址？
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="allocatedTo"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>分配给 (可选)</FormLabel>
                   <FormControl>
-                    <Input placeholder="例如 张三的笔记本, 服务器-01" {...field} />
+                    <Input placeholder="例如 服务器-01, 用户设备" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="usageUnit"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>使用单位 (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例如 研发部, 财务科" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contactPerson"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>联系人 (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例如 张三" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>电话 (可选)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例如 13800138000" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
