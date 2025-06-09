@@ -34,7 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch"; // Import Switch
+import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area"; // Added ScrollArea import
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN } from "@/types";
@@ -50,13 +51,13 @@ const ipAddressStatusLabels: Record<IPAddressStatus, string> = {
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
   subnetId: z.string().optional(),
-  directVlanId: z.string().optional(), // Renamed from vlanId for clarity
+  directVlanId: z.string().optional(),
   status: z.enum(["allocated", "free", "reserved"], { required_error: "状态是必需的"}),
-  isGateway: z.boolean().optional(), // New field
+  isGateway: z.boolean().optional(),
   allocatedTo: z.string().max(100, "分配给对象过长").optional(),
-  usageUnit: z.string().max(100, "使用单位过长").optional(), // New field
-  contactPerson: z.string().max(50, "联系人姓名过长").optional(), // New field
-  phone: z.string().max(30, "电话号码过长").optional(), // New field
+  usageUnit: z.string().max(100, "使用单位过长").optional(),
+  contactPerson: z.string().max(50, "联系人姓名过长").optional(),
+  phone: z.string().max(30, "电话号码过长").optional(),
   description: z.string().max(200, "描述过长").optional(),
 });
 
@@ -65,7 +66,7 @@ type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
 interface IPAddressFormSheetProps {
   ipAddress?: IPAddress;
   subnets: Subnet[];
-  vlans: VLAN[]; // directVlans
+  vlans: VLAN[];
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
@@ -73,12 +74,12 @@ interface IPAddressFormSheetProps {
 }
 
 const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
-const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__"; // Renamed from INHERIT_VLAN_SENTINEL
+const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
 
 export function IPAddressFormSheet({
     ipAddress,
     subnets,
-    vlans, // directVlans
+    vlans,
     currentSubnetId,
     children,
     buttonProps,
@@ -93,13 +94,13 @@ export function IPAddressFormSheet({
     defaultValues: {
       ipAddress: "",
       subnetId: "",
-      directVlanId: "", // Renamed
+      directVlanId: "",
       status: "free",
-      isGateway: false, // Default for new field
+      isGateway: false,
       allocatedTo: "",
-      usageUnit: "", // Default for new field
-      contactPerson: "", // Default for new field
-      phone: "", // Default for new field
+      usageUnit: "",
+      contactPerson: "",
+      phone: "",
       description: "",
     },
   });
@@ -109,13 +110,13 @@ export function IPAddressFormSheet({
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
             subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : ""),
-            directVlanId: ipAddress?.directVlanId || "", // Renamed
+            directVlanId: ipAddress?.directVlanId || "",
             status: ipAddress?.status || "free",
-            isGateway: ipAddress?.isGateway || false, // Reset new field
+            isGateway: ipAddress?.isGateway || false,
             allocatedTo: ipAddress?.allocatedTo || "",
-            usageUnit: ipAddress?.usageUnit || "", // Reset new field
-            contactPerson: ipAddress?.contactPerson || "", // Reset new field
-            phone: ipAddress?.phone || "", // Reset new field
+            usageUnit: ipAddress?.usageUnit || "",
+            contactPerson: ipAddress?.contactPerson || "",
+            phone: ipAddress?.phone || "",
             description: ipAddress?.description || "",
         });
         form.clearErrors();
@@ -132,7 +133,7 @@ export function IPAddressFormSheet({
       const commonPayload = {
         ipAddress: data.ipAddress,
         subnetId: effectiveSubnetId,
-        directVlanId: directVlanIdToSave, // string | null
+        directVlanId: directVlanIdToSave,
         status: data.status,
         isGateway: data.isGateway,
         allocatedTo: data.allocatedTo || null,
@@ -148,7 +149,7 @@ export function IPAddressFormSheet({
       } else {
         const payloadForCreate: Omit<IPAddress, "id"> = {
             ...commonPayload,
-            directVlanId: commonPayload.directVlanId === null ? undefined : commonPayload.directVlanId, // create expects string | undefined
+            directVlanId: commonPayload.directVlanId === null ? undefined : commonPayload.directVlanId,
             allocatedTo: commonPayload.allocatedTo === null ? undefined : commonPayload.allocatedTo,
             usageUnit: commonPayload.usageUnit === null ? undefined : commonPayload.usageUnit,
             contactPerson: commonPayload.contactPerson === null ? undefined : commonPayload.contactPerson,
@@ -199,198 +200,202 @@ export function IPAddressFormSheet({
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent className="sm:max-w-lg">
-        <SheetHeader>
+      <SheetContent className="sm:max-w-lg w-full flex flex-col p-0">
+        <SheetHeader className="p-6 pb-4 border-b">
           <SheetTitle>{isEditing ? "编辑IP地址" : "添加新IP地址"}</SheetTitle>
           <SheetDescription>
             {isEditing ? "更新现有IP地址的详细信息。" : "填写新IP地址的详细信息。"}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">
-            <FormField
-              control={form.control}
-              name="ipAddress"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>IP 地址</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 192.168.1.100" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="subnetId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>子网</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === NO_SUBNET_SELECTED_SENTINEL ? "" : value)}
-                    value={field.value || NO_SUBNET_SELECTED_SENTINEL}
-                    disabled={subnets.length === 0 && !field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={subnets.length > 0 ? "选择一个子网" : "无可用子网"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                       <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>无子网 / 全局池</SelectItem>
-                      {subnets.map((subnet) => (
-                        <SelectItem key={subnet.id} value={subnet.id}>
-                          {subnet.cidr} ({subnet.name || subnet.description || "无描述"})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="directVlanId" // Renamed
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>直接关联 VLAN (可选)</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === NO_DIRECT_VLAN_SENTINEL ? "" : value)} // Renamed
-                    value={field.value === "" || field.value === null || field.value === undefined ? NO_DIRECT_VLAN_SENTINEL : field.value } // Renamed
-                    disabled={vlans.length === 0 && field.value !== NO_DIRECT_VLAN_SENTINEL && field.value !== ""} // Renamed
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或无" : "无可用VLAN"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NO_DIRECT_VLAN_SENTINEL}>无直接VLAN</SelectItem> 
-                      {vlans.map((vlan) => (
-                        <SelectItem key={vlan.id} value={vlan.id}>
-                          VLAN {vlan.vlanNumber} ({vlan.name || vlan.description || "无描述"})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>IP直接属于此VLAN，独立于其子网的VLAN设置。</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>状态</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择状态" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {ipAddressStatusOptions.map((status) => (
-                        <SelectItem key={status} value={status} className="capitalize">
-                          {ipAddressStatusLabels[status]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isGateway"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                  <div className="space-y-0.5">
-                    <FormLabel>是否网关</FormLabel>
-                    <FormDescription>
-                      此IP地址是否作为其子网的网关地址？
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="allocatedTo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>分配给 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 服务器-01, 用户设备" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="usageUnit"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>使用单位 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 研发部, 财务科" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="contactPerson"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>联系人 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 张三" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>电话 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 13800138000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>描述 (可选)</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="简要描述或备注" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <SheetFooter className="mt-8">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden">
+            <ScrollArea className="flex-1 px-6 pt-6 pb-2">
+              <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="ipAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>IP 地址</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 192.168.1.100" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="subnetId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>子网</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === NO_SUBNET_SELECTED_SENTINEL ? "" : value)}
+                        value={field.value || NO_SUBNET_SELECTED_SENTINEL}
+                        disabled={subnets.length === 0 && !field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={subnets.length > 0 ? "选择一个子网" : "无可用子网"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>无子网 / 全局池</SelectItem>
+                          {subnets.map((subnet) => (
+                            <SelectItem key={subnet.id} value={subnet.id}>
+                              {subnet.cidr} ({subnet.name || subnet.description || "无描述"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="directVlanId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>直接关联 VLAN (可选)</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === NO_DIRECT_VLAN_SENTINEL ? "" : value)}
+                        value={field.value === "" || field.value === null || field.value === undefined ? NO_DIRECT_VLAN_SENTINEL : field.value }
+                        disabled={vlans.length === 0 && field.value !== NO_DIRECT_VLAN_SENTINEL && field.value !== ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或无" : "无可用VLAN"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={NO_DIRECT_VLAN_SENTINEL}>无直接VLAN</SelectItem> 
+                          {vlans.map((vlan) => (
+                            <SelectItem key={vlan.id} value={vlan.id}>
+                              VLAN {vlan.vlanNumber} ({vlan.name || vlan.description || "无描述"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>IP直接属于此VLAN，独立于其子网的VLAN设置。</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>状态</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择状态" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ipAddressStatusOptions.map((status) => (
+                            <SelectItem key={status} value={status} className="capitalize">
+                              {ipAddressStatusLabels[status]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="isGateway"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>是否网关</FormLabel>
+                        <FormDescription>
+                          此IP地址是否作为其子网的网关地址？
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="allocatedTo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>分配给 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 服务器-01, 用户设备" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="usageUnit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>使用单位 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 研发部, 财务科" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="contactPerson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>联系人 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 张三" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>电话 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 13800138000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>描述 (可选)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="简要描述或备注" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </ScrollArea>
+            <SheetFooter className="p-6 pt-4 border-t">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
                   取消
@@ -406,5 +411,6 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
+    
 
     
