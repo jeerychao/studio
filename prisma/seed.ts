@@ -13,7 +13,9 @@ import {
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
-import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType, DeviceType as AppDeviceType } from '../src/types';
+import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
+// Ensure DeviceType enum is imported correctly to be used as a value
+import { DeviceType as AppDeviceType } from '../src/types';
 
 async function main() {
   console.log('Start seeding ...');
@@ -125,8 +127,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name,
-        dhcpEnabled: subnetData.dhcpEnabled,
+        name: subnetData.name, // Added
+        dhcpEnabled: subnetData.dhcpEnabled, // Added
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -136,8 +138,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name,
-        dhcpEnabled: subnetData.dhcpEnabled,
+        name: subnetData.name, // Added
+        dhcpEnabled: subnetData.dhcpEnabled, // Added
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -152,11 +154,11 @@ async function main() {
       update: {
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway,
+        isGateway: ipData.isGateway, // Added
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit,
-        contactPerson: ipData.contactPerson,
-        phone: ipData.phone,
+        usageUnit: ipData.usageUnit, // Added
+        contactPerson: ipData.contactPerson, // Added
+        phone: ipData.phone, // Added
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -165,11 +167,11 @@ async function main() {
         id: ipData.id,
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway,
+        isGateway: ipData.isGateway, // Added
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit,
-        contactPerson: ipData.contactPerson,
-        phone: ipData.phone,
+        usageUnit: ipData.usageUnit, // Added
+        contactPerson: ipData.contactPerson, // Added
+        phone: ipData.phone, // Added
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -181,7 +183,8 @@ async function main() {
   // Seed ISPs
   console.log('Seeding ISPs...');
   for (const isp of seedISPsData) {
-    await prisma.isp.upsert({ // Changed from prisma.iSP to prisma.isp
+    // Ensure prisma.isp is used (lowercase 'isp' for the model 'ISP')
+    await prisma.isp.upsert({ 
       where: { name: isp.name },
       update: { description: isp.description, contactInfo: isp.contactInfo },
       create: { name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
@@ -192,10 +195,11 @@ async function main() {
   // Seed Devices
   console.log('Seeding Devices...');
   for (const device of seedDevicesData) {
-    await prisma.device.upsert({ // Assuming prisma.device is correct, if Device model is PascalCase
+    // Ensure prisma.device is used (lowercase 'device' for the model 'Device')
+    await prisma.device.upsert({ 
       where: { name: device.name }, 
       update: {
-        deviceType: device.deviceType as AppDeviceType,
+        deviceType: device.deviceType as AppDeviceType, // Ensure AppDeviceType is correctly imported and used
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -205,7 +209,7 @@ async function main() {
       },
       create: {
         name: device.name,
-        deviceType: device.deviceType as AppDeviceType,
+        deviceType: device.deviceType as AppDeviceType, // Ensure AppDeviceType is correctly imported and used
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -250,4 +254,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
