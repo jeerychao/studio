@@ -1,5 +1,5 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus } from '../types';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, ISP, Device, DeviceType } from '../types';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 import { PERMISSIONS } from '../types';
 
@@ -36,15 +36,22 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: 'Perform Data Export', group: 'Tools', description: 'Can export data to files (e.g., CSV).' },
   { id: PERMISSIONS.VIEW_SETTINGS, name: 'View Settings', group: 'System Settings', description: 'Can view application-wide settings.' },
   { id: PERMISSIONS.VIEW_QUERY_PAGE, name: 'View Query Page', group: 'Query Tool', description: 'Access the comprehensive query tool.' },
-  // Example for a future backup permission
-  // { id: PERMISSIONS.PERFORM_DATABASE_BACKUP, name: 'Perform Database Backup', group: 'System Settings', description: 'Can initiate a database backup.' },
+  // New permissions for ISP and Device
+  { id: PERMISSIONS.VIEW_ISP, name: 'View ISPs', group: 'ISP Management', description: 'Can view ISP details.' },
+  { id: PERMISSIONS.CREATE_ISP, name: 'Create ISPs', group: 'ISP Management', description: 'Can add new ISPs.' },
+  { id: PERMISSIONS.EDIT_ISP, name: 'Edit ISPs', group: 'ISP Management', description: 'Can modify existing ISPs.' },
+  { id: PERMISSIONS.DELETE_ISP, name: 'Delete ISPs', group: 'ISP Management', description: 'Can remove ISPs.' },
+  { id: PERMISSIONS.VIEW_DEVICE, name: 'View Devices', group: 'Device Management', description: 'Can view device details.' },
+  { id: PERMISSIONS.CREATE_DEVICE, name: 'Create Devices', group: 'Device Management', description: 'Can add new devices.' },
+  { id: PERMISSIONS.EDIT_DEVICE, name: 'Edit Devices', group: 'Device Management', description: 'Can modify existing devices.' },
+  { id: PERMISSIONS.DELETE_DEVICE, name: 'Delete Devices', group: 'Device Management', description: 'Can remove devices.' },
 ];
 
 function createInitialSubnetSeedData(
   id: string,
   cidr: string,
-  name?: string, // New
-  dhcpEnabled?: boolean, // New
+  name?: string, 
+  dhcpEnabled?: boolean, 
   vlanId?: string,
   description?: string
 ): Omit<Subnet, 'utilization'> {
@@ -60,7 +67,7 @@ function createInitialSubnetSeedData(
     networkAddress,
     subnetMask,
     ipRange,
-    name: name || cidr, // Default name to CIDR if not provided
+    name: name || cidr, 
     dhcpEnabled: dhcpEnabled ?? false,
     vlanId,
     description,
@@ -129,7 +136,10 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
-      PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT, // Allow export for operator
+      PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT, 
+      // New permissions for Operator
+      PERMISSIONS.VIEW_ISP, PERMISSIONS.CREATE_ISP, PERMISSIONS.EDIT_ISP,
+      PERMISSIONS.VIEW_DEVICE, PERMISSIONS.CREATE_DEVICE, PERMISSIONS.EDIT_DEVICE,
     ] as PermissionId[]
   },
   {
@@ -143,11 +153,13 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
+      // New permissions for Viewer
+      PERMISSIONS.VIEW_ISP,
+      PERMISSIONS.VIEW_DEVICE,
     ] as PermissionId[]
   },
 ];
 
-// User mock data remains the same as it uses roleId which then defines permissions
 export const mockUsers: Array<User & { password?: string }> = [
   { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID, password: 'admin', avatar: '/images/avatars/admin_avatar.png', lastLogin: new Date(Date.now() - 86400000).toISOString() },
   { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID, password: 'operator', avatar: '/images/avatars/operator_avatar.png', lastLogin: new Date(Date.now() - 3600000).toISOString() },
@@ -159,4 +171,21 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_002', userId: 'seed_user_operator', username: 'operator', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
   { id: 'seed_log_003', userId: 'seed_user_admin', username: 'admin', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 (Office VLAN) description update' },
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
+];
+
+// New mock data for ISP
+export const mockISPs: Omit<ISP, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { name: '中国电信 (China Telecom)', description: '主要固网和移动运营商', contactInfo: '客服热线: 10000' },
+  { name: '中国联通 (China Unicom)', description: '主要固网和移动运营商', contactInfo: '客服热线: 10010' },
+  { name: '中国移动 (China Mobile)', description: '主要移动和固网运营商', contactInfo: '客服热线: 10086' },
+  { name: '教育网 (CERNET)', description: '中国教育和科研计算机网', contactInfo: 'noc@cernet.com' },
+];
+
+// New mock data for Device
+export const mockDevices: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { name: 'Core-Switch-A1', deviceType: DeviceType.SWITCH, location: '主数据中心 A1柜', managementIp: '10.255.1.1', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'CS7506EA1SERIAL', description: '核心汇聚交换机 A' },
+  { name: 'Edge-Router-Telecom', deviceType: DeviceType.ROUTER, location: '电信接入间', managementIp: '10.255.254.1', brand: 'Huawei', modelNumber: 'NE40E-X8', serialNumber: 'ERTCSERIAL001', description: '电信出口路由器' },
+  { name: 'Firewall-Main', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.255.250.1', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', serialNumber: 'FWMAINSERIAL01', description: '主防火墙' },
+  { name: 'AP-Office-Floor1-01', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '192.168.1.250', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', serialNumber: 'APOFFF101SERIAL', description: '一层办公区AP 01' },
+  { name: 'Server-VMHost-01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.0.0.100', brand: 'Dell', modelNumber: 'PowerEdge R740', serialNumber: 'SRVVMH01SERIAL', description: '虚拟化宿主机 01' },
 ];

@@ -1,57 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id        String    @id @default(uuid())
-  username  String    @unique
-  email     String    @unique
-  password  String
-  avatar    String?
-  roleId    String
-  role      Role      @relation(fields: [roleId], references: [id])
-  lastLogin DateTime?
-  auditLogs AuditLog[] // Relation to AuditLog model
-
-  @@index([roleId])
+  id          String    @id @default(uuid())
+  username    String    @unique
+  email       String    @unique
+  password    String
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id])
+  avatar      String?
+  lastLogin   DateTime?
+  auditLogs   AuditLog[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Role {
   id          String       @id @default(uuid())
   name        String       @unique // e.g., "Administrator", "Operator", "Viewer"
   description String?
-  permissions Permission[] @relation("RolePermissions")
   users       User[]
+  permissions Permission[] @relation("RolePermissions")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Permission {
-  id          String   @id // Use predefined PermissionId strings
+  id          String   @id // Use predefined string IDs like 'subnet.create'
   name        String   @unique
   group       String   // e.g., "Subnet Management", "User Management"
   description String?
   roles       Role[]   @relation("RolePermissions")
-}
-
-model Subnet {
-  id             String     @id @default(uuid())
-  cidr           String     @unique
-  networkAddress String
-  subnetMask     String
-  ipRange        String?
-  name           String?    // New: For "子网名称"
-  description    String?
-  dhcpEnabled    Boolean?   @default(false) // New: For "dhp启用"
-  vlanId         String?
-  vlan           VLAN?      @relation(fields: [vlanId], references: [id], onDelete: SetNull)
-  ipAddresses    IPAddress[]
-
-  @@index([vlanId])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model VLAN {
@@ -60,47 +50,104 @@ model VLAN {
   name        String?
   description String?
   subnets     Subnet[]
+  // For IPs directly assigned to a VLAN, not part of a Subnet's specific IP range, if needed
   ipAddresses IPAddress[] @relation("IPDirectlyOnVLAN")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Subnet {
+  id             String     @id @default(uuid())
+  cidr           String     @unique // e.g., 192.168.1.0/24
+  networkAddress String     // e.g., 192.168.1.0
+  subnetMask     String     // e.g., 255.255.255.0
+  ipRange        String?    // e.g., "192.168.1.1 - 192.168.1.254"
+  name           String?    // New: Descriptive name for the subnet, e.g., "Office Network Floor 1"
+  description    String?
+  dhcpEnabled    Boolean?   @default(false) // New: Is DHCP enabled for this subnet?
+  vlanId         String?
+  vlan           VLAN?      @relation(fields: [vlanId], references: [id], onDelete: SetNull) // SetNull if VLAN is deleted
+  ipAddresses    IPAddress[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model IPAddress {
-  id             String    @id @default(uuid())
-  ipAddress      String
-  subnetId       String?
-  subnet         Subnet?   @relation(fields: [subnetId], references: [id], onDelete: SetNull)
-  directVlanId   String?   // If this IP is directly on a VLAN, not through a subnet
-  directVlan     VLAN?     @relation("IPDirectlyOnVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
-  status         String    // "allocated", "free", "reserved"
-  isGateway      Boolean?  @default(false) // New: For "是否网关"
-  allocatedTo    String?   // General allocation target (e.g., device, service)
-  usageUnit      String?   // New: For "使用单位"
-  contactPerson  String?   // New: For "联系人"
-  phone          String?   // New: For "电话"
-  description    String?
-  lastSeen       DateTime? @updatedAt // Automatically updated on record change
+  id            String   @id @default(uuid())
+  ipAddress     String   // The actual IP address, e.g., "192.168.1.100"
+  subnetId      String?  // Null if it's a global IP not belonging to a managed subnet
+  subnet        Subnet?  @relation(fields: [subnetId], references: [id], onDelete: Cascade) // Cascade delete if Subnet is deleted
+  directVlanId  String?  // If this IP is directly on a VLAN, not through its subnet (less common)
+  directVlan    VLAN?    @relation("IPDirectlyOnVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
+  status        String   // e.g., "allocated", "free", "reserved"
+  isGateway     Boolean? @default(false) // New: Is this IP address a gateway for its subnet?
+  allocatedTo   String?  // To whom or what this IP is allocated (e.g., device name, user, service)
+  usageUnit     String?  // New: The department or unit using this IP, e.g., "Marketing Dept"
+  contactPerson String?  // New: Contact person for this IP allocation
+  phone         String?  // New: Contact phone number
+  description   String?
+  lastSeen      DateTime? // Could be used to track activity, @updatedAt might serve similar purpose for record changes
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Store vlanId separately for direct IP-to-VLAN assignment (independent of subnet's VLAN)
-  // This field was named 'vlanId' in previous versions, renaming to 'directVlanId' for clarity.
-  // The relation "IPDirectlyOnVLAN" clarifies this is not the subnet's VLAN.
-  // If an IP is in a subnet, its effective VLAN is typically the subnet's VLAN.
-  // This `directVlanId` is for overrides or IPs not in any subnet.
-
-  @@unique([subnetId, ipAddress], name: "unique_ip_in_subnet_or_global_if_subnetId_null")
-  @@index([subnetId])
-  @@index([directVlanId])
-  @@index([status])
+  // Ensure IP is unique within its subnet, or globally if no subnetId
+  // Prisma doesn't directly support conditional unique constraints on nullable fields in a simple way.
+  // This will be handled by application logic for now or a more complex DB constraint if needed.
+  // We can enforce uniqueness of (ipAddress, subnetId) where subnetId can be null.
+  // However, Prisma's @@unique typically treats nulls as distinct.
+  // A common workaround is to have a separate table for global IPs or use a sentinel value.
+  // For now, rely on create/update logic to check.
+  @@unique([ipAddress, subnetId]) // This implies (ip, null) must be unique, and (ip, specific_subnet_id) must be unique.
 }
 
 model AuditLog {
   id        String   @id @default(uuid())
-  userId    String? // User who performed the action (can be null for system actions)
+  userId    String?  // Can be null if system-generated
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  username  String?  // Store username denormalized for cases where user might be deleted
-  action    String   // e.g., "create_subnet", "login_user"
-  details   String?  // More details about the action
+  username  String?  // Denormalized for easier display, esp. if user is deleted
+  action    String   // e.g., "create_subnet", "user_login"
+  details   String?
   timestamp DateTime @default(now())
-
-  @@index([userId])
-  @@index([action])
-  @@index([timestamp])
 }
+
+// New Model for ISP (Internet Service Provider)
+model ISP {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g., "China Telecom", "Comcast"
+  description String?
+  contactInfo String?  // e.g., "support@isp.com, 123-456-7890"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  // deviceConnections DeviceConnection[] // Relation to be added in Phase 3
+}
+
+// New Model for Devices
+model Device {
+  id            String     @id @default(uuid())
+  name          String     @unique // e.g., "Core-Switch-01", "Router-Branch-A"
+  deviceType    DeviceType?
+  location      String?    // e.g., "Data Center A, Rack 5, Unit 10"
+  managementIp  String?    @unique // Management IP Address of the device
+  brand         String?    // e.g., "Cisco", "Juniper", "Dell"
+  modelNumber   String?    // e.g., "Catalyst 9300", "MX204"
+  serialNumber  String?    @unique
+  description   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  // deviceConnections DeviceConnection[] @relation("LocalDeviceConnections") // Relation to be added in Phase 3
+}
+
+// Enum for Device Types
+enum DeviceType {
+  ROUTER
+  SWITCH
+  FIREWALL
+  SERVER
+  ACCESS_POINT
+  OLT        // Optical Line Terminal (运营商设备)
+  DDN_DEVICE // (运营商设备)
+  OTHER
+}
+
+// Model for DeviceConnection will be added in Phase 3
+// model DeviceConnection { ... }

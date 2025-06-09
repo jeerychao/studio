@@ -7,11 +7,13 @@ import {
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
+  mockISPs as seedISPsData, // New
+  mockDevices as seedDevicesData, // New
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
-import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
+import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType, DeviceType as AppDeviceType } from '../src/types';
 
 async function main() {
   console.log('Start seeding ...');
@@ -123,8 +125,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name, // New
-        dhcpEnabled: subnetData.dhcpEnabled, // New
+        name: subnetData.name,
+        dhcpEnabled: subnetData.dhcpEnabled,
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -134,8 +136,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name, // New
-        dhcpEnabled: subnetData.dhcpEnabled, // New
+        name: subnetData.name,
+        dhcpEnabled: subnetData.dhcpEnabled,
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -150,31 +152,71 @@ async function main() {
       update: {
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway, // New
+        isGateway: ipData.isGateway,
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit, // New
-        contactPerson: ipData.contactPerson, // New
-        phone: ipData.phone, // New
+        usageUnit: ipData.usageUnit,
+        contactPerson: ipData.contactPerson,
+        phone: ipData.phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
-        directVlanId: ipData.directVlanId, // Updated field name
+        directVlanId: ipData.directVlanId,
       },
       create: {
         id: ipData.id,
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway, // New
+        isGateway: ipData.isGateway,
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit, // New
-        contactPerson: ipData.contactPerson, // New
-        phone: ipData.phone, // New
+        usageUnit: ipData.usageUnit,
+        contactPerson: ipData.contactPerson,
+        phone: ipData.phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
-        directVlanId: ipData.directVlanId, // Updated field name
+        directVlanId: ipData.directVlanId,
       },
     });
   }
   console.log('IP Addresses seeded.');
+
+  // Seed ISPs
+  console.log('Seeding ISPs...');
+  for (const isp of seedISPsData) {
+    await prisma.iSP.upsert({
+      where: { name: isp.name },
+      update: { description: isp.description, contactInfo: isp.contactInfo },
+      create: { name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
+    });
+  }
+  console.log('ISPs seeded.');
+
+  // Seed Devices
+  console.log('Seeding Devices...');
+  for (const device of seedDevicesData) {
+    await prisma.device.upsert({
+      where: { name: device.name }, // Assuming name is unique for seed data initial setup
+      update: {
+        deviceType: device.deviceType as AppDeviceType,
+        location: device.location,
+        managementIp: device.managementIp,
+        brand: device.brand,
+        modelNumber: device.modelNumber,
+        serialNumber: device.serialNumber,
+        description: device.description,
+      },
+      create: {
+        name: device.name,
+        deviceType: device.deviceType as AppDeviceType,
+        location: device.location,
+        managementIp: device.managementIp,
+        brand: device.brand,
+        modelNumber: device.modelNumber,
+        serialNumber: device.serialNumber,
+        description: device.description,
+      },
+    });
+  }
+  console.log('Devices seeded.');
+
 
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {

@@ -2,7 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure, SubnetFreeIpDetails, PaginatedResponse } from '@/types';
+import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure, SubnetFreeIpDetails, PaginatedResponse, ISP as AppISP, Device as AppDevice, DeviceType as AppDeviceType } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
 import {
@@ -20,7 +20,7 @@ import { logger } from './logger';
 import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, type ActionErrorResponse } from './errors';
 import { createActionErrorResponse } from './error-utils';
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
-import { Prisma, type IPAddress as PrismaIPAddress, type Subnet as PrismaSubnet, type VLAN as PrismaVLAN } from '@prisma/client';
+import { Prisma, type IPAddress as PrismaIPAddress, type Subnet as PrismaSubnet, type VLAN as PrismaVLAN, DeviceType as PrismaDeviceType } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -344,7 +344,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
 type PrismaIPAddressWithRelations = Prisma.IPAddressGetPayload<{ include: { subnet: { include: { vlan: true } }; directVlan: true; }; }>;
 export type AppIPAddressWithRelations = AppIPAddress & {
   subnet?: { id: string; cidr: string; name?: string; networkAddress: string; vlan?: { vlanNumber: number; name?: string; } | null } | null;
-  directVlan?: { vlanNumber: number; name?: string; } | null; // Changed from vlan to directVlan
+  directVlan?: { vlanNumber: number; name?: string; } | null; 
 };
 
 export async function getIPAddressesAction(params?: FetchParams): Promise<PaginatedResponse<AppIPAddressWithRelations>> {
@@ -515,23 +515,235 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
-// User Actions (Existing code, ensure it's compatible with FetchedUserDetails if used)
-export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function updateOwnPasswordAction(userId: string, payload: { currentPassword?: string; newPassword?: string; }): Promise<ActionResponse<{ message: string }>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function deleteUserAction(id: string, performingUserId?: string): Promise<ActionResponse> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
+// User Actions
+export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> {
+  const actionName = 'getUsersAction';
+  try {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const totalCount = await prisma.user.count();
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const usersFromDb = await prisma.user.findMany({
+      include: { role: { include: { permissions: true } } },
+      orderBy: { username: 'asc' },
+      skip,
+      take: pageSize,
+    });
+    const appUsers: FetchedUserDetails[] = usersFromDb.map(user => ({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      roleId: user.roleId,
+      roleName: user.role.name as AppRoleNameType,
+      avatar: user.avatar || undefined,
+      lastLogin: user.lastLogin?.toISOString() || undefined,
+      permissions: user.role.permissions.map(p => p.id as AppPermissionIdType),
+    }));
+    return { data: appUsers, totalCount, currentPage: page, totalPages, pageSize };
+  } catch (error) {
+    logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
+    throw new AppError("获取用户数据时发生服务器错误。", 500, "GET_USERS_FAILED", "无法加载用户数据。");
+  }
+}
+export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
+  const actionName = 'createUserAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    if (!data.password) { throw new ValidationError("新用户需要密码。", "password"); }
+    const existingUserByEmail = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existingUserByEmail) { throw new ResourceError(`邮箱 ${data.email} 已被使用。`, 'EMAIL_ALREADY_EXISTS', `邮箱 ${data.email} 已被注册。`, 'email'); }
+    const existingUserByUsername = await prisma.user.findUnique({ where: { username: data.username } });
+    if (existingUserByUsername) { throw new ResourceError(`用户名 ${data.username} 已被使用。`, 'USERNAME_ALREADY_EXISTS', `用户名 ${data.username} 已被注册。`, 'username'); }
+    const roleExists = await prisma.role.findUnique({ where: { id: data.roleId } });
+    if (!roleExists) { throw new NotFoundError(`角色 ID: ${data.roleId}`, `分配的角色不存在。`, 'roleId'); }
 
-// Role Actions (Existing code)
-export async function getRolesAction(params?: FetchParams): Promise<PaginatedResponse<AppRole>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "id" | "userCount" | "name">> & { permissions?: AppPermissionIdType[] }, performingUserId?: string): Promise<ActionResponse<AppRole>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
+    const newUser = await prisma.user.create({
+      data: {
+        username: data.username,
+        email: data.email,
+        password: data.password, // In a real app, hash this password
+        roleId: data.roleId,
+        avatar: data.avatar || '/images/avatars/default_avatar.png',
+      },
+      include: { role: { include: { permissions: true } } },
+    });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` } });
+    revalidatePath("/users");
+    const fetchedUser: FetchedUserDetails = {
+        id: newUser.id, username: newUser.username, email: newUser.email, roleId: newUser.roleId,
+        roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined,
+        permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: newUser.lastLogin?.toISOString() || undefined,
+    };
+    return { success: true, data: fetchedUser };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
+  const actionName = 'updateUserAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const userToUpdate = await prisma.user.findUnique({ where: { id } });
+    if (!userToUpdate) { throw new NotFoundError(`用户 ID: ${id}`, `要更新的用户未找到。`); }
+
+    const updateData: Prisma.UserUpdateInput = {};
+    if (data.username && data.username !== userToUpdate.username) { if (await prisma.user.findFirst({ where: { username: data.username, NOT: { id } } })) { throw new ResourceError(`用户名 ${data.username} 已被使用。`, 'USERNAME_ALREADY_EXISTS', `用户名 ${data.username} 已被其他用户使用。`, 'username'); } updateData.username = data.username; }
+    if (data.email && data.email !== userToUpdate.email) { if (await prisma.user.findFirst({ where: { email: data.email, NOT: { id } } })) { throw new ResourceError(`邮箱 ${data.email} 已被使用。`, 'EMAIL_ALREADY_EXISTS', `邮箱 ${data.email} 已被其他用户使用。`, 'email'); } updateData.email = data.email; }
+    if (data.roleId && data.roleId !== userToUpdate.roleId) { if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) { throw new NotFoundError(`角色 ID: ${data.roleId}`, `分配的角色不存在。`, 'roleId'); } updateData.roleId = data.roleId; }
+    if (data.password) { updateData.password = data.password; } // In real app, hash this
+    if (data.avatar) { updateData.avatar = data.avatar; }
+
+    if (Object.keys(updateData).length === 0) {
+        const currentUserDetails = await fetchCurrentUserDetailsAction(id);
+        if(!currentUserDetails) throw new NotFoundError(`用户 ID: ${id}`, "获取当前用户详情失败。");
+        return { success: true, data: currentUserDetails };
+    }
+    const updatedUser = await prisma.user.update({ where: { id }, data: updateData, include: { role: { include: { permissions: true } } } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_user', details: `更新了用户 ${updatedUser.username}` } });
+    revalidatePath("/users");
+    const fetchedUser: FetchedUserDetails = {
+        id: updatedUser.id, username: updatedUser.username, email: updatedUser.email, roleId: updatedUser.roleId,
+        roleName: updatedUser.role.name as AppRoleNameType, avatar: updatedUser.avatar || undefined,
+        permissions: updatedUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: updatedUser.lastLogin?.toISOString() || undefined,
+    };
+    return { success: true, data: fetchedUser };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+export async function updateOwnPasswordAction(userId: string, payload: { currentPassword?: string; newPassword?: string; }): Promise<ActionResponse<{ message: string }>> {
+    const actionName = 'updateOwnPasswordAction';
+    try {
+        const { currentPassword, newPassword } = payload;
+        if (!currentPassword || !newPassword) { throw new ValidationError("当前密码和新密码都是必需的。", "currentPassword"); }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) { throw new AuthError("用户未找到。", "用户身份验证失败。"); }
+        if (user.password !== currentPassword) { throw new AuthError("当前密码不正确。", "当前密码不正确。", "currentPassword"); }
+        if (currentPassword === newPassword) { throw new ValidationError("新密码不能与当前密码相同。", "newPassword", undefined, "新密码不能与当前密码相同。"); }
+        await prisma.user.update({ where: { id: userId }, data: { password: newPassword } });
+        await prisma.auditLog.create({ data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了自己的密码。` } });
+        return { success: true, data: { message: "密码已成功更新。" } };
+    } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+export async function deleteUserAction(id: string, performingUserId?: string): Promise<ActionResponse> {
+  const actionName = 'deleteUserAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const userToDelete = await prisma.user.findUnique({ where: { id } });
+    if (!userToDelete) { throw new NotFoundError(`用户 ID: ${id}`, `要删除的用户未找到。`); }
+    if (userToDelete.id === performingUserId) { throw new ResourceError("无法删除当前登录的用户。", "CANNOT_DELETE_SELF", "您不能删除自己的账户。"); }
+    // Optional: Check if user is last admin etc. - for this app, assume deletable if not self.
+    await prisma.auditLog.updateMany({ where: { userId: id }, data: { userId: null }}); // Dissociate audit logs from user
+    await prisma.user.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_user', details: `删除了用户 ${userToDelete.username}` } });
+    revalidatePath("/users");
+    return { success: true };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+// Role Actions
+export async function getRolesAction(params?: FetchParams): Promise<PaginatedResponse<AppRole>> {
+  const actionName = 'getRolesAction';
+  try {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const totalCount = await prisma.role.count();
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const rolesFromDb = await prisma.role.findMany({
+      include: { permissions: true, _count: { select: { users: true } } },
+      orderBy: { name: 'asc' },
+      skip,
+      take: pageSize,
+    });
+    const appRoles: AppRole[] = rolesFromDb.map(role => ({
+      id: role.id,
+      name: role.name as AppRoleNameType,
+      description: role.description || undefined,
+      permissions: role.permissions.map(p => p.id as AppPermissionIdType),
+      userCount: role._count.users,
+    }));
+    return { data: appRoles, totalCount, currentPage: page, totalPages, pageSize };
+  } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取角色数据时发生服务器错误。", 500, "GET_ROLES_FAILED", "无法加载角色数据。"); }
+}
+export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "id" | "userCount" | "name">> & { permissions?: AppPermissionIdType[] }, performingUserId?: string): Promise<ActionResponse<AppRole>> {
+  const actionName = 'updateRoleAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const roleToUpdate = await prisma.role.findUnique({ where: { id } });
+    if (!roleToUpdate) { throw new NotFoundError(`角色 ID: ${id}`, `要更新的角色未找到。`); }
+    const updatePayload: Prisma.RoleUpdateInput = {};
+    if (data.description !== undefined) { updatePayload.description = data.description || null; }
+    if (data.permissions) {
+        if (roleToUpdate.name === 'Administrator') { throw new ResourceError("不能修改 Administrator 角色的权限。", "ADMIN_ROLE_PERMISSIONS_PROTECTED", "系统管理员角色的权限是固定的，不能修改。"); }
+        // Validate permissions exist
+        const validPermissions = await prisma.permission.findMany({ where: { id: { in: data.permissions } } });
+        if (validPermissions.length !== data.permissions.length) { throw new ValidationError("一个或多个提供的权限 ID 无效。", "permissions"); }
+        updatePayload.permissions = { set: data.permissions.map(pid => ({ id: pid })) };
+    }
+    if (Object.keys(updatePayload).length === 0) {
+        const currentRoleData = await prisma.role.findUnique({ where: { id }, include: {permissions: true, _count: {select: {users: true}}} });
+        if (!currentRoleData) throw new NotFoundError(`角色 ID: ${id}`, `获取当前角色数据失败。`);
+        const appRole : AppRole = { id: currentRoleData.id, name: currentRoleData.name as AppRoleNameType, description: currentRoleData.description || undefined, permissions: currentRoleData.permissions.map(p=>p.id as AppPermissionIdType), userCount: currentRoleData._count.users };
+        return { success: true, data: appRole };
+    }
+    const updatedRole = await prisma.role.update({ where: { id }, data: updatePayload, include: { permissions: true, _count: {select: {users: true}} } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_role', details: `更新了角色 ${updatedRole.name}` } });
+    revalidatePath("/roles");
+    const appRole : AppRole = { id: updatedRole.id, name: updatedRole.name as AppRoleNameType, description: updatedRole.description || undefined, permissions: updatedRole.permissions.map(p=>p.id as AppPermissionIdType), userCount: updatedRole._count.users };
+    return { success: true, data: appRole };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
 export async function createRoleAction(data: any): Promise<ActionResponse<AppRole>> { logger.warn('Attempted to call createRoleAction, which is disabled.'); throw new AppError("不允许创建新角色。", 403, 'ROLE_CREATION_NOT_ALLOWED'); }
 export async function deleteRoleAction(id: string): Promise<ActionResponse> { const role = await prisma.role.findUnique({where: {id}}); if (role && (role.name === "Administrator" || role.name === "Operator" || role.name === "Viewer" )) { throw new AppError("不允许删除固定角色。", 403, 'FIXED_ROLE_DELETION_NOT_ALLOWED'); } throw new NotFoundError(`角色 ID: ${id}`, "未找到角色或不允许删除。"); }
 
-// Audit Log Actions (Existing code)
-export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function deleteAuditLogAction(id: string, performingUserId?: string): Promise<ActionResponse> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
-export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
+// Audit Log Actions
+export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> {
+  const actionName = 'getAuditLogsAction';
+  try {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const totalCount = await prisma.auditLog.count();
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const logsFromDb = await prisma.auditLog.findMany({
+      orderBy: { timestamp: 'desc' },
+      skip,
+      take: pageSize,
+    });
+    const appLogs: AppAuditLog[] = logsFromDb.map(log => ({
+      id: log.id,
+      userId: log.userId || undefined,
+      username: log.username || '系统',
+      action: log.action,
+      timestamp: log.timestamp.toISOString(),
+      details: log.details || undefined,
+    }));
+    return { data: appLogs, totalCount, currentPage: page, totalPages, pageSize };
+  } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取审计日志数据时发生服务器错误。", 500, "GET_AUDIT_LOGS_FAILED", "无法加载审计日志数据。"); }
+}
+export async function deleteAuditLogAction(id: string, performingUserId?: string): Promise<ActionResponse> {
+  const actionName = 'deleteAuditLogAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    if (!(await prisma.auditLog.findUnique({ where: { id } }))) { throw new NotFoundError(`审计日志 ID: ${id}`, `要删除的审计日志条目未找到。`); }
+    await prisma.auditLog.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_audit_log_entry', details: `删除了审计日志条目 ID ${id}` } });
+    revalidatePath("/audit-logs");
+    return { success: true };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteAuditLogsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0; const failureDetails: BatchOperationFailure[] = [];
+  for (const id of ids) {
+    try {
+      if (!(await prisma.auditLog.findUnique({ where: { id } }))) { throw new NotFoundError(`审计日志 ID: ${id}`, `审计日志条目 ID ${id} 未找到。`); }
+      await prisma.auditLog.delete({ where: { id } });
+      successCount++;
+    } catch (error: unknown) { const errRes = createActionErrorResponse(error, `${actionName}_single`); failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: errRes.userMessage }); }
+  }
+  if (successCount > 0) { await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_audit_log', details: `批量删除了 ${successCount} 条审计日志。失败 ${failureDetails.length} 条。` } }); revalidatePath("/audit-logs"); }
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
 
 // Permission Actions
 export async function getAllPermissionsAction(): Promise<AppPermission[]> { return mockPermissions.map(p => ({ ...p, description: p.description || undefined })); }
@@ -560,7 +772,28 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> { /* ... (no changes for this phase, but needs to select new fields if VLANs are extended later) ... */ return {} as any; }
+export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
+  const actionName = 'queryVlansAction';
+  try {
+    const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
+    const queryString = params.queryString?.trim();
+    if (!queryString) { return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } }; }
+    const isNumericQuery = /^\d+$/.test(queryString); const vlanNumberQuery = isNumericQuery ? parseInt(queryString, 10) : null;
+    const orConditions: Prisma.VLANWhereInput[] = [];
+    if (vlanNumberQuery !== null && vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) { orConditions.push({ vlanNumber: vlanNumberQuery }); }
+    orConditions.push({ name: { contains: queryString } }); orConditions.push({ description: { contains: queryString } });
+    let whereClause: Prisma.VLANWhereInput = { OR: orConditions }; if (orConditions.length === 0) { whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_VLAN" };}
+    const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const vlansFromDb = await prisma.vLAN.findMany({ where: whereClause, include: { subnets: { select: { id: true, cidr: true, name: true, description: true } }, ipAddresses: { select: { id: true, ipAddress: true, description: true } } }, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize, });
+    const results: VlanQueryResult[] = vlansFromDb.map(v => ({
+      id: v.id, vlanNumber: v.vlanNumber, name: v.name || undefined, description: v.description || undefined,
+      associatedSubnets: v.subnets.map(s => ({id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})),
+      associatedDirectIPs: v.ipAddresses.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})),
+      resourceCount: v.subnets.length + v.ipAddresses.length,
+    }));
+    return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
 
 export async function queryIpAddressesAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<AppIPAddressWithRelations>>> {
   const actionName = 'queryIpAddressesAction';
@@ -595,4 +828,388 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<ActionResponse<SubnetFreeIpDetails>> { /* ... (no changes needed for this phase based on current scope) ... */ return {} as any; }
+export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<ActionResponse<SubnetFreeIpDetails>> {
+  const actionName = 'getSubnetFreeIpDetailsAction';
+  try {
+    const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } });
+    if (!subnet) { throw new NotFoundError(`子网 ID: ${subnetId}`, `请求的子网未找到。`); }
+    const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
+    if (!subnetProperties) { throw new AppError(`子网 ${subnet.cidr} 的 CIDR 配置无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_FREE_IP_CALC'); }
+    const totalUsableIPs = getUsableIpCount(subnetProperties.prefix);
+    const dbAllocatedIPs = await prisma.iPAddress.findMany({ where: { subnetId, status: 'allocated' }, select: { ipAddress: true } });
+    const dbReservedIPs = await prisma.iPAddress.findMany({ where: { subnetId, status: 'reserved' }, select: { ipAddress: true } });
+    const dbAllocatedIPsCount = dbAllocatedIPs.length;
+    const dbReservedIPsCount = dbReservedIPs.length;
+    const usedIpNumbers = new Set([...dbAllocatedIPs, ...dbReservedIPs].map(ip => ipToNumber(ip.ipAddress)));
+    const availableIpNumbers: number[] = [];
+    if (subnetProperties.firstUsableIp && subnetProperties.lastUsableIp) {
+      const firstUsableNum = ipToNumber(subnetProperties.firstUsableIp);
+      const lastUsableNum = ipToNumber(subnetProperties.lastUsableIp);
+      for (let i = firstUsableNum; i <= lastUsableNum; i++) { if (!usedIpNumbers.has(i)) { availableIpNumbers.push(i); } }
+    } else if (subnetProperties.prefix === 32) { // For /32, the network address itself is the only usable IP
+      const networkNum = ipToNumber(subnetProperties.networkAddress);
+      if (!usedIpNumbers.has(networkNum)) { availableIpNumbers.push(networkNum); }
+    }
+    // For /31, both network and broadcast equivalent are usable.
+    else if (subnetProperties.prefix === 31) {
+        const networkNum = ipToNumber(subnetProperties.networkAddress);
+        const secondIpNum = ipToNumber(subnetProperties.broadcastAddress); // broadcastAddress for /31 is the second usable IP
+        if (!usedIpNumbers.has(networkNum)) availableIpNumbers.push(networkNum);
+        if (!usedIpNumbers.has(secondIpNum)) availableIpNumbers.push(secondIpNum);
+    }
+    const calculatedAvailableIpRanges = groupConsecutiveIpsToRanges(availableIpNumbers);
+    return { success: true, data: { subnetId, subnetCidr: subnet.cidr, totalUsableIPs, dbAllocatedIPsCount, dbReservedIPsCount, calculatedAvailableIPsCount: availableIpNumbers.length, calculatedAvailableIpRanges, } };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+
+// --- ISP Actions ---
+export async function getISPsAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppISP>>> {
+  const actionName = 'getISPsAction';
+  try {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+
+    const totalCount = await prisma.iSP.count();
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+    const ispsFromDb = await prisma.iSP.findMany({
+      orderBy: { name: 'asc' },
+      skip,
+      take: pageSize,
+    });
+
+    const appISPs: AppISP[] = ispsFromDb.map(isp => ({
+      id: isp.id,
+      name: isp.name,
+      description: isp.description || undefined,
+      contactInfo: isp.contactInfo || undefined,
+      createdAt: isp.createdAt.toISOString(),
+      updatedAt: isp.updatedAt.toISOString(),
+    }));
+
+    return { success: true, data: { data: appISPs, totalCount, currentPage: page, totalPages, pageSize } };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function createISPAction(data: Omit<AppISP, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppISP>> {
+  const actionName = 'createISPAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    if (!data.name || data.name.trim() === "") {
+      throw new ValidationError("运营商名称是必需的。", "name");
+    }
+    const existingISP = await prisma.iSP.findUnique({ where: { name: data.name } });
+    if (existingISP) {
+      throw new ResourceError(`运营商 "${data.name}" 已存在。`, 'ISP_ALREADY_EXISTS', undefined, 'name');
+    }
+
+    const newISP = await prisma.iSP.create({
+      data: {
+        name: data.name,
+        description: data.description || null,
+        contactInfo: data.contactInfo || null,
+      },
+    });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_isp', details: `创建了运营商 ${newISP.name}` } });
+    revalidatePath("/settings/isps"); // Assuming a path for ISP management
+    const appISP: AppISP = {
+      id: newISP.id, name: newISP.name, description: newISP.description || undefined, contactInfo: newISP.contactInfo || undefined,
+      createdAt: newISP.createdAt.toISOString(), updatedAt: newISP.updatedAt.toISOString(),
+    };
+    return { success: true, data: appISP };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function updateISPAction(id: string, data: Partial<Omit<AppISP, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppISP>> {
+  const actionName = 'updateISPAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const ispToUpdate = await prisma.iSP.findUnique({ where: { id } });
+    if (!ispToUpdate) {
+      throw new NotFoundError(`运营商 ID: ${id}`, `要更新的运营商未找到。`);
+    }
+
+    const updatePayload: Prisma.ISPUpdateInput = {};
+    if (data.name && data.name !== ispToUpdate.name) {
+      if (await prisma.iSP.findFirst({ where: { name: data.name, NOT: { id } } })) {
+        throw new ResourceError(`运营商名称 "${data.name}" 已被其他运营商使用。`, 'ISP_NAME_ALREADY_EXISTS', undefined, 'name');
+      }
+      updatePayload.name = data.name;
+    }
+    if (data.hasOwnProperty('description')) updatePayload.description = data.description || null;
+    if (data.hasOwnProperty('contactInfo')) updatePayload.contactInfo = data.contactInfo || null;
+    
+    if (Object.keys(updatePayload).length === 0) {
+        const currentAppISP : AppISP = { ...ispToUpdate, description: ispToUpdate.description || undefined, contactInfo: ispToUpdate.contactInfo || undefined, createdAt: ispToUpdate.createdAt.toISOString(), updatedAt: ispToUpdate.updatedAt.toISOString() };
+        return { success: true, data: currentAppISP};
+    }
+
+    const updatedISP = await prisma.iSP.update({ where: { id }, data: updatePayload });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_isp', details: `更新了运营商 ${updatedISP.name}` } });
+    revalidatePath("/settings/isps");
+     const appISP: AppISP = {
+      id: updatedISP.id, name: updatedISP.name, description: updatedISP.description || undefined, contactInfo: updatedISP.contactInfo || undefined,
+      createdAt: updatedISP.createdAt.toISOString(), updatedAt: updatedISP.updatedAt.toISOString(),
+    };
+    return { success: true, data: appISP };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function deleteISPAction(id: string, performingUserId?: string): Promise<ActionResponse> {
+  const actionName = 'deleteISPAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const ispToDelete = await prisma.iSP.findUnique({ where: { id } });
+    if (!ispToDelete) {
+      throw new NotFoundError(`运营商 ID: ${id}`, `要删除的运营商未找到。`);
+    }
+    // Add check if ISP is in use by DeviceConnections later if relations are added
+    // const connections = await prisma.deviceConnection.count({ where: { ispId: id } });
+    // if (connections > 0) {
+    //   throw new ResourceError(`运营商 "${ispToDelete.name}" 仍被 ${connections} 个设备连接使用。`, 'ISP_IN_USE');
+    // }
+    await prisma.iSP.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_isp', details: `删除了运营商 ${ispToDelete.name}` } });
+    revalidatePath("/settings/isps");
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function batchDeleteISPsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteISPsAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0; const failureDetails: BatchOperationFailure[] = []; const deletedIspNames: string[] = [];
+
+  for (const id of ids) {
+    try {
+      const ispToDelete = await prisma.iSP.findUnique({ where: { id } });
+      if (!ispToDelete) {
+        failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '运营商未找到。' });
+        continue;
+      }
+      // Add check if ISP is in use by DeviceConnections later
+      // const connections = await prisma.deviceConnection.count({ where: { ispId: id } });
+      // if (connections > 0) {
+      //   throw new ResourceError(`运营商 "${ispToDelete.name}" 仍被 ${connections} 个连接使用。`, 'ISP_IN_USE_BATCH');
+      // }
+      await prisma.iSP.delete({ where: { id } });
+      deletedIspNames.push(ispToDelete.name);
+      successCount++;
+    } catch (error: unknown) {
+      const errRes = createActionErrorResponse(error, `${actionName}_single`);
+      failureDetails.push({ id, itemIdentifier: (await prisma.iSP.findUnique({ where: { id } }))?.name || `ID ${id}`, error: errRes.userMessage });
+    }
+  }
+  if (deletedIspNames.length > 0) {
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_isp', details: `批量删除了 ${deletedIspNames.length} 个运营商: ${deletedIspNames.join(', ')}。失败 ${failureDetails.length} 个。` } });
+    revalidatePath("/settings/isps");
+  }
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
+
+
+// --- Device Actions ---
+export async function getDevicesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppDevice>>> {
+  const actionName = 'getDevicesAction';
+  try {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+
+    const totalCount = await prisma.device.count();
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+    const devicesFromDb = await prisma.device.findMany({
+      orderBy: { name: 'asc' },
+      skip,
+      take: pageSize,
+    });
+
+    const appDevices: AppDevice[] = devicesFromDb.map(device => ({
+      id: device.id,
+      name: device.name,
+      deviceType: device.deviceType as AppDeviceType || undefined,
+      location: device.location || undefined,
+      managementIp: device.managementIp || undefined,
+      brand: device.brand || undefined,
+      modelNumber: device.modelNumber || undefined,
+      serialNumber: device.serialNumber || undefined,
+      description: device.description || undefined,
+      createdAt: device.createdAt.toISOString(),
+      updatedAt: device.updatedAt.toISOString(),
+    }));
+
+    return { success: true, data: { data: appDevices, totalCount, currentPage: page, totalPages, pageSize } };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function createDeviceAction(data: Omit<AppDevice, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppDevice>> {
+  const actionName = 'createDeviceAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+     if (!data.name || data.name.trim() === "") {
+      throw new ValidationError("设备名称是必需的。", "name");
+    }
+    const existingDeviceByName = await prisma.device.findUnique({ where: { name: data.name } });
+    if (existingDeviceByName) {
+      throw new ResourceError(`设备名称 "${data.name}" 已存在。`, 'DEVICE_NAME_ALREADY_EXISTS', undefined, 'name');
+    }
+    if (data.managementIp && await prisma.device.findUnique({ where: { managementIp: data.managementIp } })) {
+      throw new ResourceError(`管理IP "${data.managementIp}" 已被其他设备使用。`, 'DEVICE_MANAGEMENT_IP_EXISTS', undefined, 'managementIp');
+    }
+     if (data.serialNumber && await prisma.device.findUnique({ where: { serialNumber: data.serialNumber } })) {
+      throw new ResourceError(`序列号 "${data.serialNumber}" 已被其他设备使用。`, 'DEVICE_SERIAL_EXISTS', undefined, 'serialNumber');
+    }
+
+    const newDevice = await prisma.device.create({
+      data: {
+        name: data.name,
+        deviceType: data.deviceType as PrismaDeviceType | undefined,
+        location: data.location || null,
+        managementIp: data.managementIp || null,
+        brand: data.brand || null,
+        modelNumber: data.modelNumber || null,
+        serialNumber: data.serialNumber || null,
+        description: data.description || null,
+      },
+    });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_device', details: `创建了设备 ${newDevice.name}` } });
+    revalidatePath("/settings/devices"); // Assuming a path for Device management
+    const appDevice: AppDevice = {
+        id: newDevice.id, name: newDevice.name, deviceType: newDevice.deviceType as AppDeviceType || undefined,
+        location: newDevice.location || undefined, managementIp: newDevice.managementIp || undefined,
+        brand: newDevice.brand || undefined, modelNumber: newDevice.modelNumber || undefined,
+        serialNumber: newDevice.serialNumber || undefined, description: newDevice.description || undefined,
+        createdAt: newDevice.createdAt.toISOString(), updatedAt: newDevice.updatedAt.toISOString(),
+    };
+    return { success: true, data: appDevice };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function updateDeviceAction(id: string, data: Partial<Omit<AppDevice, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppDevice>> {
+  const actionName = 'updateDeviceAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const deviceToUpdate = await prisma.device.findUnique({ where: { id } });
+    if (!deviceToUpdate) {
+      throw new NotFoundError(`设备 ID: ${id}`, `要更新的设备未找到。`);
+    }
+
+    const updatePayload: Prisma.DeviceUpdateInput = {};
+    if (data.name && data.name !== deviceToUpdate.name) {
+      if (await prisma.device.findFirst({ where: { name: data.name, NOT: { id } } })) {
+        throw new ResourceError(`设备名称 "${data.name}" 已被其他设备使用。`, 'DEVICE_NAME_ALREADY_EXISTS', undefined, 'name');
+      }
+      updatePayload.name = data.name;
+    }
+    if (data.managementIp && data.managementIp !== deviceToUpdate.managementIp) {
+      if (await prisma.device.findFirst({ where: { managementIp: data.managementIp, NOT: { id } } })) {
+        throw new ResourceError(`管理IP "${data.managementIp}" 已被其他设备使用。`, 'DEVICE_MANAGEMENT_IP_EXISTS', undefined, 'managementIp');
+      }
+      updatePayload.managementIp = data.managementIp;
+    }
+     if (data.serialNumber && data.serialNumber !== deviceToUpdate.serialNumber) {
+      if (await prisma.device.findFirst({ where: { serialNumber: data.serialNumber, NOT: { id } } })) {
+        throw new ResourceError(`序列号 "${data.serialNumber}" 已被其他设备使用。`, 'DEVICE_SERIAL_EXISTS', undefined, 'serialNumber');
+      }
+      updatePayload.serialNumber = data.serialNumber;
+    }
+
+    if (data.hasOwnProperty('deviceType')) updatePayload.deviceType = data.deviceType as PrismaDeviceType | undefined | null;
+    if (data.hasOwnProperty('location')) updatePayload.location = data.location || null;
+    if (data.hasOwnProperty('brand')) updatePayload.brand = data.brand || null;
+    if (data.hasOwnProperty('modelNumber')) updatePayload.modelNumber = data.modelNumber || null;
+    if (data.hasOwnProperty('description')) updatePayload.description = data.description || null;
+
+    if (Object.keys(updatePayload).length === 0 && (!data.deviceType || data.deviceType === deviceToUpdate.deviceType)) {
+        const currentAppDevice : AppDevice = { ...deviceToUpdate, deviceType: deviceToUpdate.deviceType as AppDeviceType || undefined, location: deviceToUpdate.location || undefined, managementIp: deviceToUpdate.managementIp || undefined, brand: deviceToUpdate.brand || undefined, modelNumber: deviceToUpdate.modelNumber || undefined, serialNumber: deviceToUpdate.serialNumber || undefined, description: deviceToUpdate.description || undefined, createdAt: deviceToUpdate.createdAt.toISOString(), updatedAt: deviceToUpdate.updatedAt.toISOString() };
+        return { success: true, data: currentAppDevice };
+    }
+
+    const updatedDevice = await prisma.device.update({ where: { id }, data: updatePayload });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_device', details: `更新了设备 ${updatedDevice.name}` } });
+    revalidatePath("/settings/devices");
+    const appDevice: AppDevice = {
+        id: updatedDevice.id, name: updatedDevice.name, deviceType: updatedDevice.deviceType as AppDeviceType || undefined,
+        location: updatedDevice.location || undefined, managementIp: updatedDevice.managementIp || undefined,
+        brand: updatedDevice.brand || undefined, modelNumber: updatedDevice.modelNumber || undefined,
+        serialNumber: updatedDevice.serialNumber || undefined, description: updatedDevice.description || undefined,
+        createdAt: updatedDevice.createdAt.toISOString(), updatedAt: updatedDevice.updatedAt.toISOString(),
+    };
+    return { success: true, data: appDevice };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function deleteDeviceAction(id: string, performingUserId?: string): Promise<ActionResponse> {
+  const actionName = 'deleteDeviceAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const deviceToDelete = await prisma.device.findUnique({ where: { id } });
+    if (!deviceToDelete) {
+      throw new NotFoundError(`设备 ID: ${id}`, `要删除的设备未找到。`);
+    }
+    // Add check if Device is in use by DeviceConnections later if relations are added
+    // const connections = await prisma.deviceConnection.count({
+    //   where: { OR: [{ localDeviceId: id }, { remoteDeviceId: id }] } // Example if remoteDeviceId exists
+    // });
+    // if (connections > 0) {
+    //   throw new ResourceError(`设备 "${deviceToDelete.name}" 仍被 ${connections} 个连接使用。`, 'DEVICE_IN_USE');
+    // }
+    await prisma.device.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_device', details: `删除了设备 ${deviceToDelete.name}` } });
+    revalidatePath("/settings/devices");
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function batchDeleteDevicesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteDevicesAction';
+  const auditUser = await getAuditUserInfo(performingUserId);
+  let successCount = 0; const failureDetails: BatchOperationFailure[] = []; const deletedDeviceNames: string[] = [];
+
+  for (const id of ids) {
+    try {
+      const deviceToDelete = await prisma.device.findUnique({ where: { id } });
+      if (!deviceToDelete) {
+        failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '设备未找到。' });
+        continue;
+      }
+      // Add check if Device is in use by DeviceConnections later
+      // const connections = await prisma.deviceConnection.count({
+      //   where: { OR: [{ localDeviceId: id }, { remoteDeviceId: id }] }
+      // });
+      // if (connections > 0) {
+      //   throw new ResourceError(`设备 "${deviceToDelete.name}" 仍被 ${connections} 个连接使用。`, 'DEVICE_IN_USE_BATCH');
+      // }
+      await prisma.device.delete({ where: { id } });
+      deletedDeviceNames.push(deviceToDelete.name);
+      successCount++;
+    } catch (error: unknown) {
+      const errRes = createActionErrorResponse(error, `${actionName}_single`);
+      failureDetails.push({ id, itemIdentifier: (await prisma.device.findUnique({ where: { id } }))?.name || `ID ${id}`, error: errRes.userMessage });
+    }
+  }
+  if (deletedDeviceNames.length > 0) {
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_device', details: `批量删除了 ${deletedDeviceNames.length} 个设备: ${deletedDeviceNames.join(', ')}。失败 ${failureDetails.length} 个。` } });
+    revalidatePath("/settings/devices");
+  }
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
