@@ -1,7 +1,8 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, ISP, Device, DeviceType } from '../types';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, ISP, Device } from '../types';
+// Correctly import DeviceType as a value (enum)
+import { PERMISSIONS, DeviceType } from '../types';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
-import { PERMISSIONS } from '../types';
 
 // Fixed Role IDs
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
@@ -50,8 +51,8 @@ export const mockPermissions: Permission[] = [
 function createInitialSubnetSeedData(
   id: string,
   cidr: string,
-  name?: string, 
-  dhcpEnabled?: boolean, 
+  name?: string,
+  dhcpEnabled?: boolean,
   vlanId?: string,
   description?: string
 ): Omit<Subnet, 'utilization'> {
@@ -67,7 +68,7 @@ function createInitialSubnetSeedData(
     networkAddress,
     subnetMask,
     ipRange,
-    name: name || cidr, 
+    name: name || undefined, // Keep name distinct from description
     dhcpEnabled: dhcpEnabled ?? false,
     vlanId,
     description,
@@ -136,10 +137,10 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS, PERMISSIONS.CREATE_IPADDRESS, PERMISSIONS.EDIT_IPADDRESS, PERMISSIONS.DELETE_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
-      PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT, 
+      PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT,
       // New permissions for Operator
-      PERMISSIONS.VIEW_ISP, PERMISSIONS.CREATE_ISP, PERMISSIONS.EDIT_ISP,
-      PERMISSIONS.VIEW_DEVICE, PERMISSIONS.CREATE_DEVICE, PERMISSIONS.EDIT_DEVICE,
+      PERMISSIONS.VIEW_ISP, PERMISSIONS.CREATE_ISP, PERMISSIONS.EDIT_ISP, PERMISSIONS.DELETE_ISP, // Added DELETE_ISP
+      PERMISSIONS.VIEW_DEVICE, PERMISSIONS.CREATE_DEVICE, PERMISSIONS.EDIT_DEVICE, PERMISSIONS.DELETE_DEVICE, // Added DELETE_DEVICE
     ] as PermissionId[]
   },
   {
@@ -188,4 +189,6 @@ export const mockDevices: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: 'Firewall-Main', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.255.250.1', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', serialNumber: 'FWMAINSERIAL01', description: '主防火墙' },
   { name: 'AP-Office-Floor1-01', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '192.168.1.250', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', serialNumber: 'APOFFF101SERIAL', description: '一层办公区AP 01' },
   { name: 'Server-VMHost-01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.0.0.100', brand: 'Dell', modelNumber: 'PowerEdge R740', serialNumber: 'SRVVMH01SERIAL', description: '虚拟化宿主机 01' },
+  { name: 'OLT-Campus-BuildingA', deviceType: DeviceType.OLT, location: '园区A栋弱电间', managementIp: '10.254.1.1', brand: 'ZTE', modelNumber: 'C300', serialNumber: 'OLTCBA001SERIAL', description: 'A栋楼宇OLT设备' },
+  { name: 'DDN-Branch-Office-X', deviceType: DeviceType.DDN_DEVICE, location: 'X分公司机房', managementIp: '172.16.200.1', brand: 'Cisco', modelNumber: '2901', serialNumber: 'DDNBOXSERIAL01', description: 'X分公司DDN接入设备' },
 ];
