@@ -7,8 +7,8 @@ import {
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
-  mockISPs as seedISPsData,
-  mockDevices as seedDevicesData, // Ensure this is imported
+  mockISPs as seedISPsData, // Import ISP mock data
+  mockDevices as seedDevicesData, // Import Device mock data
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
@@ -127,8 +127,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name,
-        dhcpEnabled: subnetData.dhcpEnabled,
+        name: subnetData.name, // Added name field
+        dhcpEnabled: subnetData.dhcpEnabled, // Added dhcpEnabled field
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -138,8 +138,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name,
-        dhcpEnabled: subnetData.dhcpEnabled,
+        name: subnetData.name, // Added name field
+        dhcpEnabled: subnetData.dhcpEnabled, // Added dhcpEnabled field
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -154,11 +154,11 @@ async function main() {
       update: {
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway,
+        isGateway: ipData.isGateway, // Added isGateway
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit,
-        contactPerson: ipData.contactPerson,
-        phone: ipData.phone,
+        usageUnit: ipData.usageUnit, // Added usageUnit
+        contactPerson: ipData.contactPerson, // Added contactPerson
+        phone: ipData.phone, // Added phone
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -167,11 +167,11 @@ async function main() {
         id: ipData.id,
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway,
+        isGateway: ipData.isGateway,  // Added isGateway
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit,
-        contactPerson: ipData.contactPerson,
-        phone: ipData.phone,
+        usageUnit: ipData.usageUnit, // Added usageUnit
+        contactPerson: ipData.contactPerson, // Added contactPerson
+        phone: ipData.phone, // Added phone
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -254,5 +254,7 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
 
     
