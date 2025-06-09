@@ -7,8 +7,8 @@ import {
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
-  mockISPs as seedISPsData, // New
-  mockDevices as seedDevicesData, // New
+  mockISPs as seedISPsData, 
+  mockDevices as seedDevicesData,
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
@@ -181,7 +181,7 @@ async function main() {
   // Seed ISPs
   console.log('Seeding ISPs...');
   for (const isp of seedISPsData) {
-    await prisma.iSP.upsert({
+    await prisma.isp.upsert({ // Changed from prisma.iSP to prisma.isp
       where: { name: isp.name },
       update: { description: isp.description, contactInfo: isp.contactInfo },
       create: { name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
@@ -192,8 +192,8 @@ async function main() {
   // Seed Devices
   console.log('Seeding Devices...');
   for (const device of seedDevicesData) {
-    await prisma.device.upsert({
-      where: { name: device.name }, // Assuming name is unique for seed data initial setup
+    await prisma.device.upsert({ // Assuming prisma.device is correct, if Device model is PascalCase
+      where: { name: device.name }, 
       update: {
         deviceType: device.deviceType as AppDeviceType,
         location: device.location,
@@ -250,3 +250,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
