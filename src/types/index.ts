@@ -46,6 +46,7 @@ export const PERMISSIONS = {
 
   // Settings
   VIEW_SETTINGS: 'settings.view',
+  // PERFORM_DATABASE_BACKUP: 'settings.db_backup', // Example for future backup permission
 
   // Query Page (New)
   VIEW_QUERY_PAGE: 'querypage.view',
@@ -67,17 +68,19 @@ export interface Subnet {
   networkAddress: string;
   subnetMask: string;
   ipRange?: string;
-  vlanId?: string;
+  name?: string; // New: For "子网名称"
   description?: string;
+  dhcpEnabled?: boolean; // New: For "dhp启用"
+  vlanId?: string;
   utilization?: number;
 }
 
 export interface VLAN {
   id: string;
   vlanNumber: number;
-  name?: string; // Added VLAN name field
+  name?: string;
   description?: string;
-  subnetCount?: number;
+  subnetCount?: number; // Number of subnets and directly associated IPs
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -86,9 +89,13 @@ export interface IPAddress {
   id: string;
   ipAddress: string;
   subnetId?: string;
-  vlanId?: string; // IP-specific VLAN override
+  directVlanId?: string; // Renamed from vlanId for clarity: IP-specific VLAN override
   status: IPAddressStatus;
-  allocatedTo?: string;
+  isGateway?: boolean; // New: For "是否网关"
+  allocatedTo?: string; // General allocation target (e.g., device, service name)
+  usageUnit?: string; // New: For "使用单位"
+  contactPerson?: string; // New: For "联系人"
+  phone?: string; // New: For "电话"
   description?: string;
   lastSeen?: string;
 }
@@ -98,27 +105,27 @@ export interface User {
   username: string;
   email: string;
   roleId: string;
-  roleName?: RoleName;
+  roleName?: RoleName; // Derived in application logic
   avatar?: string;
   lastLogin?: string;
+  permissions?: PermissionId[]; // Added for currentUser context
 }
 
 export interface Role {
   id: string;
   name: RoleName;
   description?: string;
-  userCount?: number;
+  userCount?: number; // Derived from _count relation
   permissions: PermissionId[];
 }
 
-
-// For Audit Logs (simplified)
+// For Audit Logs
 export interface AuditLog {
   id: string;
-  userId: string;
-  username?: string;
+  userId: string; // Can be 'system' or a user ID
+  username?: string; // Denormalized for display, esp. if user is deleted
   action: string;
-  timestamp: string;
+  timestamp: string; // ISO string
   details?: string;
 }
 
@@ -126,9 +133,11 @@ export interface AuditLog {
 export interface SubnetQueryResult {
   id: string;
   cidr: string;
+  name?: string; // New
   description?: string;
+  dhcpEnabled?: boolean; // New
   vlanNumber?: number;
-  vlanName?: string; // Changed from vlanDescription to vlanName
+  vlanName?: string;
   totalUsableIPs: number;
   allocatedIPsCount: number;
   dbFreeIPsCount: number;
@@ -138,16 +147,14 @@ export interface SubnetQueryResult {
 export interface VlanQueryResult {
   id: string;
   vlanNumber: number;
-  name?: string; // Added name field
+  name?: string;
   description?: string;
-  associatedSubnets: Array<{ id: string; cidr: string; description?: string }>;
+  associatedSubnets: Array<{ id: string; cidr: string; name?:string; description?: string }>;
   associatedDirectIPs: Array<{ id: string; ipAddress: string; description?: string }>;
   resourceCount: number;
 }
 // For IP Address query, we can reuse AppIPAddressWithRelations from actions.ts
 
-
-// New type for Subnet IP Details view
 export interface SubnetFreeIpDetails {
   subnetId: string;
   subnetCidr: string;
@@ -167,9 +174,9 @@ export interface PaginatedResponse<T> {
 }
 
 export interface BatchOperationFailure<TIdentifier = string> {
-  id: TIdentifier;
-  itemIdentifier: string;
-  error: string;
+  id: TIdentifier; // Original ID of the item that failed
+  itemIdentifier: string; // User-friendly identifier (e.g., CIDR, VLAN number, IP address)
+  error: string; // User-friendly error message
 }
 
 export interface BatchDeleteResult<TIdentifier = string> {
