@@ -7,15 +7,15 @@ import {
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
-  mockISPs as seedISPsData, 
-  mockDevices as seedDevicesData,
+  mockISPs as seedISPsData,
+  mockDevices as seedDevicesData, // Ensure this is imported
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
-// Ensure DeviceType enum is imported correctly to be used as a value
-import { DeviceType as AppDeviceType } from '../src/types';
+// Correctly import DeviceType as a value (enum) for use in seeding
+import { DeviceType as AppDeviceType } from '../src/types'; // Renaming to AppDeviceType to avoid conflict if Prisma has its own DeviceType
 
 async function main() {
   console.log('Start seeding ...');
@@ -99,7 +99,7 @@ async function main() {
         await prisma.vLAN.delete({ where: { id: conflictingVlan.id } });
       }
     }
-    await prisma.vLAN.upsert({
+    await prisma.vLAN.upsert({ // Use vLAN (PascalCase as per Prisma schema for this specific model if it was like that)
       where: { id: vlanData.id },
       update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
       create: { id: vlanData.id, vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
@@ -127,8 +127,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name, // Added
-        dhcpEnabled: subnetData.dhcpEnabled, // Added
+        name: subnetData.name,
+        dhcpEnabled: subnetData.dhcpEnabled,
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -138,8 +138,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name, // Added
-        dhcpEnabled: subnetData.dhcpEnabled, // Added
+        name: subnetData.name,
+        dhcpEnabled: subnetData.dhcpEnabled,
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -149,16 +149,16 @@ async function main() {
 
   console.log('Seeding IP Addresses...');
   for (const ipData of seedIPsData) {
-    await prisma.iPAddress.upsert({
+    await prisma.iPAddress.upsert({ // Use iPAddress (camelCase, Prisma default)
       where: { id: ipData.id },
       update: {
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway, // Added
+        isGateway: ipData.isGateway,
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit, // Added
-        contactPerson: ipData.contactPerson, // Added
-        phone: ipData.phone, // Added
+        usageUnit: ipData.usageUnit,
+        contactPerson: ipData.contactPerson,
+        phone: ipData.phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -167,11 +167,11 @@ async function main() {
         id: ipData.id,
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway, // Added
+        isGateway: ipData.isGateway,
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit, // Added
-        contactPerson: ipData.contactPerson, // Added
-        phone: ipData.phone, // Added
+        usageUnit: ipData.usageUnit,
+        contactPerson: ipData.contactPerson,
+        phone: ipData.phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -183,7 +183,7 @@ async function main() {
   // Seed ISPs
   console.log('Seeding ISPs...');
   for (const isp of seedISPsData) {
-    // Ensure prisma.isp is used (lowercase 'isp' for the model 'ISP')
+    // Use prisma.isp (lowercase) as Prisma client usually lowercases model names like 'ISP'
     await prisma.isp.upsert({ 
       where: { name: isp.name },
       update: { description: isp.description, contactInfo: isp.contactInfo },
@@ -195,11 +195,11 @@ async function main() {
   // Seed Devices
   console.log('Seeding Devices...');
   for (const device of seedDevicesData) {
-    // Ensure prisma.device is used (lowercase 'device' for the model 'Device')
+    // Use prisma.device (lowercase) as Prisma client usually lowercases model names like 'Device'
     await prisma.device.upsert({ 
       where: { name: device.name }, 
       update: {
-        deviceType: device.deviceType as AppDeviceType, // Ensure AppDeviceType is correctly imported and used
+        deviceType: device.deviceType as AppDeviceType, // Use imported AppDeviceType
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -209,7 +209,7 @@ async function main() {
       },
       create: {
         name: device.name,
-        deviceType: device.deviceType as AppDeviceType, // Ensure AppDeviceType is correctly imported and used
+        deviceType: device.deviceType as AppDeviceType, // Use imported AppDeviceType
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -254,3 +254,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
