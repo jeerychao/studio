@@ -5,12 +5,12 @@ datasource db {
 }
 
 generator client {
-  provider        = "prisma-client-js"
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 model Permission {
-  id          String   @id @default(cuid()) // Assuming permissions might be added via UI later
+  id          String   @id
   name        String   @unique
   group       String
   description String?
@@ -20,7 +20,7 @@ model Permission {
 }
 
 model Role {
-  id          String   @id // Roles are fixed and seeded with specific IDs
+  id          String   @id
   name        String   @unique
   description String?
   users       User[]
@@ -30,32 +30,32 @@ model Role {
 }
 
 model User {
-  id        String     @id // Users are seeded with specific IDs for mock purposes
-  username  String     @unique
-  email     String     @unique
-  password  String
-  avatar    String?
-  lastLogin DateTime?
-  roleId    String
-  role      Role       @relation(fields: [roleId], references: [id])
-  auditLogs AuditLog[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id          String    @id
+  username    String    @unique
+  email       String    @unique
+  password    String
+  avatar      String?
+  lastLogin   DateTime?
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id])
+  auditLogs   AuditLog[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model VLAN {
-  id                String      @id // VLANs are seeded with specific IDs
-  vlanNumber        Int         @unique
+  id                String    @id
+  vlanNumber        Int       @unique
   name              String?
   description       String?
   subnets           Subnet[]
   directIpAddresses IPAddress[] @relation("IpToDirectVlan")
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model Subnet {
-  id             String     @id // Subnets are seeded with specific IDs
+  id             String     @id
   cidr           String     @unique
   networkAddress String
   subnetMask     String
@@ -71,29 +71,29 @@ model Subnet {
 }
 
 model IPAddress {
-  id                String    @id // IPAddresses are seeded with specific IDs
+  id                String     @id
   ipAddress         String
   subnetId          String?
-  subnet            Subnet?   @relation("IpToSubnet", fields: [subnetId], references: [id], onDelete: SetNull)
+  subnet            Subnet?    @relation("IpToSubnet", fields: [subnetId], references: [id], onDelete: SetNull)
   directVlanId      String?
-  directVlan        VLAN?     @relation("IpToDirectVlan", fields: [directVlanId], references: [id], onDelete: SetNull)
-  status            String    // "allocated", "free", "reserved"
-  isGateway         Boolean?  @default(false)
+  directVlan        VLAN?      @relation("IpToDirectVlan", fields: [directVlanId], references: [id], onDelete: SetNull)
+  status            String     // "allocated", "free", "reserved"
+  isGateway         Boolean?   @default(false)
   allocatedTo       String?
   usageUnit         String?
   contactPerson     String?
   phone             String?
   description       String?
-  lastSeen          DateTime? // Manual update, no @updatedAt
+  lastSeen          DateTime?
   deviceConnections DeviceConnection[] @relation("IpToDeviceConnection")
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   @@unique([ipAddress, subnetId])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid()) // AuditLogs should auto-generate IDs
+  id        String   @id @default(cuid())
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   username  String?
@@ -103,33 +103,33 @@ model AuditLog {
 }
 
 model Isp {
-  id                String             @id @default(cuid()) // ISPs created via UI need auto-ID
-  name              String             @unique
+  id                String    @id @default(cuid())
+  name              String    @unique
   description       String?
-  contactInfo     String?
+  contactInfo       String?
   deviceConnections DeviceConnection[] @relation("IspForConnection")
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model Device {
-  id                String             @id @default(cuid()) // Devices created via UI need auto-ID
-  name              String             @unique
-  deviceType        String?
+  id                String    @id @default(cuid())
+  name              String    @unique
+  deviceType        String?   // e.g., ROUTER, SWITCH, FIREWALL, SERVER
   location          String?
-  managementIp      String?            @unique
+  managementIp      String?   @unique
   brand             String?
   modelNumber       String?
-  serialNumber      String?            @unique
+  serialNumber      String?   @unique
   description       String?
   localConnections  DeviceConnection[] @relation("LocalDeviceConnections")
   remoteConnections DeviceConnection[] @relation("RemoteDeviceConnections")
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model DeviceConnection {
-  id                 String    @id @default(cuid()) // Connections created via UI need auto-ID
+  id                 String    @id @default(cuid())
   localDeviceId      String
   localDevice        Device    @relation("LocalDeviceConnections", fields: [localDeviceId], references: [id])
   localIpId          String?
@@ -139,8 +139,8 @@ model DeviceConnection {
   remoteHostnameOrIp String?
   ispId              String?
   isp                Isp?      @relation("IspForConnection", fields: [ispId], references: [id], onDelete: SetNull)
-  connectionType     String
-  status             String
+  connectionType     String    // e.g., ETHERNET_COPPER, ETHERNET_FIBER, WIFI, VPN
+  status             String    // e.g., ACTIVE, INACTIVE, MAINTENANCE
   bandwidth          String?
   localInterface     String?
   remoteInterface    String?
