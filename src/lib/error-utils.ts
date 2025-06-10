@@ -1,3 +1,4 @@
+
 // src/lib/error-utils.ts
 
 import { AppError, ValidationError, ResourceError, NetworkError } from './errors';
@@ -148,10 +149,12 @@ export function createActionErrorResponse(
   }
 
   if (error instanceof Prisma.PrismaClientValidationError) {
+    // Make userMessage more verbose for PrismaClientValidationError
+    const detailedUserMessage = `数据验证失败。Prisma 客户端验证错误：${error.message}. 请检查所有字段是否符合要求。`;
     return {
-        userMessage: "数据验证失败，无法执行数据库操作。请检查所有字段是否符合要求。",
+        userMessage: detailedUserMessage,
         code: 'PRISMA_VALIDATION_ERROR',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        details: process.env.NODE_ENV === 'development' ? error.message : "Prisma Client Validation Error. Enable development mode for more details.",
     };
   }
 
