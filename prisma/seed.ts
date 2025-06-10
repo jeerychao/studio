@@ -9,12 +9,12 @@ import {
   mockAuditLogs as seedAuditLogsData,
   mockISPs as seedISPsData, 
   mockDevices as seedDevicesData, 
+  mockDeviceConnections as seedDeviceConnectionsData, // Added DeviceConnection mock data
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
-import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
-// Correctly import DeviceType as a value (enum) for use in seeding
+import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType, DeviceConnection as AppDeviceConnection, DeviceConnectionType, DeviceConnectionStatus } from '../src/types';
 import { DeviceType as AppDeviceType } from '../src/types'; 
 
 async function main() {
@@ -180,24 +180,23 @@ async function main() {
   }
   console.log('IP Addresses seeded.');
 
-  // Seed ISPs
   console.log('Seeding ISPs...');
   for (const isp of seedISPsData) {
-    await prisma.isp.upsert({ // Changed from prisma.iSP to prisma.isp
-      where: { name: isp.name },
-      update: { description: isp.description, contactInfo: isp.contactInfo },
-      create: { name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
+    await prisma.isp.upsert({ 
+      where: { id: (isp as any).id }, // Assuming IDs are pre-assigned in mockISPs for upsert
+      update: { name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
+      create: { id: (isp as any).id, name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
     });
   }
   console.log('ISPs seeded.');
 
-  // Seed Devices
   console.log('Seeding Devices...');
   for (const device of seedDevicesData) {
-    await prisma.device.upsert({ // Changed from prisma.Device to prisma.device
-      where: { name: device.name }, 
+    await prisma.device.upsert({ 
+      where: { id: (device as any).id }, // Assuming IDs are pre-assigned
       update: {
-        deviceType: device.deviceType as AppDeviceType, 
+        name: device.name,
+        deviceType: device.deviceType as string | undefined, 
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -206,8 +205,9 @@ async function main() {
         description: device.description,
       },
       create: {
+        id: (device as any).id,
         name: device.name,
-        deviceType: device.deviceType as AppDeviceType, 
+        deviceType: device.deviceType as string | undefined, 
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -219,6 +219,33 @@ async function main() {
   }
   console.log('Devices seeded.');
 
+  console.log('Seeding Device Connections...');
+  for (const connData of seedDeviceConnectionsData) {
+    // Type assertion as Prisma generated types will expect connect objects for relations
+    const createPayload: Prisma.DeviceConnectionCreateInput = {
+        id: connData.id,
+        localDevice: { connect: { id: connData.localDeviceId } },
+        localIpAddress: connData.localIpId ? { connect: { id: connData.localIpId } } : undefined,
+        remoteDevice: connData.remoteDeviceId ? { connect: { id: connData.remoteDeviceId } } : undefined,
+        isp: connData.ispId ? { connect: { id: connData.ispId } } : undefined,
+        connectionType: connData.connectionType as string, // Prisma expects string here due to schema
+        status: connData.status as string, // Prisma expects string here
+        bandwidth: connData.bandwidth,
+        localInterface: connData.localInterface,
+        remoteHostnameOrIp: connData.remoteHostnameOrIp,
+        remoteInterface: connData.remoteInterface,
+        description: connData.description,
+    };
+    const updatePayload: Prisma.DeviceConnectionUpdateInput = { ...createPayload };
+    delete (updatePayload as any).id; // id should not be in update payload like this
+
+    await prisma.deviceConnection.upsert({
+      where: { id: connData.id },
+      create: createPayload,
+      update: updatePayload,
+    });
+  }
+  console.log('Device Connections seeded.');
 
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {
@@ -252,4 +279,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

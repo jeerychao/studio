@@ -46,22 +46,27 @@ export const PERMISSIONS = {
 
   // Settings
   VIEW_SETTINGS: 'settings.view',
-  // PERFORM_DATABASE_BACKUP: 'settings.db_backup', // Example for future backup permission
 
   // Query Page
   VIEW_QUERY_PAGE: 'querypage.view',
 
-  // ISP Management (New)
+  // ISP Management
   VIEW_ISP: 'isp.view',
   CREATE_ISP: 'isp.create',
   EDIT_ISP: 'isp.edit',
   DELETE_ISP: 'isp.delete',
 
-  // Device Management (New)
+  // Device Management
   VIEW_DEVICE: 'device.view',
   CREATE_DEVICE: 'device.create',
   EDIT_DEVICE: 'device.edit',
   DELETE_DEVICE: 'device.delete',
+
+  // Device Connections (New)
+  VIEW_DEVICECONNECTION: 'deviceconnection.view',
+  CREATE_DEVICECONNECTION: 'deviceconnection.create',
+  EDIT_DEVICECONNECTION: 'deviceconnection.edit',
+  DELETE_DEVICECONNECTION: 'deviceconnection.delete',
 
 } as const;
 
@@ -92,7 +97,7 @@ export interface VLAN {
   vlanNumber: number;
   name?: string;
   description?: string;
-  subnetCount?: number; // Number of subnets and directly associated IPs
+  subnetCount?: number; 
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -194,7 +199,6 @@ export interface BatchDeleteResult<TIdentifier = string> {
   failureDetails: Array<BatchOperationFailure<TIdentifier>>;
 }
 
-// New Enum for Device Types (matches Prisma Enum)
 export enum DeviceType {
   ROUTER = "ROUTER",
   SWITCH = "SWITCH",
@@ -206,18 +210,15 @@ export enum DeviceType {
   OTHER = "OTHER",
 }
 
-// New Interface for ISP
 export interface ISP {
   id: string;
   name: string;
   description?: string;
   contactInfo?: string;
-  // deviceConnectionCount?: number; // Will be added when DeviceConnection is introduced
   createdAt?: string;
   updatedAt?: string;
 }
 
-// New Interface for Device
 export interface Device {
   id: string;
   name: string;
@@ -228,9 +229,48 @@ export interface Device {
   modelNumber?: string;
   serialNumber?: string;
   description?: string;
-  // deviceConnectionCount?: number; // Will be added when DeviceConnection is introduced
   createdAt?: string;
   updatedAt?: string;
 }
 
-// DeviceConnection interface will be added in Phase 3
+// New types for DeviceConnection
+export type DeviceConnectionType = 
+  | "ETHERNET_COPPER" 
+  | "ETHERNET_FIBER" 
+  | "WIFI" 
+  | "VPN_IPSEC" 
+  | "VPN_SSL" 
+  | "SERIAL" 
+  | "CELLULAR"
+  | "SATELLITE"
+  | "OTHER";
+
+export type DeviceConnectionStatus = 
+  | "ACTIVE" 
+  | "INACTIVE" 
+  | "MAINTENANCE" 
+  | "PLANNED"
+  | "DECOMMISSIONED";
+
+export interface DeviceConnection {
+  id: string;
+  localDeviceId: string;
+  localIpId?: string;
+  remoteDeviceId?: string;
+  remoteHostnameOrIp?: string;
+  ispId?: string;
+  connectionType: DeviceConnectionType; 
+  status: DeviceConnectionStatus;
+  bandwidth?: string;
+  localInterface?: string;
+  remoteInterface?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+
+  // For UI display, these might be populated by actions
+  localDeviceName?: string;
+  localIpAddressString?: string;
+  remoteDeviceName?: string;
+  ispName?: string;
+}

@@ -1,10 +1,8 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, ISP, Device } from '../types';
-// Correctly import DeviceType as a value (enum)
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, ISP, Device, DeviceConnection, DeviceConnectionType, DeviceConnectionStatus } from '../types';
 import { PERMISSIONS, DeviceType } from '../types';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 
-// Fixed Role IDs
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
 export const OPERATOR_ROLE_ID = 'role_operator_fixed_id';
 export const VIEWER_ROLE_ID = 'role_viewer_fixed_id';
@@ -37,7 +35,6 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: 'Perform Data Export', group: 'Tools', description: 'Can export data to files (e.g., CSV).' },
   { id: PERMISSIONS.VIEW_SETTINGS, name: 'View Settings', group: 'System Settings', description: 'Can view application-wide settings.' },
   { id: PERMISSIONS.VIEW_QUERY_PAGE, name: 'View Query Page', group: 'Query Tool', description: 'Access the comprehensive query tool.' },
-  // New permissions for ISP and Device
   { id: PERMISSIONS.VIEW_ISP, name: 'View ISPs', group: 'ISP Management', description: 'Can view ISP details.' },
   { id: PERMISSIONS.CREATE_ISP, name: 'Create ISPs', group: 'ISP Management', description: 'Can add new ISPs.' },
   { id: PERMISSIONS.EDIT_ISP, name: 'Edit ISPs', group: 'ISP Management', description: 'Can modify existing ISPs.' },
@@ -46,6 +43,10 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.CREATE_DEVICE, name: 'Create Devices', group: 'Device Management', description: 'Can add new devices.' },
   { id: PERMISSIONS.EDIT_DEVICE, name: 'Edit Devices', group: 'Device Management', description: 'Can modify existing devices.' },
   { id: PERMISSIONS.DELETE_DEVICE, name: 'Delete Devices', group: 'Device Management', description: 'Can remove devices.' },
+  { id: PERMISSIONS.VIEW_DEVICECONNECTION, name: 'View Device Connections', group: 'Device Connection Management', description: 'Can view device connection details.' },
+  { id: PERMISSIONS.CREATE_DEVICECONNECTION, name: 'Create Device Connections', group: 'Device Connection Management', description: 'Can add new device connections.' },
+  { id: PERMISSIONS.EDIT_DEVICECONNECTION, name: 'Edit Device Connections', group: 'Device Connection Management', description: 'Can modify existing device connections.' },
+  { id: PERMISSIONS.DELETE_DEVICECONNECTION, name: 'Delete Device Connections', group: 'Device Connection Management', description: 'Can remove device connections.' },
 ];
 
 function createInitialSubnetSeedData(
@@ -68,7 +69,7 @@ function createInitialSubnetSeedData(
     networkAddress,
     subnetMask,
     ipRange,
-    name: name || undefined, // Keep name distinct from description
+    name: name || undefined, 
     dhcpEnabled: dhcpEnabled ?? false,
     vlanId,
     description,
@@ -124,7 +125,7 @@ export const mockRoles: Role[] = [
     id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: mockPermissions.map(p => p.id as PermissionId) // All permissions
+    permissions: mockPermissions.map(p => p.id as PermissionId)
   },
   {
     id: OPERATOR_ROLE_ID,
@@ -138,9 +139,9 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
       PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT,
-      // New permissions for Operator
-      PERMISSIONS.VIEW_ISP, PERMISSIONS.CREATE_ISP, PERMISSIONS.EDIT_ISP, PERMISSIONS.DELETE_ISP, // Added DELETE_ISP
-      PERMISSIONS.VIEW_DEVICE, PERMISSIONS.CREATE_DEVICE, PERMISSIONS.EDIT_DEVICE, PERMISSIONS.DELETE_DEVICE, // Added DELETE_DEVICE
+      PERMISSIONS.VIEW_ISP, PERMISSIONS.CREATE_ISP, PERMISSIONS.EDIT_ISP, PERMISSIONS.DELETE_ISP,
+      PERMISSIONS.VIEW_DEVICE, PERMISSIONS.CREATE_DEVICE, PERMISSIONS.EDIT_DEVICE, PERMISSIONS.DELETE_DEVICE,
+      PERMISSIONS.VIEW_DEVICECONNECTION, PERMISSIONS.CREATE_DEVICECONNECTION, PERMISSIONS.EDIT_DEVICECONNECTION, PERMISSIONS.DELETE_DEVICECONNECTION,
     ] as PermissionId[]
   },
   {
@@ -154,9 +155,9 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
-      // New permissions for Viewer
       PERMISSIONS.VIEW_ISP,
       PERMISSIONS.VIEW_DEVICE,
+      PERMISSIONS.VIEW_DEVICECONNECTION,
     ] as PermissionId[]
   },
 ];
@@ -174,7 +175,6 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-// New mock data for ISP
 export const mockISPs: Omit<ISP, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: '中国电信 (China Telecom)', description: '主要固网和移动运营商', contactInfo: '客服热线: 10000' },
   { name: '中国联通 (China Unicom)', description: '主要固网和移动运营商', contactInfo: '客服热线: 10010' },
@@ -182,13 +182,88 @@ export const mockISPs: Omit<ISP, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: '教育网 (CERNET)', description: '中国教育和科研计算机网', contactInfo: 'noc@cernet.com' },
 ];
 
-// New mock data for Device
 export const mockDevices: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { name: 'Core-Switch-A1', deviceType: DeviceType.SWITCH, location: '主数据中心 A1柜', managementIp: '10.255.1.1', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'CS7506EA1SERIAL', description: '核心汇聚交换机 A' },
-  { name: 'Edge-Router-Telecom', deviceType: DeviceType.ROUTER, location: '电信接入间', managementIp: '10.255.254.1', brand: 'Huawei', modelNumber: 'NE40E-X8', serialNumber: 'ERTCSERIAL001', description: '电信出口路由器' },
-  { name: 'Firewall-Main', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.255.250.1', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', serialNumber: 'FWMAINSERIAL01', description: '主防火墙' },
-  { name: 'AP-Office-Floor1-01', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '192.168.1.250', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', serialNumber: 'APOFFF101SERIAL', description: '一层办公区AP 01' },
-  { name: 'Server-VMHost-01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.0.0.100', brand: 'Dell', modelNumber: 'PowerEdge R740', serialNumber: 'SRVVMH01SERIAL', description: '虚拟化宿主机 01' },
-  { name: 'OLT-Campus-BuildingA', deviceType: DeviceType.OLT, location: '园区A栋弱电间', managementIp: '10.254.1.1', brand: 'ZTE', modelNumber: 'C300', serialNumber: 'OLTCBA001SERIAL', description: 'A栋楼宇OLT设备' },
-  { name: 'DDN-Branch-Office-X', deviceType: DeviceType.DDN_DEVICE, location: 'X分公司机房', managementIp: '172.16.200.1', brand: 'Cisco', modelNumber: '2901', serialNumber: 'DDNBOXSERIAL01', description: 'X分公司DDN接入设备' },
+  { id: 'seed_device_001', name: 'Core-Switch-A1', deviceType: DeviceType.SWITCH, location: '主数据中心 A1柜', managementIp: '10.255.1.1', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'CS7506EA1SERIAL', description: '核心汇聚交换机 A' },
+  { id: 'seed_device_002', name: 'Edge-Router-Telecom', deviceType: DeviceType.ROUTER, location: '电信接入间', managementIp: '10.255.254.1', brand: 'Huawei', modelNumber: 'NE40E-X8', serialNumber: 'ERTCSERIAL001', description: '电信出口路由器' },
+  { id: 'seed_device_003', name: 'Firewall-Main', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.255.250.1', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', serialNumber: 'FWMAINSERIAL01', description: '主防火墙' },
+  { id: 'seed_device_004', name: 'AP-Office-Floor1-01', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '192.168.1.250', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', serialNumber: 'APOFFF101SERIAL', description: '一层办公区AP 01' },
+  { id: 'seed_device_005', name: 'Server-VMHost-01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.0.0.100', brand: 'Dell', modelNumber: 'PowerEdge R740', serialNumber: 'SRVVMH01SERIAL', description: '虚拟化宿主机 01' },
+  { id: 'seed_device_006', name: 'OLT-Campus-BuildingA', deviceType: DeviceType.OLT, location: '园区A栋弱电间', managementIp: '10.254.1.1', brand: 'ZTE', modelNumber: 'C300', serialNumber: 'OLTCBA001SERIAL', description: 'A栋楼宇OLT设备' },
+  { id: 'seed_device_007', name: 'DDN-Branch-Office-X', deviceType: DeviceType.DDN_DEVICE, location: 'X分公司机房', managementIp: '172.16.200.1', brand: 'Cisco', modelNumber: '2901', serialNumber: 'DDNBOXSERIAL01', description: 'X分公司DDN接入设备' },
 ];
+
+export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  {
+    id: 'seed_dc_001',
+    localDeviceId: 'seed_device_001', // Core-Switch-A1
+    localIpId: undefined, // Switches often connect via layer 2 or have SVIs not directly tied to a 'connection IP'
+    remoteDeviceId: 'seed_device_002', // Edge-Router-Telecom
+    connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
+    status: 'ACTIVE' as DeviceConnectionStatus,
+    bandwidth: '10 Gbps',
+    localInterface: 'Ten-GigabitEthernet1/0/1',
+    remoteInterface: 'GigabitEthernet0/0/1',
+    description: 'Uplink from Core Switch A1 to Edge Router Telecom',
+  },
+  {
+    id: 'seed_dc_002',
+    localDeviceId: 'seed_device_002', // Edge-Router-Telecom
+    localIpId: undefined, // Assuming WAN IP is not managed as a separate IPAddress entity for this connection
+    remoteHostnameOrIp: '202.96.128.86', // Example external IP for ISP
+    ispId: mockISPs.find(isp => isp.name.includes('Telecom'))?.id || 'seed_isp_telecom_fallback_id', // Find China Telecom ISP
+    connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
+    status: 'ACTIVE' as DeviceConnectionStatus,
+    bandwidth: '1 Gbps',
+    localInterface: 'GigabitEthernet0/0/0',
+    description: 'Primary internet connection via China Telecom',
+  },
+  {
+    id: 'seed_dc_003',
+    localDeviceId: 'seed_device_001', // Core-Switch-A1
+    localIpId: undefined,
+    remoteDeviceId: 'seed_device_005', // Server-VMHost-01
+    connectionType: 'ETHERNET_COPPER' as DeviceConnectionType,
+    status: 'ACTIVE' as DeviceConnectionStatus,
+    bandwidth: '1 Gbps',
+    localInterface: 'GigabitEthernet1/0/10',
+    remoteInterface: 'eth0',
+    description: 'Connection to VMHost-01',
+  },
+];
+
+// Ensure mockISPs have IDs before mockDeviceConnections uses them
+mockISPs.forEach((isp, index) => {
+  (isp as any).id = `seed_isp_${index.toString().padStart(3, '0')}`;
+  if (isp.name.includes('Telecom')) (isp as any).id = 'seed_isp_telecom_fallback_id'; // for specific lookup
+});
+mockDevices.forEach((device, index) => {
+  (device as any).id = `seed_device_${index.toString().padStart(3, '0')}`;
+});
+
+// Assign IDs to Device Connections for seeding if not already present
+mockDeviceConnections.forEach((conn, index) => {
+    if (!conn.id) {
+      conn.id = `seed_dc_${index.toString().padStart(3, '0')}`;
+    }
+    // Make sure the ispId used in mockDeviceConnections matches one from mockISPs
+    const telecomISP = mockISPs.find(isp => isp.name.includes('China Telecom'));
+    if (telecomISP && conn.ispId === 'seed_isp_telecom_fallback_id') {
+      conn.ispId = (telecomISP as any).id;
+    }
+});
+
+
+// Verify that all referenced IDs in mockDeviceConnections exist in their respective mock arrays
+// This is a sanity check for development
+const deviceIds = new Set(mockDevices.map(d => d.id));
+const ipIds = new Set(mockIPAddresses.map(ip => ip.id));
+const ispIds = new Set(mockISPs.map(i => (i as any).id));
+
+mockDeviceConnections.forEach(conn => {
+  if (!deviceIds.has(conn.localDeviceId)) console.warn(`[Seed Data Warning] mockDeviceConnections: localDeviceId ${conn.localDeviceId} not found in mockDevices.`);
+  if (conn.localIpId && !ipIds.has(conn.localIpId)) console.warn(`[Seed Data Warning] mockDeviceConnections: localIpId ${conn.localIpId} not found in mockIPAddresses.`);
+  if (conn.remoteDeviceId && !deviceIds.has(conn.remoteDeviceId)) console.warn(`[Seed Data Warning] mockDeviceConnections: remoteDeviceId ${conn.remoteDeviceId} not found in mockDevices.`);
+  if (conn.ispId && !ispIds.has(conn.ispId)) console.warn(`[Seed Data Warning] mockDeviceConnections: ispId ${conn.ispId} not found in mockISPs.`);
+});
+
+
