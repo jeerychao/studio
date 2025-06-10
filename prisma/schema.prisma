@@ -5,12 +5,12 @@ datasource db {
 }
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
 }
 
 model Permission {
-  id          String   @id
+  id          String   @id @default(cuid()) // Assuming permissions might be added via UI later
   name        String   @unique
   group       String
   description String?
@@ -20,31 +20,31 @@ model Permission {
 }
 
 model Role {
-  id          String       @id
-  name        String       @unique
+  id          String   @id // Roles are fixed and seeded with specific IDs
+  name        String   @unique
   description String?
   users       User[]
   permissions Permission[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model User {
-  id          String     @id
-  username    String     @unique
-  email       String     @unique
-  password    String
-  avatar      String?
-  lastLogin   DateTime?
-  roleId      String
-  role        Role       @relation(fields: [roleId], references: [id])
-  auditLogs   AuditLog[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id        String     @id // Users are seeded with specific IDs for mock purposes
+  username  String     @unique
+  email     String     @unique
+  password  String
+  avatar    String?
+  lastLogin DateTime?
+  roleId    String
+  role      Role       @relation(fields: [roleId], references: [id])
+  auditLogs AuditLog[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model VLAN {
-  id                String      @id
+  id                String      @id // VLANs are seeded with specific IDs
   vlanNumber        Int         @unique
   name              String?
   description       String?
@@ -55,7 +55,7 @@ model VLAN {
 }
 
 model Subnet {
-  id             String     @id
+  id             String     @id // Subnets are seeded with specific IDs
   cidr           String     @unique
   networkAddress String
   subnetMask     String
@@ -71,7 +71,7 @@ model Subnet {
 }
 
 model IPAddress {
-  id                String    @id
+  id                String    @id // IPAddresses are seeded with specific IDs
   ipAddress         String
   subnetId          String?
   subnet            Subnet?   @relation("IpToSubnet", fields: [subnetId], references: [id], onDelete: SetNull)
@@ -84,38 +84,38 @@ model IPAddress {
   contactPerson     String?
   phone             String?
   description       String?
-  lastSeen          DateTime?
+  lastSeen          DateTime? // Manual update, no @updatedAt
   deviceConnections DeviceConnection[] @relation("IpToDeviceConnection")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  @@unique([ipAddress, subnetId]) // IP must be unique within its subnet, or globally if no subnet
+  @@unique([ipAddress, subnetId])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid()) // Added @default(cuid())
+  id        String   @id @default(cuid()) // AuditLogs should auto-generate IDs
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  username  String?  // Denormalized for cases where user might be deleted
+  username  String?
   action    String
   details   String?
-  timestamp DateTime @default(now()) // No updatedAt for audit logs as they are immutable once created
+  timestamp DateTime @default(now())
 }
 
 model Isp {
-  id                String             @id
+  id                String             @id @default(cuid()) // ISPs created via UI need auto-ID
   name              String             @unique
   description       String?
-  contactInfo       String?
+  contactInfo     String?
   deviceConnections DeviceConnection[] @relation("IspForConnection")
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
 
 model Device {
-  id                String             @id
+  id                String             @id @default(cuid()) // Devices created via UI need auto-ID
   name              String             @unique
-  deviceType        String?            // e.g., ROUTER, SWITCH, FIREWALL, SERVER
+  deviceType        String?
   location          String?
   managementIp      String?            @unique
   brand             String?
@@ -129,22 +129,22 @@ model Device {
 }
 
 model DeviceConnection {
-  id                 String   @id
+  id                 String    @id @default(cuid()) // Connections created via UI need auto-ID
   localDeviceId      String
-  localDevice        Device   @relation("LocalDeviceConnections", fields: [localDeviceId], references: [id])
+  localDevice        Device    @relation("LocalDeviceConnections", fields: [localDeviceId], references: [id])
   localIpId          String?
   localIpAddress     IPAddress? @relation("IpToDeviceConnection", fields: [localIpId], references: [id], onDelete: SetNull)
   remoteDeviceId     String?
-  remoteDevice       Device?  @relation("RemoteDeviceConnections", fields: [remoteDeviceId], references: [id], onDelete: SetNull)
+  remoteDevice       Device?   @relation("RemoteDeviceConnections", fields: [remoteDeviceId], references: [id], onDelete: SetNull)
   remoteHostnameOrIp String?
   ispId              String?
-  isp                Isp?     @relation("IspForConnection", fields: [ispId], references: [id], onDelete: SetNull)
-  connectionType     String   // e.g., ETHERNET_COPPER, ETHERNET_FIBER, WIFI, VPN
-  status             String   // e.g., ACTIVE, INACTIVE, MAINTENANCE
+  isp                Isp?      @relation("IspForConnection", fields: [ispId], references: [id], onDelete: SetNull)
+  connectionType     String
+  status             String
   bandwidth          String?
   localInterface     String?
   remoteInterface    String?
   description        String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
