@@ -1,12 +1,12 @@
+// prisma/schema.prisma
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = []
+  provider = "prisma-client-js"
 }
 
 model Subnet {
@@ -15,171 +15,152 @@ model Subnet {
   networkAddress String      // e.g., "192.168.1.0"
   subnetMask     String      // e.g., "255.255.255.0"
   ipRange        String?     // e.g., "192.168.1.1 - 192.168.1.254"
-  name           String?     // User-defined name for the subnet
-  dhcpEnabled    Boolean?    @default(false)
+  name           String?
   description    String?
+  dhcpEnabled    Boolean?    @default(false)
   vlanId         String?
-  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: SetNull) // If VLAN deleted, set vlanId to null
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: Restrict) // Restrict deletion if VLAN is in use
   ipAddresses    IPAddress[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 }
 
 model VLAN {
-  id          String    @id @default(uuid())
-  vlanNumber  Int       @unique // 1-4094
-  name        String?
-  description String?
-  subnets     Subnet[]
-  ipAddresses IPAddress[] @relation("DirectVlanToIPAddresses") // IPs directly associated with this VLAN
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String      @id @default(uuid())
+  vlanNumber   Int         @unique // 1-4094
+  name         String?
+  description  String?
+  subnets      Subnet[]
+  ipAddresses  IPAddress[] @relation("DirectVLANForIP") // IPs directly assigned to this VLAN
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model IPAddress {
   id            String        @id @default(uuid())
   ipAddress     String        // e.g., "192.168.1.100"
   subnetId      String?
-  subnet        Subnet?       @relation(fields: [subnetId], references: [id], onDelete: Cascade) // If Subnet deleted, IP is deleted
-  directVlanId  String?       // For IPs not in a subnet but directly on a VLAN
-  directVlan    VLAN?         @relation("DirectVlanToIPAddresses", fields: [directVlanId], references: [id], onDelete: SetNull)
-  status        String        // e.g., "allocated", "free", "reserved"
+  subnet        Subnet?       @relation(fields: [subnetId], references: [id], onDelete: SetNull) // If subnet deleted, IP becomes unassigned from subnet
+  directVlanId  String?       // For IPs directly assigned to a VLAN, not via subnet
+  directVlan    VLAN?         @relation("DirectVLANForIP", fields: [directVlanId], references: [id], onDelete: SetNull)
+  status        String        // "allocated", "free", "reserved"
   isGateway     Boolean?      @default(false)
-  allocatedTo   String?       // e.g., "Server-01", "John Doe PC"
+  allocatedTo   String?       // e.g., "Server-01", "User-PC"
   usageUnit     String?       // e.g., "Marketing Department", "R&D Lab"
-  contactPerson String?       // e.g., "Jane Smith"
-  phone         String?       // e.g., "123-456-7890"
+  contactPerson String?
+  phone         String?
   description   String?
-  lastSeen      DateTime?     @updatedAt // Automatically updated
+  lastSeen      DateTime?     @updatedAt // Automatically updates on any change, can represent last active or modification time
+  createdAt     DateTime      @default(now())
 
-  deviceConnections DeviceConnection[] @relation("IPAddressToConnections")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([ipAddress, subnetId]) // An IP must be unique within its subnet, or globally if no subnet
+  @@unique([ipAddress, subnetId], name: "unique_ip_in_subnet")
+  @@index([status])
+  @@index([allocatedTo])
 }
 
 model User {
-  id        String    @id @default(uuid())
-  username  String    @unique
-  email     String    @unique
-  password  String    // In a real app, this would be hashed
-  roleId    String
-  role      Role      @relation(fields: [roleId], references: [id])
-  avatar    String?   // URL or path to avatar image
-  lastLogin DateTime?
-  auditLogs AuditLog[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(uuid())
+  username    String    @unique
+  email       String    @unique
+  password    String // Store hashed passwords in a real app
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id])
+  avatar      String?
+  lastLogin   DateTime?
+  auditLogs   AuditLog[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Role {
   id          String       @id @default(uuid())
   name        String       @unique // e.g., "Administrator", "Operator", "Viewer"
   description String?
-  permissions Permission[] @relation("RoleToPermissions")
   users       User[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  permissions Permission[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Permission {
-  id          String @id // e.g., "subnet.create", "user.delete"
-  name        String @unique // e.g., "Create Subnets"
-  group       String // e.g., "Subnet Management"
+  id          String   @id // e.g., "subnet.create", "user.delete"
+  name        String   @unique // e.g., "Create Subnets"
+  group       String   // e.g., "Subnet Management"
   description String?
-  roles       Role[] @relation("RoleToPermissions")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  roles       Role[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AuditLog {
   id        String   @id @default(uuid())
-  userId    String? // User who performed the action
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull) // If user deleted, keep log but nullify userId
-  username  String   // Denormalized username for easier display even if user is deleted
-  action    String   // e.g., "create_subnet", "login_user"
+  userId    String? // Can be null for system actions
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull) // If user deleted, log remains but without userId
+  username  String?  // Denormalized for easier display even if user is deleted
+  action    String   // e.g., "create_subnet", "user_login"
+  details   String?
   timestamp DateTime @default(now())
-  details   String?  // e.g., "Created subnet 192.168.1.0/24"
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
 }
 
-// ISP (Internet Service Provider)
+// ISP Model (Phase 2)
 model Isp { // Changed from ISP to Isp for Prisma convention
-  id          String    @id @default(uuid())
-  name        String    @unique
-  description String?
-  contactInfo String?   // Contact number, email, etc.
-  // Future: Add relation to connections/circuits if needed
-  deviceConnections DeviceConnection[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?
+  contactInfo  String?
+  // deviceConnections DeviceConnection[] // Future relation for Phase 3
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
-enum DeviceType {
-  ROUTER
-  SWITCH
-  FIREWALL
-  SERVER
-  ACCESS_POINT
-  OLT // Optical Line Terminal
-  DDN_DEVICE // DDN/专线设备
-  OTHER
-}
+// Device Model (Phase 2)
+// Removed DeviceType enum definition from here as SQLite doesn't support it natively.
+// We'll use a String type in the model and manage enum consistency at the application level.
 
-// Network Device
 model Device {
-  id           String      @id @default(uuid())
-  name         String      @unique // User-friendly name for the device
-  deviceType   DeviceType? // e.g., Router, Switch, Firewall
-  location     String?     // Physical location or rack details
-  managementIp String?     @unique // Management IP address of the device
+  id           String  @id @default(uuid())
+  name         String  @unique
+  deviceType   String? // Was DeviceType?, now String?. Validation via App enum.
+  location     String?
+  managementIp String? @unique // Assuming management IP should be unique
   brand        String?
   modelNumber  String?
-  serialNumber String?     @unique
+  serialNumber String? @unique // Assuming serial number should be unique
   description  String?
-
-  // Connections originating from this device
-  localConnections DeviceConnection[] @relation("LocalDeviceToConnections")
-  // Connections terminating at this device (placeholder if needed for symmetric relations)
-  // remoteConnections DeviceConnection[] @relation("RemoteDeviceToConnections")
-
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // localDeviceConnections DeviceConnection[] @relation("LocalDeviceConnections") // Future relation
+  // remoteDeviceConnections DeviceConnection[] @relation("RemoteDeviceConnections") // Future relation
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
-
-// Placeholder for Phase 3 - will be expanded
+// DeviceConnection Model (Phase 3 Placeholder)
+// This model will link devices, IPs, and ISPs.
+// It's added as a placeholder to establish basic relations
+// and avoid complex migrations later if these relations are added
+// to already existing and populated tables.
 model DeviceConnection {
-  id String @id @default(uuid())
+  id                String     @id @default(uuid())
+  connectionType    String?    // e.g., "WAN", "VPN", "Direct"
+  localIpId         String?    // IP on the local device for this connection
+  localIpAddress    IPAddress? @relation(fields: [localIpId], references: [id], onDelete: SetNull)
+  localDeviceId     String     // ID of the local device
+  localDevice       Device     @relation(fields: [localDeviceId], references: [id], onDelete: Cascade) // If local device is deleted, connection is removed
+  remoteIp          String?    // IP Address of the remote end (if applicable, could be external)
+  // remoteDeviceId String? // ID of the remote device (if it's another managed device)
+  // remoteDevice   Device?   @relation("RemoteDeviceConnections", fields: [remoteDeviceId], references: [id], onDelete: SetNull)
+  ispId             String?    // ISP providing this connection
+  isp               Isp?       @relation(fields: [ispId], references: [id], onDelete: SetNull)
+  bandwidth         String?    // e.g., "100 Mbps"
+  status            String?    // e.g., "Active", "Backup", "Down"
+  description       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  localDeviceId String
-  localDevice Device @relation("LocalDeviceToConnections", fields: [localDeviceId], references: [id])
-  
-  // remoteDeviceId String? // Optional if connection is to an external entity not in Device model
-  // remoteDevice Device? @relation("RemoteDeviceToConnections", fields: [remoteDeviceId], references: [id])
-
-  ipAddressId String? // IP address used on the local device for this connection
-  ipAddress IPAddress? @relation("IPAddressToConnections", fields: [ipAddressId], references: [id])
-
-  ispId String? // ISP providing this connection
-  isp Isp? @relation(fields: [ispId], references: [id])
-  
-  // Other fields like port, bandwidth, circuit ID, notes etc. to be added in Phase 3
-  connectionType String? // e.g., "Fiber", "Ethernet", "专线"
-  bandwidth String? // e.g., "100Mbps", "1Gbps"
-  notes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([localDeviceId])
+  // @@index([remoteDeviceId])
+  @@index([ispId])
 }

@@ -3,7 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog as AppAuditLog, IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType, Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure, SubnetFreeIpDetails, PaginatedResponse, ISP as AppISP, Device as AppDevice, DeviceType as AppDeviceType } from '@/types';
-import { PERMISSIONS } from '@/types';
+import { PERMISSIONS, DeviceType } from '@/types'; // Import DeviceType enum from app types
 import prisma from "./prisma";
 import {
   getSubnetPropertiesFromCidr,
@@ -20,7 +20,7 @@ import { logger } from './logger';
 import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, type ActionErrorResponse } from './errors';
 import { createActionErrorResponse } from './error-utils';
 import { ADMIN_ROLE_ID, OPERATOR_ROLE_ID, VIEWER_ROLE_ID, mockPermissions } from "./data";
-import { Prisma, type IPAddress as PrismaIPAddress, type Subnet as PrismaSubnet, type VLAN as PrismaVLAN, DeviceType as PrismaDeviceType } from '@prisma/client';
+import { Prisma } from '@prisma/client'; // Removed PrismaDeviceType as enum is removed from schema
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -871,10 +871,10 @@ export async function getISPsAction(params?: FetchParams): Promise<ActionRespons
     const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
 
-    const totalCount = await prisma.iSP.count();
+    const totalCount = await prisma.isp.count(); // Changed from prisma.iSP to prisma.isp
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
-    const ispsFromDb = await prisma.iSP.findMany({
+    const ispsFromDb = await prisma.isp.findMany({ // Changed from prisma.iSP to prisma.isp
       orderBy: { name: 'asc' },
       skip,
       take: pageSize,
@@ -902,12 +902,12 @@ export async function createISPAction(data: Omit<AppISP, 'id' | 'createdAt' | 'u
     if (!data.name || data.name.trim() === "") {
       throw new ValidationError("运营商名称是必需的。", "name");
     }
-    const existingISP = await prisma.iSP.findUnique({ where: { name: data.name } });
+    const existingISP = await prisma.isp.findUnique({ where: { name: data.name } }); // Changed from prisma.iSP to prisma.isp
     if (existingISP) {
       throw new ResourceError(`运营商 "${data.name}" 已存在。`, 'ISP_ALREADY_EXISTS', undefined, 'name');
     }
 
-    const newISP = await prisma.iSP.create({
+    const newISP = await prisma.isp.create({ // Changed from prisma.iSP to prisma.isp
       data: {
         name: data.name,
         description: data.description || null,
@@ -915,7 +915,7 @@ export async function createISPAction(data: Omit<AppISP, 'id' | 'createdAt' | 'u
       },
     });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_isp', details: `创建了运营商 ${newISP.name}` } });
-    revalidatePath("/settings/isps"); // Assuming a path for ISP management
+    revalidatePath("/settings/isps"); 
     const appISP: AppISP = {
       id: newISP.id, name: newISP.name, description: newISP.description || undefined, contactInfo: newISP.contactInfo || undefined,
       createdAt: newISP.createdAt.toISOString(), updatedAt: newISP.updatedAt.toISOString(),
@@ -930,14 +930,14 @@ export async function updateISPAction(id: string, data: Partial<Omit<AppISP, 'id
   const actionName = 'updateISPAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const ispToUpdate = await prisma.iSP.findUnique({ where: { id } });
+    const ispToUpdate = await prisma.isp.findUnique({ where: { id } }); // Changed from prisma.iSP to prisma.isp
     if (!ispToUpdate) {
       throw new NotFoundError(`运营商 ID: ${id}`, `要更新的运营商未找到。`);
     }
 
-    const updatePayload: Prisma.ISPUpdateInput = {};
+    const updatePayload: Prisma.IspUpdateInput = {}; // Changed from Prisma.ISPUpdateInput
     if (data.name && data.name !== ispToUpdate.name) {
-      if (await prisma.iSP.findFirst({ where: { name: data.name, NOT: { id } } })) {
+      if (await prisma.isp.findFirst({ where: { name: data.name, NOT: { id } } })) { // Changed from prisma.iSP to prisma.isp
         throw new ResourceError(`运营商名称 "${data.name}" 已被其他运营商使用。`, 'ISP_NAME_ALREADY_EXISTS', undefined, 'name');
       }
       updatePayload.name = data.name;
@@ -950,7 +950,7 @@ export async function updateISPAction(id: string, data: Partial<Omit<AppISP, 'id
         return { success: true, data: currentAppISP};
     }
 
-    const updatedISP = await prisma.iSP.update({ where: { id }, data: updatePayload });
+    const updatedISP = await prisma.isp.update({ where: { id }, data: updatePayload }); // Changed from prisma.iSP to prisma.isp
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_isp', details: `更新了运营商 ${updatedISP.name}` } });
     revalidatePath("/settings/isps");
      const appISP: AppISP = {
@@ -967,16 +967,11 @@ export async function deleteISPAction(id: string, performingUserId?: string): Pr
   const actionName = 'deleteISPAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const ispToDelete = await prisma.iSP.findUnique({ where: { id } });
+    const ispToDelete = await prisma.isp.findUnique({ where: { id } }); // Changed from prisma.iSP to prisma.isp
     if (!ispToDelete) {
       throw new NotFoundError(`运营商 ID: ${id}`, `要删除的运营商未找到。`);
     }
-    // Add check if ISP is in use by DeviceConnections later if relations are added
-    // const connections = await prisma.deviceConnection.count({ where: { ispId: id } });
-    // if (connections > 0) {
-    //   throw new ResourceError(`运营商 "${ispToDelete.name}" 仍被 ${connections} 个设备连接使用。`, 'ISP_IN_USE');
-    // }
-    await prisma.iSP.delete({ where: { id } });
+    await prisma.isp.delete({ where: { id } }); // Changed from prisma.iSP to prisma.isp
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_isp', details: `删除了运营商 ${ispToDelete.name}` } });
     revalidatePath("/settings/isps");
     return { success: true };
@@ -992,22 +987,17 @@ export async function batchDeleteISPsAction(ids: string[], performingUserId?: st
 
   for (const id of ids) {
     try {
-      const ispToDelete = await prisma.iSP.findUnique({ where: { id } });
+      const ispToDelete = await prisma.isp.findUnique({ where: { id } }); // Changed from prisma.iSP to prisma.isp
       if (!ispToDelete) {
         failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '运营商未找到。' });
         continue;
       }
-      // Add check if ISP is in use by DeviceConnections later
-      // const connections = await prisma.deviceConnection.count({ where: { ispId: id } });
-      // if (connections > 0) {
-      //   throw new ResourceError(`运营商 "${ispToDelete.name}" 仍被 ${connections} 个连接使用。`, 'ISP_IN_USE_BATCH');
-      // }
-      await prisma.iSP.delete({ where: { id } });
+      await prisma.isp.delete({ where: { id } }); // Changed from prisma.iSP to prisma.isp
       deletedIspNames.push(ispToDelete.name);
       successCount++;
     } catch (error: unknown) {
       const errRes = createActionErrorResponse(error, `${actionName}_single`);
-      failureDetails.push({ id, itemIdentifier: (await prisma.iSP.findUnique({ where: { id } }))?.name || `ID ${id}`, error: errRes.userMessage });
+      failureDetails.push({ id, itemIdentifier: (await prisma.isp.findUnique({ where: { id } }))?.name || `ID ${id}`, error: errRes.userMessage }); // Changed from prisma.iSP to prisma.isp
     }
   }
   if (deletedIspNames.length > 0) {
@@ -1038,7 +1028,8 @@ export async function getDevicesAction(params?: FetchParams): Promise<ActionResp
     const appDevices: AppDevice[] = devicesFromDb.map(device => ({
       id: device.id,
       name: device.name,
-      deviceType: device.deviceType as AppDeviceType || undefined,
+      // Cast string from DB to AppDeviceType enum. Ensure DeviceType enum from '@/types' is used.
+      deviceType: device.deviceType ? device.deviceType as AppDeviceType : undefined,
       location: device.location || undefined,
       managementIp: device.managementIp || undefined,
       brand: device.brand || undefined,
@@ -1076,7 +1067,8 @@ export async function createDeviceAction(data: Omit<AppDevice, 'id' | 'createdAt
     const newDevice = await prisma.device.create({
       data: {
         name: data.name,
-        deviceType: data.deviceType as PrismaDeviceType | undefined,
+        // data.deviceType is AppDeviceType (string enum member), store as string
+        deviceType: data.deviceType as string | undefined, 
         location: data.location || null,
         managementIp: data.managementIp || null,
         brand: data.brand || null,
@@ -1086,9 +1078,10 @@ export async function createDeviceAction(data: Omit<AppDevice, 'id' | 'createdAt
       },
     });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_device', details: `创建了设备 ${newDevice.name}` } });
-    revalidatePath("/settings/devices"); // Assuming a path for Device management
+    revalidatePath("/settings/devices"); 
     const appDevice: AppDevice = {
-        id: newDevice.id, name: newDevice.name, deviceType: newDevice.deviceType as AppDeviceType || undefined,
+        id: newDevice.id, name: newDevice.name, 
+        deviceType: newDevice.deviceType ? newDevice.deviceType as AppDeviceType : undefined,
         location: newDevice.location || undefined, managementIp: newDevice.managementIp || undefined,
         brand: newDevice.brand || undefined, modelNumber: newDevice.modelNumber || undefined,
         serialNumber: newDevice.serialNumber || undefined, description: newDevice.description || undefined,
@@ -1129,22 +1122,45 @@ export async function updateDeviceAction(id: string, data: Partial<Omit<AppDevic
       updatePayload.serialNumber = data.serialNumber;
     }
 
-    if (data.hasOwnProperty('deviceType')) updatePayload.deviceType = data.deviceType as PrismaDeviceType | undefined | null;
+    if (data.hasOwnProperty('deviceType')) updatePayload.deviceType = data.deviceType as string | undefined | null; // Store as string
     if (data.hasOwnProperty('location')) updatePayload.location = data.location || null;
     if (data.hasOwnProperty('brand')) updatePayload.brand = data.brand || null;
     if (data.hasOwnProperty('modelNumber')) updatePayload.modelNumber = data.modelNumber || null;
     if (data.hasOwnProperty('description')) updatePayload.description = data.description || null;
 
-    if (Object.keys(updatePayload).length === 0 && (!data.deviceType || data.deviceType === deviceToUpdate.deviceType)) {
-        const currentAppDevice : AppDevice = { ...deviceToUpdate, deviceType: deviceToUpdate.deviceType as AppDeviceType || undefined, location: deviceToUpdate.location || undefined, managementIp: deviceToUpdate.managementIp || undefined, brand: deviceToUpdate.brand || undefined, modelNumber: deviceToUpdate.modelNumber || undefined, serialNumber: deviceToUpdate.serialNumber || undefined, description: deviceToUpdate.description || undefined, createdAt: deviceToUpdate.createdAt.toISOString(), updatedAt: deviceToUpdate.updatedAt.toISOString() };
+    // Check if deviceType actually changed before considering it for Object.keys check
+    let deviceTypeChanged = false;
+    if (data.hasOwnProperty('deviceType')) {
+        const newDeviceTypeString = data.deviceType as string | undefined | null;
+        const oldDeviceTypeString = deviceToUpdate.deviceType as string | undefined | null;
+        if (newDeviceTypeString !== oldDeviceTypeString) {
+            deviceTypeChanged = true;
+        }
+    }
+
+    if (Object.keys(updatePayload).length === 0 && !deviceTypeChanged) {
+        const currentAppDevice : AppDevice = { 
+            ...deviceToUpdate, 
+            deviceType: deviceToUpdate.deviceType ? deviceToUpdate.deviceType as AppDeviceType : undefined, 
+            location: deviceToUpdate.location || undefined, 
+            managementIp: deviceToUpdate.managementIp || undefined, 
+            brand: deviceToUpdate.brand || undefined, 
+            modelNumber: deviceToUpdate.modelNumber || undefined, 
+            serialNumber: deviceToUpdate.serialNumber || undefined, 
+            description: deviceToUpdate.description || undefined, 
+            createdAt: deviceToUpdate.createdAt.toISOString(), 
+            updatedAt: deviceToUpdate.updatedAt.toISOString() 
+        };
         return { success: true, data: currentAppDevice };
     }
+
 
     const updatedDevice = await prisma.device.update({ where: { id }, data: updatePayload });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_device', details: `更新了设备 ${updatedDevice.name}` } });
     revalidatePath("/settings/devices");
     const appDevice: AppDevice = {
-        id: updatedDevice.id, name: updatedDevice.name, deviceType: updatedDevice.deviceType as AppDeviceType || undefined,
+        id: updatedDevice.id, name: updatedDevice.name, 
+        deviceType: updatedDevice.deviceType ? updatedDevice.deviceType as AppDeviceType : undefined,
         location: updatedDevice.location || undefined, managementIp: updatedDevice.managementIp || undefined,
         brand: updatedDevice.brand || undefined, modelNumber: updatedDevice.modelNumber || undefined,
         serialNumber: updatedDevice.serialNumber || undefined, description: updatedDevice.description || undefined,
@@ -1164,13 +1180,14 @@ export async function deleteDeviceAction(id: string, performingUserId?: string):
     if (!deviceToDelete) {
       throw new NotFoundError(`设备 ID: ${id}`, `要删除的设备未找到。`);
     }
-    // Add check if Device is in use by DeviceConnections later if relations are added
-    // const connections = await prisma.deviceConnection.count({
-    //   where: { OR: [{ localDeviceId: id }, { remoteDeviceId: id }] } // Example if remoteDeviceId exists
-    // });
-    // if (connections > 0) {
-    //   throw new ResourceError(`设备 "${deviceToDelete.name}" 仍被 ${connections} 个连接使用。`, 'DEVICE_IN_USE');
-    // }
+    // Check if device is in use by DeviceConnections
+    const connectionsCount = await prisma.deviceConnection.count({
+      where: { localDeviceId: id } 
+    });
+    if (connectionsCount > 0) {
+      throw new ResourceError(`设备 "${deviceToDelete.name}" 仍被 ${connectionsCount} 个设备连接使用。`, 'DEVICE_IN_USE_CONNECTIONS', `无法删除设备 ${deviceToDelete.name}，因为它仍与 ${connectionsCount} 个连接关联。`);
+    }
+
     await prisma.device.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_device', details: `删除了设备 ${deviceToDelete.name}` } });
     revalidatePath("/settings/devices");
@@ -1192,13 +1209,14 @@ export async function batchDeleteDevicesAction(ids: string[], performingUserId?:
         failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '设备未找到。' });
         continue;
       }
-      // Add check if Device is in use by DeviceConnections later
-      // const connections = await prisma.deviceConnection.count({
-      //   where: { OR: [{ localDeviceId: id }, { remoteDeviceId: id }] }
-      // });
-      // if (connections > 0) {
-      //   throw new ResourceError(`设备 "${deviceToDelete.name}" 仍被 ${connections} 个连接使用。`, 'DEVICE_IN_USE_BATCH');
-      // }
+      // Check if device is in use by DeviceConnections
+      const connectionsCount = await prisma.deviceConnection.count({
+         where: { localDeviceId: id } 
+      });
+      if (connectionsCount > 0) {
+        throw new ResourceError(`设备 "${deviceToDelete.name}" 仍被 ${connectionsCount} 个设备连接使用。`, 'DEVICE_IN_USE_CONNECTIONS_BATCH', `设备 "${deviceToDelete.name}" 仍与 ${connectionsCount} 个连接关联。`);
+      }
+
       await prisma.device.delete({ where: { id } });
       deletedDeviceNames.push(deviceToDelete.name);
       successCount++;
@@ -1213,3 +1231,4 @@ export async function batchDeleteDevicesAction(ids: string[], performingUserId?:
   }
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
+
