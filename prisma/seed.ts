@@ -62,11 +62,23 @@ async function main() {
   console.log('Roles seeded (Pass 1 complete).');
 
   console.log('Updating Roles (Pass 2: Connect permissions)...');
+  const allDbPermissions = await prisma.permission.findMany({ select: { id: true } });
+
   for (const roleData of seedRolesData) {
-    const mappedPermissions = roleData.permissions.map(appPermId => ({ id: appPermId as string }));
+    let permissionsToSet: { id: string }[];
+
+    if (roleData.id === SEED_ADMIN_ROLE_ID) {
+      // Administrator role gets all permissions currently in the DB
+      console.log(`Assigning all ${allDbPermissions.length} DB permissions to Administrator role.`);
+      permissionsToSet = allDbPermissions.map(p => ({ id: p.id }));
+    } else {
+      // Other roles get permissions as defined in mockRoles (src/lib/data.ts)
+      permissionsToSet = roleData.permissions.map(appPermId => ({ id: appPermId as string }));
+    }
+    
     await prisma.role.update({
       where: { id: roleData.id },
-      data: { permissions: { set: mappedPermissions } },
+      data: { permissions: { set: permissionsToSet } },
     });
   }
   console.log('Roles updated with permissions (Pass 2 complete).');
@@ -183,35 +195,25 @@ async function main() {
 
   console.log('Seeding ISPs...');
   for (const ispData of seedISPsData) {
-    const existingIsp = await prisma.isp.findUnique({
-      where: { name: ispData.name }, // Check by unique name
-    });
-
-    if (existingIsp) {
-      // If ISP with this name exists, update it.
-      await prisma.isp.update({
-        where: { name: ispData.name },
-        data: {
-          description: ispData.description,
-          contactInfo: ispData.contactInfo,
-          // We don't try to update 'id' here if found by name
-        },
-      });
-    } else {
-      // If ISP with this name does not exist, create it using the ID from mock data.
-      const currentIspId = (ispData as any).id;
-      if (!currentIspId || typeof currentIspId !== 'string') {
-        throw new Error(`ISP data is missing a valid string ID for ISP named: ${ispData.name}`);
-      }
-      await prisma.isp.create({
-        data: {
-          id: currentIspId, // Use the ID from mockISPs
-          name: ispData.name,
-          description: ispData.description,
-          contactInfo: ispData.contactInfo,
-        },
-      });
+    const currentIspId = (ispData as any).id;
+    if (!currentIspId || typeof currentIspId !== 'string') {
+      // This should ideally not happen if data.ts is correct
+      throw new Error(`ISP data is missing a valid string ID for ISP named: ${ispData.name}`);
     }
+    await prisma.isp.upsert({
+      where: { id: currentIspId }, // Use the ID from mockISPs for where clause
+      update: { // Update relevant fields, ensuring name is not changed if found by ID
+        name: ispData.name,
+        description: ispData.description,
+        contactInfo: ispData.contactInfo,
+      },
+      create: { // Create with the ID from mockISPs
+        id: currentIspId,
+        name: ispData.name,
+        description: ispData.description,
+        contactInfo: ispData.contactInfo,
+      },
+    });
   }
   console.log('ISPs seeded.');
 
