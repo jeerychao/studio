@@ -13,7 +13,10 @@ import {
   FileDown,
   ListChecks,
   Search,
-  Settings2 as SettingsIconLucide, // Added for settings temporary debug
+  Settings2 as SettingsIconLucide,
+  Signal,     // Added for ISP
+  HardDrive,  // Added for Device
+  Link2,      // Added for Device Connection
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,7 +45,7 @@ const navItemConfigs: NavItemConfig[] = [
   {
     href: "/ip-management", 
     label: "IP 管理",
-    icon: Network, // No specific permission for the group itself, visibility depends on children
+    icon: Network,
     subItems: [
       { href: "/vlans", label: "VLAN 管理", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
       { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
@@ -56,12 +59,22 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_QUERY_PAGE,
   },
   {
-    href: "/user-management", 
-    label: "用户和角色", // No specific permission for the group itself
+    href: "/user-role-management", 
+    label: "用户和角色",
     icon: Users,
     subItems: [
       { href: "/users", label: "用户管理", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
       { href: "/roles", label: "角色管理", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
+    ],
+  },
+  {
+    href: "/system-settings", // New parent group for settings
+    label: "系统设置",
+    icon: SettingsIconLucide,
+    subItems: [
+      { href: "/settings/isps", label: "ISP 管理", icon: Signal, requiredPermission: PERMISSIONS.VIEW_ISP },
+      { href: "/settings/devices", label: "设备管理", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DEVICE },
+      { href: "/settings/device-connections", label: "设备连接管理", icon: Link2, requiredPermission: PERMISSIONS.VIEW_DEVICECONNECTION },
     ],
   },
   {
@@ -71,49 +84,33 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.PERFORM_TOOLS_EXPORT 
   },
   { href: "/audit-logs", label: "审计日志", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
-  // Settings is handled by a separate button in SidebarFooter
-  // { href: "/settings", label: "设置", icon: SettingsIconLucide, requiredPermission: PERMISSIONS.VIEW_SETTINGS },
+  // The old "/settings" link is removed as its functionality will be covered by the new sub-pages or is minimal.
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { currentUser, isAuthLoading } = useCurrentUser();
 
-  // logger.debug("[SidebarNav] Render. Pathname:", pathname, "isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : 'null');
-
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
-    // logger.debug("[filterNavItemsByPermission] Start filtering. User:", user ? user.username : "null", "User permissions (first 5):", user?.permissions?.slice(0,5));
     if (!user || !user.permissions || !Array.isArray(user.permissions)) {
-      // logger.warn("[filterNavItemsByPermission] User is null or permissions array is invalid. Returning empty list.");
       return [];
     }
 
     return items.map(item => {
-      // logger.debug(`[filterNavItemsByPermission] Processing item: ${item.label}, Href: ${item.href}, RequiredPerm: ${item.requiredPermission}`);
-      
       let hasAccessToCurrentItem = true; 
       if (item.requiredPermission) {
         hasAccessToCurrentItem = hasPermission(user, item.requiredPermission);
-        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' requires '${item.requiredPermission}'. User has permission: ${hasAccessToCurrentItem}`);
       }
 
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems && item.subItems.length > 0) {
-        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' has subItems. Filtering them...`);
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' - Filtered subItems count: ${filteredSubItems.length}`);
-        
-        // If a parent group item has no specific permission of its own,
-        // it should only be shown if at least one of its children is visible.
         if (!item.requiredPermission && filteredSubItems.length === 0) {
-          // logger.debug(`[filterNavItemsByPermission] Group item '${item.label}' has no required perm and no visible children. Hiding group.`);
           return null; 
         }
       }
       
-      // If the item itself requires a permission and the user doesn't have it, hide it.
       if (item.requiredPermission && !hasAccessToCurrentItem) {
-        // logger.debug(`[filterNavItemsByPermission] Item '${item.label}' access denied due to its own required permission. Hiding.`);
         return null;
       }
 
@@ -123,41 +120,30 @@ export function SidebarNav() {
 
 
   const accessibleNavItems = React.useMemo(() => {
-      // logger.debug("[SidebarNav useMemo accessibleNavItems] Recalculating. isAuthLoading:", isAuthLoading, "currentUser exists:", !!currentUser);
       if (isAuthLoading || !currentUser) {
-        // logger.debug("[SidebarNav useMemo accessibleNavItems] Auth loading or no current user, returning empty array for accessibleNavItems.");
         return [];
       }
-      // logger.debug("[SidebarNav useMemo accessibleNavItems] Calculating for user:", currentUser.username, "User Permissions (first 5):", currentUser.permissions?.slice(0,5));
       let items = filterNavItemsByPermission(navItemConfigs, currentUser);
-      // logger.debug(`[SidebarNav useMemo accessibleNavItems] Final calculated items for user ${currentUser.username}:`, items.map(i=> ({label: i.label, href: i.href, subItemsCount: i.subItems?.length || 0 })));
       return items;
   }, [currentUser, isAuthLoading, filterNavItemsByPermission]);
 
   const [openAccordionItems, setOpenAccordionItems] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    // logger.debug("[SidebarNav useEffect openAccordionItems] Running. Pathname:", pathname, "isAuthLoading:", isAuthLoading, "AccessibleItems count:", accessibleNavItems.length);
     if (isAuthLoading || !accessibleNavItems || accessibleNavItems.length === 0) {
         setOpenAccordionItems(currentOpenItems => {
-            // if (currentOpenItems.length > 0) logger.debug("[SidebarNav useEffect openAccordionItems] Auth loading or no items, clearing open accordions.");
             return currentOpenItems.length > 0 ? [] : currentOpenItems;
         });
         return;
     }
     const activeParentGroup = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     if (activeParentGroup) {
-        // logger.debug("[SidebarNav useEffect openAccordionItems] Active parent group found:", activeParentGroup.label);
         setOpenAccordionItems(currentOpenItems => {
             if (currentOpenItems.includes(activeParentGroup.href)) {
-                // logger.debug("[SidebarNav useEffect openAccordionItems] Accordion for active group already open.");
                 return currentOpenItems;
             }
-            // logger.debug("[SidebarNav useEffect openAccordionItems] Opening accordion for active group:", activeParentGroup.label);
             return [...currentOpenItems, activeParentGroup.href];
         });
-    } else {
-        // logger.debug("[SidebarNav useEffect openAccordionItems] No active parent group found for current path.");
     }
   }, [pathname, accessibleNavItems, isAuthLoading]);
 
@@ -211,17 +197,7 @@ export function SidebarNav() {
     );
   };
 
-  // logger.debug("[SidebarNav DEBUG Final Render Check] isAuthLoading:", isAuthLoading, "currentUser exists:", !!currentUser);
-  // if(currentUser) {
-  //   logger.debug("[SidebarNav DEBUG Final Render Check] currentUser.username:", currentUser.username, "currentUser.permissions (count):", currentUser.permissions?.length);
-  //   // logger.debug("[SidebarNav DEBUG Final Render Check] currentUser.permissions (actual):", currentUser.permissions);
-  // }
-  // logger.debug("[SidebarNav DEBUG Final Render Check] accessibleNavItems count:", accessibleNavItems?.length);
-  // logger.debug("[SidebarNav DEBUG Final Render Check] accessibleNavItems (actual labels):", accessibleNavItems?.map(i => i.label));
-
-
   if (isAuthLoading) {
-    // logger.debug("[SidebarNav] Render: Auth loading, showing loading message.");
     return (
       <>
         <div className="p-4 text-sm text-sidebar-foreground">加载导航...</div>
@@ -229,7 +205,6 @@ export function SidebarNav() {
     );
   }
   if (!currentUser) {
-    // logger.warn("[SidebarNav] Render: No current user, showing error message.");
     return (
       <>
         <div className="p-4 text-sm text-sidebar-foreground">加载用户数据错误或用户未登录。</div>
@@ -238,7 +213,6 @@ export function SidebarNav() {
   }
   
   if (accessibleNavItems.length === 0 && currentUser.id !== 'guest-fallback-id') {
-    // logger.warn(`[SidebarNav] Render: No accessible nav items for user ${currentUser.username} (not guest). Check permissions.`);
     return (
       <>
         <div className="p-4 text-sm text-sidebar-foreground">没有可访问的导航项。请检查用户权限。</div>
@@ -246,7 +220,6 @@ export function SidebarNav() {
     );
   }
    if (accessibleNavItems.length === 0 && currentUser.id === 'guest-fallback-id') {
-    // logger.info(`[SidebarNav] Render: No accessible nav items for GUEST user.`);
     return (
         <>
           <div className="p-4 text-sm text-sidebar-foreground">访客无导航项。</div>
