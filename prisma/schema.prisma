@@ -1,16 +1,67 @@
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = [] // Add any preview features you are using, e.g., "fullTextSearch"
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+}
+
+model Permission {
+  id          String @id
+  name        String @unique
+  group       String
+  description String?
+  roles       Role[] @relation("RolePermissions")
+
+  @@map("permissions")
+}
+
+model Role {
+  id            String       @id
+  name          String       @unique
+  description   String?
+  users         User[]
+  permissions   Permission[] @relation("RolePermissions")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("roles")
+}
+
+model User {
+  id         String      @id
+  username   String      @unique
+  email      String      @unique
+  password   String
+  roleId     String
+  role       Role        @relation(fields: [roleId], references: [id])
+  avatar     String?
+  lastLogin  DateTime?
+  auditLogs  AuditLog[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("users")
+}
+
+model VLAN {
+  id           String    @id
+  vlanNumber   Int       @unique
+  name         String?
+  description  String?
+  subnets      Subnet[]
+  ipAddresses  IPAddress[] @relation("IPAddressDirectVLAN")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("vlans")
 }
 
 model Subnet {
-  id             String      @id // Removed @default(cuid())
+  id             String      @id
   cidr           String      @unique
   networkAddress String
   subnetMask     String
@@ -19,161 +70,99 @@ model Subnet {
   dhcpEnabled    Boolean?    @default(false)
   description    String?
   vlanId         String?
-  vlan           VLAN?       @relation("VlanSubnets", fields: [vlanId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  ipAddresses    IPAddress[] @relation("SubnetIPs")
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  ipAddresses    IPAddress[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([vlanId])
-}
-
-model VLAN {
-  id          String   @id // Removed @default(cuid())
-  vlanNumber  Int      @unique
-  name        String?
-  description String?
-  subnets     Subnet[] @relation("VlanSubnets")
-  ipAddresses IPAddress[] @relation("VlanDirectIPs") // IPs directly associated with this VLAN
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("subnets")
 }
 
 model IPAddress {
-  id             String        @id // Removed @default(cuid())
+  id             String    @id
   ipAddress      String
-  subnetId       String?
-  subnet         Subnet?       @relation("SubnetIPs", fields: [subnetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  directVlanId   String?       // For IPs directly associated with a VLAN, independent of subnet
-  directVlan     VLAN?         @relation("VlanDirectIPs", fields: [directVlanId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  status         String        // e.g., "allocated", "free", "reserved"
-  isGateway      Boolean?      @default(false)
+  status         String // "allocated", "free", "reserved"
+  isGateway      Boolean?  @default(false)
   allocatedTo    String?
   usageUnit      String?
   contactPerson  String?
   phone          String?
   description    String?
-  lastSeen       DateTime?
+  lastSeen       DateTime? @updatedAt // Can use @updatedAt if 'lastSeen' should always update on modification
+  subnetId       String?
+  subnet         Subnet?   @relation(fields: [subnetId], references: [id], onDelete: SetNull)
+  directVlanId   String?
+  directVlan     VLAN?     @relation("IPAddressDirectVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt // This is the field causing P3018
+  
+  deviceConnections DeviceConnection[] @relation("LocalIpForConnection")
 
-  deviceConnectionsAsLocalIp DeviceConnection[] @relation("IpForLocalConnection")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([ipAddress, subnetId]) // Ensures IP is unique within its subnet or globally if subnetId is null
-  @@index([subnetId])
-  @@index([directVlanId])
-  @@index([status])
-}
-
-model User {
-  id          String     @id // Removed @default(cuid())
-  username    String     @unique
-  email       String     @unique
-  password    String
-  roleId      String
-  role        Role       @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  avatar      String?
-  lastLogin   DateTime?
-  auditLogs   AuditLog[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([roleId])
-}
-
-model Role {
-  id          String       @id // Removed @default(cuid())
-  name        String       @unique
-  description String?
-  users       User[]
-  permissions Permission[] @relation("RolePermissions")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Permission {
-  id          String   @id // Removed @default(cuid())
-  name        String   @unique // e.g., 'subnet.create'
-  group       String   // e.g., 'Subnet Management'
-  description String?
-  roles       Role[]   @relation("RolePermissions")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@unique([ipAddress, subnetId]) // Composite unique key
+  @@map("ip_addresses")
 }
 
 model AuditLog {
-  id        String    @id // Removed @default(cuid())
+  id        String   @id
   userId    String?
-  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade) // User might be deleted
-  username  String?   // Denormalized username for easier display if user is deleted
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String?
   action    String
-  timestamp DateTime  @default(now())
+  timestamp DateTime @default(now())
   details   String?
 
-  @@index([userId])
-  @@index([action])
-  @@index([timestamp])
+  @@map("audit_logs")
 }
 
 model Isp {
-  id                        String             @id // Removed @default(cuid())
-  name                      String             @unique
-  description               String?
-  contactInfo               String?
-  providedDeviceConnections DeviceConnection[] @relation("IspForConnection")
+  id                String            @id
+  name              String            @unique
+  description       String?
+  contactInfo       String?
+  deviceConnections DeviceConnection[] @relation("IspForConnection")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("isps")
 }
 
 model Device {
-  id                         String             @id // Removed @default(cuid())
-  name                       String             @unique
-  deviceType                 String?            // e.g., ROUTER, SWITCH, FIREWALL, SERVER, ACCESS_POINT, OTHER
-  location                   String?
-  managementIp               String?            @unique
-  brand                      String?
-  modelNumber                String?
-  serialNumber               String?            @unique
-  description                String?
-  connectionsAsLocalDevice   DeviceConnection[] @relation("LocalDeviceForConnection")
-  connectionsAsRemoteDevice  DeviceConnection[] @relation("RemoteDeviceForConnection")
+  id                  String              @id
+  name                String              @unique
+  deviceType          String? // Maps to DeviceType enum in application
+  location            String?
+  managementIp        String?             @unique
+  brand               String?
+  modelNumber         String?
+  serialNumber        String?             @unique
+  description         String?
+  localConnections    DeviceConnection[]  @relation("LocalDeviceForConnection")
+  remoteConnections   DeviceConnection[]  @relation("RemoteDeviceForConnection")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("devices")
 }
 
 model DeviceConnection {
-  id                 String   @id // Removed @default(cuid())
-  localDeviceId      String
-  localDevice        Device   @relation("LocalDeviceForConnection", fields: [localDeviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  localIpId          String?
-  localIpAddress     IPAddress? @relation("IpForLocalConnection", fields: [localIpId], references: [id], onDelete: SetNull, onUpdate: Cascade) // An IP on the local device used for this connection
-  remoteDeviceId     String?
-  remoteDevice       Device?  @relation("RemoteDeviceForConnection", fields: [remoteDeviceId], references: [id], onDelete: SetNull, onUpdate: Cascade) // Could be another managed device
-  remoteHostnameOrIp String?  // Or an external IP/hostname
-  ispId              String?
-  isp                Isp?     @relation("IspForConnection", fields: [ispId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  
-  connectionType String     // E.g., ETHERNET_COPPER, ETHERNET_FIBER, WIFI, VPN_IPSEC, VPN_SSL, SERIAL, CELLULAR, SATELLITE, OTHER
-  status           String     // E.g., ACTIVE, INACTIVE, MAINTENANCE, PLANNED, DECOMMISSIONED
-  bandwidth          String?  // E.g., "1 Gbps", "100 Mbps"
-  localInterface     String?  // E.g., "GigabitEthernet0/1", "eth0", "Port-channel1"
-  remoteInterface    String?  // E.g., "Serial0/0/0", "Po1"
-  description        String?
+  id                  String    @id
+  localDeviceId       String
+  localDevice         Device    @relation("LocalDeviceForConnection", fields: [localDeviceId], references: [id])
+  localIpId           String?
+  localIpAddress      IPAddress? @relation("LocalIpForConnection", fields: [localIpId], references: [id], onDelete: SetNull)
+  remoteDeviceId      String?
+  remoteDevice        Device?   @relation("RemoteDeviceForConnection", fields: [remoteDeviceId], references: [id], onDelete: SetNull)
+  remoteHostnameOrIp  String?
+  ispId               String?
+  isp                 Isp?      @relation("IspForConnection", fields: [ispId], references: [id], onDelete: SetNull)
+  connectionType      String    // Maps to DeviceConnectionType enum
+  status              String    // Maps to DeviceConnectionStatus enum
+  bandwidth           String?
+  localInterface      String?
+  remoteInterface     String?
+  description         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([localDeviceId])
-  @@index([localIpId])
-  @@index([remoteDeviceId])
-  @@index([ispId])
-  @@index([connectionType])
-  @@index([status])
+  @@map("device_connections")
 }
