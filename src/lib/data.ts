@@ -183,22 +183,23 @@ export const mockISPs: Omit<ISP, 'id' | 'createdAt' | 'updatedAt'>[] = [
 ];
 
 export const mockDevices: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { id: 'seed_device_001', name: 'Core-Switch-A1', deviceType: DeviceType.SWITCH, location: '主数据中心 A1柜', managementIp: '10.255.1.1', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'UNIQUE_SN_CS7506EA1', description: '核心汇聚交换机 A' },
-  { id: 'seed_device_002', name: 'Edge-Router-Telecom', deviceType: DeviceType.ROUTER, location: '电信接入间', managementIp: '10.255.254.1', brand: 'Huawei', modelNumber: 'NE40E-X8', serialNumber: 'UNIQUE_SN_ERTCSERIAL001', description: '电信出口路由器' },
-  { id: 'seed_device_003', name: 'Firewall-Main', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.255.250.1', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', serialNumber: 'UNIQUE_SN_FWMAINSERIAL01', description: '主防火墙' },
-  { id: 'seed_device_004', name: 'AP-Office-Floor1-01', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '192.168.1.250', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', serialNumber: 'UNIQUE_SN_APOFFF101', description: '一层办公区AP 01' },
-  { id: 'seed_device_005', name: 'Server-VMHost-01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.0.0.100', brand: 'Dell', modelNumber: 'PowerEdge R740', serialNumber: 'UNIQUE_SN_SRVVMH01', description: '虚拟化宿主机 01' },
-  { id: 'seed_device_006', name: 'OLT-Campus-BuildingA', deviceType: DeviceType.OLT, location: '园区A栋弱电间', managementIp: '10.254.1.1', brand: 'ZTE', modelNumber: 'C300', serialNumber: 'UNIQUE_SN_OLTCBA001', description: 'A栋楼宇OLT设备' },
-  { id: 'seed_device_007', name: 'DDN-Branch-Office-X', deviceType: DeviceType.DDN_DEVICE, location: 'X分公司机房', managementIp: '172.16.200.1', brand: 'Cisco', modelNumber: '2901', serialNumber: 'UNIQUE_SN_DDNBOXSERIAL01', description: 'X分公司DDN接入设备' },
-  { id: 'seed_device_008', name: 'Backup-Router-Unicom', deviceType: DeviceType.ROUTER, location: '联通接入间', managementIp: '10.255.254.2', brand: 'Juniper', modelNumber: 'MX204', serialNumber: 'UNIQUE_SN_BRUC001', description: '联通备份出口路由器' },
-  { id: 'seed_device_009', name: 'Core-Switch-B1', deviceType: DeviceType.SWITCH, location: '主数据中心 B1柜', managementIp: '10.255.1.2', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'UNIQUE_SN_CS7506EB1', description: '核心汇聚交换机 B (冗余)' },
+  { name: 'Core-Switch-A1', deviceType: DeviceType.SWITCH, location: '主数据中心 A1柜', managementIp: '10.255.1.1', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'UNIQUE_SN_CS7506EA1', description: '核心汇聚交换机 A' },
+  { name: 'Edge-Router-Telecom', deviceType: DeviceType.ROUTER, location: '电信接入间', managementIp: '10.255.254.1', brand: 'Huawei', modelNumber: 'NE40E-X8', serialNumber: 'UNIQUE_SN_ERTC001', description: '电信出口路由器' },
+  { name: 'Firewall-Main', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.255.250.1', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', serialNumber: 'UNIQUE_SN_FWMAIN01', description: '主防火墙' },
+  { name: 'AP-Office-Floor1-01', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '192.168.1.250', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', serialNumber: 'UNIQUE_SN_APOFFF101', description: '一层办公区AP 01' },
+  { name: 'Server-VMHost-01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.0.0.100', brand: 'Dell', modelNumber: 'PowerEdge R740', serialNumber: 'UNIQUE_SN_SRVVMH01', description: '虚拟化宿主机 01' },
+  { name: 'OLT-Campus-BuildingA', deviceType: DeviceType.OLT, location: '园区A栋弱电间', managementIp: '10.254.1.1', brand: 'ZTE', modelNumber: 'C300', serialNumber: 'UNIQUE_SN_OLTCBA001', description: 'A栋楼宇OLT设备' },
+  { name: 'DDN-Branch-Office-X', deviceType: DeviceType.DDN_DEVICE, location: 'X分公司机房', managementIp: '172.16.200.1', brand: 'Cisco', modelNumber: '2901', serialNumber: 'UNIQUE_SN_DDNBOX01', description: 'X分公司DDN接入设备' },
+  { name: 'Backup-Router-Unicom', deviceType: DeviceType.ROUTER, location: '联通接入间', managementIp: '10.255.254.2', brand: 'Juniper', modelNumber: 'MX204', serialNumber: 'UNIQUE_SN_BRUC001', description: '联通备份出口路由器' },
+  { name: 'Core-Switch-B1', deviceType: DeviceType.SWITCH, location: '主数据中心 B1柜', managementIp: '10.255.1.2', brand: 'H3C', modelNumber: 'S7506E', serialNumber: 'UNIQUE_SN_CS7506EB1', description: '核心汇聚交换机 B (冗余)' },
+  { name: 'Dumb-Switch-01', deviceType: DeviceType.SWITCH, location: 'Closet', managementIp: undefined, brand: 'Netgear', modelNumber: 'GS105', serialNumber: 'UNIQUE_SN_DUMBSW01', description: 'Unmanaged switch' },
+  { name: 'Dumb-Switch-02', deviceType: DeviceType.SWITCH, location: 'Desk', managementIp: undefined, brand: 'TP-Link', modelNumber: 'TL-SG1005D', serialNumber: 'UNIQUE_SN_DUMBSW02', description: 'Another unmanaged switch' },
 ];
 
 export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
-    id: 'seed_dc_001',
-    localDeviceId: 'seed_device_001', // Core-Switch-A1
-    remoteDeviceId: 'seed_device_002', // Edge-Router-Telecom
+    localDeviceId: 'seed_device_000', // Core-Switch-A1 (index 0)
+    remoteDeviceId: 'seed_device_001', // Edge-Router-Telecom (index 1)
     connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
     status: 'ACTIVE' as DeviceConnectionStatus,
     bandwidth: '10 Gbps',
@@ -207,10 +208,9 @@ export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 
     description: 'Uplink from Core Switch A1 to Edge Router Telecom',
   },
   {
-    id: 'seed_dc_002',
-    localDeviceId: 'seed_device_002', // Edge-Router-Telecom
-    remoteHostnameOrIp: '202.96.128.86', // Example external IP for ISP
-    ispId: 'seed_isp_000', // China Telecom
+    localDeviceId: 'seed_device_001', // Edge-Router-Telecom (index 1)
+    remoteHostnameOrIp: '202.96.128.86', 
+    ispId: 'seed_isp_000', // China Telecom (index 0)
     connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
     status: 'ACTIVE' as DeviceConnectionStatus,
     bandwidth: '1 Gbps',
@@ -218,9 +218,8 @@ export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 
     description: 'Primary internet connection via China Telecom',
   },
   {
-    id: 'seed_dc_003',
-    localDeviceId: 'seed_device_001', // Core-Switch-A1
-    remoteDeviceId: 'seed_device_005', // Server-VMHost-01
+    localDeviceId: 'seed_device_000', // Core-Switch-A1 (index 0)
+    remoteDeviceId: 'seed_device_004', // Server-VMHost-01 (index 4)
     connectionType: 'ETHERNET_COPPER' as DeviceConnectionType,
     status: 'ACTIVE' as DeviceConnectionStatus,
     bandwidth: '1 Gbps',
@@ -229,10 +228,9 @@ export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 
     description: 'Connection to VMHost-01',
   },
   {
-    id: 'seed_dc_004',
-    localDeviceId: 'seed_device_001', // Core-Switch-A1
-    localIpId: 'seed_ip_001', // 192.168.1.1 (SVI on switch)
-    remoteDeviceId: 'seed_device_003', // Firewall-Main
+    localDeviceId: 'seed_device_000', // Core-Switch-A1 (index 0)
+    localIpId: 'seed_ip_001', // 192.168.1.1
+    remoteDeviceId: 'seed_device_002', // Firewall-Main (index 2)
     connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
     status: 'ACTIVE' as DeviceConnectionStatus,
     bandwidth: '10 Gbps',
@@ -241,12 +239,11 @@ export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 
     description: 'Core Switch A1 to Main Firewall',
   },
   {
-    id: 'seed_dc_005',
-    localDeviceId: 'seed_device_008', // Backup-Router-Unicom
-    remoteHostnameOrIp: '210.22.84.3', // Example external IP for Unicom
-    ispId: 'seed_isp_001', // China Unicom
+    localDeviceId: 'seed_device_007', // Backup-Router-Unicom (index 7)
+    remoteHostnameOrIp: '210.22.84.3', 
+    ispId: 'seed_isp_001', // China Unicom (index 1)
     connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
-    status: 'STANDBY' as DeviceConnectionStatus, // Example status
+    status: 'STANDBY' as DeviceConnectionStatus,
     bandwidth: '500 Mbps',
     localInterface: 'ge-0/0/0',
     description: 'Backup internet connection via China Unicom',
@@ -261,21 +258,17 @@ mockDevices.forEach((device, index) => {
   (device as any).id = `seed_device_${index.toString().padStart(3, '0')}`;
 });
 
-// Assign IDs to Device Connections for seeding if not already present
-// And ensure related IDs exist
 mockDeviceConnections.forEach((conn, index) => {
-    if (!conn.id) {
-      conn.id = `seed_dc_${index.toString().padStart(3, '0')}`;
+    if (!(conn as any).id) {
+      (conn as any).id = `seed_dc_${index.toString().padStart(3, '0')}`;
     }
-    const localDeviceExists = mockDevices.some(d => d.id === conn.localDeviceId);
-    const remoteDeviceExists = !conn.remoteDeviceId || mockDevices.some(d => d.id === conn.remoteDeviceId);
+    const localDeviceExists = mockDevices.some(d => (d as any).id === conn.localDeviceId);
+    const remoteDeviceExists = !conn.remoteDeviceId || mockDevices.some(d => (d as any).id === conn.remoteDeviceId);
     const localIpExists = !conn.localIpId || mockIPAddresses.some(ip => ip.id === conn.localIpId);
     const ispExists = !conn.ispId || mockISPs.some(isp => (isp as any).id === conn.ispId);
 
-    if (!localDeviceExists) console.warn(`[Seed Data Warning] mockDeviceConnections: localDeviceId ${conn.localDeviceId} for conn.id ${conn.id} not found in mockDevices.`);
-    if (conn.remoteDeviceId && !remoteDeviceExists) console.warn(`[Seed Data Warning] mockDeviceConnections: remoteDeviceId ${conn.remoteDeviceId} for conn.id ${conn.id} not found in mockDevices.`);
-    if (conn.localIpId && !localIpExists) console.warn(`[Seed Data Warning] mockDeviceConnections: localIpId ${conn.localIpId} for conn.id ${conn.id} not found in mockIPAddresses.`);
-    if (conn.ispId && !ispExists) console.warn(`[Seed Data Warning] mockDeviceConnections: ispId ${conn.ispId} for conn.id ${conn.id} not found in mockISPs.`);
+    if (!localDeviceExists) console.warn(`[Seed Data Warning] mockDeviceConnections: localDeviceId ${conn.localDeviceId} for conn.id ${(conn as any).id} not found in mockDevices.`);
+    if (conn.remoteDeviceId && !remoteDeviceExists) console.warn(`[Seed Data Warning] mockDeviceConnections: remoteDeviceId ${conn.remoteDeviceId} for conn.id ${(conn as any).id} not found in mockDevices.`);
+    if (conn.localIpId && !localIpExists) console.warn(`[Seed Data Warning] mockDeviceConnections: localIpId ${conn.localIpId} for conn.id ${(conn as any).id} not found in mockIPAddresses.`);
+    if (conn.ispId && !ispExists) console.warn(`[Seed Data Warning] mockDeviceConnections: ispId ${conn.ispId} for conn.id ${(conn as any).id} not found in mockISPs.`);
 });
-
-    
