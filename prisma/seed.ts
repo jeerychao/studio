@@ -7,15 +7,16 @@ import {
   mockSubnets as seedSubnetsData,
   mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
-  mockISPs as seedISPsData, 
-  mockDevices as seedDevicesData, 
-  mockDeviceConnections as seedDeviceConnectionsData, // Added DeviceConnection mock data
+  mockISPs as seedISPsData,
+  mockDevices as seedDevicesData,
+  mockDeviceConnections as seedDeviceConnectionsData,
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
 } from '../src/lib/data';
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType, DeviceConnection as AppDeviceConnection, DeviceConnectionType, DeviceConnectionStatus } from '../src/types';
-import { DeviceType as AppDeviceType } from '../src/types'; 
+import { DeviceType as AppDeviceType } from '../src/types';
+import { Prisma } from '@prisma/client';
 
 async function main() {
   console.log('Start seeding ...');
@@ -99,7 +100,7 @@ async function main() {
         await prisma.vLAN.delete({ where: { id: conflictingVlan.id } });
       }
     }
-    await prisma.vLAN.upsert({ 
+    await prisma.vLAN.upsert({
       where: { id: vlanData.id },
       update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
       create: { id: vlanData.id, vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
@@ -127,8 +128,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name, 
-        dhcpEnabled: subnetData.dhcpEnabled, 
+        name: subnetData.name,
+        dhcpEnabled: subnetData.dhcpEnabled,
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -138,8 +139,8 @@ async function main() {
         networkAddress: subnetData.networkAddress,
         subnetMask: subnetData.subnetMask,
         ipRange: subnetData.ipRange,
-        name: subnetData.name, 
-        dhcpEnabled: subnetData.dhcpEnabled, 
+        name: subnetData.name,
+        dhcpEnabled: subnetData.dhcpEnabled,
         description: subnetData.description,
         vlanId: subnetData.vlanId,
       },
@@ -149,16 +150,16 @@ async function main() {
 
   console.log('Seeding IP Addresses...');
   for (const ipData of seedIPsData) {
-    await prisma.iPAddress.upsert({ 
+    await prisma.iPAddress.upsert({
       where: { id: ipData.id },
       update: {
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway, 
+        isGateway: ipData.isGateway,
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit, 
-        contactPerson: ipData.contactPerson, 
-        phone: ipData.phone, 
+        usageUnit: ipData.usageUnit,
+        contactPerson: ipData.contactPerson,
+        phone: ipData.phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -167,11 +168,11 @@ async function main() {
         id: ipData.id,
         ipAddress: ipData.ipAddress,
         status: ipData.status as string,
-        isGateway: ipData.isGateway,  
+        isGateway: ipData.isGateway,
         allocatedTo: ipData.allocatedTo,
-        usageUnit: ipData.usageUnit, 
-        contactPerson: ipData.contactPerson, 
-        phone: ipData.phone, 
+        usageUnit: ipData.usageUnit,
+        contactPerson: ipData.contactPerson,
+        phone: ipData.phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -181,22 +182,39 @@ async function main() {
   console.log('IP Addresses seeded.');
 
   console.log('Seeding ISPs...');
-  for (const isp of seedISPsData) {
-    await prisma.isp.upsert({ 
-      where: { id: (isp as any).id }, // Assuming IDs are pre-assigned in mockISPs for upsert
-      update: { name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
-      create: { id: (isp as any).id, name: isp.name, description: isp.description, contactInfo: isp.contactInfo },
+  for (const ispData of seedISPsData) {
+    const existingIsp = await prisma.isp.findUnique({
+      where: { name: ispData.name },
     });
+
+    if (existingIsp) {
+      await prisma.isp.update({
+        where: { name: ispData.name },
+        data: {
+          description: ispData.description,
+          contactInfo: ispData.contactInfo,
+        },
+      });
+    } else {
+      await prisma.isp.create({
+        data: {
+          id: (ispData as any).id,
+          name: ispData.name,
+          description: ispData.description,
+          contactInfo: ispData.contactInfo,
+        },
+      });
+    }
   }
   console.log('ISPs seeded.');
 
   console.log('Seeding Devices...');
   for (const device of seedDevicesData) {
-    await prisma.device.upsert({ 
+    await prisma.device.upsert({
       where: { id: (device as any).id }, // Assuming IDs are pre-assigned
       update: {
         name: device.name,
-        deviceType: device.deviceType as string | undefined, 
+        deviceType: device.deviceType as string | undefined,
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -207,7 +225,7 @@ async function main() {
       create: {
         id: (device as any).id,
         name: device.name,
-        deviceType: device.deviceType as string | undefined, 
+        deviceType: device.deviceType as string | undefined,
         location: device.location,
         managementIp: device.managementIp,
         brand: device.brand,
@@ -221,15 +239,14 @@ async function main() {
 
   console.log('Seeding Device Connections...');
   for (const connData of seedDeviceConnectionsData) {
-    // Type assertion as Prisma generated types will expect connect objects for relations
     const createPayload: Prisma.DeviceConnectionCreateInput = {
         id: connData.id,
         localDevice: { connect: { id: connData.localDeviceId } },
         localIpAddress: connData.localIpId ? { connect: { id: connData.localIpId } } : undefined,
         remoteDevice: connData.remoteDeviceId ? { connect: { id: connData.remoteDeviceId } } : undefined,
         isp: connData.ispId ? { connect: { id: connData.ispId } } : undefined,
-        connectionType: connData.connectionType as string, // Prisma expects string here due to schema
-        status: connData.status as string, // Prisma expects string here
+        connectionType: connData.connectionType as string,
+        status: connData.status as string,
         bandwidth: connData.bandwidth,
         localInterface: connData.localInterface,
         remoteHostnameOrIp: connData.remoteHostnameOrIp,
@@ -237,7 +254,7 @@ async function main() {
         description: connData.description,
     };
     const updatePayload: Prisma.DeviceConnectionUpdateInput = { ...createPayload };
-    delete (updatePayload as any).id; // id should not be in update payload like this
+    delete (updatePayload as any).id;
 
     await prisma.deviceConnection.upsert({
       where: { id: connData.id },
@@ -279,3 +296,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
