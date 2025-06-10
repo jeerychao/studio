@@ -1,27 +1,68 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-generator client {
-  provider = "prisma-client-js"
-}
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Subnet {
+  id             String     @id @default(uuid())
+  cidr           String     @unique
+  networkAddress String
+  subnetMask     String
+  ipRange        String?
+  name           String? // New field for Subnet name
+  description    String?
+  dhcpEnabled    Boolean?   @default(false) // New field for DHCP status
+  vlanId         String?
+  vlan           VLAN?      @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  ipAddresses    IPAddress[]
+  // deviceConnections DeviceConnection[] @relation("SubnetConnections") // Example if subnet can be directly connected
+}
+
+model VLAN {
+  id            String      @id @default(uuid())
+  vlanNumber    Int         @unique
+  name          String?
+  description   String?
+  subnets       Subnet[]
+  ipAddresses   IPAddress[] @relation("IPDirectlyOnVLAN")
+}
+
+model IPAddress {
+  id             String    @id @default(uuid())
+  ipAddress      String
+  subnetId       String?
+  subnet         Subnet?   @relation(fields: [subnetId], references: [id], onDelete: Cascade) // Cascade delete if subnet is gone
+  directVlanId   String?
+  directVlan     VLAN?     @relation("IPDirectlyOnVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
+  status         String // "allocated", "free", "reserved"
+  isGateway      Boolean?  @default(false)
+  allocatedTo    String?
+  usageUnit      String?
+  contactPerson  String?
+  phone          String?
+  description    String?
+  lastSeen       DateTime? @updatedAt
+
+  deviceConnection DeviceConnection?
+
+  @@unique([ipAddress, subnetId], name: "unique_ip_address_in_subnet_or_global")
+}
+
 model User {
-  id          String    @id @default(uuid())
-  username    String    @unique
-  email       String    @unique
-  password    String
-  roleId      String
-  role        Role      @relation(fields: [roleId], references: [id])
-  avatar      String?
-  lastLogin   DateTime?
-  auditLogs   AuditLog[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String     @id @default(uuid())
+  username  String     @unique
+  email     String     @unique
+  password  String
+  avatar    String?
+  lastLogin DateTime?
+  roleId    String
+  role      Role       @relation(fields: [roleId], references: [id])
+  auditLogs AuditLog[]
 }
 
 model Role {
@@ -30,124 +71,90 @@ model Role {
   description String?
   users       User[]
   permissions Permission[] @relation("RolePermissions")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
 }
 
 model Permission {
-  id          String   @id // Use predefined string IDs like 'subnet.create'
-  name        String   @unique
-  group       String   // e.g., "Subnet Management", "User Management"
+  id          String @id // e.g., "subnet.create", "user.view"
+  name        String @unique
+  group       String // e.g., "Subnet Management", "User Access"
   description String?
-  roles       Role[]   @relation("RolePermissions")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model VLAN {
-  id          String   @id @default(uuid())
-  vlanNumber  Int      @unique
-  name        String?
-  description String?
-  subnets     Subnet[]
-  // For IPs directly assigned to a VLAN, not part of a Subnet's specific IP range, if needed
-  ipAddresses IPAddress[] @relation("IPDirectlyOnVLAN")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
-model Subnet {
-  id             String     @id @default(uuid())
-  cidr           String     @unique // e.g., 192.168.1.0/24
-  networkAddress String     // e.g., 192.168.1.0
-  subnetMask     String     // e.g., 255.255.255.0
-  ipRange        String?    // e.g., "192.168.1.1 - 192.168.1.254"
-  name           String?    // New: Descriptive name for the subnet, e.g., "Office Network Floor 1"
-  description    String?
-  dhcpEnabled    Boolean?   @default(false) // New: Is DHCP enabled for this subnet?
-  vlanId         String?
-  vlan           VLAN?      @relation(fields: [vlanId], references: [id], onDelete: SetNull) // SetNull if VLAN is deleted
-  ipAddresses    IPAddress[]
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-}
-
-model IPAddress {
-  id            String   @id @default(uuid())
-  ipAddress     String   // The actual IP address, e.g., "192.168.1.100"
-  subnetId      String?  // Null if it's a global IP not belonging to a managed subnet
-  subnet        Subnet?  @relation(fields: [subnetId], references: [id], onDelete: Cascade) // Cascade delete if Subnet is deleted
-  directVlanId  String?  // If this IP is directly on a VLAN, not through its subnet (less common)
-  directVlan    VLAN?    @relation("IPDirectlyOnVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
-  status        String   // e.g., "allocated", "free", "reserved"
-  isGateway     Boolean? @default(false) // New: Is this IP address a gateway for its subnet?
-  allocatedTo   String?  // To whom or what this IP is allocated (e.g., device name, user, service)
-  usageUnit     String?  // New: The department or unit using this IP, e.g., "Marketing Dept"
-  contactPerson String?  // New: Contact person for this IP allocation
-  phone         String?  // New: Contact phone number
-  description   String?
-  lastSeen      DateTime? // Could be used to track activity, @updatedAt might serve similar purpose for record changes
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Ensure IP is unique within its subnet, or globally if no subnetId
-  // Prisma doesn't directly support conditional unique constraints on nullable fields in a simple way.
-  // This will be handled by application logic for now or a more complex DB constraint if needed.
-  // We can enforce uniqueness of (ipAddress, subnetId) where subnetId can be null.
-  // However, Prisma's @@unique typically treats nulls as distinct.
-  // A common workaround is to have a separate table for global IPs or use a sentinel value.
-  // For now, rely on create/update logic to check.
-  @@unique([ipAddress, subnetId]) // This implies (ip, null) must be unique, and (ip, specific_subnet_id) must be unique.
+  roles       Role[] @relation("RolePermissions")
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?  // Can be null if system-generated
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  username  String?  // Denormalized for easier display, esp. if user is deleted
-  action    String   // e.g., "create_subnet", "user_login"
+  id        String    @id @default(uuid())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull) // SetNull if user is deleted
+  username  String // Store username denormalized for history even if user is deleted
+  action    String
+  timestamp DateTime  @default(now())
   details   String?
-  timestamp DateTime @default(now())
 }
 
-// New Model for ISP (Internet Service Provider)
-model ISP {
-  id          String   @id @default(uuid())
-  name        String   @unique // e.g., "China Telecom", "Comcast"
+// Phase 2: New Models
+model Isp { // Changed from ISP to Isp (PascalCase for better Prisma convention)
+  id          String    @id @default(uuid())
+  name        String    @unique
   description String?
-  contactInfo String?  // e.g., "support@isp.com, 123-456-7890"
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  // deviceConnections DeviceConnection[] // Relation to be added in Phase 3
+  contactInfo String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  deviceConnections DeviceConnection[]
 }
 
-// New Model for Devices
-model Device {
-  id            String     @id @default(uuid())
-  name          String     @unique // e.g., "Core-Switch-01", "Router-Branch-A"
-  deviceType    DeviceType?
-  location      String?    // e.g., "Data Center A, Rack 5, Unit 10"
-  managementIp  String?    @unique // Management IP Address of the device
-  brand         String?    // e.g., "Cisco", "Juniper", "Dell"
-  modelNumber   String?    // e.g., "Catalyst 9300", "MX204"
-  serialNumber  String?    @unique
-  description   String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  // deviceConnections DeviceConnection[] @relation("LocalDeviceConnections") // Relation to be added in Phase 3
-}
-
-// Enum for Device Types
 enum DeviceType {
   ROUTER
   SWITCH
   FIREWALL
   SERVER
   ACCESS_POINT
-  OLT        // Optical Line Terminal (运营商设备)
-  DDN_DEVICE // (运营商设备)
+  OLT
+  DDN_DEVICE
   OTHER
 }
 
-// Model for DeviceConnection will be added in Phase 3
-// model DeviceConnection { ... }
+model Device {
+  id           String     @id @default(uuid())
+  name         String     @unique
+  deviceType   DeviceType?
+  location     String?
+  managementIp String?    @unique
+  brand        String?
+  modelNumber  String?
+  serialNumber String?    @unique // Serial numbers should generally be unique
+  description  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  deviceConnectionsLocal  DeviceConnection[] @relation("LocalDeviceConnections")
+  // deviceConnectionsRemote DeviceConnection[] @relation("RemoteDeviceConnections") // If tracking remote end of connection
+}
+
+// Phase 3: Connection Model (placeholder, will be detailed later)
+model DeviceConnection {
+  id String @id @default(uuid())
+  // --- Relations to be added in Phase 3 ---
+  // Example fields (will be refined)
+  ipAddress   IPAddress? @relation(fields: [ipAddressId], references: [id])
+  ipAddressId String?
+
+  localDevice   Device @relation("LocalDeviceConnections", fields: [localDeviceId], references: [id])
+  localDeviceId String
+
+  // remoteDevice   Device? @relation("RemoteDeviceConnections", fields: [remoteDeviceId], references: [id])
+  // remoteDeviceId String?
+
+  isp   Isp? @relation(fields: [ispId], references: [id])
+  ispId String?
+
+  // --- Attributes of the connection ---
+  localPort        String? // e.g., "GigabitEthernet0/1"
+  // remotePort       String?
+  connectionType   String? // e.g., "Copper", "Fiber", "Wireless"
+  bandwidth        String? // e.g., "1Gbps"
+  status           String? // e.g., "Up", "Down", "Maintenance"
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
