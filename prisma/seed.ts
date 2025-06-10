@@ -184,21 +184,28 @@ async function main() {
   console.log('Seeding ISPs...');
   for (const ispData of seedISPsData) {
     const existingIsp = await prisma.isp.findUnique({
-      where: { name: ispData.name },
+      where: { name: ispData.name }, // Check by unique name
     });
 
     if (existingIsp) {
+      // If ISP with this name exists, update it.
       await prisma.isp.update({
         where: { name: ispData.name },
         data: {
           description: ispData.description,
           contactInfo: ispData.contactInfo,
+          // We don't try to update 'id' here if found by name
         },
       });
     } else {
+      // If ISP with this name does not exist, create it using the ID from mock data.
+      const currentIspId = (ispData as any).id;
+      if (!currentIspId || typeof currentIspId !== 'string') {
+        throw new Error(`ISP data is missing a valid string ID for ISP named: ${ispData.name}`);
+      }
       await prisma.isp.create({
         data: {
-          id: (ispData as any).id,
+          id: currentIspId, // Use the ID from mockISPs
           name: ispData.name,
           description: ispData.description,
           contactInfo: ispData.contactInfo,
@@ -211,7 +218,7 @@ async function main() {
   console.log('Seeding Devices...');
   for (const device of seedDevicesData) {
     await prisma.device.upsert({
-      where: { id: (device as any).id }, // Assuming IDs are pre-assigned
+      where: { id: (device as any).id }, 
       update: {
         name: device.name,
         deviceType: device.deviceType as string | undefined,
@@ -239,6 +246,37 @@ async function main() {
 
   console.log('Seeding Device Connections...');
   for (const connData of seedDeviceConnectionsData) {
+    // Validate foreign keys before attempting to upsert
+    const localDeviceExists = await prisma.device.findUnique({ where: { id: connData.localDeviceId } });
+    if (!localDeviceExists) {
+      console.warn(`Skipping DeviceConnection seed for localDeviceId ${connData.localDeviceId} as it does not exist. Mock Connection ID: ${connData.id}`);
+      continue;
+    }
+
+    if (connData.localIpId) {
+      const localIpExists = await prisma.iPAddress.findUnique({ where: { id: connData.localIpId } });
+      if (!localIpExists) {
+        console.warn(`Skipping DeviceConnection seed for localIpId ${connData.localIpId} as it does not exist. Mock Connection ID: ${connData.id}`);
+        continue;
+      }
+    }
+
+    if (connData.remoteDeviceId) {
+      const remoteDeviceExists = await prisma.device.findUnique({ where: { id: connData.remoteDeviceId } });
+      if (!remoteDeviceExists) {
+        console.warn(`Skipping DeviceConnection seed for remoteDeviceId ${connData.remoteDeviceId} as it does not exist. Mock Connection ID: ${connData.id}`);
+        continue;
+      }
+    }
+
+    if (connData.ispId) {
+      const ispExists = await prisma.isp.findUnique({ where: { id: connData.ispId } });
+      if (!ispExists) {
+        console.warn(`Skipping DeviceConnection seed for ispId ${connData.ispId} as it does not exist. Mock Connection ID: ${connData.id}`);
+        continue; 
+      }
+    }
+
     const createPayload: Prisma.DeviceConnectionCreateInput = {
         id: connData.id,
         localDevice: { connect: { id: connData.localDeviceId } },
