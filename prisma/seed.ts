@@ -2,26 +2,25 @@
 import prisma from '../src/lib/prisma';
 import {
   mockPermissions as seedPermissionsData,
-  mockRoles as seedRolesData,
+  mockRoles as seedRolesData, // This will be updated with new permissions
   mockVLANs as seedVLANsData,
   mockSubnets as seedSubnetsData,
-  mockIPAddresses as seedIPsData,
+  mockIPAddresses as seedIPsData, // This will be updated with new fields
   mockAuditLogs as seedAuditLogsData,
-  mockISPs as seedISPsData,
-  mockDevices as seedDevicesData,
-  mockDeviceConnections as seedDeviceConnectionsData,
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
-} from '../src/lib/data';
-import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType, DeviceConnection as AppDeviceConnection, DeviceConnectionType, DeviceConnectionStatus } from '../src/types';
-import { DeviceType as AppDeviceType } from '../src/types';
+} from '../src/lib/data'; // data.ts will also need updates
+import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
+// Removed Device related types
 import { Prisma } from '@prisma/client';
 
 async function main() {
   console.log('Start seeding ...');
 
   console.log('Seeding Permissions...');
+  // Permissions are defined in data.ts, which will be updated by changing types/index.ts PERMISSIONS object
+  // Ensure mockPermissions in data.ts reflects the new permission set from types/index.ts
   for (const p of seedPermissionsData) {
     await prisma.permission.upsert({
       where: { id: p.id as string },
@@ -66,16 +65,14 @@ async function main() {
 
   for (const roleData of seedRolesData) {
     let permissionsToSet: { id: string }[];
-
     if (roleData.id === SEED_ADMIN_ROLE_ID) {
-      // Administrator role gets all permissions currently in the DB
       console.log(`Assigning all ${allDbPermissions.length} DB permissions to Administrator role.`);
       permissionsToSet = allDbPermissions.map(p => ({ id: p.id }));
     } else {
-      // Other roles get permissions as defined in mockRoles (src/lib/data.ts)
+      // For Operator and Viewer, use permissions defined in src/lib/data.ts's mockRoles
+      // Ensure mockRoles in data.ts is updated to reflect the new permission structure
       permissionsToSet = roleData.permissions.map(appPermId => ({ id: appPermId as string }));
     }
-    
     await prisma.role.update({
       where: { id: roleData.id },
       data: { permissions: { set: permissionsToSet } },
@@ -100,7 +97,8 @@ async function main() {
 
   console.log('Seeding VLANs...');
   for (const vlanData of seedVLANsData) {
-    const conflictingVlan = await prisma.vLAN.findFirst({ where: { vlanNumber: vlanData.vlanNumber, NOT: { id: vlanData.id } } });
+    // ... (VLAN seeding logic remains similar, check for conflicts)
+     const conflictingVlan = await prisma.vLAN.findFirst({ where: { vlanNumber: vlanData.vlanNumber, NOT: { id: vlanData.id } } });
     if (conflictingVlan) {
       console.warn(`Conflict: VLAN number ${vlanData.vlanNumber} (intended for ID ${vlanData.id}) is already used by VLAN ID ${conflictingVlan.id}.`);
       const subnetsUsing = await prisma.subnet.count({ where: { vlanId: conflictingVlan.id } });
@@ -122,6 +120,7 @@ async function main() {
 
   console.log('Seeding Subnets...');
   for (const subnetData of seedSubnetsData) {
+    // ... (Subnet seeding logic remains similar, check for conflicts)
     const conflictingSubnet = await prisma.subnet.findFirst({ where: { cidr: subnetData.cidr, NOT: { id: subnetData.id } } });
     if (conflictingSubnet) {
       console.warn(`Conflict: Subnet CIDR ${subnetData.cidr} (intended for ID ${subnetData.id}) is already used by Subnet ID ${conflictingSubnet.id}.`);
@@ -160,8 +159,8 @@ async function main() {
   }
   console.log('Subnets seeded.');
 
-  console.log('Seeding IP Addresses...');
-  for (const ipData of seedIPsData) {
+  console.log('Seeding IP Addresses (with new optional fields)...');
+  for (const ipData of seedIPsData) { // seedIPsData will need to be updated in data.ts
     await prisma.iPAddress.upsert({
       where: { id: ipData.id },
       update: {
@@ -175,6 +174,13 @@ async function main() {
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
+        // New fields
+        selectedOperatorName: (ipData as any).selectedOperatorName || null,
+        selectedOperatorDevice: (ipData as any).selectedOperatorDevice || null,
+        selectedAccessType: (ipData as any).selectedAccessType || null,
+        selectedLocalDeviceName: (ipData as any).selectedLocalDeviceName || null,
+        selectedDevicePort: (ipData as any).selectedDevicePort || null,
+        selectedPaymentSource: (ipData as any).selectedPaymentSource || null,
       },
       create: {
         id: ipData.id,
@@ -188,121 +194,65 @@ async function main() {
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
+        // New fields
+        selectedOperatorName: (ipData as any).selectedOperatorName || null,
+        selectedOperatorDevice: (ipData as any).selectedOperatorDevice || null,
+        selectedAccessType: (ipData as any).selectedAccessType || null,
+        selectedLocalDeviceName: (ipData as any).selectedLocalDeviceName || null,
+        selectedDevicePort: (ipData as any).selectedDevicePort || null,
+        selectedPaymentSource: (ipData as any).selectedPaymentSource || null,
       },
     });
   }
   console.log('IP Addresses seeded.');
 
-  console.log('Seeding ISPs...');
-  for (const ispData of seedISPsData) {
-    const currentIspId = (ispData as any).id;
-    if (!currentIspId || typeof currentIspId !== 'string') {
-      // This should ideally not happen if data.ts is correct
-      throw new Error(`ISP data is missing a valid string ID for ISP named: ${ispData.name}`);
-    }
-    await prisma.isp.upsert({
-      where: { id: currentIspId }, // Use the ID from mockISPs for where clause
-      update: { // Update relevant fields, ensuring name is not changed if found by ID
-        name: ispData.name,
-        description: ispData.description,
-        contactInfo: ispData.contactInfo,
-      },
-      create: { // Create with the ID from mockISPs
-        id: currentIspId,
-        name: ispData.name,
-        description: ispData.description,
-        contactInfo: ispData.contactInfo,
-      },
+  // Seeding for New Dictionaries
+  console.log('Seeding Operator Dictionaries...');
+  const operatorDictData = [
+    { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300', accessType: '独享' },
+    { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40', accessType: '共享' },
+    { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500', accessType: '独享' },
+  ];
+  for (const opData of operatorDictData) {
+    await prisma.operatorDictionary.upsert({
+      where: { operatorName: opData.operatorName },
+      update: opData,
+      create: opData,
     });
   }
-  console.log('ISPs seeded.');
+  console.log('Operator Dictionaries seeded.');
 
-  console.log('Seeding Devices...');
-  for (const device of seedDevicesData) {
-    await prisma.device.upsert({
-      where: { id: (device as any).id }, 
-      update: {
-        name: device.name,
-        deviceType: device.deviceType as string | undefined,
-        location: device.location,
-        managementIp: device.managementIp,
-        brand: device.brand,
-        modelNumber: device.modelNumber,
-        serialNumber: device.serialNumber,
-        description: device.description,
-      },
-      create: {
-        id: (device as any).id,
-        name: device.name,
-        deviceType: device.deviceType as string | undefined,
-        location: device.location,
-        managementIp: device.managementIp,
-        brand: device.brand,
-        modelNumber: device.modelNumber,
-        serialNumber: device.serialNumber,
-        description: device.description,
-      },
+  console.log('Seeding Local Device Dictionaries...');
+  const localDeviceDictData = [
+    { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
+    { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
+    { deviceName: '防火墙-总部出口', port: 'eth1/1' },
+  ];
+  for (const ldData of localDeviceDictData) {
+    await prisma.localDeviceDictionary.upsert({
+      where: { deviceName: ldData.deviceName },
+      update: ldData,
+      create: ldData,
     });
   }
-  console.log('Devices seeded.');
+  console.log('Local Device Dictionaries seeded.');
 
-  console.log('Seeding Device Connections...');
-  for (const connData of seedDeviceConnectionsData) {
-    // Validate foreign keys before attempting to upsert
-    const localDeviceExists = await prisma.device.findUnique({ where: { id: connData.localDeviceId } });
-    if (!localDeviceExists) {
-      console.warn(`Skipping DeviceConnection seed for localDeviceId ${connData.localDeviceId} as it does not exist. Mock Connection ID: ${connData.id}`);
-      continue;
-    }
-
-    if (connData.localIpId) {
-      const localIpExists = await prisma.iPAddress.findUnique({ where: { id: connData.localIpId } });
-      if (!localIpExists) {
-        console.warn(`Skipping DeviceConnection seed for localIpId ${connData.localIpId} as it does not exist. Mock Connection ID: ${connData.id}`);
-        continue;
-      }
-    }
-
-    if (connData.remoteDeviceId) {
-      const remoteDeviceExists = await prisma.device.findUnique({ where: { id: connData.remoteDeviceId } });
-      if (!remoteDeviceExists) {
-        console.warn(`Skipping DeviceConnection seed for remoteDeviceId ${connData.remoteDeviceId} as it does not exist. Mock Connection ID: ${connData.id}`);
-        continue;
-      }
-    }
-
-    if (connData.ispId) {
-      const ispExists = await prisma.isp.findUnique({ where: { id: connData.ispId } });
-      if (!ispExists) {
-        console.warn(`Skipping DeviceConnection seed for ispId ${connData.ispId} as it does not exist. Mock Connection ID: ${connData.id}`);
-        continue; 
-      }
-    }
-
-    const createPayload: Prisma.DeviceConnectionCreateInput = {
-        id: connData.id,
-        localDevice: { connect: { id: connData.localDeviceId } },
-        localIpAddress: connData.localIpId ? { connect: { id: connData.localIpId } } : undefined,
-        remoteDevice: connData.remoteDeviceId ? { connect: { id: connData.remoteDeviceId } } : undefined,
-        isp: connData.ispId ? { connect: { id: connData.ispId } } : undefined,
-        connectionType: connData.connectionType as string,
-        status: connData.status as string,
-        bandwidth: connData.bandwidth,
-        localInterface: connData.localInterface,
-        remoteHostnameOrIp: connData.remoteHostnameOrIp,
-        remoteInterface: connData.remoteInterface,
-        description: connData.description,
-    };
-    const updatePayload: Prisma.DeviceConnectionUpdateInput = { ...createPayload };
-    delete (updatePayload as any).id;
-
-    await prisma.deviceConnection.upsert({
-      where: { id: connData.id },
-      create: createPayload,
-      update: updatePayload,
+  console.log('Seeding Payment Source Dictionaries...');
+  const paymentSourceDictData = [
+    { sourceName: '自费' },
+    { sourceName: '财政付费-项目A' },
+    { sourceName: '财政付费-项目B' },
+  ];
+  for (const psData of paymentSourceDictData) {
+    await prisma.paymentSourceDictionary.upsert({
+      where: { sourceName: psData.sourceName },
+      update: psData,
+      create: psData,
     });
   }
-  console.log('Device Connections seeded.');
+  console.log('Payment Source Dictionaries seeded.');
+
+  // Removed ISP, Device, DeviceConnection seeding
 
   console.log('Seeding Audit Logs...');
   for (const logData of seedAuditLogsData) {
@@ -313,7 +263,7 @@ async function main() {
     if (!existingLog) {
       await prisma.auditLog.create({
         data: {
-          id: logData.id,
+          id: logData.id, // AuditLog ID is now auto-generated by @default(cuid())
           userId: validUserId,
           username: validUsername,
           action: logData.action,
@@ -321,6 +271,17 @@ async function main() {
           timestamp: logData.timestamp ? new Date(logData.timestamp) : new Date(),
         },
       });
+    } else { // If log exists, update it - useful if seed script is re-run
+        await prisma.auditLog.update({
+            where: {id: logData.id},
+            data: {
+                userId: validUserId,
+                username: validUsername,
+                action: logData.action,
+                details: logData.details,
+                timestamp: logData.timestamp ? new Date(logData.timestamp) : new Date(),
+            }
+        });
     }
   }
   console.log('Audit Logs seeded.');
@@ -336,5 +297,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    

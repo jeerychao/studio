@@ -41,32 +41,47 @@ export const PERMISSIONS = {
 
   // Tools
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
-  PERFORM_TOOLS_IMPORT: 'tools.import_export.import',
   PERFORM_TOOLS_EXPORT: 'tools.import_export.export',
-
-  // Settings
-  VIEW_SETTINGS: 'settings.view',
 
   // Query Page
   VIEW_QUERY_PAGE: 'querypage.view',
 
-  // ISP Management
+  // ISP Management (Added back)
   VIEW_ISP: 'isp.view',
   CREATE_ISP: 'isp.create',
   EDIT_ISP: 'isp.edit',
   DELETE_ISP: 'isp.delete',
 
-  // Device Management
+  // Device Management (Added back)
   VIEW_DEVICE: 'device.view',
   CREATE_DEVICE: 'device.create',
   EDIT_DEVICE: 'device.edit',
   DELETE_DEVICE: 'device.delete',
 
-  // Device Connections (New)
+  // Device Connection Management (Added back)
   VIEW_DEVICECONNECTION: 'deviceconnection.view',
   CREATE_DEVICECONNECTION: 'deviceconnection.create',
   EDIT_DEVICECONNECTION: 'deviceconnection.edit',
   DELETE_DEVICECONNECTION: 'deviceconnection.delete',
+  
+  // Settings (General - may need refinement if specific sub-settings permissions are added)
+  VIEW_SETTINGS: 'settings.view', // Example general settings view permission
+
+  // Dictionary Management
+  VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
+  CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
+  EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
+  DELETE_DICTIONARY_OPERATOR: 'dictionary.operator.delete',
+
+  VIEW_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.view',
+  CREATE_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.create',
+  EDIT_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.edit',
+  DELETE_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.delete',
+
+  VIEW_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.view',
+  CREATE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.create',
+  EDIT_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.edit',
+  DELETE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.delete',
 
 } as const;
 
@@ -85,9 +100,9 @@ export interface Subnet {
   networkAddress: string;
   subnetMask: string;
   ipRange?: string;
-  name?: string; 
+  name?: string;
   description?: string;
-  dhcpEnabled?: boolean; 
+  dhcpEnabled?: boolean;
   vlanId?: string;
   utilization?: number;
 }
@@ -97,7 +112,7 @@ export interface VLAN {
   vlanNumber: number;
   name?: string;
   description?: string;
-  subnetCount?: number; 
+  subnetCount?: number;
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -106,15 +121,23 @@ export interface IPAddress {
   id: string;
   ipAddress: string;
   subnetId?: string;
-  directVlanId?: string; 
+  directVlanId?: string;
   status: IPAddressStatus;
-  isGateway?: boolean; 
-  allocatedTo?: string; 
-  usageUnit?: string; 
-  contactPerson?: string; 
-  phone?: string; 
+  isGateway?: boolean;
+  allocatedTo?: string;
+  usageUnit?: string;
+  contactPerson?: string;
+  phone?: string;
   description?: string;
   lastSeen?: string;
+
+  // New fields
+  selectedOperatorName?: string;
+  selectedOperatorDevice?: string;
+  selectedAccessType?: string;
+  selectedLocalDeviceName?: string;
+  selectedDevicePort?: string;
+  selectedPaymentSource?: string;
 }
 
 export interface User {
@@ -122,35 +145,106 @@ export interface User {
   username: string;
   email: string;
   roleId: string;
-  roleName?: RoleName; 
+  roleName?: RoleName;
   avatar?: string;
   lastLogin?: string;
-  permissions?: PermissionId[]; 
+  permissions?: PermissionId[];
 }
 
 export interface Role {
   id: string;
   name: RoleName;
   description?: string;
-  userCount?: number; 
+  userCount?: number;
   permissions: PermissionId[];
 }
 
 export interface AuditLog {
   id: string;
-  userId?: string; 
-  username?: string; 
+  userId?: string;
+  username?: string;
   action: string;
-  timestamp: string; 
+  timestamp: string;
   details?: string;
 }
+
+// --- Added back ISP, Device, DeviceType, DeviceConnection, etc. ---
+export interface ISP {
+  id: string;
+  name: string;
+  description?: string;
+  contactInfo?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export enum DeviceType {
+  ROUTER = 'ROUTER',
+  SWITCH = 'SWITCH',
+  FIREWALL = 'FIREWALL',
+  SERVER = 'SERVER',
+  ACCESS_POINT = 'ACCESS_POINT',
+  OLT = 'OLT',
+  DDN_DEVICE = 'DDN_DEVICE',
+  OTHER = 'OTHER',
+}
+
+export interface Device {
+  id: string;
+  name: string;
+  deviceType?: DeviceType;
+  location?: string;
+  managementIp?: string;
+  brand?: string;
+  modelNumber?: string;
+  serialNumber?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export enum DeviceConnectionType {
+  ETHERNET_COPPER = 'ETHERNET_COPPER',
+  ETHERNET_FIBER = 'ETHERNET_FIBER',
+  WIFI = 'WIFI',
+  SERIAL = 'SERIAL',
+  VPN = 'VPN',
+  OTHER = 'OTHER',
+}
+
+export enum DeviceConnectionStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  STANDBY = 'STANDBY',
+  MAINTENANCE = 'MAINTENANCE',
+}
+
+export interface DeviceConnection {
+  id: string;
+  localDeviceId: string;
+  remoteDeviceId?: string;
+  remoteHostnameOrIp?: string;
+  ispId?: string;
+  connectionType: DeviceConnectionType;
+  status: DeviceConnectionStatus;
+  bandwidth?: string;
+  localInterface?: string;
+  remoteInterface?: string;
+  localIpId?: string;
+  remoteIpId?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+// --- End of added back types ---
+
 
 export interface SubnetQueryResult {
   id: string;
   cidr: string;
-  name?: string; 
+  name?: string;
   description?: string;
-  dhcpEnabled?: boolean; 
+  dhcpEnabled?: boolean;
   vlanNumber?: number;
   vlanName?: string;
   totalUsableIPs: number;
@@ -188,9 +282,9 @@ export interface PaginatedResponse<T> {
 }
 
 export interface BatchOperationFailure<TIdentifier = string> {
-  id: TIdentifier; 
-  itemIdentifier: string; 
-  error: string; 
+  id: TIdentifier;
+  itemIdentifier: string;
+  error: string;
 }
 
 export interface BatchDeleteResult<TIdentifier = string> {
@@ -199,78 +293,27 @@ export interface BatchDeleteResult<TIdentifier = string> {
   failureDetails: Array<BatchOperationFailure<TIdentifier>>;
 }
 
-export enum DeviceType {
-  ROUTER = "ROUTER",
-  SWITCH = "SWITCH",
-  FIREWALL = "FIREWALL",
-  SERVER = "SERVER",
-  ACCESS_POINT = "ACCESS_POINT",
-  OLT = "OLT",
-  DDN_DEVICE = "DDN_DEVICE",
-  OTHER = "OTHER",
-}
-
-export interface ISP {
+// New Dictionary Types
+export interface OperatorDictionary {
   id: string;
-  name: string;
-  description?: string;
-  contactInfo?: string;
+  operatorName: string;
+  operatorDevice?: string;
+  accessType?: string; // e.g., "独享", "共享"
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface Device {
+export interface LocalDeviceDictionary {
   id: string;
-  name: string;
-  deviceType?: DeviceType;
-  location?: string;
-  managementIp?: string;
-  brand?: string;
-  modelNumber?: string;
-  serialNumber?: string;
-  description?: string;
+  deviceName: string;
+  port?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-// New types for DeviceConnection
-export type DeviceConnectionType = 
-  | "ETHERNET_COPPER" 
-  | "ETHERNET_FIBER" 
-  | "WIFI" 
-  | "VPN_IPSEC" 
-  | "VPN_SSL" 
-  | "SERIAL" 
-  | "CELLULAR"
-  | "SATELLITE"
-  | "OTHER";
-
-export type DeviceConnectionStatus = 
-  | "ACTIVE" 
-  | "INACTIVE" 
-  | "MAINTENANCE" 
-  | "PLANNED"
-  | "DECOMMISSIONED";
-
-export interface DeviceConnection {
+export interface PaymentSourceDictionary {
   id: string;
-  localDeviceId: string;
-  localIpId?: string;
-  remoteDeviceId?: string;
-  remoteHostnameOrIp?: string;
-  ispId?: string;
-  connectionType: DeviceConnectionType; 
-  status: DeviceConnectionStatus;
-  bandwidth?: string;
-  localInterface?: string;
-  remoteInterface?: string;
-  description?: string;
+  sourceName: string;
   createdAt?: string;
   updatedAt?: string;
-
-  // For UI display, these might be populated by actions
-  localDeviceName?: string;
-  localIpAddressString?: string;
-  remoteDeviceName?: string;
-  ispName?: string;
 }
