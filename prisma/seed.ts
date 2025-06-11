@@ -10,6 +10,9 @@ import {
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
+  mockOperatorDictionaries, // New import
+  mockLocalDeviceDictionaries, // New import
+  mockPaymentSourceDictionaries, // New import
 } from '../src/lib/data'; // data.ts will also need updates
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
 // Removed Device related types
@@ -175,12 +178,12 @@ async function main() {
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
         // New fields
-        selectedOperatorName: (ipData as any).selectedOperatorName || null,
-        selectedOperatorDevice: (ipData as any).selectedOperatorDevice || null,
-        selectedAccessType: (ipData as any).selectedAccessType || null,
-        selectedLocalDeviceName: (ipData as any).selectedLocalDeviceName || null,
-        selectedDevicePort: (ipData as any).selectedDevicePort || null,
-        selectedPaymentSource: (ipData as any).selectedPaymentSource || null,
+        selectedOperatorName: ipData.selectedOperatorName || null,
+        selectedOperatorDevice: ipData.selectedOperatorDevice || null,
+        selectedAccessType: ipData.selectedAccessType || null,
+        selectedLocalDeviceName: ipData.selectedLocalDeviceName || null,
+        selectedDevicePort: ipData.selectedDevicePort || null,
+        selectedPaymentSource: ipData.selectedPaymentSource || null,
       },
       create: {
         id: ipData.id,
@@ -195,12 +198,12 @@ async function main() {
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
         // New fields
-        selectedOperatorName: (ipData as any).selectedOperatorName || null,
-        selectedOperatorDevice: (ipData as any).selectedOperatorDevice || null,
-        selectedAccessType: (ipData as any).selectedAccessType || null,
-        selectedLocalDeviceName: (ipData as any).selectedLocalDeviceName || null,
-        selectedDevicePort: (ipData as any).selectedDevicePort || null,
-        selectedPaymentSource: (ipData as any).selectedPaymentSource || null,
+        selectedOperatorName: ipData.selectedOperatorName || null,
+        selectedOperatorDevice: ipData.selectedOperatorDevice || null,
+        selectedAccessType: ipData.selectedAccessType || null,
+        selectedLocalDeviceName: ipData.selectedLocalDeviceName || null,
+        selectedDevicePort: ipData.selectedDevicePort || null,
+        selectedPaymentSource: ipData.selectedPaymentSource || null,
       },
     });
   }
@@ -208,14 +211,9 @@ async function main() {
 
   // Seeding for New Dictionaries
   console.log('Seeding Operator Dictionaries...');
-  const operatorDictData = [
-    { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300', accessType: '独享' },
-    { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40', accessType: '共享' },
-    { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500', accessType: '独享' },
-  ];
-  for (const opData of operatorDictData) {
+  for (const opData of mockOperatorDictionaries) { // Use new mock data
     await prisma.operatorDictionary.upsert({
-      where: { operatorName: opData.operatorName },
+      where: { operatorName: opData.operatorName }, // Assuming operatorName is unique
       update: opData,
       create: opData,
     });
@@ -223,14 +221,9 @@ async function main() {
   console.log('Operator Dictionaries seeded.');
 
   console.log('Seeding Local Device Dictionaries...');
-  const localDeviceDictData = [
-    { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
-    { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
-    { deviceName: '防火墙-总部出口', port: 'eth1/1' },
-  ];
-  for (const ldData of localDeviceDictData) {
+  for (const ldData of mockLocalDeviceDictionaries) { // Use new mock data
     await prisma.localDeviceDictionary.upsert({
-      where: { deviceName: ldData.deviceName },
+      where: { deviceName: ldData.deviceName }, // Assuming deviceName is unique
       update: ldData,
       create: ldData,
     });
@@ -238,14 +231,9 @@ async function main() {
   console.log('Local Device Dictionaries seeded.');
 
   console.log('Seeding Payment Source Dictionaries...');
-  const paymentSourceDictData = [
-    { sourceName: '自费' },
-    { sourceName: '财政付费-项目A' },
-    { sourceName: '财政付费-项目B' },
-  ];
-  for (const psData of paymentSourceDictData) {
+  for (const psData of mockPaymentSourceDictionaries) { // Use new mock data
     await prisma.paymentSourceDictionary.upsert({
-      where: { sourceName: psData.sourceName },
+      where: { sourceName: psData.sourceName }, // Assuming sourceName is unique
       update: psData,
       create: psData,
     });
@@ -297,3 +285,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    

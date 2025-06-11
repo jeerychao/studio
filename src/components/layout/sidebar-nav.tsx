@@ -10,13 +10,15 @@ import {
   Globe,
   Users,
   ShieldCheck,
-  FileDown,
   ListChecks,
   Search,
   Settings2 as SettingsIconLucide,
-  Signal,     // Added for ISP
-  HardDrive,  // Added for Device
-  Link2,      // Added for Device Connection
+  BookOpen, // Icon for Dictionaries
+  Users2,   // Icon for User & Role Management
+  FileText, // Icon for Audit Logs
+  UploadCloud, // Icon for Data Export
+  HardDrive, // For Local Device Dictionary
+  CreditCard, // For Payment Source Dictionary
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,16 +38,17 @@ interface NavItemConfig {
   href: string;
   label: string;
   icon: React.ElementType;
-  requiredPermission?: PermissionId;
+  requiredPermission?: PermissionId | PermissionId[]; // Can be single or array for parent items
   subItems?: NavItemConfig[];
 }
 
 const navItemConfigs: NavItemConfig[] = [
   { href: "/dashboard", label: "仪表盘", icon: LayoutDashboard, requiredPermission: PERMISSIONS.VIEW_DASHBOARD },
   {
-    href: "/ip-management", 
+    href: "/ip-management",
     label: "IP 管理",
     icon: Network,
+    requiredPermission: [PERMISSIONS.VIEW_VLAN, PERMISSIONS.VIEW_SUBNET, PERMISSIONS.VIEW_IPADDRESS],
     subItems: [
       { href: "/vlans", label: "VLAN 管理", icon: Cable, requiredPermission: PERMISSIONS.VIEW_VLAN },
       { href: "/subnets", label: "子网管理", icon: Network, requiredPermission: PERMISSIONS.VIEW_SUBNET },
@@ -59,33 +62,39 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_QUERY_PAGE,
   },
   {
-    href: "/user-role-management", 
-    label: "用户和角色",
-    icon: Users,
+    href: "/dictionaries", // New top-level parent for dictionaries
+    label: "字典管理",
+    icon: BookOpen,
+    requiredPermission: [
+        PERMISSIONS.VIEW_DICTIONARY_OPERATOR,
+        PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
+        PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE
+    ],
     subItems: [
+      { href: "/dictionaries/operator", label: "运营商字典", icon: Network, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_OPERATOR },
+      { href: "/dictionaries/local-device", label: "本地设备字典", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE },
+      { href: "/dictionaries/payment-source", label: "付费来源字典", icon: CreditCard, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE },
+    ],
+  },
+  {
+    href: "/system", // New top-level parent for system-wide settings/logs/tools
+    label: "系统管理",
+    icon: SettingsIconLucide,
+    requiredPermission: [
+        PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT,
+        PERMISSIONS.VIEW_USER,
+        PERMISSIONS.VIEW_ROLE,
+        PERMISSIONS.VIEW_AUDIT_LOG,
+    ],
+    subItems: [
+      { href: "/tools/import-export", label: "数据导出", icon: UploadCloud, requiredPermission: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT },
       { href: "/users", label: "用户管理", icon: Users, requiredPermission: PERMISSIONS.VIEW_USER },
       { href: "/roles", label: "角色管理", icon: ShieldCheck, requiredPermission: PERMISSIONS.VIEW_ROLE },
+      { href: "/audit-logs", label: "审计日志", icon: FileText, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
     ],
   },
-  {
-    href: "/system-settings", // New parent group for settings
-    label: "系统设置",
-    icon: SettingsIconLucide,
-    subItems: [
-      { href: "/settings/isps", label: "ISP 管理", icon: Signal, requiredPermission: PERMISSIONS.VIEW_ISP },
-      { href: "/settings/devices", label: "设备管理", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DEVICE },
-      { href: "/settings/device-connections", label: "设备连接管理", icon: Link2, requiredPermission: PERMISSIONS.VIEW_DEVICECONNECTION },
-    ],
-  },
-  {
-    href: "/tools/import-export",
-    label: "数据导出",
-    icon: FileDown,
-    requiredPermission: PERMISSIONS.PERFORM_TOOLS_EXPORT 
-  },
-  { href: "/audit-logs", label: "审计日志", icon: ListChecks, requiredPermission: PERMISSIONS.VIEW_AUDIT_LOG },
-  // The old "/settings" link is removed as its functionality will be covered by the new sub-pages or is minimal.
 ];
+
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -97,20 +106,38 @@ export function SidebarNav() {
     }
 
     return items.map(item => {
-      let hasAccessToCurrentItem = true; 
+      let hasAccessToCurrentItem = true;
       if (item.requiredPermission) {
-        hasAccessToCurrentItem = hasPermission(user, item.requiredPermission);
+        if (Array.isArray(item.requiredPermission)) {
+          hasAccessToCurrentItem = item.requiredPermission.some(perm => hasPermission(user, perm));
+        } else {
+          hasAccessToCurrentItem = hasPermission(user, item.requiredPermission);
+        }
       }
 
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems && item.subItems.length > 0) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        if (!item.requiredPermission && filteredSubItems.length === 0) {
-          return null; 
+        // If the parent item itself doesn't have a specific permission (relies on children having perms),
+        // and all its children are filtered out, then hide the parent too.
+        if ((!item.requiredPermission || (Array.isArray(item.requiredPermission) && item.requiredPermission.length === 0)) && filteredSubItems.length === 0) {
+            return null;
+        }
+         // If parent has required permissions, but ALL children are filtered out, then parent itself also does not render (unless it's a direct link page)
+        if (filteredSubItems.length === 0 && item.href === "/dictionaries" || item.href === "/system" || item.href === "/ip-management") { // Example parent-only links
+            // Check if the parent itself should still be visible even if all children are gone.
+            // This logic might need refinement based on whether parent items are pure groups or also links.
+            // For now, if it's a group and all children are gone, and the group itself doesn't have its own unique required permission that was met, hide it.
+            if (Array.isArray(item.requiredPermission) && !item.requiredPermission.some(perm => hasPermission(user, perm))) {
+                return null;
+            }
+            if (!Array.isArray(item.requiredPermission) && item.requiredPermission && !hasPermission(user,item.requiredPermission)){
+                return null;
+            }
         }
       }
       
-      if (item.requiredPermission && !hasAccessToCurrentItem) {
+      if (!hasAccessToCurrentItem) {
         return null;
       }
 
@@ -137,14 +164,17 @@ export function SidebarNav() {
         return;
     }
     const activeParentGroup = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
-    if (activeParentGroup) {
+    if (activeParentGroup && !openAccordionItems.includes(activeParentGroup.href)) {
         setOpenAccordionItems(currentOpenItems => {
-            if (currentOpenItems.includes(activeParentGroup.href)) {
-                return currentOpenItems;
+            // Ensure not to add duplicate if already handled or if it's a re-render.
+            if (!currentOpenItems.includes(activeParentGroup.href)) {
+                 return [...currentOpenItems, activeParentGroup.href];
             }
-            return [...currentOpenItems, activeParentGroup.href];
+            return currentOpenItems;
         });
     }
+  // Only re-run if pathname or accessibleNavItems change, avoid re-running on openAccordionItems change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, accessibleNavItems, isAuthLoading]);
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
@@ -240,3 +270,5 @@ export function SidebarNav() {
     </>
   );
 }
+
+    

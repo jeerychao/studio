@@ -17,35 +17,11 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
-import { PERMISSIONS } from "@/types"; 
-import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/hooks/use-current-user";
+// PERMISSIONS import is no longer needed here as the specific settings button is removed.
+import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user";
 import { logger } from "@/lib/logger";
 
-
-function ConditionalSettingsButton() {
-  const { currentUser, isAuthLoading } = useCurrentUser();
-
-  if (isAuthLoading || !currentUser || (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-    return null;
-  }
-
-  if (!hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS)) {
-    return null;
-  }
-
-  return (
-    <Button
-      variant="ghost"
-      className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary-foreground group-data-[collapsible=icon]:justify-center"
-      asChild
-    >
-      <Link href="/settings">
-        <Settings2 className="h-5 w-5" />
-        <span className="ml-3 group-data-[collapsible=icon]:hidden">设置</span>
-      </Link>
-    </Button>
-  );
-}
+// ConditionalSettingsButton is removed as per refactoring plan (no direct /settings link in footer)
 
 export default function DashboardLayout({
   children,
@@ -97,8 +73,6 @@ export default function DashboardLayout({
             </div>
         );
     }
-    // If already on login, or if for some reason redirect is not needed, render nothing from this layout.
-    // This case should ideally not be hit if routing is correct, as /login has its own layout.
     logger.info("DashboardLayout: Auth status unauthenticated, but already on /login or redirect not needed. Rendering null from layout.");
     return null; 
   }
@@ -117,8 +91,9 @@ export default function DashboardLayout({
         <SidebarContent className="p-2">
           <SidebarNav />
         </SidebarContent>
+        {/* Removed ConditionalSettingsButton from SidebarFooter */}
         <SidebarFooter className="p-2 border-t mt-auto">
-           <ConditionalSettingsButton />
+           {/* Footer can be empty or contain other elements like version number if needed */}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
@@ -134,3 +109,5 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
+
+    

@@ -1,6 +1,6 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, ISP, Device, DeviceConnection, DeviceConnectionType, DeviceConnectionStatus } from '../types';
-import { PERMISSIONS, DeviceType } from '../types';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from '../types';
+import { PERMISSIONS, DeviceType } from '../types'; // Added DeviceType import
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
@@ -8,45 +8,48 @@ export const OPERATOR_ROLE_ID = 'role_operator_fixed_id';
 export const VIEWER_ROLE_ID = 'role_viewer_fixed_id';
 
 export const mockPermissions: Permission[] = [
-  { id: PERMISSIONS.VIEW_DASHBOARD, name: 'View Dashboard', group: 'Dashboard', description: 'Can view the main dashboard overview.' },
-  { id: PERMISSIONS.VIEW_SUBNET, name: 'View Subnets', group: 'Subnet Management', description: 'Can view subnet details and listings.' },
-  { id: PERMISSIONS.CREATE_SUBNET, name: 'Create Subnets', group: 'Subnet Management', description: 'Can add new subnets.' },
-  { id: PERMISSIONS.EDIT_SUBNET, name: 'Edit Subnets', group: 'Subnet Management', description: 'Can modify existing subnets (CIDR, VLAN, description).' },
-  { id: PERMISSIONS.DELETE_SUBNET, name: 'Delete Subnets', group: 'Subnet Management', description: 'Can remove subnets (if empty or conditions met).' },
-  { id: PERMISSIONS.VIEW_VLAN, name: 'View VLANs', group: 'VLAN Management', description: 'Can view VLAN details and listings.' },
-  { id: PERMISSIONS.CREATE_VLAN, name: 'Create VLANs', group: 'VLAN Management', description: 'Can add new VLANs.' },
-  { id: PERMISSIONS.EDIT_VLAN, name: 'Edit VLANs', group: 'VLAN Management', description: 'Can modify existing VLANs (number, name, description).' },
-  { id: PERMISSIONS.DELETE_VLAN, name: 'Delete VLANs', group: 'VLAN Management', description: 'Can remove VLANs (if not in use).' },
-  { id: PERMISSIONS.VIEW_IPADDRESS, name: 'View IP Addresses', group: 'IP Address Management', description: 'Can view IP address details and listings.' },
-  { id: PERMISSIONS.CREATE_IPADDRESS, name: 'Create IP Addresses', group: 'IP Address Management', description: 'Can add new IP addresses.' },
-  { id: PERMISSIONS.EDIT_IPADDRESS, name: 'Edit IP Addresses', group: 'IP Address Management', description: 'Can modify existing IP addresses (status, allocation, etc.).' },
-  { id: PERMISSIONS.DELETE_IPADDRESS, name: 'Delete IP Addresses', group: 'IP Address Management', description: 'Can remove IP addresses (if not allocated/reserved or conditions met).' },
-  { id: PERMISSIONS.VIEW_USER, name: 'View Users', group: 'User Management', description: 'Can view user accounts and their roles.' },
-  { id: PERMISSIONS.CREATE_USER, name: 'Create Users', group: 'User Management', description: 'Can create new user accounts.' },
-  { id: PERMISSIONS.EDIT_USER, name: 'Edit Users & Assign Roles', group: 'User Management', description: 'Can modify user details and change their roles.' },
-  { id: PERMISSIONS.DELETE_USER, name: 'Delete Users', group: 'User Management', description: 'Can delete user accounts.' },
-  { id: PERMISSIONS.VIEW_ROLE, name: 'View Roles', group: 'Role Management', description: 'Can view role details and their permissions.' },
-  { id: PERMISSIONS.EDIT_ROLE_DESCRIPTION, name: 'Edit Role Descriptions', group: 'Role Management', description: 'Can change the description of existing roles.' },
-  { id: PERMISSIONS.EDIT_ROLE_PERMISSIONS, name: 'Edit Role Permissions', group: 'Role Management', description: 'Can modify the permissions assigned to roles (except Admin role).' },
-  { id: PERMISSIONS.VIEW_AUDIT_LOG, name: 'View Audit Logs', group: 'System Logs', description: 'Can view system activity and audit trails.' },
-  { id: PERMISSIONS.DELETE_AUDIT_LOG, name: 'Delete Audit Logs', group: 'System Logs', description: 'Can delete audit log entries.' },
-  { id: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, name: 'View Import/Export Tool', group: 'Tools', description: 'Can access the data import/export page.' },
-  { id: PERMISSIONS.PERFORM_TOOLS_IMPORT, name: 'Perform Data Import', group: 'Tools', description: 'Can import data from files (e.g., Excel, CSV).' },
-  { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: 'Perform Data Export', group: 'Tools', description: 'Can export data to files (e.g., CSV).' },
-  { id: PERMISSIONS.VIEW_SETTINGS, name: 'View Settings', group: 'System Settings', description: 'Can view application-wide settings.' },
-  { id: PERMISSIONS.VIEW_QUERY_PAGE, name: 'View Query Page', group: 'Query Tool', description: 'Access the comprehensive query tool.' },
-  { id: PERMISSIONS.VIEW_ISP, name: 'View ISPs', group: 'ISP Management', description: 'Can view ISP details.' },
-  { id: PERMISSIONS.CREATE_ISP, name: 'Create ISPs', group: 'ISP Management', description: 'Can add new ISPs.' },
-  { id: PERMISSIONS.EDIT_ISP, name: 'Edit ISPs', group: 'ISP Management', description: 'Can modify existing ISPs.' },
-  { id: PERMISSIONS.DELETE_ISP, name: 'Delete ISPs', group: 'ISP Management', description: 'Can remove ISPs.' },
-  { id: PERMISSIONS.VIEW_DEVICE, name: 'View Devices', group: 'Device Management', description: 'Can view device details.' },
-  { id: PERMISSIONS.CREATE_DEVICE, name: 'Create Devices', group: 'Device Management', description: 'Can add new devices.' },
-  { id: PERMISSIONS.EDIT_DEVICE, name: 'Edit Devices', group: 'Device Management', description: 'Can modify existing devices.' },
-  { id: PERMISSIONS.DELETE_DEVICE, name: 'Delete Devices', group: 'Device Management', description: 'Can remove devices.' },
-  { id: PERMISSIONS.VIEW_DEVICECONNECTION, name: 'View Device Connections', group: 'Device Connection Management', description: 'Can view device connection details.' },
-  { id: PERMISSIONS.CREATE_DEVICECONNECTION, name: 'Create Device Connections', group: 'Device Connection Management', description: 'Can add new device connections.' },
-  { id: PERMISSIONS.EDIT_DEVICECONNECTION, name: 'Edit Device Connections', group: 'Device Connection Management', description: 'Can modify existing device connections.' },
-  { id: PERMISSIONS.DELETE_DEVICECONNECTION, name: 'Delete Device Connections', group: 'Device Connection Management', description: 'Can remove device connections.' },
+  { id: PERMISSIONS.VIEW_DASHBOARD, name: '查看仪表盘', group: '仪表盘', description: '可以查看主仪表盘概览。' },
+  { id: PERMISSIONS.VIEW_SUBNET, name: '查看子网', group: '子网管理', description: '可以查看子网详情和列表。' },
+  { id: PERMISSIONS.CREATE_SUBNET, name: '创建子网', group: '子网管理', description: '可以添加新的子网。' },
+  { id: PERMISSIONS.EDIT_SUBNET, name: '编辑子网', group: '子网管理', description: '可以修改现有子网（CIDR、VLAN、描述）。' },
+  { id: PERMISSIONS.DELETE_SUBNET, name: '删除子网', group: '子网管理', description: '可以移除子网（如果为空或满足条件）。' },
+  { id: PERMISSIONS.VIEW_VLAN, name: '查看VLAN', group: 'VLAN管理', description: '可以查看VLAN详情和列表。' },
+  { id: PERMISSIONS.CREATE_VLAN, name: '创建VLAN', group: 'VLAN管理', description: '可以添加新的VLAN。' },
+  { id: PERMISSIONS.EDIT_VLAN, name: '编辑VLAN', group: 'VLAN管理', description: '可以修改现有VLAN（编号、名称、描述）。' },
+  { id: PERMISSIONS.DELETE_VLAN, name: '删除VLAN', group: 'VLAN管理', description: '可以移除VLAN（如果未使用）。' },
+  { id: PERMISSIONS.VIEW_IPADDRESS, name: '查看IP地址', group: 'IP地址管理', description: '可以查看IP地址详情和列表。' },
+  { id: PERMISSIONS.CREATE_IPADDRESS, name: '创建IP地址', group: 'IP地址管理', description: '可以添加新的IP地址。' },
+  { id: PERMISSIONS.EDIT_IPADDRESS, name: '编辑IP地址', group: 'IP地址管理', description: '可以修改现有IP地址（状态、分配等）。' },
+  { id: PERMISSIONS.DELETE_IPADDRESS, name: '删除IP地址', group: 'IP地址管理', description: '可以移除IP地址（如果未分配/预留或满足条件）。' },
+  { id: PERMISSIONS.VIEW_USER, name: '查看用户', group: '用户管理', description: '可以查看用户账户及其角色。' },
+  { id: PERMISSIONS.CREATE_USER, name: '创建用户', group: '用户管理', description: '可以创建新的用户账户。' },
+  { id: PERMISSIONS.EDIT_USER, name: '编辑用户和分配角色', group: '用户管理', description: '可以修改用户详情和更改其角色。' },
+  { id: PERMISSIONS.DELETE_USER, name: '删除用户', group: '用户管理', description: '可以删除用户账户。' },
+  { id: PERMISSIONS.VIEW_ROLE, name: '查看角色', group: '角色管理', description: '可以查看角色详情及其权限。' },
+  { id: PERMISSIONS.EDIT_ROLE_DESCRIPTION, name: '编辑角色描述', group: '角色管理', description: '可以更改现有角色的描述。' },
+  { id: PERMISSIONS.EDIT_ROLE_PERMISSIONS, name: '编辑角色权限', group: '角色管理', description: '可以修改分配给角色的权限（管理员角色除外）。' },
+  { id: PERMISSIONS.VIEW_AUDIT_LOG, name: '查看审计日志', group: '系统日志', description: '可以查看系统活动和审计追踪。' },
+  { id: PERMISSIONS.DELETE_AUDIT_LOG, name: '删除审计日志', group: '系统日志', description: '可以删除审计日志条目。' },
+  { id: PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, name: '查看导入/导出工具', group: '工具', description: '可以访问数据导入/导出页面。' },
+  { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: '执行数据导出', group: '工具', description: '可以将数据导出到文件（例如CSV）。' },
+  { id: PERMISSIONS.VIEW_QUERY_PAGE, name: '查看信息查询页面', group: '查询工具', description: '访问综合查询工具。' },
+  { id: PERMISSIONS.VIEW_SETTINGS, name: '查看设置', group: '系统设置', description: '可以查看应用范围的设置（如果存在全局设置页面）。' },
+
+  // Dictionary Permissions
+  { id: PERMISSIONS.VIEW_DICTIONARY_OPERATOR, name: '查看运营商字典', group: '字典管理', description: '可以查看运营商字典条目。' },
+  { id: PERMISSIONS.CREATE_DICTIONARY_OPERATOR, name: '创建运营商字典条目', group: '字典管理', description: '可以添加新的运营商字典条目。' },
+  { id: PERMISSIONS.EDIT_DICTIONARY_OPERATOR, name: '编辑运营商字典条目', group: '字典管理', description: '可以修改现有的运营商字典条目。' },
+  { id: PERMISSIONS.DELETE_DICTIONARY_OPERATOR, name: '删除运营商字典条目', group: '字典管理', description: '可以删除运营商字典条目。' },
+
+  { id: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, name: '查看本地设备字典', group: '字典管理', description: '可以查看本地设备字典条目。' },
+  { id: PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, name: '创建本地设备字典条目', group: '字典管理', description: '可以添加新的本地设备字典条目。' },
+  { id: PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, name: '编辑本地设备字典条目', group: '字典管理', description: '可以修改现有的本地设备字典条目。' },
+  { id: PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE, name: '删除本地设备字典条目', group: '字典管理', description: '可以删除本地设备字典条目。' },
+
+  { id: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, name: '查看付费来源字典', group: '字典管理', description: '可以查看付费来源字典条目。' },
+  { id: PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, name: '创建付费来源字典条目', group: '字典管理', description: '可以添加新的付费来源字典条目。' },
+  { id: PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, name: '编辑付费来源字典条目', group: '字典管理', description: '可以修改现有的付费来源字典条目。' },
+  { id: PERMISSIONS.DELETE_DICTIONARY_PAYMENT_SOURCE, name: '删除付费来源字典条目', group: '字典管理', description: '可以删除付费来源字典条目。' },
 ];
 
 function createInitialSubnetSeedData(
@@ -92,11 +95,15 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
 export const mockIPAddresses: IPAddress[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
-    isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network'
+    isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
+    selectedOperatorName: '中国电信', selectedOperatorDevice: 'OLT-ZX-C300', selectedAccessType: '独享',
+    selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/1', selectedPaymentSource: '自费'
   },
   {
     id: 'seed_ip_002', ipAddress: '192.168.1.10', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: '123-101', description: 'John - Primary Workstation'
+    isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: '123-101', description: 'John - Primary Workstation',
+    selectedOperatorName: '中国联通', selectedOperatorDevice: 'Router-HW-NE40', selectedAccessType: '共享',
+    selectedLocalDeviceName: '接入交换机-B栋-F3', selectedDevicePort: 'GigabitEthernet0/24', selectedPaymentSource: '财政付费-项目A'
   },
   {
     id: 'seed_ip_003', ipAddress: '192.168.1.11', subnetId: 'seed_subnet_001', status: 'free' as IPAddressStatus,
@@ -104,19 +111,26 @@ export const mockIPAddresses: IPAddress[] = [
   },
   {
     id: 'seed_ip_004', ipAddress: '192.168.1.12', subnetId: 'seed_subnet_001', status: 'reserved' as IPAddressStatus,
-    isGateway: false, description: 'Future Printer IP', usageUnit: 'Admin Office'
+    isGateway: false, description: 'Future Printer IP', usageUnit: 'Admin Office',
+    selectedPaymentSource: '财政付费-项目B'
   },
   {
     id: 'seed_ip_005', ipAddress: '10.0.0.1', subnetId: 'seed_subnet_002', status: 'allocated' as IPAddressStatus,
-    isGateway: true, allocatedTo: 'Server Farm Router', description: 'Gateway for Servers'
+    isGateway: true, allocatedTo: 'Server Farm Router', description: 'Gateway for Servers',
+    selectedOperatorName: '中国移动', selectedOperatorDevice: 'Switch-H3C-S5500', selectedAccessType: '独享',
+    selectedLocalDeviceName: '防火墙-总部出口', selectedDevicePort: 'eth1/1', selectedPaymentSource: '自费'
   },
   {
     id: 'seed_ip_006', ipAddress: '10.0.1.5', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: '123-201', description: 'Main Web Server'
+    isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: '123-201', description: 'Main Web Server',
+    selectedOperatorName: '教育网', selectedOperatorDevice: 'Router-Ruijie-RSR77', selectedAccessType: '独享',
+    selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/2', selectedPaymentSource: '自费'
   },
   {
     id: 'seed_ip_007', ipAddress: '10.0.1.6', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: '123-202', description: 'Primary Database Server'
+    isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: '123-202', description: 'Primary Database Server',
+    selectedOperatorName: '广电网络', selectedOperatorDevice: 'CableModem-ARRIS-CM8200', selectedAccessType: '共享',
+    selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/3', selectedPaymentSource: '财政付费-项目A'
   },
 ];
 
@@ -125,7 +139,7 @@ export const mockRoles: Role[] = [
     id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: mockPermissions.map(p => p.id as PermissionId)
+    permissions: Object.values(PERMISSIONS) as PermissionId[] // Admin gets all permissions
   },
   {
     id: OPERATOR_ROLE_ID,
@@ -139,9 +153,9 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
       PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT,
-      PERMISSIONS.VIEW_ISP, PERMISSIONS.CREATE_ISP, PERMISSIONS.EDIT_ISP, PERMISSIONS.DELETE_ISP,
-      PERMISSIONS.VIEW_DEVICE, PERMISSIONS.CREATE_DEVICE, PERMISSIONS.EDIT_DEVICE, PERMISSIONS.DELETE_DEVICE,
-      PERMISSIONS.VIEW_DEVICECONNECTION, PERMISSIONS.CREATE_DEVICECONNECTION, PERMISSIONS.EDIT_DEVICECONNECTION, PERMISSIONS.DELETE_DEVICECONNECTION,
+      PERMISSIONS.VIEW_DICTIONARY_OPERATOR, PERMISSIONS.CREATE_DICTIONARY_OPERATOR, PERMISSIONS.EDIT_DICTIONARY_OPERATOR, PERMISSIONS.DELETE_DICTIONARY_OPERATOR,
+      PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE,
+      PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.DELETE_DICTIONARY_PAYMENT_SOURCE,
     ] as PermissionId[]
   },
   {
@@ -155,9 +169,9 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
-      PERMISSIONS.VIEW_ISP,
-      PERMISSIONS.VIEW_DEVICE,
-      PERMISSIONS.VIEW_DEVICECONNECTION,
+      PERMISSIONS.VIEW_DICTIONARY_OPERATOR,
+      PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
+      PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
     ] as PermissionId[]
   },
 ];
@@ -175,118 +189,31 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-export const mockISPs: Omit<ISP, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { name: '中国电信 (China Telecom)', description: '主要固网和移动运营商', contactInfo: '客服热线: 10000' },
-  { name: '中国联通 (China Unicom)', description: '主要固网和移动运营商', contactInfo: '客服热线: 10010' },
-  { name: '中国移动 (China Mobile)', description: '主要移动和固网运营商', contactInfo: '客服热线: 10086' },
-  { name: '教育网 (CERNET)', description: '中国教育和科研计算机网', contactInfo: 'noc@cernet.com' },
+// Seed data for new Dictionaries
+export const mockOperatorDictionaries: Omit<OperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300', accessType: '独享' },
+  { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40', accessType: '共享' },
+  { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500', accessType: '独享' },
+  { operatorName: '广电网络', operatorDevice: 'CableModem-ARRIS-CM8200', accessType: '共享' },
+  { operatorName: '教育网', operatorDevice: 'Router-Ruijie-RSR77', accessType: '独享' },
 ];
 
-export const mockDevices: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { name: 'Core-Switch-Alpha', deviceType: DeviceType.SWITCH, location: '主数据中心 A1柜', managementIp: '10.200.0.1', serialNumber: 'UNIQUE_SN_CS_ALPHA', brand: 'H3C', modelNumber: 'S7506E', description: '核心汇聚交换机 Alpha' },
-  { name: 'Edge-Router-Main-Telecom', deviceType: DeviceType.ROUTER, location: '电信接入间', managementIp: '10.200.1.1', serialNumber: 'UNIQUE_SN_ERT_MAIN_TELECOM', brand: 'Huawei', modelNumber: 'NE40E-X8', description: '电信主出口路由器' },
-  { name: 'Firewall-Perimeter', deviceType: DeviceType.FIREWALL, location: '主数据中心 安全区', managementIp: '10.200.2.1', serialNumber: 'UNIQUE_SN_FW_PERIMETER', brand: 'Hillstone', modelNumber: 'SG-6000-E5960', description: '边界主防火墙' },
-  { name: 'AP-Office-F1-ZoneA', deviceType: DeviceType.ACCESS_POINT, location: '办公区一层 区域A', managementIp: '10.200.3.1', serialNumber: 'UNIQUE_SN_AP_F1ZA', brand: 'Ruijie', modelNumber: 'RG-AP820-L(V2)', description: '一层办公区AP 01' },
-  { name: 'Server-VMHost-Node01', deviceType: DeviceType.SERVER, location: '服务器区 B2柜', managementIp: '10.200.4.1', serialNumber: 'UNIQUE_SN_SRV_VMH01', brand: 'Dell', modelNumber: 'PowerEdge R740', description: '虚拟化宿主机 01' },
-  { name: 'OLT-Campus-West', deviceType: DeviceType.OLT, location: '园区西栋弱电间', managementIp: '10.200.5.1', serialNumber: 'UNIQUE_SN_OLT_CW', brand: 'ZTE', modelNumber: 'C300', description: '西栋楼宇OLT设备' },
-  { name: 'Router-Branch-East', deviceType: DeviceType.ROUTER, location: '东部分公司机房', managementIp: '10.200.6.1', serialNumber: 'UNIQUE_SN_RTR_BE', brand: 'Cisco', modelNumber: '2901', description: '东部分公司接入路由' },
-  { name: 'Edge-Router-Backup-Unicom', deviceType: DeviceType.ROUTER, location: '联通接入间', managementIp: '10.200.7.1', serialNumber: 'UNIQUE_SN_ERT_BACKUP_UNICOM', brand: 'Juniper', modelNumber: 'MX204', description: '联通备份出口路由器' },
-  { name: 'Core-Switch-Bravo', deviceType: DeviceType.SWITCH, location: '主数据中心 B1柜', managementIp: '10.200.8.1', serialNumber: 'UNIQUE_SN_CS_BRAVO', brand: 'H3C', modelNumber: 'S7506E', description: '核心汇聚交换机 Bravo (冗余)' },
-  { name: 'Workgroup-Switch-Finance', deviceType: DeviceType.SWITCH, location: '财务部办公室', managementIp: undefined, serialNumber: 'UNIQUE_SN_SW_FIN', brand: 'Netgear', modelNumber: 'GS108', description: '财务部非管理型桌面交换机' },
-  { name: 'Workgroup-Switch-HR', deviceType: DeviceType.SWITCH, location: '人力资源部机柜', managementIp: undefined, serialNumber: 'UNIQUE_SN_SW_HR', brand: 'TP-Link', modelNumber: 'TL-SG1008D', description: '人力部非管理型桌面交换机' },
+export const mockLocalDeviceDictionaries: Omit<LocalDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
+  { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
+  { deviceName: '防火墙-总部出口', port: 'eth1/1' },
+  { deviceName: '服务器-WEB集群-节点1', port: 'eth0' },
+  { deviceName: '无线控制器-主楼', port: 'Port-channel1' },
 ];
 
-// Assign sequential IDs after mock data definition
-mockISPs.forEach((isp, index) => {
-  (isp as any).id = `seed_isp_${index.toString().padStart(3, '0')}`;
-});
-mockDevices.forEach((device, index) => {
-  (device as any).id = `seed_device_${index.toString().padStart(3, '0')}`;
-});
-
-
-export const mockDeviceConnections: Omit<DeviceConnection, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  {
-    localDeviceId: 'seed_device_000', // Core-Switch-Alpha
-    remoteDeviceId: 'seed_device_001', // Edge-Router-Main-Telecom
-    connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
-    status: 'ACTIVE' as DeviceConnectionStatus,
-    bandwidth: '10 Gbps',
-    localInterface: 'Ten-GigabitEthernet1/0/1',
-    remoteInterface: 'GigabitEthernet0/0/1',
-    description: 'Uplink from Core Switch Alpha to Main Telecom Edge Router',
-  },
-  {
-    localDeviceId: 'seed_device_001', // Edge-Router-Main-Telecom
-    remoteHostnameOrIp: '202.96.128.86',
-    ispId: 'seed_isp_000', // China Telecom
-    connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
-    status: 'ACTIVE' as DeviceConnectionStatus,
-    bandwidth: '1 Gbps',
-    localInterface: 'GigabitEthernet0/0/0',
-    description: 'Primary internet connection via China Telecom',
-  },
-  {
-    localDeviceId: 'seed_device_000', // Core-Switch-Alpha
-    localIpId: 'seed_ip_001', // 192.168.1.1 (assuming this IP is on Core-Switch-Alpha for management or SVI)
-    remoteDeviceId: 'seed_device_002', // Firewall-Perimeter
-    connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
-    status: 'ACTIVE' as DeviceConnectionStatus,
-    bandwidth: '10 Gbps',
-    localInterface: 'Ten-GigabitEthernet1/0/2',
-    remoteInterface: 'eth1/1',
-    description: 'Connection from Core Switch Alpha to Perimeter Firewall',
-  },
-  {
-    localDeviceId: 'seed_device_007', // Edge-Router-Backup-Unicom
-    remoteHostnameOrIp: '210.22.84.3',
-    ispId: 'seed_isp_001', // China Unicom
-    connectionType: 'ETHERNET_FIBER' as DeviceConnectionType,
-    status: 'STANDBY' as DeviceConnectionStatus,
-    bandwidth: '500 Mbps',
-    localInterface: 'ge-0/0/0',
-    description: 'Backup internet connection via China Unicom',
-  },
-  {
-    localDeviceId: 'seed_device_004', // Server-VMHost-Node01
-    remoteDeviceId: 'seed_device_000', // Core-Switch-Alpha
-    localIpId: 'seed_ip_006', // 10.0.1.5 (IP of Server-VMHost-Node01)
-    connectionType: 'ETHERNET_COPPER' as DeviceConnectionType,
-    status: 'ACTIVE' as DeviceConnectionStatus,
-    bandwidth: '2x1 Gbps LACP',
-    localInterface: 'bond0 (eth0, eth1)',
-    remoteInterface: 'GigabitEthernet1/0/10, GigabitEthernet1/0/11',
-    description: 'Dual link from VMHost-Node01 to Core Switch Alpha',
-  },
-   {
-    localDeviceId: 'seed_device_003', // AP-Office-F1-ZoneA
-    remoteDeviceId: 'seed_device_000', // Core-Switch-Alpha
-    connectionType: 'ETHERNET_COPPER' as DeviceConnectionType,
-    status: 'ACTIVE' as DeviceConnectionStatus,
-    bandwidth: '1 Gbps',
-    localInterface: 'eth0',
-    remoteInterface: 'GigabitEthernet1/0/20',
-    description: 'AP in Office Floor 1 Zone A to Core Switch Alpha',
-  }
+export const mockPaymentSourceDictionaries: Omit<PaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { sourceName: '自费' },
+  { sourceName: '财政付费-项目A' },
+  { sourceName: '财政付费-项目B' },
+  { sourceName: '部门预算-市场部' },
+  { sourceName: '集团统筹' },
 ];
 
-// Assign sequential IDs for DeviceConnections
-mockDeviceConnections.forEach((conn, index) => {
-    (conn as any).id = `seed_dc_${index.toString().padStart(3, '0')}`;
-});
+// Removed old mockISP, mockDevice, mockDeviceConnection data.
 
-// Basic validation for seed data integrity (can be expanded)
-mockDeviceConnections.forEach((conn) => {
-    if (!mockDevices.find(d => (d as any).id === conn.localDeviceId)) {
-        console.warn(`[Seed Data Warning] DeviceConnection localDeviceId ${conn.localDeviceId} not found in mockDevices.`);
-    }
-    if (conn.remoteDeviceId && !mockDevices.find(d => (d as any).id === conn.remoteDeviceId)) {
-        console.warn(`[Seed Data Warning] DeviceConnection remoteDeviceId ${conn.remoteDeviceId} not found in mockDevices.`);
-    }
-    if (conn.localIpId && !mockIPAddresses.find(ip => ip.id === conn.localIpId)) {
-        console.warn(`[Seed Data Warning] DeviceConnection localIpId ${conn.localIpId} not found in mockIPAddresses.`);
-    }
-    if (conn.ispId && !mockISPs.find(isp => (isp as any).id === conn.ispId)) {
-        console.warn(`[Seed Data Warning] DeviceConnection ispId ${conn.ispId} not found in mockISPs.`);
-    }
-});
+    

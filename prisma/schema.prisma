@@ -1,50 +1,52 @@
+
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider        = "prisma-client-js"
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 model User {
-  id          String    @id @default(cuid())
-  username    String    @unique
-  email       String    @unique
-  password    String
-  avatar      String?
-  roleId      String
-  role        Role      @relation(fields: [roleId], references: [id])
-  lastLogin   DateTime?
-  auditLogs   AuditLog[] // Relation to AuditLog model
+  id        String    @id @unique
+  username  String    @unique
+  email     String    @unique
+  password  String
+  roleId    String
+  role      Role      @relation(fields: [roleId], references: [id])
+  avatar    String?
+  lastLogin DateTime? @updatedAt
+  auditLogs AuditLog[]
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Role {
-  id          String    @id // Fixed IDs for seed, no @default
-  name        String    @unique
+  id          String       @id @unique
+  name        String       @unique // Administrator, Operator, Viewer
   description String?
+  permissions Permission[] @relation("RolePermissions")
   users       User[]
-  permissions Permission[] @relation("RoleToPermission")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Permission {
-  id          String   @id // Fixed IDs for seed, no @default
-  name        String   @unique
-  group       String
+  id          String  @id @unique // e.g., 'subnet.create', 'user.delete'
+  name        String  @unique
+  group       String // Functional group like 'Subnet Management', 'User Access'
   description String?
-  roles       Role[]   @relation("RoleToPermission")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  roles       Role[]  @relation("RolePermissions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Subnet {
-  id             String      @id // Fixed IDs for seed, no @default
+  id             String      @id @unique
   cidr           String      @unique // e.g., 192.168.1.0/24
   networkAddress String      // e.g., 192.168.1.0
   subnetMask     String      // e.g., 255.255.255.0
@@ -54,84 +56,149 @@ model Subnet {
   description    String?
   vlanId         String?
   vlan           VLAN?       @relation(fields: [vlanId], references: [id])
-  ipAddresses    IPAddress[] // Relation to IPAddress model
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  ipAddresses    IPAddress[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model VLAN {
-  id          String    @id // Fixed IDs for seed, no @default
-  vlanNumber  Int       @unique
+  id          String    @id @unique
+  vlanNumber  Int       @unique // 1-4094
   name        String?
   description String?
-  subnets     Subnet[] // Relation to Subnet model
-  ipAddresses IPAddress[] @relation("VLANToIPAddress") // Direct IP association with VLAN
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  subnets     Subnet[]
+  ipAddresses IPAddress[] @relation("DirectVlanIPs") // IPs directly assigned to this VLAN
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model IPAddress {
-  id            String  @id // Fixed IDs for seed, no @default
-  ipAddress     String
+  id            String  @id @unique
+  ipAddress     String  // e.g., 192.168.1.100
   subnetId      String?
-  subnet        Subnet? @relation(fields: [subnetId], references: [id], onDelete: Cascade)
-  directVlanId  String? // For IPs directly associated with a VLAN, not through subnet
-  directVlan    VLAN?   @relation("VLANToIPAddress", fields: [directVlanId], references: [id])
-
-  status        String    // e.g., "allocated", "free", "reserved"
-  isGateway     Boolean?  @default(false)
-  allocatedTo   String?   // e.g., "Server-01", "John Doe PC"
-  usageUnit     String?   // e.g., "IT Department", "Finance"
+  subnet        Subnet? @relation(fields: [subnetId], references: [id])
+  directVlanId  String?
+  directVlan    VLAN?   @relation("DirectVlanIPs", fields: [directVlanId], references: [id])
+  status        String  // allocated, free, reserved
+  isGateway     Boolean? @default(false)
+  allocatedTo   String?
+  usageUnit     String?
   contactPerson String?
   phone         String?
   description   String?
-  lastSeen      DateTime? @updatedAt // Automatically updated
+  lastSeen      DateTime? @updatedAt
 
-  // New fields based on user request
-  selectedOperatorName   String?
-  selectedOperatorDevice String?
-  selectedAccessType     String? // e.g., "独享", "共享"
-  selectedLocalDeviceName String?
-  selectedDevicePort     String?
-  selectedPaymentSource  String? // e.g., "自费", "财政付费"
+  // Fields for dictionary selections
+  selectedOperatorName      String? // Stores the selected OperatorDictionary.operatorName
+  selectedOperatorDevice    String? // Stores the selected OperatorDictionary.operatorDevice (auto-filled)
+  selectedAccessType        String? // Stores the selected OperatorDictionary.accessType (auto-filled)
+  selectedLocalDeviceName   String? // Stores the selected LocalDeviceDictionary.deviceName
+  selectedDevicePort        String? // Stores the selected LocalDeviceDictionary.port (auto-filled)
+  selectedPaymentSource     String? // Stores the selected PaymentSourceDictionary.sourceName
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([ipAddress, subnetId]) // IP must be unique within its subnet, or globally if no subnet
+  @@unique([ipAddress, subnetId]) // IP must be unique within a subnet, or globally if subnetId is null
 }
 
 model AuditLog {
   id        String    @id @default(cuid())
-  userId    String?   // Can be null for system-generated logs
-  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull) // If user deleted, log remains but userId is null
-  username  String?   // Store username at time of log creation for history
-  action    String
-  details   String?
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull) // SetNull if user is deleted
+  username  String?   // Denormalized for cases where user might be deleted
+  action    String    // e.g., 'create_subnet', 'login_failed'
   timestamp DateTime  @default(now())
+  details   String?   // JSON string or simple text for details
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
+// Models for Settings - these are effectively dictionaries now
+model Isp {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  contactInfo String?
+  // deviceConnections DeviceConnection[] @relation("ISPConnections") // If tracking circuits as connections
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Device {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  deviceType   String?  // e.g., ROUTER, SWITCH, FIREWALL, SERVER, ACCESS_POINT, OLT, DDN_DEVICE, OTHER (from DeviceType enum)
+  location     String?
+  managementIp String?  @unique
+  brand        String?
+  modelNumber  String?
+  serialNumber String?  @unique
+  description  String?
+  // localConnections  DeviceConnection[] @relation("LocalDeviceConnections")
+  // remoteConnections DeviceConnection[] @relation("RemoteDeviceConnections")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeviceConnection {
+  id                 String   @id @default(cuid())
+  localDeviceId      String
+  // localDevice        Device   @relation("LocalDeviceConnections", fields: [localDeviceId], references: [id])
+  localDeviceInterface String?  // e.g., GigabitEthernet0/1, Port-channel1
+  localIpId          String?  @unique // Optional, if this connection uses a specific IP on the local device
+  // localIp            IPAddress? @relation(fields: [localIpId], references: [id])
+
+  remoteDeviceId      String?   // If connecting to another managed device
+  // remoteDevice        Device?   @relation("RemoteDeviceConnections", fields: [remoteDeviceId], references: [id])
+  remoteDeviceInterface String?
+  remoteIpOrHostname  String?   // If connecting to an unmanaged device or IP
+
+  ispId        String? // If this is an ISP circuit
+  // isp          Isp?    @relation("ISPConnections", fields: [ispId], references: [id])
+  circuitId    String? // ISP provided circuit ID
+
+  connectionType String? // e.g., FIBER, COPPER, VPN (from DeviceConnectionType enum)
+  status         String? // e.g., ACTIVE, STANDBY, DOWN (from DeviceConnectionStatus enum)
+  bandwidthMbps  Int?
+  description    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 
 // New Dictionary Models
 model OperatorDictionary {
-  id             String   @id @default(cuid())
-  operatorName   String   @unique // 运营商名称
-  operatorDevice String?  // 运营商设备
-  accessType     String?  // 接入方式 (e.g., "独享", "共享")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String    @id @default(cuid())
+  operatorName      String    @unique // e.g., China Telecom
+  operatorDevice    String?   // e.g., OLT-ZX-C300 (specific device model/type from ISP)
+  accessType        String?   // e.g., Dedicated, Shared
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model LocalDeviceDictionary {
-  id         String   @id @default(cuid())
-  deviceName String   @unique // 本端设备名称
-  port       String?  // 端口
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String    @id @default(cuid())
+  deviceName  String    @unique // e.g., Core-Switch-A-Building
+  port        String?   // e.g., Ten-GigabitEthernet1/0/1
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PaymentSourceDictionary {
-  id          String   @id @default(cuid())
-  sourceName  String   @unique // 费用来源
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id          String    @id @default(cuid())
+  sourceName  String    @unique // e.g., Self-funded, Project A Funding
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
+    

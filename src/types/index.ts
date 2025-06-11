@@ -1,75 +1,35 @@
 
 export type RoleName = 'Administrator' | 'Operator' | 'Viewer';
 
-// Define all possible granular permissions in the system
 export const PERMISSIONS = {
-  // Dashboard
   VIEW_DASHBOARD: 'dashboard.view',
-
-  // Subnets
   VIEW_SUBNET: 'subnet.view',
   CREATE_SUBNET: 'subnet.create',
   EDIT_SUBNET: 'subnet.edit',
   DELETE_SUBNET: 'subnet.delete',
-
-  // VLANs
   VIEW_VLAN: 'vlan.view',
   CREATE_VLAN: 'vlan.create',
   EDIT_VLAN: 'vlan.edit',
   DELETE_VLAN: 'vlan.delete',
-
-  // IP Addresses
   VIEW_IPADDRESS: 'ipaddress.view',
   CREATE_IPADDRESS: 'ipaddress.create',
   EDIT_IPADDRESS: 'ipaddress.edit',
   DELETE_IPADDRESS: 'ipaddress.delete',
-
-  // Users
   VIEW_USER: 'user.view',
   CREATE_USER: 'user.create',
   EDIT_USER: 'user.edit',
   DELETE_USER: 'user.delete',
-
-  // Roles
   VIEW_ROLE: 'role.view',
   EDIT_ROLE_DESCRIPTION: 'role.edit_description',
   EDIT_ROLE_PERMISSIONS: 'role.edit_permissions',
-
-  // Audit Logs
   VIEW_AUDIT_LOG: 'auditlog.view',
   DELETE_AUDIT_LOG: 'auditlog.delete',
-
-  // Tools
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
-  PERFORM_TOOLS_EXPORT: 'tools.import_export.export', // Only export was mentioned in mockPermissions, import can be added if needed
-
-  // Query Page
+  PERFORM_TOOLS_EXPORT: 'tools.import_export.export',
   VIEW_QUERY_PAGE: 'querypage.view',
+  VIEW_SETTINGS: 'settings.view', // General settings view, if any global settings page remains
 
-  // ISP Management
-  VIEW_ISP: 'isp.view',
-  CREATE_ISP: 'isp.create',
-  EDIT_ISP: 'isp.edit',
-  DELETE_ISP: 'isp.delete',
-
-  // Device Management
-  VIEW_DEVICE: 'device.view',
-  CREATE_DEVICE: 'device.create',
-  EDIT_DEVICE: 'device.edit',
-  DELETE_DEVICE: 'device.delete',
-
-  // Device Connection Management
-  VIEW_DEVICECONNECTION: 'deviceconnection.view',
-  CREATE_DEVICECONNECTION: 'deviceconnection.create',
-  EDIT_DEVICECONNECTION: 'deviceconnection.edit',
-  DELETE_DEVICECONNECTION: 'deviceconnection.delete',
-  
-  // Settings (General - may need refinement if specific sub-settings permissions are added)
-  VIEW_SETTINGS: 'settings.view',
-
-  // Dictionary Management (Permissions for dictionaries were not explicitly in the initial data.ts mockPermissions,
-  // but they are defined in the schema. Including them here for completeness if needed later,
-  // though they might not be used by the current role definitions.)
+  // Dictionary Permissions
   VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
   CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
   EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
@@ -85,6 +45,8 @@ export const PERMISSIONS = {
   EDIT_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.edit',
   DELETE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.delete',
 
+  // OLD Device, ISP, DeviceConnection permissions are removed.
+  // If VIEW_SETTINGS is still used for the simplified settings page, keep it. Otherwise, can be removed too.
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -114,7 +76,7 @@ export interface VLAN {
   vlanNumber: number;
   name?: string;
   description?: string;
-  subnetCount?: number;
+  subnetCount?: number; // Represents count of subnets AND direct IPs associated
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -133,6 +95,7 @@ export interface IPAddress {
   description?: string;
   lastSeen?: string;
 
+  // New fields for dictionary selections
   selectedOperatorName?: string;
   selectedOperatorDevice?: string;
   selectedAccessType?: string;
@@ -169,74 +132,54 @@ export interface AuditLog {
   details?: string;
 }
 
-export interface ISP {
+// New Dictionary Types
+export interface OperatorDictionary {
   id: string;
-  name: string;
-  description?: string;
-  contactInfo?: string;
+  operatorName: string;
+  operatorDevice?: string;
+  accessType?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export enum DeviceType {
-  ROUTER = 'ROUTER',
-  SWITCH = 'SWITCH',
-  FIREWALL = 'FIREWALL',
-  SERVER = 'SERVER',
-  ACCESS_POINT = 'ACCESS_POINT',
-  OLT = 'OLT',
-  DDN_DEVICE = 'DDN_DEVICE',
-  OTHER = 'OTHER',
-}
-
-export interface Device {
+export interface LocalDeviceDictionary {
   id: string;
-  name: string;
-  deviceType?: DeviceType;
-  location?: string;
-  managementIp?: string;
-  brand?: string;
-  modelNumber?: string;
-  serialNumber?: string;
-  description?: string;
+  deviceName: string;
+  port?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export enum DeviceConnectionType {
-  ETHERNET_COPPER = 'ETHERNET_COPPER',
-  ETHERNET_FIBER = 'ETHERNET_FIBER',
-  WIFI = 'WIFI',
-  SERIAL = 'SERIAL',
-  VPN = 'VPN',
-  OTHER = 'OTHER',
-}
-
-export enum DeviceConnectionStatus {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  STANDBY = 'STANDBY',
-  MAINTENANCE = 'MAINTENANCE',
-}
-
-export interface DeviceConnection {
+export interface PaymentSourceDictionary {
   id: string;
-  localDeviceId: string;
-  remoteDeviceId?: string;
-  remoteHostnameOrIp?: string;
-  ispId?: string;
-  connectionType: DeviceConnectionType;
-  status: DeviceConnectionStatus;
-  bandwidth?: string;
-  localInterface?: string;
-  remoteInterface?: string;
-  localIpId?: string;
-  remoteIpId?: string;
-  description?: string;
+  sourceName: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
+
+// Paginated Response and Batch Operation types
+export interface PaginatedResponse<T> {
+  data: T[];
+  totalCount: number;
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+}
+
+export interface BatchOperationFailure<TIdentifier = string> {
+  id: TIdentifier;
+  itemIdentifier: string;
+  error: string;
+}
+
+export interface BatchDeleteResult<TIdentifier = string> {
+  successCount: number;
+  failureCount: number;
+  failureDetails: Array<BatchOperationFailure<TIdentifier>>;
+}
+
+// Query result types
 export interface SubnetQueryResult {
   id: string;
   cidr: string;
@@ -271,48 +214,18 @@ export interface SubnetFreeIpDetails {
   calculatedAvailableIpRanges: string[];
 }
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  totalCount: number;
-  currentPage: number;
-  totalPages: number;
-  pageSize: number;
-}
+// Removed old ISP, Device, DeviceType, DeviceConnection types/enums
+// They are replaced by the Dictionary models or fields within IPAddress
 
-export interface BatchOperationFailure<TIdentifier = string> {
-  id: TIdentifier; // Can be the actual ID (string/number) or a temporary identifier if ID wasn't available
-  itemIdentifier: string; // A user-friendly identifier for the item (e.g., name, CIDR, IP address)
-  error: string;
-}
-
-export interface BatchDeleteResult<TIdentifier = string> {
-  successCount: number;
-  failureCount: number;
-  failureDetails: Array<BatchOperationFailure<TIdentifier>>;
-}
-
-export interface OperatorDictionary {
-  id: string;
-  operatorName: string;
-  operatorDevice?: string;
-  accessType?: string; // e.g., "独享", "共享"
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface LocalDeviceDictionary {
-  id: string;
-  deviceName: string;
-  port?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface PaymentSourceDictionary {
-  id: string;
-  sourceName: string;
-  createdAt?: string;
-  updatedAt?: string;
+export enum DeviceType {
+  ROUTER = "ROUTER",
+  SWITCH = "SWITCH",
+  FIREWALL = "FIREWALL",
+  SERVER = "SERVER",
+  ACCESS_POINT = "ACCESS_POINT",
+  OLT = "OLT",
+  DDN_DEVICE = "DDN_DEVICE",
+  OTHER = "OTHER",
 }
 
     

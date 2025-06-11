@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, Settings2 as SettingsIconLucide, KeyRound } from "lucide-react"; // Removed Sun, Moon, Laptop as they are in ThemeToggle
+import { Menu, UserCircle, Network, KeyRound } from "lucide-react"; // Removed SettingsIconLucide
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,19 +10,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  // DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuPortal, // No longer needed here
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY, useCurrentUser, hasPermission } from "@/hooks/use-current-user"; 
-import { PERMISSIONS } from "@/types";
-import { ThemeToggle } from "@/components/settings/theme-toggle"; // Import ThemeToggle
+import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"; 
+import { ThemeToggle } from "@/components/settings/theme-toggle";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const { currentUser, isAuthLoading } = useCurrentUser(); 
-  // const { setTheme } = useTheme(); // setTheme is handled by ThemeToggle component
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -30,8 +27,6 @@ export function Header() {
       window.location.href = '/login'; 
     }
   };
-
-  const canViewSettings = currentUser && hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS);
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -65,7 +60,7 @@ export function Header() {
       )}
 
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
-        <ThemeToggle /> {/* Moved ThemeToggle here */}
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="rounded-full h-10 w-10 p-0 flex items-center justify-center">
@@ -82,15 +77,7 @@ export function Header() {
                 修改密码
               </Link>
             </DropdownMenuItem>
-            {canViewSettings && (
-              <DropdownMenuItem asChild>
-                <Link href="/settings" className="flex items-center">
-                  <SettingsIconLucide className="mr-2 h-4 w-4" />
-                  设置
-                </Link>
-              </DropdownMenuItem>
-            )}
-            {/* Removed Theme Submenu from here */}
+            {/* Settings link removed as per refactoring plan */}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
           </DropdownMenuContent>
@@ -99,3 +86,5 @@ export function Header() {
     </header>
   );
 }
+
+    
