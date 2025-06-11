@@ -5,30 +5,27 @@ dotenv.config({ path: require('path').resolve(__dirname, '../.env') }); // Ensur
 import prisma from '../src/lib/prisma';
 import {
   mockPermissions as seedPermissionsData,
-  mockRoles as seedRolesData, // This will be updated with new permissions
+  mockRoles as seedRolesData,
   mockVLANs as seedVLANsData,
   mockSubnets as seedSubnetsData,
-  mockIPAddresses as seedIPsData, // This will be updated with new fields
+  mockIPAddresses as seedIPsData,
   mockAuditLogs as seedAuditLogsData,
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
-  mockOperatorDictionaries, // New import
-  mockLocalDeviceDictionaries, // New import
-  mockPaymentSourceDictionaries, // New import
-} from '../src/lib/data'; // data.ts will also need updates
+  mockOperatorDictionaries,
+  mockLocalDeviceDictionaries,
+  mockPaymentSourceDictionaries,
+} from '../src/lib/data';
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
-// Removed Device related types
 import { Prisma } from '@prisma/client';
+import { encrypt } from '../src/app/api/auth/[...nextauth]/route'; // Corrected import
 
 async function main() {
   console.log('Start seeding ...');
   console.log(`[Seed Script] Attempting to use ENCRYPTION_KEY starting with: ${process.env.ENCRYPTION_KEY ? process.env.ENCRYPTION_KEY.substring(0, 5) + '...' : 'NOT SET'}`);
 
-
   console.log('Seeding Permissions...');
-  // Permissions are defined in data.ts, which will be updated by changing types/index.ts PERMISSIONS object
-  // Ensure mockPermissions in data.ts reflects the new permission set from types/index.ts
   for (const p of seedPermissionsData) {
     await prisma.permission.upsert({
       where: { id: p.id as string },
@@ -77,8 +74,6 @@ async function main() {
       console.log(`Assigning all ${allDbPermissions.length} DB permissions to Administrator role.`);
       permissionsToSet = allDbPermissions.map(p => ({ id: p.id }));
     } else {
-      // For Operator and Viewer, use permissions defined in src/lib/data.ts's mockRoles
-      // Ensure mockRoles in data.ts is updated to reflect the new permission structure
       permissionsToSet = roleData.permissions.map(appPermId => ({ id: appPermId as string }));
     }
     await prisma.role.update({
@@ -88,24 +83,45 @@ async function main() {
   }
   console.log('Roles updated with permissions (Pass 2 complete).');
 
-  const initialUsersToSeed: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar' | 'permissions'> & { password: string; avatarPath: string }> = [
-    { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: SEED_ADMIN_ROLE_ID, password: 'admin', avatarPath: '/images/avatars/admin_avatar.png' },
-    { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: SEED_OPERATOR_ROLE_ID, password: 'operator', avatarPath: '/images/avatars/operator_avatar.png' },
-    { id: 'seed_user_viewer', username: 'viewer', email: 'viewer@example.com', roleId: SEED_VIEWER_ROLE_ID, password: 'viewer', avatarPath: '/images/avatars/viewer_avatar.png' },
+  // Define initial users with plain text passwords to be encrypted before seeding
+  const initialUsersToSeedPlain: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar' | 'permissions'> & { password_plain: string; phone_plain?: string; avatarPath: string }> = [
+    { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: SEED_ADMIN_ROLE_ID, password_plain: 'admin', phone_plain: '11111111111', avatarPath: '/images/avatars/admin_avatar.png' },
+    { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: SEED_OPERATOR_ROLE_ID, password_plain: 'operator', phone_plain: '22222222222', avatarPath: '/images/avatars/operator_avatar.png' },
+    { id: 'seed_user_viewer', username: 'viewer', email: 'viewer@example.com', roleId: SEED_VIEWER_ROLE_ID, password_plain: 'viewer', phone_plain: '33333333333', avatarPath: '/images/avatars/viewer_avatar.png' },
   ];
+
   console.log('Seeding Users...');
-  for (const userData of initialUsersToSeed) {
+  for (const userData of initialUsersToSeedPlain) {
+    const encryptedPassword = encrypt(userData.password_plain);
+    const encryptedPhone = userData.phone_plain ? encrypt(userData.phone_plain) : null;
+
     await prisma.user.upsert({
       where: { email: userData.email },
-      update: { id: userData.id, username: userData.username, password: userData.password, roleId: userData.roleId, avatar: userData.avatarPath, lastLogin: new Date() },
-      create: { id: userData.id, username: userData.username, email: userData.email, password: userData.password, roleId: userData.roleId, avatar: userData.avatarPath, lastLogin: new Date() },
+      update: { 
+        id: userData.id, 
+        username: userData.username, 
+        password: encryptedPassword, 
+        phone: encryptedPhone,
+        roleId: userData.roleId, 
+        avatar: userData.avatarPath, 
+        lastLogin: new Date() 
+      },
+      create: { 
+        id: userData.id, 
+        username: userData.username, 
+        email: userData.email, 
+        password: encryptedPassword, 
+        phone: encryptedPhone,
+        roleId: userData.roleId, 
+        avatar: userData.avatarPath, 
+        lastLogin: new Date() 
+      },
     });
   }
   console.log('Users seeded.');
 
   console.log('Seeding VLANs...');
   for (const vlanData of seedVLANsData) {
-    // ... (VLAN seeding logic remains similar, check for conflicts)
      const conflictingVlan = await prisma.vLAN.findFirst({ where: { vlanNumber: vlanData.vlanNumber, NOT: { id: vlanData.id } } });
     if (conflictingVlan) {
       console.warn(`Conflict: VLAN number ${vlanData.vlanNumber} (intended for ID ${vlanData.id}) is already used by VLAN ID ${conflictingVlan.id}.`);
@@ -128,7 +144,6 @@ async function main() {
 
   console.log('Seeding Subnets...');
   for (const subnetData of seedSubnetsData) {
-    // ... (Subnet seeding logic remains similar, check for conflicts)
     const conflictingSubnet = await prisma.subnet.findFirst({ where: { cidr: subnetData.cidr, NOT: { id: subnetData.id } } });
     if (conflictingSubnet) {
       console.warn(`Conflict: Subnet CIDR ${subnetData.cidr} (intended for ID ${subnetData.id}) is already used by Subnet ID ${conflictingSubnet.id}.`);
@@ -168,7 +183,10 @@ async function main() {
   console.log('Subnets seeded.');
 
   console.log('Seeding IP Addresses (with new optional fields)...');
-  for (const ipData of seedIPsData) { // seedIPsData will need to be updated in data.ts
+  for (const ipData of seedIPsData) { 
+    // Encrypt phone number if present in seedIPsData
+    const encryptedPhone = ipData.phone ? encrypt(ipData.phone) : null;
+
     await prisma.iPAddress.upsert({
       where: { id: ipData.id },
       update: {
@@ -178,11 +196,10 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: ipData.phone,
+        phone: encryptedPhone, // Use encrypted phone
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
-        // New fields
         selectedOperatorName: ipData.selectedOperatorName || null,
         selectedOperatorDevice: ipData.selectedOperatorDevice || null,
         selectedAccessType: ipData.selectedAccessType || null,
@@ -198,11 +215,10 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: ipData.phone,
+        phone: encryptedPhone, // Use encrypted phone
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
-        // New fields
         selectedOperatorName: ipData.selectedOperatorName || null,
         selectedOperatorDevice: ipData.selectedOperatorDevice || null,
         selectedAccessType: ipData.selectedAccessType || null,
@@ -214,11 +230,10 @@ async function main() {
   }
   console.log('IP Addresses seeded.');
 
-  // Seeding for New Dictionaries
   console.log('Seeding Operator Dictionaries...');
-  for (const opData of mockOperatorDictionaries) { // Use new mock data
+  for (const opData of mockOperatorDictionaries) {
     await prisma.operatorDictionary.upsert({
-      where: { operatorName: opData.operatorName }, // Assuming operatorName is unique
+      where: { operatorName: opData.operatorName },
       update: opData,
       create: opData,
     });
@@ -226,9 +241,9 @@ async function main() {
   console.log('Operator Dictionaries seeded.');
 
   console.log('Seeding Local Device Dictionaries...');
-  for (const ldData of mockLocalDeviceDictionaries) { // Use new mock data
+  for (const ldData of mockLocalDeviceDictionaries) {
     await prisma.localDeviceDictionary.upsert({
-      where: { deviceName: ldData.deviceName }, // Assuming deviceName is unique
+      where: { deviceName: ldData.deviceName },
       update: ldData,
       create: ldData,
     });
@@ -236,27 +251,26 @@ async function main() {
   console.log('Local Device Dictionaries seeded.');
 
   console.log('Seeding Payment Source Dictionaries...');
-  for (const psData of mockPaymentSourceDictionaries) { // Use new mock data
+  for (const psData of mockPaymentSourceDictionaries) {
     await prisma.paymentSourceDictionary.upsert({
-      where: { sourceName: psData.sourceName }, // Assuming sourceName is unique
+      where: { sourceName: psData.sourceName },
       update: psData,
       create: psData,
     });
   }
   console.log('Payment Source Dictionaries seeded.');
 
-  // Removed ISP, Device, DeviceConnection seeding
-
   console.log('Seeding Audit Logs...');
+  const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});
   for (const logData of seedAuditLogsData) {
-    const userToLink = initialUsersToSeed.find(u => u.username === logData.username);
+    const userToLink = usersForLogLinking.find(u => u.username === logData.username);
     const validUserId = userToLink ? userToLink.id : undefined;
     const validUsername = userToLink ? userToLink.username : logData.username;
     const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id } });
     if (!existingLog) {
       await prisma.auditLog.create({
         data: {
-          id: logData.id, // AuditLog ID is now auto-generated by @default(cuid())
+          id: logData.id,
           userId: validUserId,
           username: validUsername,
           action: logData.action,
@@ -264,7 +278,7 @@ async function main() {
           timestamp: logData.timestamp ? new Date(logData.timestamp) : new Date(),
         },
       });
-    } else { // If log exists, update it - useful if seed script is re-run
+    } else {
         await prisma.auditLog.update({
             where: {id: logData.id},
             data: {
@@ -290,5 +304,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
