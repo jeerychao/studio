@@ -26,10 +26,10 @@ const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserve
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = { allocated: "已分配", free: "空闲", reserved: "预留" };
 
 const ipAddressFormSchema = z.object({
-  ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
+ ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
   subnetId: z.string().optional(),
   directVlanId: z.string().optional(),
-  status: z.enum(["allocated", "free", "reserved"], { required_error: "状态是必需的"}),
+ status: z.enum(["allocated", "free", "reserved"], { required_error: "状态是必需的"}),
   isGateway: z.boolean().optional(),
   allocatedTo: z.string().max(100, "分配给对象过长").optional(),
   usageUnit: z.string().max(100, "使用单位过长").optional(),
@@ -37,10 +37,10 @@ const ipAddressFormSchema = z.object({
   phone: z.string().max(30, "电话号码过长").optional(),
   description: z.string().max(200, "描述过长").optional(),
   selectedOperatorName: z.string().optional(),
-  selectedOperatorDevice: z.string().optional(), // Readonly, auto-filled
-  selectedAccessType: z.string().optional(),     // Readonly, auto-filled
+  selectedOperatorDevice: z.string().optional(),
+  selectedAccessType: z.string().max(100, "接入方式过长").optional(), // Changed back to optional as it's auto-filled or based on dictionary
   selectedLocalDeviceName: z.string().optional(),
-  selectedDevicePort: z.string().max(100, "设备端口过长").optional(), // Now auto-filled based on selectedLocalDeviceName
+  selectedDevicePort: z.string().max(100, "设备端口过长").optional(),
   selectedPaymentSource: z.string().optional(),
 });
 
@@ -86,7 +86,8 @@ export function IPAddressFormSheet({
     if (isOpen) {
         const initialLocalDeviceName = ipAddress?.selectedLocalDeviceName || "";
         const initialLocalDevice = localDeviceDictionaries.find(dev => dev.deviceName === initialLocalDeviceName);
-        const initialDevicePort = initialLocalDevice?.port || ipAddress?.selectedDevicePort || "";
+        const initialOperatorName = ipAddress?.selectedOperatorName || "";
+        const initialOperator = operatorDictionaries.find(op => op.operatorName === initialOperatorName);
 
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
@@ -99,34 +100,47 @@ export function IPAddressFormSheet({
             contactPerson: ipAddress?.contactPerson || "",
             phone: ipAddress?.phone || "",
             description: ipAddress?.description || "",
-            selectedOperatorName: ipAddress?.selectedOperatorName || "",
-            selectedOperatorDevice: ipAddress?.selectedOperatorDevice || "", // Auto-filled, so ensure consistent logic
-            selectedAccessType: ipAddress?.selectedAccessType || "",       // Auto-filled
+            selectedOperatorName: initialOperatorName,
+            selectedOperatorDevice: initialOperator?.operatorDevice || ipAddress?.selectedOperatorDevice || "",
+            selectedAccessType: initialOperator?.accessType || ipAddress?.selectedAccessType || "",
             selectedLocalDeviceName: initialLocalDeviceName,
-            selectedDevicePort: initialDevicePort, // Auto-filled
+            selectedDevicePort: initialLocalDevice?.port || ipAddress?.selectedDevicePort || "",
             selectedPaymentSource: ipAddress?.selectedPaymentSource || "",
         });
+
         // Re-trigger auto-fill for operator fields if editing an existing IP
+        // This section is primarily for cases where form.reset might not pick up derived values correctly
+        // or if specific logic dictates re-evaluation after reset.
         if(ipAddress?.selectedOperatorName) {
             const selectedOp = operatorDictionaries.find(op => op.operatorName === ipAddress.selectedOperatorName);
-            form.setValue("selectedOperatorDevice", selectedOp?.operatorDevice || "");
-            form.setValue("selectedAccessType", selectedOp?.accessType || "");
+            if (selectedOp) {
+                form.setValue("selectedOperatorDevice", selectedOp.operatorDevice || "");
+                form.setValue("selectedAccessType", selectedOp.accessType || "");
+            }
+        }
+        if(initialLocalDeviceName) {
+            const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === initialLocalDeviceName);
+            if (selectedDev) {
+                form.setValue("selectedDevicePort", selectedDev.port || "");
+            }
         }
         form.clearErrors();
     }
   }, [isOpen, ipAddress, subnets, vlans, currentSubnetId, form, localDeviceDictionaries, operatorDictionaries]);
 
   const handleOperatorChange = (value: string) => {
-    form.setValue("selectedOperatorName", value === NO_SELECTION_SENTINEL ? "" : value);
-    const selectedOp = operatorDictionaries.find(op => op.operatorName === value);
+    const operatorNameToSet = value === NO_SELECTION_SENTINEL ? "" : value;
+    form.setValue("selectedOperatorName", operatorNameToSet);
+    const selectedOp = operatorDictionaries.find(op => op.operatorName === operatorNameToSet);
     form.setValue("selectedOperatorDevice", selectedOp?.operatorDevice || "");
     form.setValue("selectedAccessType", selectedOp?.accessType || "");
   };
 
   const handleLocalDeviceChange = (value: string) => {
-    form.setValue("selectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
-    form.setValue("selectedDevicePort", selectedDev?.port || ""); // Auto-fill port
+    const deviceNameToSet = value === NO_SELECTION_SENTINEL ? "" : value;
+    form.setValue("selectedLocalDeviceName", deviceNameToSet);
+    const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === deviceNameToSet);
+    form.setValue("selectedDevicePort", selectedDev?.port || "");
   };
 
 
@@ -146,7 +160,7 @@ export function IPAddressFormSheet({
         selectedOperatorDevice: data.selectedOperatorDevice || null,
         selectedAccessType: data.selectedAccessType || null,
         selectedLocalDeviceName: data.selectedLocalDeviceName === NO_SELECTION_SENTINEL || !data.selectedLocalDeviceName ? null : data.selectedLocalDeviceName,
-        selectedDevicePort: data.selectedDevicePort || null, // This will be the auto-filled value
+        selectedDevicePort: data.selectedDevicePort || null,
         selectedPaymentSource: data.selectedPaymentSource === NO_SELECTION_SENTINEL || !data.selectedPaymentSource ? null : data.selectedPaymentSource,
       };
 
@@ -186,14 +200,14 @@ export function IPAddressFormSheet({
   }
 
   const trigger = children ? React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
-    : <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
+    : <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : undefined} onClick={() => setIsOpen(true)} {...buttonProps}>
         {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加IP地址</>}
         {isEditing && <span className="sr-only">编辑IP地址</span>}
       </Button>;
 
   const operatorDeviceValue = form.watch("selectedOperatorDevice");
   const accessTypeValue = form.watch("selectedAccessType");
-  const localDevicePortValue = form.watch("selectedDevicePort"); // Watch for displaying auto-filled value
+  const localDevicePortValue = form.watch("selectedDevicePort");
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -212,8 +226,7 @@ export function IPAddressFormSheet({
                 <FormField control={form.control} name="usageUnit" render={({ field }) => (<FormItem><FormLabel>使用单位 (可选)</FormLabel><FormControl><Input placeholder="例如 研发部, 财务科" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="contactPerson" render={({ field }) => (<FormItem><FormLabel>联系人 (可选)</FormLabel><FormControl><Input placeholder="例如 张三" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>电话 (可选)</FormLabel><FormControl><Input placeholder="例如 13800138000" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><FormControl><Textarea placeholder="简要描述或备注" {...field} /></FormControl><FormMessage /></FormItem>)} />
-
+                
                 <FormField control={form.control} name="selectedOperatorName" render={({ field }) => (<FormItem><FormLabel>运营商名称 (可选)</FormLabel><Select onValueChange={handleOperatorChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择运营商" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{operatorDictionaries.map(op => (<SelectItem key={op.id} value={op.operatorName}>{op.operatorName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="selectedOperatorDevice" render={({ field }) => (<FormItem><FormLabel>运营商设备 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={operatorDeviceValue || ""} readOnly disabled /></FormControl></FormItem>)} />
                 <FormField control={form.control} name="selectedAccessType" render={({ field }) => (<FormItem><FormLabel>接入方式 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={accessTypeValue || ""} readOnly disabled /></FormControl></FormItem>)} />
@@ -222,7 +235,7 @@ export function IPAddressFormSheet({
                 <FormField control={form.control} name="selectedDevicePort" render={({ field }) => (<FormItem><FormLabel>设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={localDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />
 
                 <FormField control={form.control} name="selectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-
+                <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><FormControl><Textarea placeholder="简要描述或备注" {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div></ScrollArea>
             <SheetFooter className="p-6 pt-4 border-t"><SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose><Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建IP地址")}</Button></SheetFooter>
           </form>
@@ -231,4 +244,4 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
-    
+
