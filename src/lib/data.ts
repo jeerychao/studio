@@ -1,7 +1,10 @@
 
 import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from '../types';
-import { PERMISSIONS, DeviceType } from '../types'; // Added DeviceType import
+import { PERMISSIONS, DeviceType } from '../types';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
+// Import the centralized encrypt function
+import { encrypt } from '../../app/api/auth/[...nextauth]/route';
+
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
 export const OPERATOR_ROLE_ID = 'role_operator_fixed_id';
@@ -34,18 +37,14 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: '执行数据导出', group: '工具', description: '可以将数据导出到文件（例如CSV）。' },
   { id: PERMISSIONS.VIEW_QUERY_PAGE, name: '查看信息查询页面', group: '查询工具', description: '访问综合查询工具。' },
   { id: PERMISSIONS.VIEW_SETTINGS, name: '查看设置', group: '系统设置', description: '可以查看应用范围的设置（如果存在全局设置页面）。' },
-
-  // Dictionary Permissions
   { id: PERMISSIONS.VIEW_DICTIONARY_OPERATOR, name: '查看运营商字典', group: '字典管理', description: '可以查看运营商字典条目。' },
   { id: PERMISSIONS.CREATE_DICTIONARY_OPERATOR, name: '创建运营商字典条目', group: '字典管理', description: '可以添加新的运营商字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_OPERATOR, name: '编辑运营商字典条目', group: '字典管理', description: '可以修改现有的运营商字典条目。' },
   { id: PERMISSIONS.DELETE_DICTIONARY_OPERATOR, name: '删除运营商字典条目', group: '字典管理', description: '可以删除运营商字典条目。' },
-
   { id: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, name: '查看本地设备字典', group: '字典管理', description: '可以查看本地设备字典条目。' },
   { id: PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, name: '创建本地设备字典条目', group: '字典管理', description: '可以添加新的本地设备字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, name: '编辑本地设备字典条目', group: '字典管理', description: '可以修改现有的本地设备字典条目。' },
   { id: PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE, name: '删除本地设备字典条目', group: '字典管理', description: '可以删除本地设备字典条目。' },
-
   { id: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, name: '查看付费来源字典', group: '字典管理', description: '可以查看付费来源字典条目。' },
   { id: PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, name: '创建付费来源字典条目', group: '字典管理', description: '可以添加新的付费来源字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, name: '编辑付费来源字典条目', group: '字典管理', description: '可以修改现有的付费来源字典条目。' },
@@ -95,43 +94,43 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
 export const mockIPAddresses: IPAddress[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
-    isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
+    isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: encrypt('123-001'), description: 'Default Gateway for Office Network',
     selectedOperatorName: '中国电信', selectedOperatorDevice: 'OLT-ZX-C300', selectedAccessType: '独享',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/1', selectedPaymentSource: '自费'
-  },
+ },
   {
     id: 'seed_ip_002', ipAddress: '192.168.1.10', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: '123-101', description: 'John - Primary Workstation',
+    isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: encrypt('123-101'), description: 'John - Primary Workstation',
     selectedOperatorName: '中国联通', selectedOperatorDevice: 'Router-HW-NE40', selectedAccessType: '共享',
     selectedLocalDeviceName: '接入交换机-B栋-F3', selectedDevicePort: 'GigabitEthernet0/24', selectedPaymentSource: '财政付费-项目A'
-  },
+ },
   {
     id: 'seed_ip_003', ipAddress: '192.168.1.11', subnetId: 'seed_subnet_001', status: 'free' as IPAddressStatus,
     isGateway: false,
-  },
+ },
   {
     id: 'seed_ip_004', ipAddress: '192.168.1.12', subnetId: 'seed_subnet_001', status: 'reserved' as IPAddressStatus,
     isGateway: false, description: 'Future Printer IP', usageUnit: 'Admin Office',
     selectedPaymentSource: '财政付费-项目B'
-  },
+ },
   {
     id: 'seed_ip_005', ipAddress: '10.0.0.1', subnetId: 'seed_subnet_002', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Server Farm Router', description: 'Gateway for Servers',
     selectedOperatorName: '中国移动', selectedOperatorDevice: 'Switch-H3C-S5500', selectedAccessType: '独享',
     selectedLocalDeviceName: '防火墙-总部出口', selectedDevicePort: 'eth1/1', selectedPaymentSource: '自费'
   },
-  {
+ {
     id: 'seed_ip_006', ipAddress: '10.0.1.5', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: '123-201', description: 'Main Web Server',
+    isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: encrypt('123-201'), description: 'Main Web Server',
     selectedOperatorName: '教育网', selectedOperatorDevice: 'Router-Ruijie-RSR77', selectedAccessType: '独享',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/2', selectedPaymentSource: '自费'
-  },
+ },
   {
     id: 'seed_ip_007', ipAddress: '10.0.1.6', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: '123-202', description: 'Primary Database Server',
+    isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: encrypt('123-202'), description: 'Primary Database Server',
     selectedOperatorName: '广电网络', selectedOperatorDevice: 'CableModem-ARRIS-CM8200', selectedAccessType: '共享',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/3', selectedPaymentSource: '财政付费-项目A'
-  },
+ },
 ];
 
 export const mockRoles: Role[] = [
@@ -139,7 +138,7 @@ export const mockRoles: Role[] = [
     id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: Object.values(PERMISSIONS) as PermissionId[] // Admin gets all permissions
+    permissions: Object.values(PERMISSIONS) as PermissionId[]
   },
   {
     id: OPERATOR_ROLE_ID,
@@ -176,10 +175,21 @@ export const mockRoles: Role[] = [
   },
 ];
 
-export const mockUsers: Array<User & { password?: string }> = [
-  { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID, password: 'admin', avatar: '/images/avatars/admin_avatar.png', lastLogin: new Date(Date.now() - 86400000).toISOString() },
-  { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID, password: 'operator', avatar: '/images/avatars/operator_avatar.png', lastLogin: new Date(Date.now() - 3600000).toISOString() },
-  { id: 'seed_user_viewer', username: 'viewer', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID, password: 'viewer', avatar: '/images/avatars/viewer_avatar.png', lastLogin: new Date().toISOString() },
+
+// Use the centralized encrypt function. Removed passwordIv and phoneIv as IV is part of encrypted string.
+export const mockUsers: Array<Omit<User, 'roleName' | 'permissions'> & { password?: string, phone?: string }> = [
+  { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID,
+    password: encrypt('admin'), 
+    phone: encrypt('11111111111'),
+    avatar: '/images/avatars/admin_avatar.png', lastLogin: new Date(Date.now() - 86400000).toISOString() },
+  { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID,
+    password: encrypt('operator'),
+    phone: encrypt('22222222222'),
+    avatar: '/images/avatars/operator_avatar.png', lastLogin: new Date(Date.now() - 3600000).toISOString() },
+  { id: 'seed_user_viewer', username: 'viewer', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID,
+    password: encrypt('viewer'),
+    phone: encrypt('33333333333'),
+    avatar: '/images/avatars/viewer_avatar.png', lastLogin: new Date().toISOString() },
 ];
 
 export let mockAuditLogs: AuditLog[] = [
@@ -189,7 +199,6 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-// Seed data for new Dictionaries
 export const mockOperatorDictionaries: Omit<OperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300', accessType: '独享' },
   { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40', accessType: '共享' },
@@ -213,7 +222,5 @@ export const mockPaymentSourceDictionaries: Omit<PaymentSourceDictionary, 'id' |
   { sourceName: '部门预算-市场部' },
   { sourceName: '集团统筹' },
 ];
-
-// Removed old mockISP, mockDevice, mockDeviceConnection data.
 
     

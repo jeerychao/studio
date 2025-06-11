@@ -20,8 +20,9 @@ import { validateCIDR as validateCidrInput } from "./error-utils";
 import { logger } from './logger';
 import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, type ActionErrorResponse } from './errors';
 import { createActionErrorResponse } from './error-utils';
-import { mockPermissions as seedPermissionsData } from "./data"; // Use a different alias to avoid conflict
+import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
+import { encrypt, decrypt } from '../../app/api/auth/[...nextauth]/route'; // Corrected import path
 
 export interface ActionResponse<TData = unknown> {
   success: boolean;
@@ -47,18 +48,38 @@ interface LoginPayload { email: string; password?: string; }
 interface LoginResponse { success: boolean; user?: FetchedUserDetails; message?: string; }
 
 export async function loginAction(payload: LoginPayload): Promise<LoginResponse> {
-  const actionName = 'loginAction'; const { email, password } = payload;
-  if (!email || !password) { return { success: false, message: "邮箱和密码是必需的。" }; }
+  const actionName = 'loginAction'; const { email, password: passwordAttempt } = payload;
+  if (!email || !passwordAttempt) { return { success: false, message: "邮箱和密码是必需的。" }; }
   try {
     const userFromDb = await prisma.user.findUnique({ where: { email }, include: { role: { include: { permissions: true } } } });
     if (!userFromDb) { logger.error(`[${actionName}] Login failed: User not found for email ${email}.`, new AuthError(`User with email ${email} not found.`), { email }, actionName); return { success: false, message: "邮箱或密码无效。" }; }
-    if (userFromDb.password !== password) { logger.warn(`[${actionName}] Login failed: Invalid password for user ${userFromDb.username}.`, new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName); return { success: false, message: "邮箱或密码无效。" }; }
+    
+    let decryptedStoredPassword;
+    try {
+      decryptedStoredPassword = decrypt(userFromDb.password);
+    } catch (decryptionError) {
+      logger.error(`[${actionName}] Password decryption failed for user ${userFromDb.username}.`, decryptionError as Error, { userId: userFromDb.id }, actionName);
+      return { success: false, message: "登录认证失败，请联系管理员。" }; // Generic error for security
+    }
+
+    if (decryptedStoredPassword !== passwordAttempt) { 
+      logger.warn(`[${actionName}] Login failed: Invalid password for user ${userFromDb.username}.`, new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName); 
+      return { success: false, message: "邮箱或密码无效。" }; 
+    }
+
     if (!userFromDb.role || !userFromDb.role.name) { logger.error(`[${actionName}] User ${userFromDb.id} (${userFromDb.username}) missing role.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName); return { success: false, message: "用户角色信息不完整。" }; }
     let permissionsList: AppPermissionIdType[] = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
     await prisma.user.update({ where: { id: userFromDb.id }, data: { lastLogin: new Date() } });
     await prisma.auditLog.create({ data: { userId: userFromDb.id, username: userFromDb.username, action: 'user_login', details: `用户 ${userFromDb.username} 成功登录。` } });
     return { success: true, user: { id: userFromDb.id, username: userFromDb.username, email: userFromDb.email, roleId: userFromDb.roleId, roleName: userFromDb.role.name as AppRoleNameType, avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', permissions: permissionsList, lastLogin: userFromDb.lastLogin?.toISOString() } };
-  } catch (error) { logger.error(`[${actionName}] Login error`, error as Error, { email }, actionName); return { success: false, message: "登录过程中发生意外错误。" }; }
+  } catch (error) { 
+    logger.error(`[${actionName}] Login error`, error as Error, { email }, actionName); 
+    // Check if the error is from our decrypt function due to bad format/key, etc.
+    if (error instanceof Error && error.message.includes('Decryption failed')) {
+        return { success: false, message: "登录认证参数错误，请联系管理员。" };
+    }
+    return { success: false, message: "登录过程中发生意外错误。" }; 
+  }
 }
 
 export async function fetchCurrentUserDetailsAction(userId: string): Promise<FetchedUserDetails | null> {
@@ -81,7 +102,8 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
     return { data: appUsers, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取用户数据时发生服务器错误。", 500, "GET_USERS_FAILED", "无法加载用户数据。"); }
 }
-export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
+
+export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string, phone?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
   const actionName = 'createUserAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
@@ -89,14 +111,19 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
     if (await prisma.user.findUnique({ where: { email: data.email } })) throw new ResourceError(`邮箱 ${data.email} 已被使用。`, 'EMAIL_ALREADY_EXISTS', undefined, 'email');
     if (await prisma.user.findUnique({ where: { username: data.username } })) throw new ResourceError(`用户名 ${data.username} 已被使用。`, 'USERNAME_ALREADY_EXISTS', undefined, 'username');
     if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, undefined, 'roleId');
-    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: data.password, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
+    
+    const encryptedPassword = encrypt(data.password);
+    const encryptedPhone = data.phone ? encrypt(data.phone) : null;
+
+    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: encryptedPhone, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` } });
     revalidatePath("/users");
     const fetchedUser: FetchedUserDetails = { id: newUser.id, username: newUser.username, email: newUser.email, roleId: newUser.roleId, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: newUser.lastLogin?.toISOString() || undefined };
     return { success: true, data: fetchedUser };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
-export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName">> & { password?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
+
+export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "id" | "roleName" | "phone">> & { password?: string, phone?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
   const actionName = 'updateUserAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
@@ -106,7 +133,8 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     if (data.username && data.username !== userToUpdate.username) { if (await prisma.user.findFirst({ where: { username: data.username, NOT: { id } } })) throw new ResourceError(`用户名 ${data.username} 已被使用。`, 'USERNAME_ALREADY_EXISTS', undefined, 'username'); updateData.username = data.username; }
     if (data.email && data.email !== userToUpdate.email) { if (await prisma.user.findFirst({ where: { email: data.email, NOT: { id } } })) throw new ResourceError(`邮箱 ${data.email} 已被使用。`, 'EMAIL_ALREADY_EXISTS', undefined, 'email'); updateData.email = data.email; }
     if (data.roleId && data.roleId !== userToUpdate.roleId) { if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, undefined, 'roleId'); updateData.roleId = data.roleId; }
-    if (data.password) updateData.password = data.password;
+    if (data.password) updateData.password = encrypt(data.password);
+    if (data.phone) updateData.phone = encrypt(data.phone); else if (data.hasOwnProperty('phone') && data.phone === null) updateData.phone = null; // Allow explicitly clearing phone
     if (data.avatar) updateData.avatar = data.avatar;
     if (Object.keys(updateData).length === 0) { const currentUserDetails = await fetchCurrentUserDetailsAction(id); if(!currentUserDetails) throw new NotFoundError(`用户 ID: ${id}`); return { success: true, data: currentUserDetails }; }
     const updatedUser = await prisma.user.update({ where: { id }, data: updateData, include: { role: { include: { permissions: true } } } });
@@ -116,6 +144,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     return { success: true, data: fetchedUser };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function updateOwnPasswordAction(userId: string, payload: { currentPassword?: string; newPassword?: string; }): Promise<ActionResponse<{ message: string }>> {
     const actionName = 'updateOwnPasswordAction';
     try {
@@ -123,13 +152,25 @@ export async function updateOwnPasswordAction(userId: string, payload: { current
         if (!currentPassword || !newPassword) throw new ValidationError("当前密码和新密码都是必需的。", "currentPassword");
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) throw new AuthError("用户未找到。", "用户身份验证失败。");
-        if (user.password !== currentPassword) throw new AuthError("当前密码不正确。", "当前密码不正确。", "currentPassword");
+        
+        let decryptedStoredPassword;
+        try {
+            decryptedStoredPassword = decrypt(user.password);
+        } catch (decryptionError) {
+            logger.error(`[${actionName}] Password decryption failed for user ${user.username} during own password update.`, decryptionError as Error, { userId }, actionName);
+            throw new AuthError("认证参数错误，无法验证当前密码。", "当前密码认证失败。");
+        }
+
+        if (decryptedStoredPassword !== currentPassword) throw new AuthError("当前密码不正确。", "当前密码不正确。", "currentPassword");
         if (currentPassword === newPassword) throw new ValidationError("新密码不能与当前密码相同。", "newPassword", undefined, "新密码不能与当前密码相同。");
-        await prisma.user.update({ where: { id: userId }, data: { password: newPassword } });
+        
+        const encryptedNewPassword = encrypt(newPassword);
+        await prisma.user.update({ where: { id: userId }, data: { password: encryptedNewPassword } });
         await prisma.auditLog.create({ data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了自己的密码。` } });
         return { success: true, data: { message: "密码已成功更新。" } };
     } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function deleteUserAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteUserAction';
   try {
@@ -144,6 +185,7 @@ export async function deleteUserAction(id: string, performingUserId?: string): P
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function getRolesAction(params?: FetchParams): Promise<PaginatedResponse<AppRole>> {
   const actionName = 'getRolesAction';
   try {
@@ -154,6 +196,7 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
     return { data: appRoles, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取角色数据时发生服务器错误。", 500, "GET_ROLES_FAILED", "无法加载角色数据。"); }
 }
+
 export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "id" | "userCount" | "name">> & { permissions?: AppPermissionIdType[] }, performingUserId?: string): Promise<ActionResponse<AppRole>> {
   const actionName = 'updateRoleAction';
   try {
@@ -176,6 +219,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
     return { success: true, data: appRole };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function getAllPermissionsAction(): Promise<AppPermission[]> { return seedPermissionsData.map(p => ({ ...p, description: p.description || undefined })); } 
 
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AppAuditLog>> {
@@ -188,6 +232,7 @@ export async function getAuditLogsAction(params?: FetchParams): Promise<Paginate
     return { data: appLogs, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取审计日志数据时发生服务器错误。", 500, "GET_AUDIT_LOGS_FAILED", "无法加载审计日志数据。"); }
 }
+
 export async function deleteAuditLogAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteAuditLogAction';
   try {
@@ -199,6 +244,7 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteAuditLogsAction';
   const auditUser = await getAuditUserInfo(performingUserId);
@@ -229,6 +275,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     return { data: appSubnets, totalCount: params?.page && params?.pageSize ? totalCount : appSubnets.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
   } catch (error: unknown) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); if (error instanceof AppError) throw error; throw new AppError("获取子网数据时发生服务器错误。", 500, "GET_SUBNETS_FAILED", "无法加载子网数据。"); }
 }
+
 export interface CreateSubnetData { cidr: string; name?: string | null | undefined; dhcpEnabled?: boolean | null | undefined; vlanId?: string | null | undefined; description?: string | null | undefined; }
 export async function createSubnetAction(data: CreateSubnetData, performingUserId?: string): Promise<ActionResponse<AppSubnet>> {
   const actionName = 'createSubnetAction';
@@ -247,6 +294,7 @@ export async function createSubnetAction(data: CreateSubnetData, performingUserI
     return { success: true, data: appSubnet };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export interface UpdateSubnetData { cidr?: string; name?: string | null | undefined; dhcpEnabled?: boolean | null | undefined; vlanId?: string | null | undefined; description?: string | null | undefined; }
 export async function updateSubnetAction(id: string, data: UpdateSubnetData, performingUserId?: string): Promise<ActionResponse<AppSubnet>> {
   const actionName = 'updateSubnetAction';
@@ -277,6 +325,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
     return { success: true, data: appSubnet };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 async function calculateSubnetUtilization(subnetId: string): Promise<number> {
   const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!subnet || !subnet.cidr) return 0;
   const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
@@ -284,6 +333,7 @@ async function calculateSubnetUtilization(subnetId: string): Promise<number> {
   const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" } });
   return Math.round((allocatedIpsCount / totalUsableIps) * 100);
 }
+
 export async function deleteSubnetAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteSubnetAction';
   try {
@@ -299,6 +349,7 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeleteSubnetsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteSubnetsAction';
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = []; const deletedSubnetCidrs: string[] = [];
@@ -323,6 +374,7 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
   const appVlans: AppVLAN[] = await Promise.all(vlansFromDb.map(async (vlan) => ({ ...vlan, name: vlan.name || undefined, description: vlan.description || undefined, subnetCount: (await prisma.subnet.count({ where: { vlanId: vlan.id } })) + (await prisma.iPAddress.count({ where: { directVlanId: vlan.id } })) })));
   return { data: appVlans, totalCount: params?.page && params?.pageSize ? totalCount : appVlans.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
 }
+
 export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">, performingUserId?: string): Promise<ActionResponse<AppVLAN>> {
   const actionName = 'createVLANAction';
   try {
@@ -336,6 +388,7 @@ export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">
     return { success: true, data: appVlan };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export interface BatchVlanCreationResult { successCount: number; failureDetails: Array<{ vlanNumberAttempted: number; error: string; }>; }
 export async function batchCreateVLANsAction(vlansToCreateInput: Array<{ vlanNumber: number; name?: string; description?: string; }>, performingUserId?: string): Promise<BatchVlanCreationResult> {
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchVlanCreationResult['failureDetails'] = []; const createdVlanSummaries: string[] = [];
@@ -351,6 +404,7 @@ export async function batchCreateVLANsAction(vlansToCreateInput: Array<{ vlanNum
   if (successCount > 0) { revalidatePath("/vlans"); revalidatePath("/query"); }
   return { successCount, failureDetails };
 }
+
 export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "id" | "subnetCount">>, performingUserId?: string): Promise<ActionResponse<AppVLAN>> {
   const actionName = 'updateVLANAction';
   try {
@@ -369,6 +423,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
     return { success: true, data: appVlan };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function deleteVLANAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteVLANAction';
   try {
@@ -382,6 +437,7 @@ export async function deleteVLANAction(id: string, performingUserId?: string): P
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeleteVLANsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteVLANsAction';
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = []; const deletedVlanSummaries: string[] = [];
@@ -445,25 +501,36 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       if (!isIpInCidrRange(data.ipAddress, parsedCidr)) throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress', data.ipAddress);
       if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: data.subnetId } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
     } else { if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress'); }
+    
     const createPayload: Prisma.IPAddressCreateInput = {
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
-      allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null, contactPerson: data.contactPerson || null, phone: data.phone || null,
-      description: data.description || null, lastSeen: data.lastSeen ? new Date(data.lastSeen) : null,
-      selectedOperatorName: data.selectedOperatorName || null, selectedOperatorDevice: data.selectedOperatorDevice || null, selectedAccessType: data.selectedAccessType || null,
-      selectedLocalDeviceName: data.selectedLocalDeviceName || null, selectedDevicePort: data.selectedDevicePort || null, selectedPaymentSource: data.selectedPaymentSource || null,
+      allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null, 
+      contactPerson: data.contactPerson || null, 
+      phone: data.phone ? encrypt(data.phone) : null, // Encrypt phone if provided
+      description: data.description || null, 
+      lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(), // Default to now if not provided
+      selectedOperatorName: data.selectedOperatorName || null, 
+      selectedOperatorDevice: data.selectedOperatorDevice || null, 
+      selectedAccessType: data.selectedAccessType || null,
+      selectedLocalDeviceName: data.selectedLocalDeviceName || null, 
+      selectedDevicePort: data.selectedDevicePort || null, 
+      selectedPaymentSource: data.selectedPaymentSource || null,
     };
+
     if (data.subnetId) createPayload.subnet = { connect: { id: data.subnetId } };
     if (data.directVlanId) { if (!(await prisma.vLAN.findUnique({ where: { id: data.directVlanId } }))) throw new NotFoundError(`VLAN ID: ${data.directVlanId}`, undefined, 'directVlanId'); createPayload.directVlan = { connect: { id: data.directVlanId } }; }
+    
     const newIP = await prisma.iPAddress.create({ data: createPayload });
     const subnetCidr = data.subnetId ? (await prisma.subnet.findUnique({where: {id: data.subnetId}}))?.cidr : null;
     const subnetInfo = subnetCidr ? ` 在子网 ${subnetCidr} 中` : ' 在全局池中';
     const vlanInfoLog = data.directVlanId ? ` 使用 VLAN ${(await prisma.vLAN.findUnique({where: {id:data.directVlanId}}))?.vlanNumber}`: '';
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_ip_address', details: `创建了 IP ${newIP.ipAddress}${subnetInfo}${vlanInfoLog}，状态为 ${data.status}。` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
-    const appIp: AppIPAddress = { ...newIP, isGateway: newIP.isGateway ?? false, subnetId: newIP.subnetId || undefined, directVlanId: newIP.directVlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, usageUnit: newIP.usageUnit || undefined, contactPerson: newIP.contactPerson || undefined, phone: newIP.phone || undefined, description: newIP.description || undefined, lastSeen: newIP.lastSeen?.toISOString(), status: newIP.status as AppIPAddressStatusType, selectedOperatorName: newIP.selectedOperatorName || undefined, selectedOperatorDevice: newIP.selectedOperatorDevice || undefined, selectedAccessType: newIP.selectedAccessType || undefined, selectedLocalDeviceName: newIP.selectedLocalDeviceName || undefined, selectedDevicePort: newIP.selectedDevicePort || undefined, selectedPaymentSource: newIP.selectedPaymentSource || undefined };
+    const appIp: AppIPAddress = { ...newIP, isGateway: newIP.isGateway ?? false, subnetId: newIP.subnetId || undefined, directVlanId: newIP.directVlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, usageUnit: newIP.usageUnit || undefined, contactPerson: newIP.contactPerson || undefined, phone: newIP.phone ? decrypt(newIP.phone) : undefined, description: newIP.description || undefined, lastSeen: newIP.lastSeen?.toISOString(), status: newIP.status as AppIPAddressStatusType, selectedOperatorName: newIP.selectedOperatorName || undefined, selectedOperatorDevice: newIP.selectedOperatorDevice || undefined, selectedAccessType: newIP.selectedAccessType || undefined, selectedLocalDeviceName: newIP.selectedLocalDeviceName || undefined, selectedDevicePort: newIP.selectedDevicePort || undefined, selectedPaymentSource: newIP.selectedPaymentSource || undefined };
     return { success: true, data: appIp };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export interface BatchIpCreationResult { successCount: number; failureDetails: Array<{ ipAttempted: string; error: string; }>; }
 export async function batchCreateIPAddressesAction(payload: { startIp: string; endIp: string; subnetId: string; directVlanId?: string | null; description?: string; status: AppIPAddressStatusType; isGateway?: boolean; usageUnit?:string; contactPerson?:string; phone?:string; selectedOperatorName?: string; selectedOperatorDevice?: string; selectedAccessType?: string; selectedLocalDeviceName?: string; selectedDevicePort?: string; selectedPaymentSource?: string; }, performingUserId?: string): Promise<BatchIpCreationResult> {
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchIpCreationResult['failureDetails'] = []; const createdIpAddressesForAudit: string[] = [];
@@ -480,7 +547,10 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
         if (await prisma.iPAddress.findFirst({ where: { ipAddress: currentIpStr, subnetId: subnetId } })) throw new ResourceError(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'startIp/endIp');
         const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr, status: status, isGateway: isGateway ?? false, allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
-            usageUnit: usageUnit||null, contactPerson: contactPerson||null, phone: phone||null, description: description || null,
+            usageUnit: usageUnit||null, contactPerson: contactPerson||null, 
+            phone: phone ? encrypt(phone) : null, 
+            description: description || null,
+            lastSeen: new Date(),
             selectedOperatorName: selectedOperatorName || null, selectedOperatorDevice: selectedOperatorDevice || null, selectedAccessType: selectedAccessType || null,
             selectedLocalDeviceName: selectedLocalDeviceName || null, selectedDevicePort: selectedDevicePort || null, selectedPaymentSource: selectedPaymentSource || null,
         };
@@ -494,22 +564,23 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
   if (successCount > 0) { revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query"); }
   return { successCount, failureDetails };
 }
+
 export interface UpdateIPAddressData { ipAddress?: string; subnetId?: string | undefined; directVlanId?: string | null | undefined; status?: AppIPAddressStatusType; isGateway?: boolean | null | undefined; allocatedTo?: string | null | undefined; usageUnit?: string | null | undefined; contactPerson?: string | null | undefined; phone?: string | null | undefined; description?: string | null | undefined; lastSeen?: string | null | undefined; selectedOperatorName?: string | null | undefined; selectedOperatorDevice?: string | null | undefined; selectedAccessType?: string | null | undefined; selectedLocalDeviceName?: string | null | undefined; selectedDevicePort?: string | null | undefined; selectedPaymentSource?: string | null | undefined; }
 export async function updateIPAddressAction(id: string, data: UpdateIPAddressData, performingUserId?: string): Promise<ActionResponse<AppIPAddress>> {
   const actionName = 'updateIPAddressAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const ipToUpdate = await prisma.iPAddress.findUnique({ where: { id } }); if (!ipToUpdate) throw new NotFoundError(`IP 地址 ID: ${id}`);
-    const updateData: Prisma.IPAddressUpdateInput = {}; let finalIpAddress = ipToUpdate.ipAddress;
+    const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() }; // Always update lastSeen
+    let finalIpAddress = ipToUpdate.ipAddress;
     if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) { if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress); updateData.ipAddress = data.ipAddress; finalIpAddress = data.ipAddress; }
     if (data.hasOwnProperty('status') && data.status !== undefined) updateData.status = data.status as string;
     if (data.hasOwnProperty('isGateway')) updateData.isGateway = data.isGateway ?? false;
     if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = (data.allocatedTo === undefined || data.allocatedTo === "") ? null : data.allocatedTo;
     if (data.hasOwnProperty('usageUnit')) updateData.usageUnit = (data.usageUnit === undefined || data.usageUnit === "") ? null : data.usageUnit;
     if (data.hasOwnProperty('contactPerson')) updateData.contactPerson = (data.contactPerson === undefined || data.contactPerson === "") ? null : data.contactPerson;
-    if (data.hasOwnProperty('phone')) updateData.phone = (data.phone === undefined || data.phone === "") ? null : data.phone;
+    if (data.hasOwnProperty('phone')) updateData.phone = (data.phone === undefined || data.phone === "" || data.phone === null) ? null : encrypt(data.phone);
     if (data.hasOwnProperty('description')) updateData.description = (data.description === undefined || data.description === "") ? null : data.description;
-    if (data.hasOwnProperty('lastSeen')) updateData.lastSeen = data.lastSeen ? new Date(data.lastSeen) : null;
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, undefined, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('selectedOperatorName')) updateData.selectedOperatorName = data.selectedOperatorName || null;
     if (data.hasOwnProperty('selectedOperatorDevice')) updateData.selectedOperatorDevice = data.selectedOperatorDevice || null;
@@ -541,10 +612,11 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_ip_address', details: `更新了 IP ${updatedIP.ipAddress}` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
-    const appIp: AppIPAddress = { ...updatedIP, isGateway: updatedIP.isGateway ?? false, subnetId: updatedIP.subnetId || undefined, directVlanId: updatedIP.directVlanId || undefined, allocatedTo: updatedIP.allocatedTo || undefined, usageUnit: updatedIP.usageUnit || undefined, contactPerson: updatedIP.contactPerson || undefined, phone: updatedIP.phone || undefined, description: updatedIP.description || undefined, lastSeen: updatedIP.lastSeen?.toISOString(), status: updatedIP.status as AppIPAddressStatusType, selectedOperatorName: updatedIP.selectedOperatorName || undefined, selectedOperatorDevice: updatedIP.selectedOperatorDevice || undefined, selectedAccessType: updatedIP.selectedAccessType || undefined, selectedLocalDeviceName: updatedIP.selectedLocalDeviceName || undefined, selectedDevicePort: updatedIP.selectedDevicePort || undefined, selectedPaymentSource: updatedIP.selectedPaymentSource || undefined };
+    const appIp: AppIPAddress = { ...updatedIP, isGateway: updatedIP.isGateway ?? false, subnetId: updatedIP.subnetId || undefined, directVlanId: updatedIP.directVlanId || undefined, allocatedTo: updatedIP.allocatedTo || undefined, usageUnit: updatedIP.usageUnit || undefined, contactPerson: updatedIP.contactPerson || undefined, phone: updatedIP.phone ? decrypt(updatedIP.phone) : undefined, description: updatedIP.description || undefined, lastSeen: updatedIP.lastSeen?.toISOString(), status: updatedIP.status as AppIPAddressStatusType, selectedOperatorName: updatedIP.selectedOperatorName || undefined, selectedOperatorDevice: updatedIP.selectedOperatorDevice || undefined, selectedAccessType: updatedIP.selectedAccessType || undefined, selectedLocalDeviceName: updatedIP.selectedLocalDeviceName || undefined, selectedDevicePort: updatedIP.selectedDevicePort || undefined, selectedPaymentSource: updatedIP.selectedPaymentSource || undefined };
     return { success: true, data: appIp };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function deleteIPAddressAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteIPAddressAction';
   try {
@@ -558,6 +630,7 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeleteIPAddressesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteIPAddressesAction';
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = []; const deletedIpAddresses: string[] = [];
@@ -587,6 +660,7 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
   try {
@@ -598,11 +672,12 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     orConditions.push({ name: { contains: queryString } }); orConditions.push({ description: { contains: queryString } });
     let whereClause: Prisma.VLANWhereInput = { OR: orConditions }; if (orConditions.length === 0) whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_VLAN" };
     const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const vlansFromDb = await prisma.vLAN.findMany({ where: whereClause, include: { subnets: { select: { id: true, cidr: true, name: true, description: true } }, ipAddresses: { select: { id: true, ipAddress: true, description: true } } }, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize, });
+    const vlansFromDb = await prisma.vLAN.findMany({ where: whereClause, include: { subnets: { select: { id: true, cidr: true, name: true, description: true } } , ipAddresses: { select: { id: true, ipAddress: true, description: true } } }, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize, });
     const results: VlanQueryResult[] = vlansFromDb.map(v => ({ id: v.id, vlanNumber: v.vlanNumber, name: v.name || undefined, description: v.description || undefined, associatedSubnets: v.subnets.map(s => ({id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})), associatedDirectIPs: v.ipAddresses.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})), resourceCount: v.subnets.length + v.ipAddresses.length }));
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function queryIpAddressesAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<AppIPAddressWithRelations>>> {
   const actionName = 'queryIpAddressesAction';
   try {
@@ -615,7 +690,13 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       const isPotentiallyIpSegment = !matchedIpPattern && trimmedSearchTerm.length > 0 && trimmedSearchTerm.length <= 15 && /[\d]/.test(trimmedSearchTerm) && /^[0-9.*]+$/.test(trimmedSearchTerm) && !/^\.+$/.test(trimmedSearchTerm) && !/^\*+$/.test(trimmedSearchTerm);
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } }); 
+      
+      // For phone, since it's encrypted, direct search is not possible.
+      // This part would require fetching all, decrypting, then filtering, which is inefficient for large datasets.
+      // For now, direct search on encrypted phone is omitted. Users can search by other fields.
+      // orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } }); // Cannot do this on encrypted field directly
+
       orConditionsForSearchTerm.push({ selectedOperatorName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedOperatorDevice: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm } });
     }
@@ -626,10 +707,11 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const totalCount = await prisma.iPAddress.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const includeClauseForQuery = { subnet: { include: { vlan: { select: { vlanNumber: true, name: true } } } }, directVlan: { select: {vlanNumber: true, name: true} } };
     const ipsFromDb = await prisma.iPAddress.findMany({ where: whereClause, include: includeClauseForQuery, orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], skip, take: pageSize }) as PrismaIPAddressWithRelations[];
-    const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false, allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined, description: ip.description || undefined, lastSeen: ip.lastSeen?.toISOString() || undefined, subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined, subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null, directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null, selectedOperatorName: ip.selectedOperatorName || undefined, selectedOperatorDevice: ip.selectedOperatorDevice || undefined, selectedAccessType: ip.selectedAccessType || undefined, selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined }));
+    const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false, allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone ? decrypt(ip.phone) : undefined, description: ip.description || undefined, lastSeen: ip.lastSeen?.toISOString() || undefined, subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined, subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null, directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null, selectedOperatorName: ip.selectedOperatorName || undefined, selectedOperatorDevice: ip.selectedOperatorDevice || undefined, selectedAccessType: ip.selectedAccessType || undefined, selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined }));
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<ActionResponse<SubnetFreeIpDetails>> {
   const actionName = 'getSubnetFreeIpDetailsAction';
   try {
@@ -653,11 +735,14 @@ export async function getOperatorDictionariesAction(params?: FetchParams): Promi
   try {
     const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.operatorDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' }, skip, take: pageSize });
+    const itemsFromDb = params?.page && params?.pageSize 
+        ? await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' }, skip, take: pageSize })
+        : await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' } });
     const appItems: AppOperatorDictionary[] = itemsFromDb.map(item => ({ id: item.id, operatorName: item.operatorName, operatorDevice: item.operatorDevice || undefined, accessType: item.accessType || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
-    return { success: true, data: { data: appItems, totalCount, currentPage: page, totalPages, pageSize } };
+    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function createOperatorDictionaryAction(data: Omit<AppOperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppOperatorDictionary>> {
   const actionName = 'createOperatorDictionaryAction';
   try {
@@ -667,11 +752,12 @@ export async function createOperatorDictionaryAction(data: Omit<AppOperatorDicti
     const newItem = await prisma.operatorDictionary.create({ data: { operatorName: data.operatorName, operatorDevice: data.operatorDevice || null, accessType: data.accessType || null } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_operator_dictionary', details: `创建了运营商字典条目: ${newItem.operatorName}` } });
     revalidatePath("/dictionaries/operator");
-    revalidatePath("/ip-addresses"); // Added as IP addresses use these dictionaries
+    revalidatePath("/ip-addresses");
     const appItem: AppOperatorDictionary = {...newItem, operatorDevice: newItem.operatorDevice || undefined, accessType: newItem.accessType || undefined, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString()};
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function updateOperatorDictionaryAction(id: string, data: Partial<Omit<AppOperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppOperatorDictionary>> {
   const actionName = 'updateOperatorDictionaryAction';
   try {
@@ -690,6 +776,7 @@ export async function updateOperatorDictionaryAction(id: string, data: Partial<O
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function deleteOperatorDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteOperatorDictionaryAction';
   try {
@@ -703,6 +790,7 @@ export async function deleteOperatorDictionaryAction(id: string, performingUserI
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeleteOperatorDictionariesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteOperatorDictionariesAction';
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = [];
@@ -722,11 +810,14 @@ export async function getLocalDeviceDictionariesAction(params?: FetchParams): Pr
   try {
     const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.localDeviceDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = await prisma.localDeviceDictionary.findMany({ orderBy: { deviceName: 'asc' }, skip, take: pageSize });
+    const itemsFromDb = params?.page && params?.pageSize
+        ? await prisma.localDeviceDictionary.findMany({ orderBy: { deviceName: 'asc' }, skip, take: pageSize })
+        : await prisma.localDeviceDictionary.findMany({ orderBy: { deviceName: 'asc' } });
     const appItems: AppLocalDeviceDictionary[] = itemsFromDb.map(item => ({ ...item, port: item.port || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString()}));
-    return { success: true, data: { data: appItems, totalCount, currentPage: page, totalPages, pageSize } };
+    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function createLocalDeviceDictionaryAction(data: Omit<AppLocalDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppLocalDeviceDictionary>> {
   const actionName = 'createLocalDeviceDictionaryAction';
   try {
@@ -741,6 +832,7 @@ export async function createLocalDeviceDictionaryAction(data: Omit<AppLocalDevic
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function updateLocalDeviceDictionaryAction(id: string, data: Partial<Omit<AppLocalDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppLocalDeviceDictionary>> {
   const actionName = 'updateLocalDeviceDictionaryAction';
   try {
@@ -758,6 +850,7 @@ export async function updateLocalDeviceDictionaryAction(id: string, data: Partia
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function deleteLocalDeviceDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteLocalDeviceDictionaryAction';
   try {
@@ -771,6 +864,7 @@ export async function deleteLocalDeviceDictionaryAction(id: string, performingUs
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeleteLocalDeviceDictionariesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteLocalDeviceDictionariesAction';
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = [];
@@ -790,11 +884,14 @@ export async function getPaymentSourceDictionariesAction(params?: FetchParams): 
   try {
     const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.paymentSourceDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = await prisma.paymentSourceDictionary.findMany({ orderBy: { sourceName: 'asc' }, skip, take: pageSize });
+    const itemsFromDb = params?.page && params?.pageSize
+        ? await prisma.paymentSourceDictionary.findMany({ orderBy: { sourceName: 'asc' }, skip, take: pageSize })
+        : await prisma.paymentSourceDictionary.findMany({ orderBy: { sourceName: 'asc' } });
     const appItems: AppPaymentSourceDictionary[] = itemsFromDb.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString()}));
-    return { success: true, data: { data: appItems, totalCount, currentPage: page, totalPages, pageSize } };
+    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function createPaymentSourceDictionaryAction(data: Omit<AppPaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppPaymentSourceDictionary>> {
   const actionName = 'createPaymentSourceDictionaryAction';
   try {
@@ -809,6 +906,7 @@ export async function createPaymentSourceDictionaryAction(data: Omit<AppPaymentS
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function updatePaymentSourceDictionaryAction(id: string, data: Partial<Omit<AppPaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppPaymentSourceDictionary>> {
   const actionName = 'updatePaymentSourceDictionaryAction';
   try {
@@ -825,6 +923,7 @@ export async function updatePaymentSourceDictionaryAction(id: string, data: Part
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function deletePaymentSourceDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deletePaymentSourceDictionaryAction';
   try {
@@ -838,6 +937,7 @@ export async function deletePaymentSourceDictionaryAction(id: string, performing
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
+
 export async function batchDeletePaymentSourceDictionariesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeletePaymentSourceDictionariesAction';
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = [];

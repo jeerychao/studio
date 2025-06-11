@@ -12,8 +12,11 @@ model User {
   id        String    @id @unique
   username  String    @unique
   email     String    @unique
-  password  String
+ password  String // Encrypted password
+ passwordIv String // Initialization Vector for password encryption
   roleId    String
+ phone     String? // Encrypted phone number
+ phoneIv    String? // Initialization Vector for phone encryption
   role      Role      @relation(fields: [roleId], references: [id])
   avatar    String?
   lastLogin DateTime? @updatedAt
@@ -22,6 +25,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Model to store encryption keys per user
+// This is a simplified approach; production systems might use a KMS
 
 model Role {
   id          String       @id @unique
