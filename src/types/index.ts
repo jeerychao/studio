@@ -41,33 +41,35 @@ export const PERMISSIONS = {
 
   // Tools
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
-  PERFORM_TOOLS_EXPORT: 'tools.import_export.export',
+  PERFORM_TOOLS_EXPORT: 'tools.import_export.export', // Only export was mentioned in mockPermissions, import can be added if needed
 
   // Query Page
   VIEW_QUERY_PAGE: 'querypage.view',
 
-  // ISP Management (Added back)
+  // ISP Management
   VIEW_ISP: 'isp.view',
   CREATE_ISP: 'isp.create',
   EDIT_ISP: 'isp.edit',
   DELETE_ISP: 'isp.delete',
 
-  // Device Management (Added back)
+  // Device Management
   VIEW_DEVICE: 'device.view',
   CREATE_DEVICE: 'device.create',
   EDIT_DEVICE: 'device.edit',
   DELETE_DEVICE: 'device.delete',
 
-  // Device Connection Management (Added back)
+  // Device Connection Management
   VIEW_DEVICECONNECTION: 'deviceconnection.view',
   CREATE_DEVICECONNECTION: 'deviceconnection.create',
   EDIT_DEVICECONNECTION: 'deviceconnection.edit',
   DELETE_DEVICECONNECTION: 'deviceconnection.delete',
   
   // Settings (General - may need refinement if specific sub-settings permissions are added)
-  VIEW_SETTINGS: 'settings.view', // Example general settings view permission
+  VIEW_SETTINGS: 'settings.view',
 
-  // Dictionary Management
+  // Dictionary Management (Permissions for dictionaries were not explicitly in the initial data.ts mockPermissions,
+  // but they are defined in the schema. Including them here for completeness if needed later,
+  // though they might not be used by the current role definitions.)
   VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
   CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
   EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
@@ -131,7 +133,6 @@ export interface IPAddress {
   description?: string;
   lastSeen?: string;
 
-  // New fields
   selectedOperatorName?: string;
   selectedOperatorDevice?: string;
   selectedAccessType?: string;
@@ -168,7 +169,6 @@ export interface AuditLog {
   details?: string;
 }
 
-// --- Added back ISP, Device, DeviceType, DeviceConnection, etc. ---
 export interface ISP {
   id: string;
   name: string;
@@ -236,8 +236,6 @@ export interface DeviceConnection {
   createdAt?: string;
   updatedAt?: string;
 }
-// --- End of added back types ---
-
 
 export interface SubnetQueryResult {
   id: string;
@@ -282,8 +280,8 @@ export interface PaginatedResponse<T> {
 }
 
 export interface BatchOperationFailure<TIdentifier = string> {
-  id: TIdentifier;
-  itemIdentifier: string;
+  id: TIdentifier; // Can be the actual ID (string/number) or a temporary identifier if ID wasn't available
+  itemIdentifier: string; // A user-friendly identifier for the item (e.g., name, CIDR, IP address)
   error: string;
 }
 
@@ -293,7 +291,6 @@ export interface BatchDeleteResult<TIdentifier = string> {
   failureDetails: Array<BatchOperationFailure<TIdentifier>>;
 }
 
-// New Dictionary Types
 export interface OperatorDictionary {
   id: string;
   operatorName: string;
@@ -317,3 +314,5 @@ export interface PaymentSourceDictionary {
   createdAt?: string;
   updatedAt?: string;
 }
+
+    
