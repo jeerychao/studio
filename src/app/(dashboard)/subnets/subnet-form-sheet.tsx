@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch"; // Import Switch
+import { Switch } from "@/components/ui/switch"; // Ensure Switch is imported
 import { PlusCircle, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
@@ -42,8 +42,8 @@ import { createSubnetAction, updateSubnetAction, type ActionResponse, type Updat
 
 const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)"),
-  name: z.string().max(100, "子网名称过长").optional(), // New field
-  dhcpEnabled: z.boolean().optional(), // New field
+  name: z.string().max(100, "子网名称过长").optional(),
+  dhcpEnabled: z.boolean().optional(),
   vlanId: z.string().optional(),
   description: z.string().max(200, "描述过长").optional(),
 });
@@ -69,8 +69,8 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     resolver: zodResolver(subnetFormSchema),
     defaultValues: {
       cidr: "",
-      name: "", // Default for new field
-      dhcpEnabled: false, // Default for new field
+      name: "", 
+      dhcpEnabled: false, 
       vlanId: "",
       description: "",
     },
@@ -80,8 +80,8 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
-        name: subnet?.name || "", // Reset new field
-        dhcpEnabled: subnet?.dhcpEnabled || false, // Reset new field
+        name: subnet?.name || "", 
+        dhcpEnabled: subnet?.dhcpEnabled || false, 
         vlanId: subnet?.vlanId || "",
         description: subnet?.description || "",
       });
@@ -291,4 +291,3 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
-    

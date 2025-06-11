@@ -34,7 +34,7 @@ body {
     --destructive-foreground: 0 0% 100%;
     
     --border: 210 25% 90%; 
-    --input: 210 25% 94%; 
+    --input: 210 25% 88%; /* Adjusted for #e1dfdf */
     --ring: 231 48% 52%; /* Slightly lighter primary for focus rings */
 
     --radius: 0.5rem;
@@ -84,7 +84,7 @@ body {
     --destructive-foreground: 0 0% 100%;
     
     --border: 220 15% 28%;
-    --input: 220 15% 28%;
+    --input: 220 15% 35%; /* Adjusted for a darker shade in dark mode */
     --ring: 231 50% 58%;
 
     /* Chart Colors - Dark Mode */
