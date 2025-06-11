@@ -19,12 +19,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Subnet, VLAN, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from "@/types"; 
+import type { Subnet, VLAN, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from "@/types";
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 
 const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
-const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__"; 
+const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
 const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const;
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = { allocated: "已分配", free: "空闲", reserved: "预留" };
 
@@ -40,10 +40,10 @@ const ipBatchFormSchema = z.object({
   commonContactPerson: z.string().max(50, "联系人姓名过长").optional(),
   commonPhone: z.string().max(30, "电话号码过长").optional(),
   commonSelectedOperatorName: z.string().optional(),
-  commonSelectedOperatorDevice: z.string().optional(), 
-  commonSelectedAccessType: z.string().optional(),    
+  commonSelectedOperatorDevice: z.string().optional(),
+  commonSelectedAccessType: z.string().optional(),
   commonSelectedLocalDeviceName: z.string().optional(),
-  commonSelectedDevicePort: z.string().max(100, "设备端口过长").optional(), // Manual input now
+  commonSelectedDevicePort: z.string().max(100, "设备端口过长").optional(), // Now auto-filled
   commonSelectedPaymentSource: z.string().optional(),
 }).refine(data => {
     try { return ipToNumber(data.startIp) <= ipToNumber(data.endIp); } catch (e) { return false; }
@@ -61,9 +61,9 @@ interface IPBatchFormSheetProps {
   onIpAddressChange?: () => void;
 }
 
-export function IPBatchFormSheet({ 
-    subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries, 
-    children, onIpAddressChange 
+export function IPBatchFormSheet({
+    subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries,
+    children, onIpAddressChange
 }: IPBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [submissionResult, setSubmissionResult] = React.useState<BatchIpCreationResult | null>(null);
@@ -92,7 +92,7 @@ export function IPBatchFormSheet({
         setSubmissionResult(null); form.clearErrors();
     }
   }, [isOpen, subnets, form]);
-  
+
   const handleOperatorChange = (value: string) => {
     form.setValue("commonSelectedOperatorName", value === NO_SELECTION_SENTINEL ? "" : value);
     const selectedOp = operatorDictionaries.find(op => op.operatorName === value);
@@ -102,9 +102,8 @@ export function IPBatchFormSheet({
 
   const handleLocalDeviceChange = (value: string) => {
     form.setValue("commonSelectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    // Do NOT automatically set commonSelectedDevicePort anymore
-    // const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
-    // form.setValue("commonSelectedDevicePort", selectedDev?.port || "");
+    const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
+    form.setValue("commonSelectedDevicePort", selectedDev?.port || ""); // Auto-fill port
   };
 
   async function onSubmit(data: IpBatchFormValues) {
@@ -119,7 +118,7 @@ export function IPBatchFormSheet({
         selectedOperatorDevice: data.commonSelectedOperatorDevice || undefined,
         selectedAccessType: data.commonSelectedAccessType || undefined,
         selectedLocalDeviceName: data.commonSelectedLocalDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedLocalDeviceName,
-        selectedDevicePort: data.commonSelectedDevicePort || undefined, // Pass manually entered port
+        selectedDevicePort: data.commonSelectedDevicePort || undefined, // This will be the auto-filled value
         selectedPaymentSource: data.commonSelectedPaymentSource === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedPaymentSource,
     };
     const numToCreate = ipToNumber(data.endIp) - ipToNumber(data.startIp) + 1;
@@ -132,7 +131,7 @@ export function IPBatchFormSheet({
       else if (result.successCount > 0 && result.failureDetails.length > 0) { toast({ title: "批量处理部分成功", description: `${result.successCount} 个IP创建成功，${result.failureDetails.length} 个失败。详情请见下方。` }); if (onIpAddressChange) onIpAddressChange(); }
       else if (result.failureDetails.length > 0) { toast({ title: "批量创建失败", description: `所有 ${numToCreate} 个IP地址均创建失败。详情请见下方。`, variant: "destructive" }); }
       else { toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" }); }
-    } catch (error) { 
+    } catch (error) {
       const actionError = (error as ActionResponse<any>)?.error;
       if (actionError) { toast({ title: "批量创建预处理错误", description: actionError.userMessage, variant: "destructive" }); if (actionError.field) form.setError(actionError.field as FieldPath<IpBatchFormValues>, { type: "server", message: actionError.userMessage }); }
       else { toast({ title: "客户端错误", description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。", variant: "destructive" }); }
@@ -142,10 +141,10 @@ export function IPBatchFormSheet({
 
   const handleOpenChange = (open: boolean) => { setIsOpen(open); if (!open) { form.reset(); setSubmissionResult(null); } };
   const triggerContent = children || <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP</Button>;
-  
+
   const commonOperatorDeviceValue = form.watch("commonSelectedOperatorDevice");
   const commonAccessTypeValue = form.watch("commonSelectedAccessType");
-  // const commonDevicePortValue = form.watch("commonSelectedDevicePort"); // Not needed to watch for auto-fill anymore
+  const commonDevicePortValue = form.watch("commonSelectedDevicePort"); // Watch for displaying auto-filled value
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
@@ -164,13 +163,13 @@ export function IPBatchFormSheet({
                 <FormField control={form.control} name="commonUsageUnit" render={({ field }) => (<FormItem><FormLabel>通用使用单位 (可选)</FormLabel><FormControl><Input placeholder="例如 市场部" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="commonContactPerson" render={({ field }) => (<FormItem><FormLabel>通用联系人 (可选)</FormLabel><FormControl><Input placeholder="例如 王经理" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="commonPhone" render={({ field }) => (<FormItem><FormLabel>通用电话 (可选)</FormLabel><FormControl><Input placeholder="例如 010-12345678" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                
+
                 <FormField control={form.control} name="commonSelectedOperatorName" render={({ field }) => (<FormItem><FormLabel>通用运营商名称 (可选)</FormLabel><Select onValueChange={handleOperatorChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择运营商" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{operatorDictionaries.map(op => (<SelectItem key={op.id} value={op.operatorName}>{op.operatorName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="commonSelectedOperatorDevice" render={({ field }) => (<FormItem><FormLabel>通用运营商设备 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={commonOperatorDeviceValue || ""} readOnly disabled /></FormControl></FormItem>)} />
                 <FormField control={form.control} name="commonSelectedAccessType" render={({ field }) => (<FormItem><FormLabel>通用接入方式 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={commonAccessTypeValue || ""} readOnly disabled /></FormControl></FormItem>)} />
-                
+
                 <FormField control={form.control} name="commonSelectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>通用本端设备 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="commonSelectedDevicePort" render={({ field }) => (<FormItem><FormLabel>通用设备端口 (可选)</FormLabel><FormControl><Input placeholder="例如 G0/0/1, Eth1/0" {...field} /></FormControl><FormMessage/></FormItem>)} />
+                <FormField control={form.control} name="commonSelectedDevicePort" render={({ field }) => (<FormItem><FormLabel>通用设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={commonDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />
 
                 <FormField control={form.control} name="commonSelectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>通用费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
 
@@ -189,5 +188,4 @@ export function IPBatchFormSheet({
     </Sheet>
   );
 }
-
     
