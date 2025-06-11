@@ -22,7 +22,7 @@ import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, typ
 import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
-import { encrypt, decrypt } from '../../app/api/auth/[...nextauth]/route'; // Corrected import path
+import { encrypt, decrypt } from '../app/api/auth/[...nextauth]/route'; // Corrected import path
 
 export interface ActionResponse<TData = unknown> {
   success: boolean;

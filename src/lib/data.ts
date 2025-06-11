@@ -3,7 +3,7 @@ import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, Permiss
 import { PERMISSIONS, DeviceType } from '../types';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 // Import the centralized encrypt function
-import { encrypt } from '../../app/api/auth/[...nextauth]/route';
+import { encrypt } from '../app/api/auth/[...nextauth]/route';
 
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
