@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
-import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions"; 
+import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
 import Image from "next/image";
-import { Loader2 } from "lucide-react";
+import { Loader2, UploadCloud, FileText } from "lucide-react"; // Added UploadCloud and FileText
 
 
 export default function ImportExportPage() {
@@ -112,7 +112,7 @@ export default function ImportExportPage() {
         toast({ title: "错误", description: "未知的数据类型导出请求。", variant: "destructive" });
         setIsExporting(false); return;
       }
-      
+
       if (dataToExport.length === 0) {
         toast({ title: "无数据", description: `没有可用于导出的 ${dataType === "ips" ? "IP 地址" : dataType === "subnets" ? "子网" : "VLAN"} 数据。`});
         setIsExporting(false); return;
@@ -123,7 +123,7 @@ export default function ImportExportPage() {
         toast({ title: "无内容导出", description: `未能生成CSV内容或选定类型无数据。` });
         setIsExporting(false); return;
       }
-      
+
       const filename = `${filenameFragment}_export_${new Date().toISOString().split('T')[0]}.csv`;
       const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
       const link = document.createElement("a");
@@ -189,5 +189,3 @@ export default function ImportExportPage() {
     </>
   );
 }
-
-    
