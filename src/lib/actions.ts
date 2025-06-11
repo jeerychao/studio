@@ -290,8 +290,8 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
     const auditUser = await getAuditUserInfo(performingUserId);
     const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } }); if (!subnetToDelete) throw new NotFoundError(`子网 ID: ${id}`);
     if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") { const vlanMsg = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`; throw new ResourceError(`子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}。`, 'SUBNET_HAS_VLAN_ASSOCIATION'); }
-    if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有已分配的 IP。\`, 'SUBNET_HAS_ALLOCATED_IPS');
-    if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有预留的 IP。\`, 'SUBNET_HAS_RESERVED_IPS');
+    if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有已分配的 IP。`, 'SUBNET_HAS_ALLOCATED_IPS');
+    if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有预留的 IP。`, 'SUBNET_HAS_RESERVED_IPS');
     for (const ip of await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } })) { await prisma.iPAddress.update({ where: { id: ip.id }, data: { subnet: { disconnect: true }, directVlan: { disconnect: true } } }); await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_ip_on_subnet_delete', details: `IP ${ip.ipAddress} 已从子网 ${subnetToDelete.cidr} 解除关联。` } }); }
     await prisma.subnet.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_subnet', details: `删除了子网 ${subnetToDelete.cidr}` } });
@@ -306,8 +306,8 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
     try {
       const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } }); if (!subnetToDelete) { failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '子网未找到。' }); continue; }
       if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") { const vlanMsg = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`; throw new ResourceError(`子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}。`, 'SUBNET_HAS_VLAN_ASSOCIATION_BATCH'); }
-      if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有已分配的 IP。\`, 'SUBNET_HAS_ALLOCATED_IPS_BATCH');
-      if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有预留的 IP。\`, 'SUBNET_HAS_RESERVED_IPS_BATCH');
+      if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有已分配的 IP。`, 'SUBNET_HAS_ALLOCATED_IPS_BATCH');
+      if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有预留的 IP。`, 'SUBNET_HAS_RESERVED_IPS_BATCH');
       for (const ip of await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } })) { await prisma.iPAddress.update({ where: { id: ip.id }, data: { subnet: { disconnect: true }, directVlan: { disconnect: true } } }); }
       await prisma.subnet.delete({ where: { id } }); deletedSubnetCidrs.push(subnetToDelete.cidr); successCount++;
     } catch (error: unknown) { const errRes = createActionErrorResponse(error, `${actionName}_single`); failureDetails.push({ id, itemIdentifier: (await prisma.subnet.findUnique({ where: { id } }))?.cidr || `ID ${id}`, error: errRes.userMessage }); }
@@ -342,7 +342,7 @@ export async function batchCreateVLANsAction(vlansToCreateInput: Array<{ vlanNum
   for (const vlanInput of vlansToCreateInput) {
     try {
       if (isNaN(vlanInput.vlanNumber) || vlanInput.vlanNumber < 1 || vlanInput.vlanNumber > 4094) throw new ValidationError("VLAN 号码必须是 1 到 4094 之间的整数。", 'vlanNumber', vlanInput.vlanNumber);
-      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。\`, 'VLAN_EXISTS', undefined, 'startVlanNumber');
+      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', undefined, 'startVlanNumber');
       const newVlan = await prisma.vLAN.create({ data: { vlanNumber: vlanInput.vlanNumber, name: vlanInput.name || null, description: vlanInput.description || null } });
       createdVlanSummaries.push(`${newVlan.vlanNumber}${newVlan.name ? ` (${newVlan.name})` : ''}`); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, 'batchCreateVLANsAction_single'); failureDetails.push({ vlanNumberAttempted: vlanInput.vlanNumber, error: errRes.userMessage }); }
@@ -357,7 +357,7 @@ export async function updateVLANAction(id: string, data: Partial<Omit<AppVLAN, "
     const auditUser = await getAuditUserInfo(performingUserId);
     const vlanToUpdate = await prisma.vLAN.findUnique({ where: { id } }); if (!vlanToUpdate) throw new NotFoundError(`VLAN ID: ${id}`);
     const updatePayload: Prisma.VLANUpdateInput = {};
-    if (data.hasOwnProperty('vlanNumber') && data.vlanNumber !== undefined) { if (isNaN(data.vlanNumber) || data.vlanNumber < 1 || data.vlanNumber > 4094) throw new ValidationError("VLAN 号码必须是 1 到 4094 之间的整数。", 'vlanNumber', data.vlanNumber); if (data.vlanNumber !== vlanToUpdate.vlanNumber) { const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: data.vlanNumber } }); if (existingVLAN && existingVLAN.id !== id) throw new ResourceError(`已存在另一个 VLAN 号码为 ${data.vlanNumber} 的 VLAN。\`, 'VLAN_EXISTS', undefined, 'vlanNumber'); } updatePayload.vlanNumber = data.vlanNumber; }
+    if (data.hasOwnProperty('vlanNumber') && data.vlanNumber !== undefined) { if (isNaN(data.vlanNumber) || data.vlanNumber < 1 || data.vlanNumber > 4094) throw new ValidationError("VLAN 号码必须是 1 到 4094 之间的整数。", 'vlanNumber', data.vlanNumber); if (data.vlanNumber !== vlanToUpdate.vlanNumber) { const existingVLAN = await prisma.vLAN.findUnique({ where: { vlanNumber: data.vlanNumber } }); if (existingVLAN && existingVLAN.id !== id) throw new ResourceError(`已存在另一个 VLAN 号码为 ${data.vlanNumber} 的 VLAN。`, 'VLAN_EXISTS', undefined, 'vlanNumber'); } updatePayload.vlanNumber = data.vlanNumber; }
     if (data.hasOwnProperty('name')) updatePayload.name = (data.name === "" || data.name === undefined) ? null : data.name;
     if (data.hasOwnProperty('description')) updatePayload.description = (data.description === "" || data.description === undefined) ? null : data.description;
     if (Object.keys(updatePayload).length === 0) { const subnetCount = (await prisma.subnet.count({ where: { vlanId: id } })) + (await prisma.iPAddress.count({where: {directVlanId: id}})); const currentVLANApp: AppVLAN = { ...vlanToUpdate, name: vlanToUpdate.name || undefined, description: vlanToUpdate.description || undefined, subnetCount }; return { success: true, data: currentVLANApp }; }
@@ -374,8 +374,8 @@ export async function deleteVLANAction(id: string, performingUserId?: string): P
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const vlanToDelete = await prisma.vLAN.findUnique({ where: { id } }); if (!vlanToDelete) throw new NotFoundError(`VLAN ID: ${id}`);
-    if (await prisma.subnet.count({ where: { vlanId: id } }) > 0) throw new ResourceError(`无法删除 VLAN ${vlanToDelete.vlanNumber}。它已分配给子网。\`, 'VLAN_IN_USE_SUBNET');
-    if (await prisma.iPAddress.count({ where: { directVlanId: id } }) > 0) throw new ResourceError(`无法删除 VLAN ${vlanToDelete.vlanNumber}。它已直接分配给 IP 地址。\`, 'VLAN_IN_USE_IP');
+    if (await prisma.subnet.count({ where: { vlanId: id } }) > 0) throw new ResourceError(`无法删除 VLAN ${vlanToDelete.vlanNumber}。它已分配给子网。`, 'VLAN_IN_USE_SUBNET');
+    if (await prisma.iPAddress.count({ where: { directVlanId: id } }) > 0) throw new ResourceError(`无法删除 VLAN ${vlanToDelete.vlanNumber}。它已直接分配给 IP 地址。`, 'VLAN_IN_USE_IP');
     await prisma.vLAN.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_vlan', details: `删除了 VLAN ${vlanToDelete.vlanNumber} (${vlanToDelete.name || '无名称'})` } });
     revalidatePath("/vlans"); revalidatePath("/subnets"); revalidatePath("/ip-addresses"); revalidatePath("/query");
@@ -388,8 +388,8 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
   for (const id of ids) {
     try {
       const vlanToDelete = await prisma.vLAN.findUnique({ where: { id } }); if (!vlanToDelete) { failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: 'VLAN 未找到。' }); continue; }
-      if (await prisma.subnet.count({ where: { vlanId: id } }) > 0) throw new ResourceError(`VLAN ${vlanToDelete.vlanNumber} 已分配给子网。\`, 'VLAN_IN_USE_SUBNET_BATCH');
-      if (await prisma.iPAddress.count({ where: { directVlanId: id } }) > 0) throw new ResourceError(`VLAN ${vlanToDelete.vlanNumber} 已直接分配给 IP 地址。\`, 'VLAN_IN_USE_IP_BATCH');
+      if (await prisma.subnet.count({ where: { vlanId: id } }) > 0) throw new ResourceError(`VLAN ${vlanToDelete.vlanNumber} 已分配给子网。`, 'VLAN_IN_USE_SUBNET_BATCH');
+      if (await prisma.iPAddress.count({ where: { directVlanId: id } }) > 0) throw new ResourceError(`VLAN ${vlanToDelete.vlanNumber} 已直接分配给 IP 地址。`, 'VLAN_IN_USE_IP_BATCH');
       await prisma.vLAN.delete({ where: { id } }); deletedVlanSummaries.push(`${vlanToDelete.vlanNumber}${vlanToDelete.name ? ` (${vlanToDelete.name})` : ''}`); successCount++;
     } catch (error: unknown) { const errRes = createActionErrorResponse(error, `${actionName}_single`); failureDetails.push({ id, itemIdentifier: (await prisma.vLAN.findUnique({ where: { id } }))?.vlanNumber.toString() || `ID ${id}`, error: errRes.userMessage }); }
   }
@@ -441,10 +441,10 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
     if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId');
     if (data.subnetId) {
       const targetSubnet = await prisma.subnet.findUnique({ where: { id: data.subnetId } }); if (!targetSubnet) throw new NotFoundError(`子网 ID: ${data.subnetId}`, undefined, 'subnetId');
-      const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。\`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
-      if (!isIpInCidrRange(data.ipAddress, parsedCidr)) throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。\`, 'ipAddress', data.ipAddress);
-      if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: data.subnetId } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。\`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
-    } else { if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于全局池中。\`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress'); }
+      const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
+      if (!isIpInCidrRange(data.ipAddress, parsedCidr)) throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress', data.ipAddress);
+      if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: data.subnetId } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
+    } else { if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress'); }
     const createPayload: Prisma.IPAddressCreateInput = {
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
       allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null, contactPerson: data.contactPerson || null, phone: data.phone || null,
@@ -470,14 +470,14 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
   const { startIp, endIp, subnetId, directVlanId, description, status, isGateway, usageUnit, contactPerson, phone, selectedOperatorName, selectedOperatorDevice, selectedAccessType, selectedLocalDeviceName, selectedDevicePort, selectedPaymentSource } = payload;
   try {
     const targetSubnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!targetSubnet) throw new NotFoundError(`子网 ID: ${subnetId}`, "未找到批量创建的目标子网。", 'subnetId');
-    const parsedTargetSubnetCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedTargetSubnetCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 配置无效。\`, 500, 'SUBNET_CIDR_INVALID_FOR_BATCH');
+    const parsedTargetSubnetCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedTargetSubnetCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 配置无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_BATCH');
     if (directVlanId && directVlanId.trim() !== "") { if (!(await prisma.vLAN.findUnique({ where: { id: directVlanId } }))) throw new NotFoundError(`VLAN ID: ${directVlanId}`, "为批量 IP 创建选择的 VLAN 不存在。", 'directVlanId'); }
     let currentIpNum = ipToNumber(startIp); let endIpNum = ipToNumber(endIp); if (currentIpNum > endIpNum) throw new ValidationError("起始 IP 必须小于或等于结束 IP。", 'endIp');
     for (; currentIpNum <= endIpNum; currentIpNum++) {
       const currentIpStr = numberToIp(currentIpNum);
       try {
-        if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) throw new ValidationError(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。\`, 'startIp/endIp', currentIpStr);
-        if (await prisma.iPAddress.findFirst({ where: { ipAddress: currentIpStr, subnetId: subnetId } })) throw new ResourceError(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.networkAddress} 中。\`, 'IP_EXISTS_IN_SUBNET', undefined, 'startIp/endIp');
+        if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) throw new ValidationError(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'startIp/endIp', currentIpStr);
+        if (await prisma.iPAddress.findFirst({ where: { ipAddress: currentIpStr, subnetId: subnetId } })) throw new ResourceError(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'startIp/endIp');
         const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr, status: status, isGateway: isGateway ?? false, allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
             usageUnit: usageUnit||null, contactPerson: contactPerson||null, phone: phone||null, description: description || null,
@@ -523,20 +523,20 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('subnetId')) {
       if (newSubnetId) {
         const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } }); if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。", 'subnetId');
-        const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。\`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
-        if (!isIpInCidrRange(finalIpAddress, parsedCidr)) throw new ValidationError(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。\`, 'ipAddress/subnetId', finalIpAddress);
-        if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。\`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress'); }
+        const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
+        if (!isIpInCidrRange(finalIpAddress, parsedCidr)) throw new ValidationError(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress/subnetId', finalIpAddress);
+        if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress'); }
         updateData.subnet = { connect: { id: newSubnetId } };
       } else {
         if (finalStatus === 'allocated' || finalStatus === 'reserved') throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus);
-        if (finalIpAddress !== ipToUpdate.ipAddress || ipToUpdate.subnetId !== null) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。\`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress'); }
+        if (finalIpAddress !== ipToUpdate.ipAddress || ipToUpdate.subnetId !== null) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress'); }
         updateData.subnet = { disconnect: true };
       }
     } else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) {
       const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } }); if (!currentSubnet) throw new NotFoundError(`当前子网 ID: ${newSubnetId}`, "IP 的当前子网未找到。", 'subnetId');
-      const parsedCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr); if (!parsedCidr) throw new AppError(`当前子网 ${currentSubnet.cidr} 的 CIDR 无效。\`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
-      if (!isIpInCidrRange(finalIpAddress, parsedCidr)) throw new ValidationError(`新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。\`, 'ipAddress', finalIpAddress);
-      if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`新 IP ${finalIpAddress} 已存在于子网 ${currentSubnet.networkAddress} 中。\`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
+      const parsedCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr); if (!parsedCidr) throw new AppError(`当前子网 ${currentSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
+      if (!isIpInCidrRange(finalIpAddress, parsedCidr)) throw new ValidationError(`新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`, 'ipAddress', finalIpAddress);
+      if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`新 IP ${finalIpAddress} 已存在于子网 ${currentSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress');
     }
     const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_ip_address', details: `更新了 IP ${updatedIP.ipAddress}` } });
@@ -550,8 +550,8 @@ export async function deleteIPAddressAction(id: string, performingUserId?: strin
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const ipToDelete = await prisma.iPAddress.findUnique({ where: { id }, include: { directVlan: { select: { vlanNumber: true } } } }); if (!ipToDelete) throw new NotFoundError(`IP 地址 ID: ${id}`);
-    if (ipToDelete.status === 'allocated' || ipToDelete.status === 'reserved') throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status}"。\`, 'IP_ADDRESS_IN_USE_STATUS');
-    if (ipToDelete.directVlanId) { const directVlanNumber = ipToDelete.directVlan?.vlanNumber || ipToDelete.directVlanId; throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。\`, 'IP_ADDRESS_HAS_DIRECT_VLAN'); }
+    if (ipToDelete.status === 'allocated' || ipToDelete.status === 'reserved') throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status}"。`, 'IP_ADDRESS_IN_USE_STATUS');
+    if (ipToDelete.directVlanId) { const directVlanNumber = ipToDelete.directVlan?.vlanNumber || ipToDelete.directVlanId; throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。`, 'IP_ADDRESS_HAS_DIRECT_VLAN'); }
     await prisma.iPAddress.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_ip_address', details: `删除了 IP ${ipToDelete.ipAddress}` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
@@ -564,8 +564,8 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   for (const id of ids) {
     try {
       const ipToDelete = await prisma.iPAddress.findUnique({ where: { id }, include: { directVlan: { select: { vlanNumber: true } } } }); if (!ipToDelete) { failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: 'IP 地址未找到。' }); continue; }
-      if (ipToDelete.status === 'allocated' || ipToDelete.status === 'reserved') throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status}"。\`, 'IP_ADDRESS_IN_USE_STATUS_BATCH');
-      if (ipToDelete.directVlanId) { const directVlanNumber = ipToDelete.directVlan?.vlanNumber || ipToDelete.directVlanId; throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。\`, 'IP_ADDRESS_HAS_DIRECT_VLAN_BATCH'); }
+      if (ipToDelete.status === 'allocated' || ipToDelete.status === 'reserved') throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 状态为 "${ipToDelete.status}"。`, 'IP_ADDRESS_IN_USE_STATUS_BATCH');
+      if (ipToDelete.directVlanId) { const directVlanNumber = ipToDelete.directVlan?.vlanNumber || ipToDelete.directVlanId; throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。`, 'IP_ADDRESS_HAS_DIRECT_VLAN_BATCH'); }
       await prisma.iPAddress.delete({ where: { id } }); deletedIpAddresses.push(ipToDelete.ipAddress); successCount++;
     } catch (error: unknown) { const errRes = createActionErrorResponse(error, `${actionName}_single`); failureDetails.push({ id, itemIdentifier: (await prisma.iPAddress.findUnique({ where: { id } }))?.ipAddress || `ID ${id}`, error: errRes.userMessage }); }
   }
@@ -634,7 +634,7 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
   const actionName = 'getSubnetFreeIpDetailsAction';
   try {
     const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!subnet) throw new NotFoundError(`子网 ID: ${subnetId}`);
-    const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties) throw new AppError(`子网 ${subnet.cidr} 的 CIDR 配置无效。\`, 500, 'SUBNET_CIDR_INVALID_FOR_FREE_IP_CALC');
+    const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties) throw new AppError(`子网 ${subnet.cidr} 的 CIDR 配置无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_FREE_IP_CALC');
     const totalUsableIPs = getUsableIpCount(subnetProperties.prefix);
     const dbAllocatedIPs = await prisma.iPAddress.findMany({ where: { subnetId, status: 'allocated' }, select: { ipAddress: true } });
     const dbReservedIPs = await prisma.iPAddress.findMany({ where: { subnetId, status: 'reserved' }, select: { ipAddress: true } });
@@ -663,7 +663,7 @@ export async function createOperatorDictionaryAction(data: Omit<AppOperatorDicti
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (!data.operatorName || data.operatorName.trim() === "") throw new ValidationError("运营商名称是必需的。", "operatorName");
-    if (await prisma.operatorDictionary.findUnique({ where: { operatorName: data.operatorName } })) throw new ResourceError(`运营商名称 "${data.operatorName}" 已存在。\`, 'OPERATOR_DICT_NAME_EXISTS', undefined, 'operatorName');
+    if (await prisma.operatorDictionary.findUnique({ where: { operatorName: data.operatorName } })) throw new ResourceError(`运营商名称 "${data.operatorName}" 已存在。`, 'OPERATOR_DICT_NAME_EXISTS', undefined, 'operatorName');
     const newItem = await prisma.operatorDictionary.create({ data: { operatorName: data.operatorName, operatorDevice: data.operatorDevice || null, accessType: data.accessType || null } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_operator_dictionary', details: `创建了运营商字典条目: ${newItem.operatorName}` } });
     revalidatePath("/dictionaries/operator");
@@ -678,7 +678,7 @@ export async function updateOperatorDictionaryAction(id: string, data: Partial<O
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToUpdate = await prisma.operatorDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`运营商字典 ID: ${id}`);
     const updatePayload: Prisma.OperatorDictionaryUpdateInput = {};
-    if (data.operatorName && data.operatorName !== itemToUpdate.operatorName) { if (await prisma.operatorDictionary.findFirst({ where: { operatorName: data.operatorName, NOT: { id } } })) throw new ResourceError(`运营商名称 "${data.operatorName}" 已存在。\`, 'OPERATOR_DICT_NAME_EXISTS', undefined, 'operatorName'); updatePayload.operatorName = data.operatorName; }
+    if (data.operatorName && data.operatorName !== itemToUpdate.operatorName) { if (await prisma.operatorDictionary.findFirst({ where: { operatorName: data.operatorName, NOT: { id } } })) throw new ResourceError(`运营商名称 "${data.operatorName}" 已存在。`, 'OPERATOR_DICT_NAME_EXISTS', undefined, 'operatorName'); updatePayload.operatorName = data.operatorName; }
     if (data.hasOwnProperty('operatorDevice')) updatePayload.operatorDevice = data.operatorDevice || null;
     if (data.hasOwnProperty('accessType')) updatePayload.accessType = data.accessType || null;
     if (Object.keys(updatePayload).length === 0) { const currentItem: AppOperatorDictionary = {...itemToUpdate, operatorDevice: itemToUpdate.operatorDevice || undefined, accessType: itemToUpdate.accessType || undefined, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
@@ -695,7 +695,7 @@ export async function deleteOperatorDictionaryAction(id: string, performingUserI
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.operatorDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`运营商字典 ID: ${id}`);
-    if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: itemToDelete.operatorName}, {selectedOperatorDevice: itemToDelete.operatorDevice ?? undefined}, {selectedAccessType: itemToDelete.accessType ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${itemToDelete.operatorName}" 正在被 IP 地址使用。\`);
+    if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: itemToDelete.operatorName}, {selectedOperatorDevice: itemToDelete.operatorDevice ?? undefined}, {selectedAccessType: itemToDelete.accessType ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${itemToDelete.operatorName}" 正在被 IP 地址使用。`);
     await prisma.operatorDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_operator_dictionary', details: `删除了运营商字典条目: ${itemToDelete.operatorName}` } });
     revalidatePath("/dictionaries/operator");
@@ -709,11 +709,11 @@ export async function batchDeleteOperatorDictionariesAction(ids: string[], perfo
   for (const id of ids) {
     try {
       const item = await prisma.operatorDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: item.operatorName}, {selectedOperatorDevice: item.operatorDevice ?? undefined}, {selectedAccessType: item.accessType ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${item.operatorName}" 正在被 IP 地址使用。\`);
+      if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: item.operatorName}, {selectedOperatorDevice: item.operatorDevice ?? undefined}, {selectedAccessType: item.accessType ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${item.operatorName}" 正在被 IP 地址使用。`);
       await prisma.operatorDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.operatorDictionary.findUnique({where: {id}}))?.operatorName || `ID ${id}`, error: errRes.userMessage}); }
   }
-  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_operator_dictionary', details: `批量删除了 ${successCount} 个运营商字典条目。\`}}); revalidatePath("/dictionaries/operator"); revalidatePath("/ip-addresses"); }
+  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_operator_dictionary', details: `批量删除了 ${successCount} 个运营商字典条目。`}}); revalidatePath("/dictionaries/operator"); revalidatePath("/ip-addresses"); }
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
@@ -732,7 +732,7 @@ export async function createLocalDeviceDictionaryAction(data: Omit<AppLocalDevic
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (!data.deviceName || data.deviceName.trim() === "") throw new ValidationError("设备名称是必需的。", "deviceName");
-    if (await prisma.localDeviceDictionary.findUnique({ where: { deviceName: data.deviceName } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。\`, 'LOCAL_DEVICE_DICT_NAME_EXISTS', undefined, 'deviceName');
+    if (await prisma.localDeviceDictionary.findUnique({ where: { deviceName: data.deviceName } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。`, 'LOCAL_DEVICE_DICT_NAME_EXISTS', undefined, 'deviceName');
     const newItem = await prisma.localDeviceDictionary.create({ data: { deviceName: data.deviceName, port: data.port || null } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_local_device_dictionary', details: `创建了本地设备字典条目: ${newItem.deviceName}` } });
     revalidatePath("/dictionaries/local-device");
@@ -747,7 +747,7 @@ export async function updateLocalDeviceDictionaryAction(id: string, data: Partia
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToUpdate = await prisma.localDeviceDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`本地设备字典 ID: ${id}`);
     const updatePayload: Prisma.LocalDeviceDictionaryUpdateInput = {};
-    if (data.deviceName && data.deviceName !== itemToUpdate.deviceName) { if (await prisma.localDeviceDictionary.findFirst({ where: { deviceName: data.deviceName, NOT: { id } } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。\`, 'LOCAL_DEVICE_DICT_NAME_EXISTS', undefined, 'deviceName'); updatePayload.deviceName = data.deviceName; }
+    if (data.deviceName && data.deviceName !== itemToUpdate.deviceName) { if (await prisma.localDeviceDictionary.findFirst({ where: { deviceName: data.deviceName, NOT: { id } } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。`, 'LOCAL_DEVICE_DICT_NAME_EXISTS', undefined, 'deviceName'); updatePayload.deviceName = data.deviceName; }
     if (data.hasOwnProperty('port')) updatePayload.port = data.port || null;
     if (Object.keys(updatePayload).length === 0) { const currentItem: AppLocalDeviceDictionary = {...itemToUpdate, port: itemToUpdate.port || undefined, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
     const updatedItem = await prisma.localDeviceDictionary.update({ where: { id }, data: updatePayload });
@@ -763,7 +763,7 @@ export async function deleteLocalDeviceDictionaryAction(id: string, performingUs
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.localDeviceDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`本地设备字典 ID: ${id}`);
-    if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: itemToDelete.deviceName}, {selectedDevicePort: itemToDelete.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${itemToDelete.deviceName}" 正在被 IP 地址使用。\`);
+    if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: itemToDelete.deviceName}, {selectedDevicePort: itemToDelete.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${itemToDelete.deviceName}" 正在被 IP 地址使用。`);
     await prisma.localDeviceDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_local_device_dictionary', details: `删除了本地设备字典条目: ${itemToDelete.deviceName}` } });
     revalidatePath("/dictionaries/local-device");
@@ -777,11 +777,11 @@ export async function batchDeleteLocalDeviceDictionariesAction(ids: string[], pe
   for (const id of ids) {
     try {
       const item = await prisma.localDeviceDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: item.deviceName}, {selectedDevicePort: item.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${item.deviceName}" 正在被 IP 地址使用。\`);
+      if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: item.deviceName}, {selectedDevicePort: item.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${item.deviceName}" 正在被 IP 地址使用。`);
       await prisma.localDeviceDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.localDeviceDictionary.findUnique({where: {id}}))?.deviceName || `ID ${id}`, error: errRes.userMessage}); }
   }
-  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_local_device_dictionary', details: `批量删除了 ${successCount} 个本地设备字典条目。\`}}); revalidatePath("/dictionaries/local-device"); revalidatePath("/ip-addresses"); }
+  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_local_device_dictionary', details: `批量删除了 ${successCount} 个本地设备字典条目。`}}); revalidatePath("/dictionaries/local-device"); revalidatePath("/ip-addresses"); }
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
@@ -800,7 +800,7 @@ export async function createPaymentSourceDictionaryAction(data: Omit<AppPaymentS
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (!data.sourceName || data.sourceName.trim() === "") throw new ValidationError("费用来源名称是必需的。", "sourceName");
-    if (await prisma.paymentSourceDictionary.findUnique({ where: { sourceName: data.sourceName } })) throw new ResourceError(`费用来源 "${data.sourceName}" 已存在。\`, 'PAYMENT_SOURCE_DICT_NAME_EXISTS', undefined, 'sourceName');
+    if (await prisma.paymentSourceDictionary.findUnique({ where: { sourceName: data.sourceName } })) throw new ResourceError(`费用来源 "${data.sourceName}" 已存在。`, 'PAYMENT_SOURCE_DICT_NAME_EXISTS', undefined, 'sourceName');
     const newItem = await prisma.paymentSourceDictionary.create({ data: { sourceName: data.sourceName } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_payment_source_dictionary', details: `创建了付费字典条目: ${newItem.sourceName}` } });
     revalidatePath("/dictionaries/payment-source");
@@ -815,7 +815,7 @@ export async function updatePaymentSourceDictionaryAction(id: string, data: Part
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToUpdate = await prisma.paymentSourceDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`付费字典 ID: ${id}`);
     const updatePayload: Prisma.PaymentSourceDictionaryUpdateInput = {};
-    if (data.sourceName && data.sourceName !== itemToUpdate.sourceName) { if (await prisma.paymentSourceDictionary.findFirst({ where: { sourceName: data.sourceName, NOT: { id } } })) throw new ResourceError(`费用来源 "${data.sourceName}" 已存在。\`, 'PAYMENT_SOURCE_DICT_NAME_EXISTS', undefined, 'sourceName'); updatePayload.sourceName = data.sourceName; }
+    if (data.sourceName && data.sourceName !== itemToUpdate.sourceName) { if (await prisma.paymentSourceDictionary.findFirst({ where: { sourceName: data.sourceName, NOT: { id } } })) throw new ResourceError(`费用来源 "${data.sourceName}" 已存在。`, 'PAYMENT_SOURCE_DICT_NAME_EXISTS', undefined, 'sourceName'); updatePayload.sourceName = data.sourceName; }
     if (Object.keys(updatePayload).length === 0) { const currentItem: AppPaymentSourceDictionary = {...itemToUpdate, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
     const updatedItem = await prisma.paymentSourceDictionary.update({ where: { id }, data: updatePayload });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_payment_source_dictionary', details: `更新了付费字典条目: ${updatedItem.sourceName}` } });
@@ -830,7 +830,7 @@ export async function deletePaymentSourceDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.paymentSourceDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`付费字典 ID: ${id}`);
-    if (await prisma.iPAddress.count({where: {selectedPaymentSource: itemToDelete.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${itemToDelete.sourceName}" 正在被 IP 地址使用。\`);
+    if (await prisma.iPAddress.count({where: {selectedPaymentSource: itemToDelete.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${itemToDelete.sourceName}" 正在被 IP 地址使用。`);
     await prisma.paymentSourceDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_payment_source_dictionary', details: `删除了付费字典条目: ${itemToDelete.sourceName}` } });
     revalidatePath("/dictionaries/payment-source");
@@ -844,11 +844,11 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.paymentSourceDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      if (await prisma.iPAddress.count({where: {selectedPaymentSource: item.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${item.sourceName}" 正在被 IP 地址使用。\`);
+      if (await prisma.iPAddress.count({where: {selectedPaymentSource: item.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${item.sourceName}" 正在被 IP 地址使用。`);
       await prisma.paymentSourceDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.paymentSourceDictionary.findUnique({where: {id}}))?.sourceName || `ID ${id}`, error: errRes.userMessage}); }
   }
-  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_payment_source_dictionary', details: `批量删除了 ${successCount} 个付费字典条目。\`}}); revalidatePath("/dictionaries/payment-source"); revalidatePath("/ip-addresses"); }
+  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_payment_source_dictionary', details: `批量删除了 ${successCount} 个付费字典条目。`}}); revalidatePath("/dictionaries/payment-source"); revalidatePath("/ip-addresses"); }
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 

@@ -43,7 +43,7 @@ const ipBatchFormSchema = z.object({
   commonSelectedOperatorDevice: z.string().optional(), 
   commonSelectedAccessType: z.string().optional(),    
   commonSelectedLocalDeviceName: z.string().optional(),
-  commonSelectedDevicePort: z.string().optional(),  
+  commonSelectedDevicePort: z.string().max(100, "设备端口过长").optional(), // Manual input now
   commonSelectedPaymentSource: z.string().optional(),
 }).refine(data => {
     try { return ipToNumber(data.startIp) <= ipToNumber(data.endIp); } catch (e) { return false; }
@@ -102,8 +102,9 @@ export function IPBatchFormSheet({
 
   const handleLocalDeviceChange = (value: string) => {
     form.setValue("commonSelectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
-    form.setValue("commonSelectedDevicePort", selectedDev?.port || "");
+    // Do NOT automatically set commonSelectedDevicePort anymore
+    // const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
+    // form.setValue("commonSelectedDevicePort", selectedDev?.port || "");
   };
 
   async function onSubmit(data: IpBatchFormValues) {
@@ -118,7 +119,7 @@ export function IPBatchFormSheet({
         selectedOperatorDevice: data.commonSelectedOperatorDevice || undefined,
         selectedAccessType: data.commonSelectedAccessType || undefined,
         selectedLocalDeviceName: data.commonSelectedLocalDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedLocalDeviceName,
-        selectedDevicePort: data.commonSelectedDevicePort || undefined,
+        selectedDevicePort: data.commonSelectedDevicePort || undefined, // Pass manually entered port
         selectedPaymentSource: data.commonSelectedPaymentSource === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedPaymentSource,
     };
     const numToCreate = ipToNumber(data.endIp) - ipToNumber(data.startIp) + 1;
@@ -144,7 +145,7 @@ export function IPBatchFormSheet({
   
   const commonOperatorDeviceValue = form.watch("commonSelectedOperatorDevice");
   const commonAccessTypeValue = form.watch("commonSelectedAccessType");
-  const commonDevicePortValue = form.watch("commonSelectedDevicePort");
+  // const commonDevicePortValue = form.watch("commonSelectedDevicePort"); // Not needed to watch for auto-fill anymore
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
@@ -169,7 +170,7 @@ export function IPBatchFormSheet({
                 <FormField control={form.control} name="commonSelectedAccessType" render={({ field }) => (<FormItem><FormLabel>通用接入方式 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={commonAccessTypeValue || ""} readOnly disabled /></FormControl></FormItem>)} />
                 
                 <FormField control={form.control} name="commonSelectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>通用本端设备 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="commonSelectedDevicePort" render={({ field }) => (<FormItem><FormLabel>通用设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={commonDevicePortValue || ""} readOnly disabled /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="commonSelectedDevicePort" render={({ field }) => (<FormItem><FormLabel>通用设备端口 (可选)</FormLabel><FormControl><Input placeholder="例如 G0/0/1, Eth1/0" {...field} /></FormControl><FormMessage/></FormItem>)} />
 
                 <FormField control={form.control} name="commonSelectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>通用费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
 
