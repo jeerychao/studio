@@ -1,4 +1,7 @@
 
+import dotenv from 'dotenv';
+dotenv.config({ path: require('path').resolve(__dirname, '../.env') }); // Ensure .env at project root is loaded
+
 import prisma from '../src/lib/prisma';
 import {
   mockPermissions as seedPermissionsData,
@@ -20,6 +23,8 @@ import { Prisma } from '@prisma/client';
 
 async function main() {
   console.log('Start seeding ...');
+  console.log(`[Seed Script] Attempting to use ENCRYPTION_KEY starting with: ${process.env.ENCRYPTION_KEY ? process.env.ENCRYPTION_KEY.substring(0, 5) + '...' : 'NOT SET'}`);
+
 
   console.log('Seeding Permissions...');
   // Permissions are defined in data.ts, which will be updated by changing types/index.ts PERMISSIONS object
