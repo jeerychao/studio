@@ -39,7 +39,6 @@ CREATE TABLE "OperatorDictionary" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "operatorName" TEXT NOT NULL,
     "operatorDevice" TEXT,
-    "accessType" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );

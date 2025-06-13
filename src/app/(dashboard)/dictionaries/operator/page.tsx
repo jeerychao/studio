@@ -191,7 +191,6 @@ function OperatorDictionaryView() {
                     </TableHead>
                     <TableHead>运营商名称</TableHead>
                     <TableHead>运营商设备</TableHead>
-                    <TableHead>接入方式</TableHead>
                     {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -209,7 +208,6 @@ function OperatorDictionaryView() {
                       </TableCell>
                       <TableCell className="font-medium">{item.operatorName}</TableCell>
                       <TableCell>{item.operatorDevice || "N/A"}</TableCell>
-                      <TableCell>{item.accessType || "N/A"}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (

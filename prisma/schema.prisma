@@ -96,7 +96,6 @@ model IPAddress {
   // Fields for selected dictionary values
   selectedOperatorName    String?
   selectedOperatorDevice  String?
-  selectedAccessType      String?
   selectedLocalDeviceName String?
   selectedDevicePort      String?
   selectedPaymentSource   String?
@@ -141,5 +140,5 @@ model PaymentSourceDictionary {
   id          String    @id @default(cuid())
   sourceName  String    @unique // e.g., 自费, 财政付费-项目A
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime @updatedAt
 }

@@ -849,7 +849,7 @@ export async function deleteLocalDeviceDictionaryAction(id: string, performingUs
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.localDeviceDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`本地设备字典 ID: ${id}`);
-    if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: itemToDelete.deviceName}, {selectedDevicePort: itemToDelete.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${itemToDelete.deviceName}" 正在被 IP 地址使用。`);
+    //if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: itemToDelete.deviceName}, {selectedDevicePort: itemToDelete.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${itemToDelete.deviceName}" 正在被 IP 地址使用。`);
     await prisma.localDeviceDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_local_device_dictionary', details: `删除了本地设备字典条目: ${itemToDelete.deviceName}` } });
     revalidatePath("/dictionaries/local-device");
@@ -864,7 +864,7 @@ export async function batchDeleteLocalDeviceDictionariesAction(ids: string[], pe
   for (const id of ids) {
     try {
       const item = await prisma.localDeviceDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: item.deviceName}, {selectedDevicePort: item.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${item.deviceName}" 正在被 IP 地址使用。`);
+      //if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: item.deviceName}, {selectedDevicePort: item.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${item.deviceName}" 正在被 IP 地址使用。`);
       await prisma.localDeviceDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.localDeviceDictionary.findUnique({where: {id}}))?.deviceName || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -922,7 +922,7 @@ export async function deletePaymentSourceDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.paymentSourceDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`付费字典 ID: ${id}`);
-    if (await prisma.iPAddress.count({where: {selectedPaymentSource: itemToDelete.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${itemToDelete.sourceName}" 正在被 IP 地址使用。`);
+    //if (await prisma.iPAddress.count({where: {selectedPaymentSource: itemToDelete.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${itemToDelete.sourceName}" 正在被 IP 地址使用。`);
     await prisma.paymentSourceDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_payment_source_dictionary', details: `删除了付费字典条目: ${itemToDelete.sourceName}` } });
     revalidatePath("/dictionaries/payment-source");
@@ -937,7 +937,7 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.paymentSourceDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      if (await prisma.iPAddress.count({where: {selectedPaymentSource: item.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${item.sourceName}" 正在被 IP 地址使用。`);
+      //if (await prisma.iPAddress.count({where: {selectedPaymentSource: item.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${item.sourceName}" 正在被 IP 地址使用。`);
       await prisma.paymentSourceDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.paymentSourceDictionary.findUnique({where: {id}}))?.sourceName || `ID ${id}`, error: errRes.userMessage}); }
   }
