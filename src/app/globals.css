@@ -9,7 +9,7 @@ body {
 @layer base {
   html {
     /* Prevent horizontal scrollbar issues that might arise from body padding adjustments */
-    overflow-x: hidden;
+    /* overflow-x: hidden; */ /* REVERTED: This disabled necessary horizontal scrolling */
   }
 
   body {
