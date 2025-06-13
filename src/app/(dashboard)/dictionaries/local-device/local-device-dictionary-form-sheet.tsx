@@ -19,8 +19,10 @@ import { useToast } from "@/hooks/use-toast";
 import type { LocalDeviceDictionary } from "@/types";
 import { createLocalDeviceDictionaryAction, updateLocalDeviceDictionaryAction, type ActionResponse } from "@/lib/actions";
 
+const NO_PREFIX_SENTINEL = "__NO_PREFIX_INTERNAL__";
+
 const portPrefixOptions = [
-  { value: "", label: "无前缀 / 自定义" },
+  { value: NO_PREFIX_SENTINEL, label: "无前缀 / 自定义" },
   { value: "GigabitEthernet", label: "GigabitEthernet" },
   { value: "TenGigabitEthernet", label: "TenGigabitEthernet" },
   { value: "FastEthernet", label: "FastEthernet" },
@@ -40,9 +42,10 @@ const formSchema = z.object({
   portPrefix: z.string().optional(),
   portNumberSuffix: z.string().max(40, "端口号后缀过长（最多40字符）。").optional(),
 }).superRefine((data, ctx) => {
-  const fullPort = (data.portPrefix || "") + (data.portNumberSuffix || "");
+  const prefixValue = data.portPrefix === NO_PREFIX_SENTINEL ? "" : (data.portPrefix || "");
+  const fullPort = prefixValue + (data.portNumberSuffix || "");
 
-  if (data.portPrefix && data.portPrefix !== "" && (!data.portNumberSuffix || data.portNumberSuffix.trim() === "")) {
+  if (data.portPrefix && data.portPrefix !== NO_PREFIX_SENTINEL && (!data.portNumberSuffix || data.portNumberSuffix.trim() === "")) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "选择端口前缀后，必须填写端口号后缀。",
@@ -54,7 +57,7 @@ const formSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "完整端口号（前缀+后缀）总长度不能超过50个字符。",
-      path: ["portNumberSuffix"], // Or a more general path if preferred
+      path: ["portNumberSuffix"], 
     });
   }
 });
@@ -75,25 +78,27 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { deviceName: "", portPrefix: "", portNumberSuffix: "" },
+    defaultValues: { 
+      deviceName: "", 
+      portPrefix: NO_PREFIX_SENTINEL, 
+      portNumberSuffix: "" 
+    },
   });
 
   React.useEffect(() => {
     if (isOpen) {
-      let initialPrefix = "";
+      let initialPrefix = NO_PREFIX_SENTINEL;
       let initialSuffix = "";
       if (isEditing && dictionaryEntry?.port) {
         const existingPort = dictionaryEntry.port;
-        // Iterate in reverse order of prefix length to match longer prefixes first
         const sortedPrefixOptions = [...portPrefixOptions].sort((a, b) => b.value.length - a.value.length);
-        const foundPrefix = sortedPrefixOptions.find(p => p.value !== "" && existingPort.startsWith(p.value));
+        const foundPrefix = sortedPrefixOptions.find(p => p.value !== NO_PREFIX_SENTINEL && existingPort.startsWith(p.value));
         
         if (foundPrefix) {
           initialPrefix = foundPrefix.value;
           initialSuffix = existingPort.substring(foundPrefix.value.length);
         } else {
-          // If no known prefix, put the whole thing in suffix, prefix remains "" (无前缀 / 自定义)
-          initialSuffix = existingPort;
+          initialSuffix = existingPort; // If no known prefix, whole thing is suffix, prefix is "no prefix"
         }
       }
       form.reset({
@@ -109,7 +114,8 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
     form.clearErrors();
     let response: ActionResponse<LocalDeviceDictionary>;
     try {
-      const fullPort = (data.portPrefix || "") + (data.portNumberSuffix || "");
+      const prefixToUse = data.portPrefix === NO_PREFIX_SENTINEL ? "" : (data.portPrefix || "");
+      const fullPort = prefixToUse + (data.portNumberSuffix || "");
       const payload = { 
         deviceName: data.deviceName, 
         port: fullPort.trim().length > 0 ? fullPort.trim() : undefined 
@@ -148,7 +154,7 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent className="sm:max-w-lg"> {/* Increased width for better layout */}
+      <SheetContent className="sm:max-w-lg">
         <SheetHeader><SheetTitle>{isEditing ? "编辑本地设备字典条目" : "添加新本地设备字典条目"}</SheetTitle><SheetDescription>{isEditing ? "更新现有条目的详细信息。" : "填写新条目的详细信息。"}</SheetDescription></SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">
@@ -161,8 +167,8 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
                   control={form.control}
                   name="portPrefix"
                   render={({ field }) => (
-                    <FormItem className="w-full sm:w-2/5"> {/* Adjusted width for prefix */}
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormItem className="w-full sm:w-2/5">
+                      <Select onValueChange={field.onChange} value={field.value || NO_PREFIX_SENTINEL}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="选择前缀" />
@@ -184,7 +190,7 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
                   control={form.control}
                   name="portNumberSuffix"
                   render={({ field }) => (
-                    <FormItem className="flex-grow"> {/* Suffix takes remaining space */}
+                    <FormItem className="flex-grow">
                       <FormControl>
                         <Input placeholder="例如 1/0/1 或 23" {...field} />
                       </FormControl>
@@ -193,7 +199,6 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
                   )}
                 />
               </div>
-               {/* Display combined form error for port if any */}
                {form.formState.errors.portNumberSuffix && form.formState.errors.portNumberSuffix.message?.includes("总长度") && (
                 <p className="text-sm font-medium text-destructive">{form.formState.errors.portNumberSuffix.message}</p>
               )}
