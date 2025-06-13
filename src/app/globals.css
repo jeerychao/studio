@@ -7,6 +7,32 @@ body {
 }
 
 @layer base {
+  html {
+    /* Prevent horizontal scrollbar issues that might arise from body padding adjustments */
+    overflow-x: hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Ensure body takes up at least the viewport width, helps with 100vw calculations */
+    /* min-width: 100vw; */ /* This can sometimes be problematic, let's be less aggressive */
+  }
+
+  /*
+    When Radix UI (used by ShadCN's Dialog/Sheet) locks body scroll,
+    it often adds `overflow: hidden;` and `padding-right` to the body.
+    The following attempts to ensure the main layout container is less affected.
+    This is a common area for layout shifts with modals.
+  */
+  body[data-radix-dialog-open], /* Attribute used by Radix for Dialogs/Sheets when open */
+  body[style*="overflow: hidden"] { /* General fallback if Radix uses direct styles */
+    /* You might need more specific selectors if this is too broad */
+    /* For example, ensuring fixed/sticky headers account for this. */
+    /* For now, we rely on Radix's own scrollbar compensation. */
+    /* This empty block is a placeholder for more specific overrides if needed. */
+  }
+
+
   :root {
     /* Updated Light Theme based on image and PRD */
     --background: 0 0% 96%; /* Light Gray (#F5F5F5) */

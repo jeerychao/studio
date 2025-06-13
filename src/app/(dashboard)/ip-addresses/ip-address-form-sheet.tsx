@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -98,7 +97,7 @@ export function IPAddressFormSheet({
             allocatedTo: ipAddress?.allocatedTo || "",
             usageUnit: ipAddress?.usageUnit || "",
             contactPerson: ipAddress?.contactPerson || "",
-            phone: ipAddress?.phone || "",
+            phone: ipAddress?.phone || "", // 确保这里使用解密后的值
             description: ipAddress?.description || "",
             selectedOperatorName: initialOperatorName,
             selectedOperatorDevice: initialOperator?.operatorDevice || ipAddress?.selectedOperatorDevice || "",
@@ -229,7 +228,7 @@ export function IPAddressFormSheet({
                 
                 <FormField control={form.control} name="selectedOperatorName" render={({ field }) => (<FormItem><FormLabel>运营商名称 (可选)</FormLabel><Select onValueChange={handleOperatorChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择运营商" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{operatorDictionaries.map(op => (<SelectItem key={op.id} value={op.operatorName}>{op.operatorName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="selectedOperatorDevice" render={({ field }) => (<FormItem><FormLabel>运营商设备 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={operatorDeviceValue || ""} readOnly disabled /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="selectedAccessType" render={({ field }) => (<FormItem><FormLabel>接入方式 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={accessTypeValue || ""} readOnly disabled /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="selectedAccessType" render={({ field }) => (<FormItem><FormLabel>接入方式</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择接入方式" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem><SelectItem value="汇聚">汇聚</SelectItem><SelectItem value="独立专线">独立专线</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
 
                 <FormField control={form.control} name="selectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备名称 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="selectedDevicePort" render={({ field }) => (<FormItem><FormLabel>设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={localDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />
@@ -244,4 +243,3 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
-

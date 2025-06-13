@@ -1,4 +1,3 @@
-
 import dotenv from 'dotenv';
 dotenv.config({ path: require('path').resolve(__dirname, '../.env') }); // Ensure .env at project root is loaded
 
@@ -184,8 +183,8 @@ async function main() {
 
   console.log('Seeding IP Addresses (with new optional fields)...');
   for (const ipData of seedIPsData) { 
-    // Encrypt phone number if present in seedIPsData
-    const encryptedPhone = ipData.phone ? encrypt(ipData.phone) : null;
+    // 不再加密电话号码
+    const phone = ipData.phone || null;
 
     await prisma.iPAddress.upsert({
       where: { id: ipData.id },
@@ -196,7 +195,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: encryptedPhone, // Use encrypted phone
+        phone: phone, // 使用未加密的电话号码
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -215,7 +214,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: encryptedPhone, // Use encrypted phone
+        phone: phone, // 使用未加密的电话号码
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,

@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -21,7 +20,6 @@ import { createOperatorDictionaryAction, updateOperatorDictionaryAction, type Ac
 const formSchema = z.object({
   operatorName: z.string().min(1, "运营商名称不能为空。").max(100, "运营商名称过长。"),
   operatorDevice: z.string().max(100, "运营商设备名称过长。").optional(),
-  accessType: z.string().max(50, "接入方式名称过长。").optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -43,7 +41,6 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
     defaultValues: {
       operatorName: "",
       operatorDevice: "",
-      accessType: "",
     },
   });
 
@@ -52,7 +49,6 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
       form.reset({
         operatorName: dictionaryEntry?.operatorName || "",
         operatorDevice: dictionaryEntry?.operatorDevice || "",
-        accessType: dictionaryEntry?.accessType || "",
       });
       form.clearErrors();
     }
@@ -65,7 +61,6 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
       const payload = {
         operatorName: data.operatorName,
         operatorDevice: data.operatorDevice || undefined,
-        accessType: data.accessType || undefined,
       };
 
       if (isEditing && dictionaryEntry) {
@@ -145,19 +140,6 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
                   <FormLabel>运营商设备 (可选)</FormLabel>
                   <FormControl>
                     <Input placeholder="例如 OLT-ZX-C300" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="accessType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>接入方式 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 独享, 共享" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

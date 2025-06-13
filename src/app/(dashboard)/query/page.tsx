@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -240,7 +239,7 @@ function QueryPageContent() {
       { label: "使用单位:", value: ip.usageUnit || "N/A" },
       { label: "联系人:", value: ip.contactPerson || "N/A" },
       { label: "电话:", value: ip.phone || "N/A" },
-      { label: "描述:", value: ip.description || "无描述", fullWidth: true },
+      { label: "描述:", value: ip.description || "无", fullWidth: true },
       { label: "运营商:", value: ip.selectedOperatorName || "N/A" },
       { label: "运营商设备:", value: ip.selectedOperatorDevice || "N/A" },
       { label: "接入方式:", value: ip.selectedAccessType || "N/A" },

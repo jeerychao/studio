@@ -1,6 +1,5 @@
-
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from '../types';
-import { PERMISSIONS, DeviceType } from '../types';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from '../types/index';
+import { PERMISSIONS, DeviceType } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 // Import the centralized encrypt function
 import { encrypt } from '../app/api/auth/[...nextauth]/route';
@@ -94,13 +93,13 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
 export const mockIPAddresses: IPAddress[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
-    isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: encrypt('123-001'), description: 'Default Gateway for Office Network',
+    isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
     selectedOperatorName: '中国电信', selectedOperatorDevice: 'OLT-ZX-C300', selectedAccessType: '独享',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/1', selectedPaymentSource: '自费'
  },
   {
     id: 'seed_ip_002', ipAddress: '192.168.1.10', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: encrypt('123-101'), description: 'John - Primary Workstation',
+    isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: '123-101', description: 'John - Primary Workstation',
     selectedOperatorName: '中国联通', selectedOperatorDevice: 'Router-HW-NE40', selectedAccessType: '共享',
     selectedLocalDeviceName: '接入交换机-B栋-F3', selectedDevicePort: 'GigabitEthernet0/24', selectedPaymentSource: '财政付费-项目A'
  },
@@ -121,13 +120,13 @@ export const mockIPAddresses: IPAddress[] = [
   },
  {
     id: 'seed_ip_006', ipAddress: '10.0.1.5', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: encrypt('123-201'), description: 'Main Web Server',
+    isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: '123-201', description: 'Main Web Server',
     selectedOperatorName: '教育网', selectedOperatorDevice: 'Router-Ruijie-RSR77', selectedAccessType: '独享',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/2', selectedPaymentSource: '自费'
  },
   {
     id: 'seed_ip_007', ipAddress: '10.0.1.6', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
-    isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: encrypt('123-202'), description: 'Primary Database Server',
+    isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: '123-202', description: 'Primary Database Server',
     selectedOperatorName: '广电网络', selectedOperatorDevice: 'CableModem-ARRIS-CM8200', selectedAccessType: '共享',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/3', selectedPaymentSource: '财政付费-项目A'
  },
@@ -200,11 +199,11 @@ export let mockAuditLogs: AuditLog[] = [
 ];
 
 export const mockOperatorDictionaries: Omit<OperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300', accessType: '独享' },
-  { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40', accessType: '共享' },
-  { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500', accessType: '独享' },
-  { operatorName: '广电网络', operatorDevice: 'CableModem-ARRIS-CM8200', accessType: '共享' },
-  { operatorName: '教育网', operatorDevice: 'Router-Ruijie-RSR77', accessType: '独享' },
+  { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300' },
+  { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40' },
+  { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500' },
+  { operatorName: '广电网络', operatorDevice: 'CableModem-ARRIS-CM8200' },
+  { operatorName: '教育网', operatorDevice: 'Router-Ruijie-RSR77' },
 ];
 
 export const mockLocalDeviceDictionaries: Omit<LocalDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [

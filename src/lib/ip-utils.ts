@@ -238,4 +238,3 @@ export function groupConsecutiveIpsToRanges(ipNumbers: number[]): string[] {
 
 // Removed getPrefixFromRequiredHosts and generateSubnetsFromParent functions
 
-    

@@ -1,4 +1,3 @@
-
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -113,9 +112,8 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
     if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, undefined, 'roleId');
     
     const encryptedPassword = encrypt(data.password);
-    const encryptedPhone = data.phone ? encrypt(data.phone) : null;
 
-    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: encryptedPhone, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
+    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` } });
     revalidatePath("/users");
     const fetchedUser: FetchedUserDetails = { id: newUser.id, username: newUser.username, email: newUser.email, roleId: newUser.roleId, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: newUser.lastLogin?.toISOString() || undefined };
@@ -494,7 +492,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式: ${data.ipAddress}`, 'ipAddress', data.ipAddress);
-    if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId');
+    if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) throw new ValidationError("对于'已分配'或'预留'状态的 IP，必须选择一个子网。", 'subnetId');
     if (data.subnetId) {
       const targetSubnet = await prisma.subnet.findUnique({ where: { id: data.subnetId } }); if (!targetSubnet) throw new NotFoundError(`子网 ID: ${data.subnetId}`, undefined, 'subnetId');
       const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK');
@@ -506,7 +504,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
       allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null, 
       contactPerson: data.contactPerson || null, 
-      phone: data.phone ? encrypt(data.phone) : null, // Encrypt phone if provided
+      phone: data.phone ? data.phone || null : null,
       description: data.description || null, 
       lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(), // Default to now if not provided
       selectedOperatorName: data.selectedOperatorName || null, 
@@ -526,7 +524,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
     const vlanInfoLog = data.directVlanId ? ` 使用 VLAN ${(await prisma.vLAN.findUnique({where: {id:data.directVlanId}}))?.vlanNumber}`: '';
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_ip_address', details: `创建了 IP ${newIP.ipAddress}${subnetInfo}${vlanInfoLog}，状态为 ${data.status}。` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
-    const appIp: AppIPAddress = { ...newIP, isGateway: newIP.isGateway ?? false, subnetId: newIP.subnetId || undefined, directVlanId: newIP.directVlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, usageUnit: newIP.usageUnit || undefined, contactPerson: newIP.contactPerson || undefined, phone: newIP.phone ? decrypt(newIP.phone) : undefined, description: newIP.description || undefined, lastSeen: newIP.lastSeen?.toISOString(), status: newIP.status as AppIPAddressStatusType, selectedOperatorName: newIP.selectedOperatorName || undefined, selectedOperatorDevice: newIP.selectedOperatorDevice || undefined, selectedAccessType: newIP.selectedAccessType || undefined, selectedLocalDeviceName: newIP.selectedLocalDeviceName || undefined, selectedDevicePort: newIP.selectedDevicePort || undefined, selectedPaymentSource: newIP.selectedPaymentSource || undefined };
+    const appIp: AppIPAddress = { ...newIP, isGateway: newIP.isGateway ?? false, subnetId: newIP.subnetId || undefined, directVlanId: newIP.directVlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, usageUnit: newIP.usageUnit || undefined, contactPerson: newIP.contactPerson || undefined, phone: newIP.phone || undefined, description: newIP.description || undefined, lastSeen: newIP.lastSeen?.toISOString(), status: newIP.status as AppIPAddressStatusType, selectedOperatorName: newIP.selectedOperatorName || undefined, selectedOperatorDevice: newIP.selectedOperatorDevice || undefined, selectedAccessType: newIP.selectedAccessType || undefined, selectedLocalDeviceName: newIP.selectedLocalDeviceName || undefined, selectedDevicePort: newIP.selectedDevicePort || undefined, selectedPaymentSource: newIP.selectedPaymentSource || undefined };
     return { success: true, data: appIp };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -548,7 +546,7 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
         const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr, status: status, isGateway: isGateway ?? false, allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
             usageUnit: usageUnit||null, contactPerson: contactPerson||null, 
-            phone: phone ? encrypt(phone) : null, 
+            phone: phone ? phone : null, 
             description: description || null,
             lastSeen: new Date(),
             selectedOperatorName: selectedOperatorName || null, selectedOperatorDevice: selectedOperatorDevice || null, selectedAccessType: selectedAccessType || null,
@@ -579,7 +577,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = (data.allocatedTo === undefined || data.allocatedTo === "") ? null : data.allocatedTo;
     if (data.hasOwnProperty('usageUnit')) updateData.usageUnit = (data.usageUnit === undefined || data.usageUnit === "") ? null : data.usageUnit;
     if (data.hasOwnProperty('contactPerson')) updateData.contactPerson = (data.contactPerson === undefined || data.contactPerson === "") ? null : data.contactPerson;
-    if (data.hasOwnProperty('phone')) updateData.phone = (data.phone === undefined || data.phone === "" || data.phone === null) ? null : encrypt(data.phone);
+    if (data.hasOwnProperty('phone')) updateData.phone = (data.phone === undefined || data.phone === "" || data.phone === null) ? null : data.phone;
     if (data.hasOwnProperty('description')) updateData.description = (data.description === undefined || data.description === "") ? null : data.description;
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, undefined, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('selectedOperatorName')) updateData.selectedOperatorName = data.selectedOperatorName || null;
@@ -599,7 +597,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
         if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.networkAddress} 中。`, 'IP_EXISTS_IN_SUBNET', undefined, 'ipAddress'); }
         updateData.subnet = { connect: { id: newSubnetId } };
       } else {
-        if (finalStatus === 'allocated' || finalStatus === 'reserved') throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus);
+        if (finalStatus === 'allocated' || finalStatus === 'reserved') throw new ValidationError("对于'已分配'或'预留'状态的 IP，必须选择一个子网。", 'subnetId', finalStatus);
         if (finalIpAddress !== ipToUpdate.ipAddress || ipToUpdate.subnetId !== null) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', undefined, 'ipAddress'); }
         updateData.subnet = { disconnect: true };
       }
@@ -612,7 +610,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_ip_address', details: `更新了 IP ${updatedIP.ipAddress}` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
-    const appIp: AppIPAddress = { ...updatedIP, isGateway: updatedIP.isGateway ?? false, subnetId: updatedIP.subnetId || undefined, directVlanId: updatedIP.directVlanId || undefined, allocatedTo: updatedIP.allocatedTo || undefined, usageUnit: updatedIP.usageUnit || undefined, contactPerson: updatedIP.contactPerson || undefined, phone: updatedIP.phone ? decrypt(updatedIP.phone) : undefined, description: updatedIP.description || undefined, lastSeen: updatedIP.lastSeen?.toISOString(), status: updatedIP.status as AppIPAddressStatusType, selectedOperatorName: updatedIP.selectedOperatorName || undefined, selectedOperatorDevice: updatedIP.selectedOperatorDevice || undefined, selectedAccessType: updatedIP.selectedAccessType || undefined, selectedLocalDeviceName: updatedIP.selectedLocalDeviceName || undefined, selectedDevicePort: updatedIP.selectedDevicePort || undefined, selectedPaymentSource: updatedIP.selectedPaymentSource || undefined };
+    const appIp: AppIPAddress = { ...updatedIP, isGateway: updatedIP.isGateway ?? false, subnetId: updatedIP.subnetId || undefined, directVlanId: updatedIP.directVlanId || undefined, allocatedTo: updatedIP.allocatedTo || undefined, usageUnit: updatedIP.usageUnit || undefined, contactPerson: updatedIP.contactPerson || undefined, phone: updatedIP.phone || undefined, description: updatedIP.description || undefined, lastSeen: updatedIP.lastSeen?.toISOString(), status: updatedIP.status as AppIPAddressStatusType, selectedOperatorName: updatedIP.selectedOperatorName || undefined, selectedOperatorDevice: updatedIP.selectedOperatorDevice || undefined, selectedAccessType: updatedIP.selectedAccessType || undefined, selectedLocalDeviceName: updatedIP.selectedLocalDeviceName || undefined, selectedDevicePort: updatedIP.selectedDevicePort || undefined, selectedPaymentSource: updatedIP.selectedPaymentSource || undefined };
     return { success: true, data: appIp };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -707,7 +705,7 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const totalCount = await prisma.iPAddress.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const includeClauseForQuery = { subnet: { include: { vlan: { select: { vlanNumber: true, name: true } } } }, directVlan: { select: {vlanNumber: true, name: true} } };
     const ipsFromDb = await prisma.iPAddress.findMany({ where: whereClause, include: includeClauseForQuery, orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], skip, take: pageSize }) as PrismaIPAddressWithRelations[];
-    const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false, allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone ? decrypt(ip.phone) : undefined, description: ip.description || undefined, lastSeen: ip.lastSeen?.toISOString() || undefined, subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined, subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null, directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null, selectedOperatorName: ip.selectedOperatorName || undefined, selectedOperatorDevice: ip.selectedOperatorDevice || undefined, selectedAccessType: ip.selectedAccessType || undefined, selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined }));
+    const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false, allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined, description: ip.description || undefined, lastSeen: ip.lastSeen?.toISOString() || undefined, subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined, subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null, directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null, selectedOperatorName: ip.selectedOperatorName || undefined, selectedOperatorDevice: ip.selectedOperatorDevice || undefined, selectedAccessType: ip.selectedAccessType || undefined, selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined }));
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -743,38 +741,33 @@ export async function getOperatorDictionariesAction(params?: FetchParams): Promi
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function createOperatorDictionaryAction(data: Omit<AppOperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppOperatorDictionary>> {
-  const actionName = 'createOperatorDictionaryAction';
+export async function createOperatorDictionaryAction(data: { operatorName: string; operatorDevice?: string }): Promise<ActionResponse<AppOperatorDictionary>> {
   try {
-    const auditUser = await getAuditUserInfo(performingUserId);
-    if (!data.operatorName || data.operatorName.trim() === "") throw new ValidationError("运营商名称是必需的。", "operatorName");
-    if (await prisma.operatorDictionary.findUnique({ where: { operatorName: data.operatorName } })) throw new ResourceError(`运营商名称 "${data.operatorName}" 已存在。`, 'OPERATOR_DICT_NAME_EXISTS', undefined, 'operatorName');
-    const newItem = await prisma.operatorDictionary.create({ data: { operatorName: data.operatorName, operatorDevice: data.operatorDevice || null, accessType: data.accessType || null } });
-    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_operator_dictionary', details: `创建了运营商字典条目: ${newItem.operatorName}` } });
-    revalidatePath("/dictionaries/operator");
-    revalidatePath("/ip-addresses");
-    const appItem: AppOperatorDictionary = {...newItem, operatorDevice: newItem.operatorDevice || undefined, accessType: newItem.accessType || undefined, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString()};
-    return { success: true, data: appItem };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+    const result = await prisma.operatorDictionary.create({
+      data: {
+        operatorName: data.operatorName,
+        operatorDevice: data.operatorDevice,
+      },
+    });
+    return { success: true, data: result };
+  } catch (error) {
+    return handlePrismaError(error, { operatorName: "运营商名称" });
+  }
 }
 
-export async function updateOperatorDictionaryAction(id: string, data: Partial<Omit<AppOperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppOperatorDictionary>> {
-  const actionName = 'updateOperatorDictionaryAction';
+export async function updateOperatorDictionaryAction(id: string, data: { operatorName: string; operatorDevice?: string }): Promise<ActionResponse<AppOperatorDictionary>> {
   try {
-    const auditUser = await getAuditUserInfo(performingUserId);
-    const itemToUpdate = await prisma.operatorDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`运营商字典 ID: ${id}`);
-    const updatePayload: Prisma.OperatorDictionaryUpdateInput = {};
-    if (data.operatorName && data.operatorName !== itemToUpdate.operatorName) { if (await prisma.operatorDictionary.findFirst({ where: { operatorName: data.operatorName, NOT: { id } } })) throw new ResourceError(`运营商名称 "${data.operatorName}" 已存在。`, 'OPERATOR_DICT_NAME_EXISTS', undefined, 'operatorName'); updatePayload.operatorName = data.operatorName; }
-    if (data.hasOwnProperty('operatorDevice')) updatePayload.operatorDevice = data.operatorDevice || null;
-    if (data.hasOwnProperty('accessType')) updatePayload.accessType = data.accessType || null;
-    if (Object.keys(updatePayload).length === 0) { const currentItem: AppOperatorDictionary = {...itemToUpdate, operatorDevice: itemToUpdate.operatorDevice || undefined, accessType: itemToUpdate.accessType || undefined, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
-    const updatedItem = await prisma.operatorDictionary.update({ where: { id }, data: updatePayload });
-    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_operator_dictionary', details: `更新了运营商字典条目: ${updatedItem.operatorName}` } });
-    revalidatePath("/dictionaries/operator");
-    revalidatePath("/ip-addresses");
-    const appItem: AppOperatorDictionary = {...updatedItem, operatorDevice: updatedItem.operatorDevice || undefined, accessType: updatedItem.accessType || undefined, createdAt: updatedItem.createdAt.toISOString(), updatedAt: updatedItem.updatedAt.toISOString()};
-    return { success: true, data: appItem };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+    const result = await prisma.operatorDictionary.update({
+      where: { id },
+      data: {
+        operatorName: data.operatorName,
+        operatorDevice: data.operatorDevice,
+      },
+    });
+    return { success: true, data: result };
+  } catch (error) {
+    return handlePrismaError(error, { operatorName: "运营商名称" });
+  }
 }
 
 export async function deleteOperatorDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
