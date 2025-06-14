@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
+import { Menu, UserCircle, Network, KeyRound, ChevronDown, Github } from "lucide-react"; // Added Github
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -36,8 +36,8 @@ export function Header() {
       {isMobile ? (
          <Sheet>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="shrink-0 md:hidden h-8 w-8"> {/* Adjusted size for mobile consistency */}
-              <Menu className="h-4 w-4" /> {/* Adjusted icon size */}
+            <Button variant="outline" size="icon" className="shrink-0 md:hidden h-8 w-8">
+              <Menu className="h-4 w-4" />
               <span className="sr-only">切换导航菜单</span>
             </Button>
           </SheetTrigger>
@@ -56,13 +56,22 @@ export function Header() {
           </SheetContent>
         </Sheet>
       ) : (
-        <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={toggleSidebar}> {/* Adjusted size */}
-            <Menu className="h-4 w-4" /> {/* Adjusted icon size */}
+        <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={toggleSidebar}>
+            <Menu className="h-4 w-4" />
             <span className="sr-only">切换侧边栏</span>
         </Button>
       )}
 
       <div className="flex w-full items-center gap-3 md:ml-auto md:gap-3 lg:gap-3 justify-end">
+        <Link href="https://github.com/jeerychao" target="_blank" rel="noopener noreferrer" aria-label="GitHub Profile">
+          <Button
+            variant="ghost"
+            size="icon" // Use "icon" for consistent square shape if desired, or adjust padding
+            className="rounded-full h-10 w-10 flex items-center justify-center hover:bg-transparent hover:text-current"
+          >
+            <Github className="h-5 w-5" />
+          </Button>
+        </Link>
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
