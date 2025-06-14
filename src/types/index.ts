@@ -273,7 +273,8 @@ export interface DashboardData {
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
   ipUsageByOperator: TopNItemCount[];
-  vlanResourceCounts: VLANResourceInfo[];
-  busiestVlans: VLANResourceInfo[];
+  busiestVlans: VLANResourceInfo[]; // Changed from vlanResourceCounts
   subnetsNeedingAttention: SubnetUtilizationInfo[];
+  recentAuditLogs?: AppAuditLog[]; // Added for recent activity logs
 }
+

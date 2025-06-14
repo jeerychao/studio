@@ -10,8 +10,8 @@ import type {
   OperatorDictionary as AppOperatorDictionary,
   LocalDeviceDictionary as AppLocalDeviceDictionary,
   PaymentSourceDictionary as AppPaymentSourceDictionary,
-  AccessTypeDictionary as AppAccessTypeDictionary, // Added
-  NetworkInterfaceTypeDictionary as AppNetworkInterfaceTypeDictionary, // Added
+  AccessTypeDictionary as AppAccessTypeDictionary, 
+  NetworkInterfaceTypeDictionary as AppNetworkInterfaceTypeDictionary, 
   DashboardData, 
   IPStatusCounts, 
   TopNItemCount,  
@@ -51,8 +51,7 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
 
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_QUERY_PAGE_SIZE = 10;
-// const DASHBOARD_TOP_N_COUNT = 5; // Moved to constants.ts
-// const DASHBOARD_AUDIT_LOG_COUNT = 5; // Moved to constants.ts
+
 
 interface FetchParams { page?: number; pageSize?: number; subnetId?: string; status?: AppIPAddressStatusType | 'all'; }
 export interface FetchedUserDetails { id: string; username: string; email: string; roleId: string; roleName: AppRoleNameType; avatar?: string; permissions: AppPermissionIdType[]; lastLogin?: string | undefined; }
@@ -594,7 +593,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, undefined, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('selectedOperatorName')) updateData.selectedOperatorName = data.selectedOperatorName || null;
     if (data.hasOwnProperty('selectedOperatorDevice')) updateData.selectedOperatorDevice = data.selectedOperatorDevice || null;
-    if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null; // Keep direct update from form
+    if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null; 
     if (data.hasOwnProperty('selectedLocalDeviceName')) updateData.selectedLocalDeviceName = data.selectedLocalDeviceName || null;
     if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null;
     if (data.hasOwnProperty('selectedPaymentSource')) updateData.selectedPaymentSource = data.selectedPaymentSource || null;
@@ -1133,7 +1132,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     const totalVlanCount = await prisma.vLAN.count();
     const totalSubnetCount = await prisma.subnet.count();
 
-    // IP Usage by Unit
     const usageUnitGroups = await prisma.iPAddress.groupBy({
       by: ['usageUnit'],
       _count: { usageUnit: true }, 
@@ -1143,37 +1141,20 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
       .map((g, index) => ({ item: g.usageUnit!, count: g._count.usageUnit, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
       .slice(0, DASHBOARD_TOP_N_COUNT);
-
-    const otherUsageUnitCount = usageUnitGroups
-      .slice(DASHBOARD_TOP_N_COUNT)
-      .reduce((sum, g) => sum + g._count.usageUnit, 0);
-    if (otherUsageUnitCount > 0) {
-      ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length] });
-    }
+    const otherUsageUnitCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count.usageUnit, 0);
+    if (otherUsageUnitCount > 0) ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length] });
     const unspecifiedUsageUnitCount = await prisma.iPAddress.count({ where: { OR: [{ usageUnit: null }, { usageUnit: "" }] } });
     if (unspecifiedUsageUnitCount > 0) {
         const unspecifiedExists = ipUsageByUnit.find(item => item.item === "未指定");
-        if (!unspecifiedExists && ipUsageByUnit.length < DASHBOARD_TOP_N_COUNT + (otherUsageUnitCount > 0 ? 1: 0) ) { 
-             ipUsageByUnit.push({ item: "未指定", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
-        } else if (!unspecifiedExists && ipUsageByUnit.length >= DASHBOARD_TOP_N_COUNT + (otherUsageUnitCount > 0 ? 1: 0)) {
-            // If "未指定" didn't make it to Top N and we already have an "其他", add its count to "其他" or create "其他"
+        if (!unspecifiedExists && ipUsageByUnit.length < DASHBOARD_TOP_N_COUNT + (otherUsageUnitCount > 0 ? 1: 0) ) ipUsageByUnit.push({ item: "未指定", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
+        else if (!unspecifiedExists && ipUsageByUnit.length >= DASHBOARD_TOP_N_COUNT + (otherUsageUnitCount > 0 ? 1: 0)) {
             const otherIndex = ipUsageByUnit.findIndex(item => item.item === "其他");
-            if (otherIndex !== -1) {
-                ipUsageByUnit[otherIndex].count += unspecifiedUsageUnitCount;
-            } else {
-                ipUsageByUnit.push({ item: "其他", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
-            }
+            if (otherIndex !== -1) ipUsageByUnit[otherIndex].count += unspecifiedUsageUnitCount;
+            else ipUsageByUnit.push({ item: "其他", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
         }
     }
-    // Ensure ipUsageByUnit is sorted by count descending, "其他" and "未指定" might break order
-    ipUsageByUnit.sort((a, b) => {
-      if (a.item === "其他" || a.item === "未指定") return 1; // Push to end
-      if (b.item === "其他" || b.item === "未指定") return -1; // Push to end
-      return b.count - a.count;
-    });
+    ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
 
-
-    // IP Usage by Operator
     const operatorGroups = await prisma.iPAddress.groupBy({
       by: ['selectedOperatorName'],
       _count: { selectedOperatorName: true },
@@ -1183,68 +1164,41 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
      let ipUsageByOperator: TopNItemCount[] = operatorGroups
       .map((g, index) => ({ item: g.selectedOperatorName!, count: g._count.selectedOperatorName, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
       .slice(0, DASHBOARD_TOP_N_COUNT);
-    const otherOperatorCount = operatorGroups
-      .slice(DASHBOARD_TOP_N_COUNT)
-      .reduce((sum, g) => sum + g._count.selectedOperatorName, 0);
-    if (otherOperatorCount > 0) {
-      ipUsageByOperator.push({ item: "其他", count: otherOperatorCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length] });
-    }
+    const otherOperatorCount = operatorGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count.selectedOperatorName, 0);
+    if (otherOperatorCount > 0) ipUsageByOperator.push({ item: "其他", count: otherOperatorCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length] });
     const unspecifiedOperatorCount = await prisma.iPAddress.count({ where: { OR: [{ selectedOperatorName: null }, { selectedOperatorName: "" }] } });
     if (unspecifiedOperatorCount > 0) {
         const unspecifiedOpExists = ipUsageByOperator.find(item => item.item === "未指定");
-        if (!unspecifiedOpExists && ipUsageByOperator.length < DASHBOARD_TOP_N_COUNT + (otherOperatorCount > 0 ? 1:0) ) {
-            ipUsageByOperator.push({ item: "未指定", count: unspecifiedOperatorCount, fill: CHART_COLORS_REMAINDER[(ipUsageByOperator.length) % CHART_COLORS_REMAINDER.length]});
-        } else if (!unspecifiedOpExists && ipUsageByOperator.length >= DASHBOARD_TOP_N_COUNT + (otherOperatorCount > 0 ? 1:0)) {
+        if (!unspecifiedOpExists && ipUsageByOperator.length < DASHBOARD_TOP_N_COUNT + (otherOperatorCount > 0 ? 1:0) ) ipUsageByOperator.push({ item: "未指定", count: unspecifiedOperatorCount, fill: CHART_COLORS_REMAINDER[(ipUsageByOperator.length) % CHART_COLORS_REMAINDER.length]});
+        else if (!unspecifiedOpExists && ipUsageByOperator.length >= DASHBOARD_TOP_N_COUNT + (otherOperatorCount > 0 ? 1:0)) {
             const otherOpIndex = ipUsageByOperator.findIndex(item => item.item === "其他");
-            if (otherOpIndex !== -1) {
-                ipUsageByOperator[otherOpIndex].count += unspecifiedOperatorCount;
-            } else {
-                ipUsageByOperator.push({ item: "其他", count: unspecifiedOperatorCount, fill: CHART_COLORS_REMAINDER[(ipUsageByOperator.length) % CHART_COLORS_REMAINDER.length]});
-            }
+            if (otherOpIndex !== -1) ipUsageByOperator[otherOpIndex].count += unspecifiedOperatorCount;
+            else ipUsageByOperator.push({ item: "其他", count: unspecifiedOperatorCount, fill: CHART_COLORS_REMAINDER[(ipUsageByOperator.length) % CHART_COLORS_REMAINDER.length]});
         }
     }
-    ipUsageByOperator.sort((a, b) => {
-      if (a.item === "其他" || a.item === "未指定") return 1;
-      if (b.item === "其他" || b.item === "未指定") return -1;
-      return b.count - a.count;
-    });
+    ipUsageByOperator.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
 
-    const allVlansFromDb = await prisma.vLAN.findMany({
-      include: { _count: { select: { subnets: true, ipAddresses: true } } },
-      orderBy: { vlanNumber: 'asc' }
-    });
-    const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({
-      id: vlan.id, vlanNumber: vlan.vlanNumber, name: vlan.name || undefined,
-      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.ipAddresses || 0),
-    }));
-    const busiestVlans = [...vlanResourceCounts]
-      .sort((a, b) => b.resourceCount - a.resourceCount)
-      .slice(0, DASHBOARD_TOP_N_COUNT);
+    const allVlansFromDb = await prisma.vLAN.findMany({ include: { _count: { select: { subnets: true, ipAddresses: true } } }, orderBy: { vlanNumber: 'asc' } });
+    const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({ id: vlan.id, vlanNumber: vlan.vlanNumber, name: vlan.name || undefined, resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.ipAddresses || 0), }));
+    const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
-    // Subnets Needing Attention
     const allSubnets = await prisma.subnet.findMany();
-    const subnetsWithUtilization: SubnetUtilizationInfo[] = await Promise.all(
-        allSubnets.map(async (subnet) => {
-            const utilization = await calculateSubnetUtilization(subnet.id);
-            return { id: subnet.id, cidr: subnet.cidr, name: subnet.name || undefined, utilization };
-        })
-    );
-    const subnetsNeedingAttention = subnetsWithUtilization
-        .filter(s => s.utilization > 80)
-        .sort((a, b) => b.utilization - a.utilization)
-        .slice(0, DASHBOARD_TOP_N_COUNT);
+    const subnetsWithUtilization: SubnetUtilizationInfo[] = await Promise.all( allSubnets.map(async (subnet) => ({ id: subnet.id, cidr: subnet.cidr, name: subnet.name || undefined, utilization: await calculateSubnetUtilization(subnet.id) })) );
+    const subnetsNeedingAttention = subnetsWithUtilization.filter(s => s.utilization > 80).sort((a, b) => b.utilization - a.utilization).slice(0, DASHBOARD_TOP_N_COUNT);
 
+    const recentAuditLogs = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: DASHBOARD_AUDIT_LOG_COUNT });
+    const appAuditLogs: AppAuditLog[] = recentAuditLogs.map(log => ({ id: log.id, userId: log.userId || undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
 
     const dashboardData: DashboardData = {
       totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
-      ipUsageByUnit, ipUsageByOperator, vlanResourceCounts, busiestVlans,
-      subnetsNeedingAttention,
+      ipUsageByUnit, ipUsageByOperator, busiestVlans,
+      subnetsNeedingAttention, recentAuditLogs: appAuditLogs,
     };
     revalidatePath("/dashboard"); 
     return { success: true, data: dashboardData };
-
   } catch (error: unknown) {
     logger.error(actionName, error as Error, { context: actionName });
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+

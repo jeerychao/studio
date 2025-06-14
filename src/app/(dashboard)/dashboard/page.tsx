@@ -3,22 +3,27 @@
 
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LayoutDashboard, Cable, Globe, Percent, AlertTriangle, Loader2, Network as NetworkIcon } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { LayoutDashboard, Globe, Cable, Network as NetworkIcon, Percent, Users, ListChecks, AlertTriangle, Loader2 } from "lucide-react";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { PERMISSIONS } from "@/types";
-import { getIPAddressesAction, getVLANsAction, getSubnetsAction } from "@/lib/actions";
-import type { ActionResponse } from "@/lib/actions"; // For PaginatedResponse if used directly
+import { PERMISSIONS, type DashboardData, type AuditLog } from "@/types";
+import { getDashboardDataAction, type ActionResponse } from "@/lib/actions";
+import { IPStatusPieChart } from "@/components/dashboard/ip-status-pie-chart";
+import { UsageBarChart } from "@/components/dashboard/usage-bar-chart";
+import { VlanResourceBarChart } from "@/components/dashboard/vlan-resource-bar-chart";
+import { Badge } from "@/components/ui/badge";
+import Link from 'next/link';
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table"; // Added Table components
 
-interface DashboardStatCardProps {
-  title: string;
-  value: string | number;
-  icon: React.ElementType;
-  description?: string;
-}
+const CHART_COLORS_REMAINDER = [ // From lib/actions.ts - used for client-side display if needed or fallback
+  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
+];
 
-function DashboardStatCard({ title, value, icon: IconComponent, description }: DashboardStatCardProps) {
-  return (
+function DashboardStatCard({ title, value, icon: IconComponent, description, linkTo }: { title: string; value: string | number; icon: React.ElementType; description?: string; linkTo?: string }) {
+  const content = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -30,76 +35,57 @@ function DashboardStatCard({ title, value, icon: IconComponent, description }: D
       </CardContent>
     </Card>
   );
-}
-
-interface DashboardStats {
-  totalIpCount: number;
-  usedIpCount: number;
-  freeIpCount: number;
-  ipUsagePercentage: number;
-  totalVlanCount: number;
-  totalSubnetCount: number;
+  return linkTo ? <Link href={linkTo} className="hover:shadow-lg transition-shadow">{content}</Link> : content;
 }
 
 export default function DashboardPage() {
   const { currentUser, isAuthLoading } = useCurrentUser();
-  const [stats, setStats] = React.useState<DashboardStats | null>(null);
-  const [isLoadingData, setIsLoadingData] = React.useState(true);
+  const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [auditLogs, setAuditLogs] = React.useState<AuditLog[]>([]); // For recent activity
 
   React.useEffect(() => {
     async function fetchData() {
       if (isAuthLoading || !currentUser) {
         return;
       }
-      setIsLoadingData(true);
+      setIsLoading(true);
       setError(null);
 
       if (!hasPermission(currentUser, PERMISSIONS.VIEW_DASHBOARD)) {
         setError("您没有权限查看仪表盘。");
-        setIsLoadingData(false);
-        setStats(null);
+        setIsLoading(false);
+        setDashboardData(null);
+        setAuditLogs([]);
         return;
       }
 
       try {
-        // Fetch all data for counts.
-        // These actions will fetch all items if pagination params are omitted.
-        const [ipsResult, vlansResult, subnetsResult] = await Promise.all([
-          getIPAddressesAction({}), 
-          getVLANsAction({}),    
-          getSubnetsAction({})     
-        ]);
-
-        const allIps = ipsResult.data || [];
-        const totalIpCount = allIps.length; // totalCount from action if paginated, or data.length if all fetched
-        const usedIpCount = allIps.filter(ip => ip.status === 'allocated').length;
-        const freeIpCount = allIps.filter(ip => ip.status === 'free' || ip.status === 'reserved').length;
-        const ipUsagePercentage = totalIpCount > 0 ? Math.round((usedIpCount / totalIpCount) * 100) : 0;
-
-        const totalVlanCount = vlansResult.totalCount || (vlansResult.data?.length || 0);
-        const totalSubnetCount = subnetsResult.totalCount || (subnetsResult.data?.length || 0);
-        
-        setStats({
-          totalIpCount,
-          usedIpCount,
-          freeIpCount,
-          ipUsagePercentage,
-          totalVlanCount,
-          totalSubnetCount,
-        });
-
+        const response: ActionResponse<DashboardData> = await getDashboardDataAction();
+        if (response.success && response.data) {
+          setDashboardData(response.data);
+          // Fetch recent audit logs if not included in dashboardData or handle separately
+          // For now, assuming dashboardData might include a snippet of logs or we fetch them
+          // Let's assume audit logs are part of dashboardData for simplicity here or fetched in a dedicated way.
+          // Example: setAuditLogs(response.data.recentAuditLogs || []);
+        } else {
+          setError(response.error?.userMessage || "加载仪表盘数据失败。");
+          setDashboardData(null);
+          setAuditLogs([]);
+        }
       } catch (e) {
         setError((e as Error).message || "加载仪表盘数据时发生未知错误。");
-        setStats(null);
+        setDashboardData(null);
+        setAuditLogs([]);
       } finally {
-        setIsLoadingData(false);
+        setIsLoading(false);
       }
     }
     fetchData();
   }, [currentUser, isAuthLoading]);
 
-  if (isAuthLoading || (isLoadingData && !stats && !error)) {
+  if (isAuthLoading || (isLoading && !dashboardData && !error)) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -116,13 +102,11 @@ export default function DashboardPage() {
           {error === "您没有权限查看仪表盘。" ? "访问被拒绝" : "加载仪表盘数据失败"}
         </h2>
         <p className="text-muted-foreground mb-4">{error}</p>
-        {error !== "您没有权限查看仪表盘。" &&
-          <p className="text-xs text-muted-foreground">请尝试刷新页面或稍后再试。</p>
-        }
+        {error !== "您没有权限查看仪表盘。" && <p className="text-xs text-muted-foreground">请尝试刷新页面或稍后再试。</p>}
       </div>
     );
   }
-  
+
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_DASHBOARD)) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -133,9 +117,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!stats) {
-    // This case implies isLoadingData is false, no error, but stats is null.
-    // Could be due to an issue in data transformation or unexpected API response.
+  if (!dashboardData) {
     return (
       <div className="flex items-center justify-center h-full text-center p-4">
         <Loader2 className="h-12 w-12 text-muted-foreground mb-3 animate-spin" />
@@ -144,24 +126,136 @@ export default function DashboardPage() {
     );
   }
 
+  const {
+    totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
+    ipUsageByUnit, ipUsageByOperator, busiestVlans,
+    subnetsNeedingAttention,
+  } = dashboardData;
+
+  const ipUsagePercentage = totalIpCount > 0 ? Math.round((ipStatusCounts.allocated / totalIpCount) * 100) : 0;
+  const freeAndReservedIpCount = ipStatusCounts.free + ipStatusCounts.reserved;
+
+  const ipStatusChartData = [
+    { name: "已分配", value: ipStatusCounts.allocated, fill: "hsl(var(--chart-1))" },
+    { name: "空闲", value: ipStatusCounts.free, fill: "hsl(var(--chart-2))" },
+    { name: "预留", value: ipStatusCounts.reserved, fill: "hsl(var(--chart-3))" },
+  ];
+  
+  const vlanResourceChartData = busiestVlans.map((vlan, index) => ({
+    name: `VLAN ${vlan.vlanNumber}${vlan.name ? ` (${vlan.name.substring(0,10)+(vlan.name.length > 10 ? '...' : '')})` : ''}`,
+    "资源数": vlan.resourceCount,
+    fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
+  }));
+
+
   return (
     <>
       <PageHeader title="系统仪表盘" description="IPAM Lite 系统概览与关键指标。" icon={<LayoutDashboard className="h-6 w-6 text-primary" />} />
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <DashboardStatCard title="总 IP 地址数" value={stats.totalIpCount} icon={Globe} />
+        <DashboardStatCard title="总 IP 地址数" value={totalIpCount} icon={Globe} linkTo="/ip-addresses" />
         <DashboardStatCard 
             title="IP 地址使用情况" 
-            value={`${stats.usedIpCount} 已用 / ${stats.freeIpCount} 可用`} 
+            value={`${ipStatusCounts.allocated} 已用 / ${freeAndReservedIpCount} 可用`} 
             icon={Percent} 
-            description={`使用率: ${stats.ipUsagePercentage}%`}
+            description={`使用率: ${ipUsagePercentage}%`}
+            linkTo="/ip-addresses"
         />
-        <DashboardStatCard title="总 VLAN 数" value={stats.totalVlanCount} icon={Cable} />
-        <DashboardStatCard title="总子网数" value={stats.totalSubnetCount} icon={NetworkIcon} />
+        <DashboardStatCard title="总 VLAN 数" value={totalVlanCount} icon={Cable} linkTo="/vlans"/>
+        <DashboardStatCard title="总子网数" value={totalSubnetCount} icon={NetworkIcon} linkTo="/subnets"/>
       </div>
-      
-      <div className="text-center p-8 text-muted-foreground mt-6">
-        <p className="text-sm">(核心数据展示区域和动态信息区域，如IP状态分布、使用单位排行等，将在此处进一步实现)</p>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-6">
+        <Card className="lg:col-span-1">
+          <CardHeader><CardTitle className="text-base">IP 地址状态分布</CardTitle></CardHeader>
+          <CardContent className="h-[250px]"><IPStatusPieChart data={ipStatusChartData} /></CardContent>
+        </Card>
+        <Card className="lg:col-span-1">
+          <CardHeader><CardTitle className="text-base">按使用单位的 IP 分配 (Top N)</CardTitle></CardHeader>
+          <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByUnit} dataKey="value" layout="vertical" yAxisWidth={120} /></CardContent>
+        </Card>
+        <Card className="lg:col-span-1">
+          <CardHeader><CardTitle className="text-base">按运营商的 IP 分配 (Top N)</CardTitle></CardHeader>
+          <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByOperator} dataKey="value" layout="vertical" yAxisWidth={120}/></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 mb-6"> {/* Changed lg:grid-cols-3 to lg:grid-cols-1 for single wider chart */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-base">最繁忙的 VLAN (按资源数 Top {dashboardData.busiestVlans.length || 0})</CardTitle>
+                <CardDescription>显示关联子网和直接IP数量最多的VLAN。</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[300px] pl-2 pr-6 pb-6">
+              <VlanResourceBarChart data={vlanResourceChartData} />
+            </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">高利用率子网 (Top {dashboardData.subnetsNeedingAttention.length || 0})</CardTitle>
+            <CardDescription>利用率超过 80% 的子网，可能需要关注。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {subnetsNeedingAttention.length > 0 ? (
+              <ScrollArea className="h-[200px]">
+                <Table>
+                  <TableHeader><TableRow><TableHead>子网</TableHead><TableHead className="text-right">利用率</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {subnetsNeedingAttention.map(subnet => (
+                      <TableRow key={subnet.id}>
+                        <TableCell>
+                          <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline">
+                            {subnet.cidr} {subnet.name && `(${subnet.name})`}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-right"><Badge variant={subnet.utilization > 90 ? "destructive" : "default"}>{subnet.utilization}%</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">当前没有利用率超过80%的子网。</p>
+            )}
+             <div className="mt-4 text-right">
+                <Button variant="outline" size="sm" asChild>
+                    <Link href="/subnets">查看所有子网</Link>
+                </Button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">最近活动日志 (Top {dashboardData.recentAuditLogs?.length || 0})</CardTitle>
+            <CardDescription>系统最近的操作记录。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {dashboardData.recentAuditLogs && dashboardData.recentAuditLogs.length > 0 ? (
+              <ScrollArea className="h-[200px]">
+                <ul className="space-y-2">
+                  {dashboardData.recentAuditLogs.map(log => (
+                    <li key={log.id} className="text-xs border-b pb-1">
+                      <p className="font-medium truncate">
+                        <span className="text-muted-foreground">{new Date(log.timestamp).toLocaleString()}</span> - {log.username || "系统"}
+                      </p>
+                      <p className="text-muted-foreground truncate ml-2">操作: <Badge variant="secondary" className="capitalize text-[10px] px-1 py-0">{log.action.replace(/_/g, " ")}</Badge> - {log.details || "无详情"}</p>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">没有最近的活动日志。</p>
+            )}
+            <div className="mt-4 text-right">
+                <Button variant="outline" size="sm" asChild>
+                    <Link href="/audit-logs">查看所有日志</Link>
+                </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </>
   );
