@@ -41,6 +41,7 @@ import { createUserAction, updateUserAction, type ActionResponse, type FetchedUs
 const userFormSchema = z.object({
   username: z.string().min(3, "用户名必须至少3个字符").max(50, "用户名过长"),
   email: z.string().email("无效的邮箱地址"),
+  phone: z.string().max(30, "电话号码过长").optional().or(z.literal('')), // Allow empty string, will be converted to null
   roleId: z.string().min(1, "角色是必需的"),
   avatar: z.string().optional(),
   password: z.preprocess(
@@ -95,6 +96,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     defaultValues: {
       username: "",
       email: "",
+      phone: "",
       roleId: roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || "",
       avatar: "/images/avatars/default_avatar.png",
       password: "",
@@ -107,6 +109,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
         form.reset({
         username: user?.username || "",
         email: user?.email || "",
+        phone: user?.phone || "",
         roleId: user?.roleId || (roles.find(r => r.name === 'Viewer')?.id || roles[0]?.id || ""),
         avatar: user?.avatar || "/images/avatars/default_avatar.png",
         password: "",
@@ -120,14 +123,14 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     form.clearErrors();
     if (!isEditing && !data.password) {
         form.setError("password", { type: "manual", message: "新用户需要密码。" });
-        // No server call yet, so no server userMessage to use in toast
         toast({ title: "需要密码", description: "新用户需要密码。", variant: "destructive" });
         return;
     }
 
-    const payload: Partial<User> & { password?: string } = {
+    const payload: Partial<User> & { password?: string, phone?: string | null } = { // Ensure phone can be null
       username: data.username,
       email: data.email,
+      phone: data.phone === "" ? null : data.phone, // Convert empty string to null
       roleId: data.roleId,
       avatar: data.avatar || "/images/avatars/default_avatar.png",
     };
@@ -141,7 +144,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
       if (isEditing && user) {
         response = await updateUserAction(user.id, payload);
       } else {
-        if (!payload.password) { // Should be caught by earlier client-side check, but as a safeguard
+        if (!payload.password) {
             toast({ title: "密码错误", description: "新用户密码意外丢失。", variant: "destructive" });
             return;
         }
@@ -169,7 +172,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
           });
         }
       }
-    } catch (error) { // Catch unexpected errors
+    } catch (error) { 
       toast({
         title: "客户端错误",
         description: error instanceof Error ? error.message : "提交表单时发生意外错误。",
@@ -220,6 +223,19 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
                   <FormLabel>邮箱</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="例如 user@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>电话号码 (可选)</FormLabel>
+                  <FormControl>
+                    <Input type="tel" placeholder="例如 13800138000" {...field} value={field.value || ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -312,3 +328,5 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
     </Sheet>
   );
 }
+
+    
