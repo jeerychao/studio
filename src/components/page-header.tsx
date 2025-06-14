@@ -11,19 +11,20 @@ interface PageHeaderProps {
 export function PageHeader({ title, description, icon, actionElement }: PageHeaderProps) {
   return (
     <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2"> {/* Reduced gap from 3 to 2 */}
         {/* Render the icon node directly. Wrapper for consistent layout if needed. */}
         {icon && (
-          <div className="flex h-8 w-8 items-center justify-center"> {/* Basic wrapper for alignment */}
+          <div className="flex h-6 w-6 items-center justify-center"> {/* Reduced icon wrapper from h-8 w-8 to h-6 w-6 */}
             {icon}
           </div>
         )}
         <div>
-          <h1 className="text-xl font-bold tracking-tight md:text-2xl">{title}</h1>
-          {description && <p className="text-muted-foreground">{description}</p>}
+          <h1 className="text-xl font-bold tracking-tight md:text-2xl leading-tight">{title}</h1> {/* Added leading-tight */}
+          {description && <p className="text-muted-foreground leading-snug">{description}</p>} {/* Added leading-snug */}
         </div>
       </div>
       {actionElement && <div>{actionElement}</div>}
     </div>
   );
 }
+
