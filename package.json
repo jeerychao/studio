@@ -11,10 +11,10 @@
     "postinstall": "prisma generate",
     "prisma:migrate:reset": "node ./node_modules/.bin/prisma migrate reset",
     "prisma:db:push": "node ./node_modules/.bin/prisma db push",
-    "prisma:db:seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node --no-cache ./prisma/seed.ts"
+    "prisma:db:seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P tsconfig.json ./prisma/seed.ts"
   },
   "prisma": {
-    "seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node --no-cache ./prisma/seed.ts",
+    "seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P tsconfig.json ./prisma/seed.ts",
     "binaryTargets": [
       "native",
       "debian-openssl-3.0.x"
