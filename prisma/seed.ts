@@ -1,8 +1,6 @@
 
 import dotenv from 'dotenv';
-dotenv.config({ path: require('path').resolve(__dirname, '../.env') }); // Ensure .env at project root is loaded
-
-import prisma from '../src/lib/prisma';
+import { PrismaClient, Prisma } from '@prisma/client'; // PrismaClient is locally instantiated
 import {
   mockPermissions as seedPermissionsData,
   mockRoles as seedRolesData,
@@ -16,13 +14,43 @@ import {
   mockOperatorDictionaries,
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
-  mockAccessTypeDictionaries, // Import new mock data
+  mockAccessTypeDictionaries,
+  mockNetworkInterfaceTypeDictionaries,
 } from '../src/lib/data';
-import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
-import { Prisma } from '@prisma/client';
+import type { User as AppUser } from '../src/types';
 import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
 
+console.log("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL) ---");
+
+const prisma = new PrismaClient();
+
+(async () => {
+  try {
+    console.log("--- PRISMA SEED SCRIPT: ATTEMPTING DOTENV LOAD ---");
+    try {
+      dotenv.config({ path: require('path').resolve(__dirname, '../.env') });
+      console.log("--- PRISMA SEED SCRIPT: DOTENV LOAD SUCCESSFUL ---");
+    } catch (dotenvError) {
+      console.error("--- PRISMA SEED SCRIPT: DOTENV LOAD FAILED ---", dotenvError);
+    }
+
+    console.log("--- PRISMA SEED SCRIPT: ATTEMPTING MAIN FUNCTION EXECUTION ---");
+    await main();
+    console.log("--- PRISMA SEED SCRIPT: MAIN FUNCTION EXECUTION FINISHED (SUCCESSFULLY OR WITH CAUGHT ERROR INSIDE MAIN) ---");
+
+  } catch (e) {
+    console.error('--- PRISMA SEED SCRIPT: UNCAUGHT ERROR IN TOP-LEVEL WRAPPER ---');
+    console.error(e);
+    process.exit(1);
+  } finally {
+    console.log("--- PRISMA SEED SCRIPT: TOP-LEVEL WRAPPER FINALLY BLOCK ---");
+    // prisma.$disconnect() is called in main's finally
+  }
+})();
+
+
 async function main() {
+  console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION STARTED ---");
   console.log('Start seeding ...');
   console.log(`[Seed Script] Attempting to use ENCRYPTION_KEY starting with: ${process.env.ENCRYPTION_KEY ? process.env.ENCRYPTION_KEY.substring(0, 5) + '...' : 'NOT SET'}`);
 
@@ -93,29 +121,28 @@ async function main() {
   console.log('Seeding Users...');
   for (const userData of initialUsersToSeedPlain) {
     const encryptedPassword = encrypt(userData.password_plain);
-    // Store phone number in plaintext
     const plainPhone = userData.phone_plain || null;
 
     await prisma.user.upsert({
       where: { email: userData.email },
-      update: { 
-        id: userData.id, 
-        username: userData.username, 
-        password: encryptedPassword, 
-        phone: plainPhone, // Store plaintext phone
-        roleId: userData.roleId, 
-        avatar: userData.avatarPath, 
-        lastLogin: new Date() 
+      update: {
+        id: userData.id,
+        username: userData.username,
+        password: encryptedPassword,
+        phone: plainPhone,
+        roleId: userData.roleId,
+        avatar: userData.avatarPath,
+        lastLogin: new Date()
       },
-      create: { 
-        id: userData.id, 
-        username: userData.username, 
-        email: userData.email, 
-        password: encryptedPassword, 
-        phone: plainPhone, // Store plaintext phone
-        roleId: userData.roleId, 
-        avatar: userData.avatarPath, 
-        lastLogin: new Date() 
+      create: {
+        id: userData.id,
+        username: userData.username,
+        email: userData.email,
+        password: encryptedPassword,
+        phone: plainPhone,
+        roleId: userData.roleId,
+        avatar: userData.avatarPath,
+        lastLogin: new Date()
       },
     });
   }
@@ -184,7 +211,7 @@ async function main() {
   console.log('Subnets seeded.');
 
   console.log('Seeding IP Addresses (with new optional fields)...');
-  for (const ipData of seedIPsData) { 
+  for (const ipData of seedIPsData) {
     const phone = ipData.phone || null;
 
     await prisma.iPAddress.upsert({
@@ -196,7 +223,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: phone, 
+        phone: phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -215,7 +242,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: phone, 
+        phone: phone,
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -232,7 +259,7 @@ async function main() {
 
   console.log('Seeding Operator Dictionaries...');
   for (const opData of mockOperatorDictionaries) {
-    const { ...restOfOpData } = opData; // No accessType to remove
+    const { ...restOfOpData } = opData;
     await prisma.operatorDictionary.upsert({
       where: { operatorName: restOfOpData.operatorName },
       update: restOfOpData,
@@ -261,7 +288,7 @@ async function main() {
   }
   console.log('Payment Source Dictionaries seeded.');
 
-  console.log('Seeding Access Type Dictionaries...'); // New seed block
+  console.log('Seeding Access Type Dictionaries...');
   for (const atData of mockAccessTypeDictionaries) {
     await prisma.accessTypeDictionary.upsert({
       where: { name: atData.name },
@@ -270,6 +297,16 @@ async function main() {
     });
   }
   console.log('Access Type Dictionaries seeded.');
+
+  console.log('Seeding Network Interface Type Dictionaries...');
+  for (const nitData of mockNetworkInterfaceTypeDictionaries) {
+    await prisma.networkInterfaceTypeDictionary.upsert({
+      where: { name: nitData.name },
+      update: { name: nitData.name, description: nitData.description },
+      create: { name: nitData.name, description: nitData.description },
+    });
+  }
+  console.log('Network Interface Type Dictionaries seeded.');
 
   console.log('Seeding Audit Logs...');
   const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});
@@ -305,14 +342,18 @@ async function main() {
   console.log('Audit Logs seeded.');
 
   console.log('Seeding finished.');
+  console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION COMPLETED ---");
 }
 
 main()
   .catch((e) => {
+    console.error("--- PRISMA SEED SCRIPT MAIN FUNCTION ERROR ---");
     console.error(e);
     process.exit(1);
   })
   .finally(async () => {
+    console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION FINALLY BLOCK ---");
     await prisma.$disconnect();
+    console.log("--- PRISMA SEED SCRIPT DISCONNECTED ---");
   });
 
