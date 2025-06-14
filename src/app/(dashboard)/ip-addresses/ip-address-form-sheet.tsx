@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -37,7 +38,7 @@ const ipAddressFormSchema = z.object({
   description: z.string().max(200, "描述过长").optional(),
   selectedOperatorName: z.string().optional(),
   selectedOperatorDevice: z.string().optional(),
-  selectedAccessType: z.string().max(100, "接入方式过长").optional(), // Changed back to optional as it's auto-filled or based on dictionary
+  selectedAccessType: z.string().optional(), // Now manually selected
   selectedLocalDeviceName: z.string().optional(),
   selectedDevicePort: z.string().max(100, "设备端口过长").optional(),
   selectedPaymentSource: z.string().optional(),
@@ -97,26 +98,25 @@ export function IPAddressFormSheet({
             allocatedTo: ipAddress?.allocatedTo || "",
             usageUnit: ipAddress?.usageUnit || "",
             contactPerson: ipAddress?.contactPerson || "",
-            phone: ipAddress?.phone || "", // 确保这里使用解密后的值
+            phone: ipAddress?.phone || "", 
             description: ipAddress?.description || "",
             selectedOperatorName: initialOperatorName,
             selectedOperatorDevice: initialOperator?.operatorDevice || ipAddress?.selectedOperatorDevice || "",
-            selectedAccessType: initialOperator?.accessType || ipAddress?.selectedAccessType || "",
+            selectedAccessType: ipAddress?.selectedAccessType || "", // No longer auto-filled from operator dict
             selectedLocalDeviceName: initialLocalDeviceName,
             selectedDevicePort: initialLocalDevice?.port || ipAddress?.selectedDevicePort || "",
             selectedPaymentSource: ipAddress?.selectedPaymentSource || "",
         });
-
-        // Re-trigger auto-fill for operator fields if editing an existing IP
-        // This section is primarily for cases where form.reset might not pick up derived values correctly
-        // or if specific logic dictates re-evaluation after reset.
+        
+        // Auto-fill operator device if operator name is selected
         if(ipAddress?.selectedOperatorName) {
             const selectedOp = operatorDictionaries.find(op => op.operatorName === ipAddress.selectedOperatorName);
             if (selectedOp) {
                 form.setValue("selectedOperatorDevice", selectedOp.operatorDevice || "");
-                form.setValue("selectedAccessType", selectedOp.accessType || "");
+                // Access type is NOT set here anymore
             }
         }
+        // Auto-fill local device port if local device name is selected
         if(initialLocalDeviceName) {
             const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === initialLocalDeviceName);
             if (selectedDev) {
@@ -132,7 +132,7 @@ export function IPAddressFormSheet({
     form.setValue("selectedOperatorName", operatorNameToSet);
     const selectedOp = operatorDictionaries.find(op => op.operatorName === operatorNameToSet);
     form.setValue("selectedOperatorDevice", selectedOp?.operatorDevice || "");
-    form.setValue("selectedAccessType", selectedOp?.accessType || "");
+    // form.setValue("selectedAccessType", selectedOp?.accessType || ""); // Removed: accessType no longer from operator dict
   };
 
   const handleLocalDeviceChange = (value: string) => {
@@ -157,7 +157,7 @@ export function IPAddressFormSheet({
         contactPerson: data.contactPerson || null, phone: data.phone || null, description: data.description || null,
         selectedOperatorName: data.selectedOperatorName === NO_SELECTION_SENTINEL || !data.selectedOperatorName ? null : data.selectedOperatorName,
         selectedOperatorDevice: data.selectedOperatorDevice || null,
-        selectedAccessType: data.selectedAccessType || null,
+        selectedAccessType: data.selectedAccessType === NO_SELECTION_SENTINEL || !data.selectedAccessType ? null : data.selectedAccessType, // Send null if "no selection"
         selectedLocalDeviceName: data.selectedLocalDeviceName === NO_SELECTION_SENTINEL || !data.selectedLocalDeviceName ? null : data.selectedLocalDeviceName,
         selectedDevicePort: data.selectedDevicePort || null,
         selectedPaymentSource: data.selectedPaymentSource === NO_SELECTION_SENTINEL || !data.selectedPaymentSource ? null : data.selectedPaymentSource,
@@ -205,7 +205,7 @@ export function IPAddressFormSheet({
       </Button>;
 
   const operatorDeviceValue = form.watch("selectedOperatorDevice");
-  const accessTypeValue = form.watch("selectedAccessType");
+  // const accessTypeValue = form.watch("selectedAccessType"); // No longer needed to watch for auto-fill
   const localDevicePortValue = form.watch("selectedDevicePort");
 
   return (
@@ -228,7 +228,25 @@ export function IPAddressFormSheet({
                 
                 <FormField control={form.control} name="selectedOperatorName" render={({ field }) => (<FormItem><FormLabel>运营商名称 (可选)</FormLabel><Select onValueChange={handleOperatorChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择运营商" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{operatorDictionaries.map(op => (<SelectItem key={op.id} value={op.operatorName}>{op.operatorName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="selectedOperatorDevice" render={({ field }) => (<FormItem><FormLabel>运营商设备 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={operatorDeviceValue || ""} readOnly disabled /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="selectedAccessType" render={({ field }) => (<FormItem><FormLabel>接入方式</FormLabel><Select onValueChange={field.onChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择接入方式" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem><SelectItem value="汇聚">汇聚</SelectItem><SelectItem value="专线">专线</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                
+                <FormField 
+                    control={form.control} 
+                    name="selectedAccessType" 
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>接入方式</FormLabel>
+                            <Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="选择接入方式" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>
+                                    <SelectItem value="汇聚">汇聚</SelectItem>
+                                    <SelectItem value="专线">专线</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    )} 
+                />
 
                 <FormField control={form.control} name="selectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备名称 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="selectedDevicePort" render={({ field }) => (<FormItem><FormLabel>设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={localDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />

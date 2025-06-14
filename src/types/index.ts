@@ -137,7 +137,7 @@ export interface OperatorDictionary {
   id: string;
   operatorName: string;
   operatorDevice?: string;
-  accessType?: string;
+  // accessType?: string; // Removed
   createdAt?: string;
   updatedAt?: string;
 }

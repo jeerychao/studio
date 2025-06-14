@@ -179,15 +179,15 @@ export const mockRoles: Role[] = [
 export const mockUsers: Array<Omit<User, 'roleName' | 'permissions'> & { password?: string, phone?: string }> = [
   { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID,
     password: encrypt('admin'), 
-    phone: encrypt('11111111111'),
+    phone: '11111111111', // Plaintext
     avatar: '/images/avatars/admin_avatar.png', lastLogin: new Date(Date.now() - 86400000).toISOString() },
   { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID,
     password: encrypt('operator'),
-    phone: encrypt('22222222222'),
+    phone: '22222222222', // Plaintext
     avatar: '/images/avatars/operator_avatar.png', lastLogin: new Date(Date.now() - 3600000).toISOString() },
   { id: 'seed_user_viewer', username: 'viewer', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID,
     password: encrypt('viewer'),
-    phone: encrypt('33333333333'),
+    phone: '33333333333', // Plaintext
     avatar: '/images/avatars/viewer_avatar.png', lastLogin: new Date().toISOString() },
 ];
 
@@ -198,7 +198,7 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-export const mockOperatorDictionaries: Omit<OperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const mockOperatorDictionaries: Omit<OperatorDictionary, 'id' | 'createdAt' | 'updatedAt' | 'accessType'>[] = [
   { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300' },
   { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40' },
   { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500' },

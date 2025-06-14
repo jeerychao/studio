@@ -232,10 +232,12 @@ async function main() {
 
   console.log('Seeding Operator Dictionaries...');
   for (const opData of mockOperatorDictionaries) {
+    // Ensure accessType is not included in the data being upserted
+    const { accessType, ...restOfOpData } = opData;
     await prisma.operatorDictionary.upsert({
-      where: { operatorName: opData.operatorName },
-      update: opData,
-      create: opData,
+      where: { operatorName: restOfOpData.operatorName },
+      update: restOfOpData,
+      create: restOfOpData,
     });
   }
   console.log('Operator Dictionaries seeded.');

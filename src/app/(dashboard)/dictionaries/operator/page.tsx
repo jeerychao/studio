@@ -165,7 +165,7 @@ function OperatorDictionaryView() {
     <>
       <PageHeader
         title="运营商字典管理"
-        description="管理运营商、其设备及接入类型信息。"
+        description="管理运营商及其设备信息。" // Removed accessType from description
         icon={<Network className="h-6 w-6 text-primary" />}
         actionElement={pageActionButtons}
       />
@@ -191,6 +191,7 @@ function OperatorDictionaryView() {
                     </TableHead>
                     <TableHead>运营商名称</TableHead>
                     <TableHead>运营商设备</TableHead>
+                    {/* Removed TableHead for Access Type */}
                     {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -208,6 +209,7 @@ function OperatorDictionaryView() {
                       </TableCell>
                       <TableCell className="font-medium">{item.operatorName}</TableCell>
                       <TableCell>{item.operatorDevice || "N/A"}</TableCell>
+                      {/* Removed TableCell for item.accessType */}
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (

@@ -582,7 +582,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, undefined, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('selectedOperatorName')) updateData.selectedOperatorName = data.selectedOperatorName || null;
     if (data.hasOwnProperty('selectedOperatorDevice')) updateData.selectedOperatorDevice = data.selectedOperatorDevice || null;
-    if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null;
+    if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null; // Keep direct update from form
     if (data.hasOwnProperty('selectedLocalDeviceName')) updateData.selectedLocalDeviceName = data.selectedLocalDeviceName || null;
     if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null;
     if (data.hasOwnProperty('selectedPaymentSource')) updateData.selectedPaymentSource = data.selectedPaymentSource || null;
@@ -731,7 +731,7 @@ export async function getOperatorDictionariesAction(params?: FetchParams): Promi
     const itemsFromDb = params?.page && params?.pageSize 
         ? await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' }, skip, take: pageSize })
         : await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' } });
-    const appItems: AppOperatorDictionary[] = itemsFromDb.map(item => ({ id: item.id, operatorName: item.operatorName, operatorDevice: item.operatorDevice || undefined, accessType: item.accessType || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
+    const appItems: AppOperatorDictionary[] = itemsFromDb.map(item => ({ id: item.id, operatorName: item.operatorName, operatorDevice: item.operatorDevice || undefined, /* accessType: item.accessType || undefined, */ createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
     return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -742,9 +742,12 @@ export async function createOperatorDictionaryAction(data: { operatorName: strin
       data: {
         operatorName: data.operatorName,
         operatorDevice: data.operatorDevice,
+        // accessType is removed
       },
     });
-    return { success: true, data: result };
+    // Ensure returned data matches the updated AppOperatorDictionary type (without accessType)
+    const { ...restOfResult } = result;
+    return { success: true, data: restOfResult };
   } catch (error) {
     return handlePrismaError(error, { operatorName: "运营商名称" });
   }
@@ -757,9 +760,12 @@ export async function updateOperatorDictionaryAction(id: string, data: { operato
       data: {
         operatorName: data.operatorName,
         operatorDevice: data.operatorDevice,
+        // accessType is removed
       },
     });
-    return { success: true, data: result };
+    // Ensure returned data matches the updated AppOperatorDictionary type (without accessType)
+    const { ...restOfResult } = result;
+    return { success: true, data: restOfResult };
   } catch (error) {
     return handlePrismaError(error, { operatorName: "运营商名称" });
   }
@@ -770,7 +776,8 @@ export async function deleteOperatorDictionaryAction(id: string, performingUserI
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.operatorDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`运营商字典 ID: ${id}`);
-    if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: itemToDelete.operatorName}, {selectedOperatorDevice: itemToDelete.operatorDevice ?? undefined}, {selectedAccessType: itemToDelete.accessType ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${itemToDelete.operatorName}" 正在被 IP 地址使用。`);
+    // Check only for operatorName and operatorDevice, as accessType is removed
+    if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: itemToDelete.operatorName}, {selectedOperatorDevice: itemToDelete.operatorDevice ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${itemToDelete.operatorName}" 正在被 IP 地址使用。`);
     await prisma.operatorDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_operator_dictionary', details: `删除了运营商字典条目: ${itemToDelete.operatorName}` } });
     revalidatePath("/dictionaries/operator");
@@ -785,7 +792,8 @@ export async function batchDeleteOperatorDictionariesAction(ids: string[], perfo
   for (const id of ids) {
     try {
       const item = await prisma.operatorDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: item.operatorName}, {selectedOperatorDevice: item.operatorDevice ?? undefined}, {selectedAccessType: item.accessType ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${item.operatorName}" 正在被 IP 地址使用。`);
+      // Check only for operatorName and operatorDevice, as accessType is removed
+      if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: item.operatorName}, {selectedOperatorDevice: item.operatorDevice ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${item.operatorName}" 正在被 IP 地址使用。`);
       await prisma.operatorDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.operatorDictionary.findUnique({where: {id}}))?.operatorName || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -958,3 +966,4 @@ function handlePrismaError(error: any, fieldNameMap: Record<string, string>): Ac
   return createActionErrorResponse(error, 'DICTIONARY_DB_ERROR');
 }
     
+

@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -20,6 +21,7 @@ import { createOperatorDictionaryAction, updateOperatorDictionaryAction, type Ac
 const formSchema = z.object({
   operatorName: z.string().min(1, "运营商名称不能为空。").max(100, "运营商名称过长。"),
   operatorDevice: z.string().max(100, "运营商设备名称过长。").optional(),
+  // accessType is removed from Zod schema
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -41,6 +43,7 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
     defaultValues: {
       operatorName: "",
       operatorDevice: "",
+      // accessType is removed from defaultValues
     },
   });
 
@@ -49,6 +52,7 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
       form.reset({
         operatorName: dictionaryEntry?.operatorName || "",
         operatorDevice: dictionaryEntry?.operatorDevice || "",
+        // accessType is removed from reset
       });
       form.clearErrors();
     }
@@ -61,6 +65,7 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
       const payload = {
         operatorName: data.operatorName,
         operatorDevice: data.operatorDevice || undefined,
+        // accessType is removed from payload
       };
 
       if (isEditing && dictionaryEntry) {
@@ -145,6 +150,7 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
                 </FormItem>
               )}
             />
+            {/* Removed FormField for accessType */}
             <SheetFooter className="mt-8">
               <SheetClose asChild>
                 <Button type="button" variant="outline">取消</Button>
