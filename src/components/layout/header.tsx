@@ -29,8 +29,6 @@ export function Header() {
     logger.info("Header: Logout initiated by user:", currentUser?.username);
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      // Instead of router.push, which might be affected by client-side caching or state,
-      // a full page reload to /login ensures a clean state.
       window.location.href = '/login'; 
     }
   };

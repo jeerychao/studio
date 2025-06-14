@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from 'next/navigation'; // Re-enabled
+import { useRouter, usePathname } from 'next/navigation';
 import * as React from "react";
 import { Network, Loader2 } from "lucide-react"; 
 import Image from 'next/image';
@@ -16,9 +16,8 @@ import {
 } from "@/components/ui/sidebar";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
-// import { Button } from "@/components/ui/button"; // Temporarily removed
 import { Toaster } from "@/components/ui/toaster";
-import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user"; // Re-enabled
+import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user";
 import { logger } from "@/lib/logger";
 
 export default function DashboardLayout({
@@ -26,12 +25,12 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {  
-  const { currentUser, isAuthLoading } = useCurrentUser(); // Re-enabled
-  const router = useRouter(); // Re-enabled
-  const pathname = usePathname(); // Re-enabled
-  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading'); // Re-enabled
+  const { currentUser, isAuthLoading } = useCurrentUser();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
-  React.useEffect(() => { // Re-enabled auth logic
+  React.useEffect(() => {
     logger.debug("[DashboardLayout Effect] Running. isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : 'null');
     if (isAuthLoading) {
       setAuthStatus('loading');
@@ -44,7 +43,7 @@ export default function DashboardLayout({
         logger.info(`DashboardLayout: User authenticated: ${currentUser.username} (ID: ${currentUser.id}). Current path: ${pathname}`);
         if (pathname === '/login'){
              logger.info("DashboardLayout: User authenticated and on /login, redirecting to /dashboard.");
-             router.replace('/dashboard'); // Redirect away from login if authenticated
+             router.replace('/dashboard'); 
         }
     } else { 
       setAuthStatus('unauthenticated');
@@ -55,7 +54,7 @@ export default function DashboardLayout({
     }
   }, [currentUser, isAuthLoading, router, pathname]);
 
-  if (authStatus === 'loading') { // Re-enabled loading check
+  if (authStatus === 'loading') {
     logger.info("DashboardLayout: Auth status is 'loading', rendering loading spinner.");
     return (
       <div className="flex items-center justify-center h-screen">
@@ -65,7 +64,7 @@ export default function DashboardLayout({
     );
   }
 
-  if (authStatus === 'unauthenticated' && pathname !== '/login') { // Re-enabled unauthenticated check
+  if (authStatus === 'unauthenticated' && pathname !== '/login') {
     logger.info("DashboardLayout: Auth status 'unauthenticated' and not on /login, rendering redirect message.");
     return (
         <div className="flex flex-col items-center justify-center h-screen">
@@ -76,9 +75,6 @@ export default function DashboardLayout({
     );
   }
   
-  // If unauthenticated and on /login, children (login page) should render.
-  // If authenticated, normal layout renders.
-
   logger.info("DashboardLayout: Rendering main layout content. AuthStatus:", authStatus);
   return (
     <SidebarProvider defaultOpen={true}>

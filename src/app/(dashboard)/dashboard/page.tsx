@@ -115,7 +115,7 @@ export default function DashboardPage() {
   ];
 
   const busiestVlansForChart = dashboardData.busiestVlans.map((vlan, index) => ({
-    name: `VLAN ${vlan.vlanNumber}${vlan.name ? ` (${vlan.name.substring(0,15)+(vlan.name.length > 15 ? '...' : '')})` : ''}`, // Ensure name is suitable for chart
+    name: `VLAN ${vlan.vlanNumber}${vlan.name ? ` (${vlan.name.substring(0,15)+(vlan.name.length > 15 ? '...' : '')})` : ''}`,
     "资源数": vlan.resourceCount,
     fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
