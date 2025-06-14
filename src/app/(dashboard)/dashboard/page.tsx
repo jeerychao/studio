@@ -44,7 +44,7 @@ function DashboardStatCard({ title, value, icon, description, link, linkText }: 
 
 export default function DashboardPage() {
   // Ensure useCurrentUser is called unconditionally at the top level of the component
-  const { currentUser, isAuthLoading } = useCurrentUser(); 
+  const { currentUser, isAuthLoading } = useCurrentUser();
   const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true); // Combined loading state
   const [error, setError] = React.useState<string | null>(null);
@@ -102,7 +102,7 @@ export default function DashboardPage() {
           {error === "您没有权限查看仪表盘。" ? "访问被拒绝" : "加载仪表盘数据失败"}
         </h2>
         <p className="text-muted-foreground mb-4">{error}</p>
-        {error !== "您没有权限查看仪表盘。" && 
+        {error !== "您没有权限查看仪表盘。" &&
           <p className="text-xs text-muted-foreground">请尝试刷新页面或稍后再试。如果问题持续存在，请联系管理员。</p>
         }
       </div>
