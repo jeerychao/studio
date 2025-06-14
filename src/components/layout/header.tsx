@@ -14,27 +14,28 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-// import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"; // Temporarily removed
+import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
-// import { useRouter } from "next/navigation"; // Temporarily removed
+import { useRouter } from "next/navigation";
+import { logger } from "@/lib/logger";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
-  // const { currentUser, isAuthLoading } = useCurrentUser(); // Temporarily removed
-  // const router = useRouter(); // Temporarily removed
+  const { currentUser, isAuthLoading } = useCurrentUser();
+  const router = useRouter();
 
   const handleLogout = () => {
-    // This will not fully work without useCurrentUser to clear mock user,
-    // but we keep the redirect for basic logout attempt.
+    logger.info("Header: Logout initiated by user:", currentUser?.username);
     if (typeof window !== "undefined") {
-      // localStorage.removeItem(MOCK_USER_STORAGE_KEY); // Can't use MOCK_USER_STORAGE_KEY without import
-      localStorage.removeItem('mock_current_user_id_v3_prisma_real_data'); // Use string directly
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+      // Instead of router.push, which might be affected by client-side caching or state,
+      // a full page reload to /login ensures a clean state.
       window.location.href = '/login'; 
     }
   };
-
-  const mockUsernameForDisplay = "用户 (调试)"; // Placeholder
+  
+  const usernameForDisplay = !isAuthLoading && currentUser ? currentUser.username : "用户";
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -94,12 +95,15 @@ export function Header() {
               className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
             >
               <UserCircle className="h-6 w-6" />
+              <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">
+                {isAuthLoading ? "加载中..." : usernameForDisplay}
+              </span>
               <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{mockUsernameForDisplay}</DropdownMenuLabel>
+            <DropdownMenuLabel>{isAuthLoading ? "加载中..." : usernameForDisplay}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/account/change-password" className="flex items-center w-full">
