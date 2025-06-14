@@ -130,7 +130,7 @@ export default async function DashboardPage() {
             <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalIpCount.toLocaleString()}</div>
+            <div className="text-xl font-bold">{totalIpCount.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">数据库中记录的总 IP 数</p>
           </CardContent>
         </Card>
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
             <FilePieChart className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ipUtilizationPercentage}%</div>
+            <div className="text-xl font-bold">{ipUtilizationPercentage}%</div>
             <p className="text-xs text-muted-foreground">{allocatedIps.toLocaleString()} 已分配 / {unusedIpTotal.toLocaleString()} 未使用</p>
             <Progress value={ipUtilizationPercentage} className="mt-2 h-2" />
           </CardContent>
@@ -151,7 +151,7 @@ export default async function DashboardPage() {
             <Cable className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalVlanCount.toLocaleString()}</div>
+            <div className="text-xl font-bold">{totalVlanCount.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">已配置的 VLAN 总数</p>
           </CardContent>
         </Card>
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
             <Globe className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalSubnetCount.toLocaleString()}</div>
+            <div className="text-xl font-bold">{totalSubnetCount.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">已配置的子网总数</p>
           </CardContent>
         </Card>
@@ -170,7 +170,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2"> 
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">IP 地址状态分布</CardTitle> 
+            <CardTitle className="text-base font-semibold">IP 地址状态分布</CardTitle> 
             <CardDescription className="text-xs">按已分配、空闲和预留状态显示 IP 地址。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
@@ -179,7 +179,7 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
+            <CardTitle className="text-base font-semibold">按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
             <CardDescription className="text-xs">显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个使用单位。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
@@ -191,7 +191,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2"> 
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
+            <CardTitle className="text-base font-semibold">按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
             <CardDescription className="text-xs">显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个运营商。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">VLAN 资源分布 (Top 10)</CardTitle> 
+            <CardTitle className="text-base font-semibold">VLAN 资源分布 (Top 10)</CardTitle> 
             <CardDescription className="text-xs">显示关联资源数（子网+直接IP）最多的前10个VLAN。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
@@ -212,10 +212,10 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2"> 
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
+            <CardTitle className="text-base font-semibold">最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
             <CardDescription className="text-xs">按关联的子网和直接 IP 地址总数排名。</CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-2"> {/* pt-2 to give a bit of space before list */}
+          <CardContent className="p-4 pt-2"> 
             {busiestVlans && busiestVlans.length > 0 ? (
               <ul className="space-y-1.5">
                 {busiestVlans.map(vlan => (
@@ -235,7 +235,7 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">即将分配完的子网 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
+            <CardTitle className="text-base font-semibold">即将分配完的子网 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
             <CardDescription className="text-xs">子网 IP 地址利用率超过 80%。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-2">
@@ -268,7 +268,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-1"> 
         <Card>
           <CardHeader className="p-4">
-            <CardTitle className="text-lg">最近活动日志</CardTitle> 
+            <CardTitle className="text-base font-semibold">最近活动日志</CardTitle> 
             <CardDescription className="text-xs">系统中最近执行的 {DASHBOARD_AUDIT_LOG_COUNT} 条操作。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0">
