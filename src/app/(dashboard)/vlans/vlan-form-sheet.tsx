@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, X } from "lucide-react"; // Added X icon
 import { useToast } from "@/hooks/use-toast";
 import type { VLAN } from "@/types";
 import { createVLANAction, updateVLANAction, type ActionResponse } from "@/lib/actions";
@@ -59,6 +59,8 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
       description: vlan?.description || "",
     },
   });
+
+  const vlanNameValue = form.watch("name"); // Watch the name field for the clear button
 
   React.useEffect(() => {
     if (isOpen) {
@@ -158,9 +160,26 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>VLAN 名称 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 办公网络" {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input placeholder="例如 办公网络" {...field} className="pr-8" />
+                    </FormControl>
+                    {vlanNameValue && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          form.setValue("name", "");
+                          form.trigger("name");
+                        }}
+                        aria-label="清除 VLAN 名称"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -194,3 +213,4 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
     </Sheet>
   );
 }
+
