@@ -28,7 +28,7 @@ model Role {
   id          String       @id @default(cuid())
   name        String       @unique
   description String?
-  permissions Permission[] @relation("RolePermissions")
+  permissions Permission[] @relation("RolePermissions") // 显式命名关系
   users       User[]
 
   createdAt DateTime @default(now())
@@ -36,11 +36,11 @@ model Role {
 }
 
 model Permission {
-  id          String  @id @default(cuid())
-  name        String  @unique
+  id          String   @id @default(cuid()) // 确保有 @default(cuid())
+  name        String   @unique
   group       String
   description String?
-  roles       Role[]  @relation("RolePermissions")
+  roles       Role[]   @relation("RolePermissions") // 显式命名关系
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,7 +155,7 @@ model AccessTypeDictionary {
 
 model NetworkInterfaceTypeDictionary {
   id          String   @id @default(cuid())
-  name        String   @unique // e.g., "GigabitEthernet", "TenGigabitEthernet", "ge-", "eth"
+  name        String   @unique // e.g., "GigabitEthernet", "TenGigabitEthernet"
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
