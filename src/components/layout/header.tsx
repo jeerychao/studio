@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound } from "lucide-react"; // Removed SettingsIconLucide
+import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react"; // Added ChevronDown
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -59,12 +59,13 @@ export function Header() {
         </Button>
       )}
 
-      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4 justify-end">
+      <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end"> {/* Adjusted gap for tighter packing */}
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="rounded-full h-10 w-10 p-0 flex items-center justify-center">
-              <UserCircle className="h-8 w-8" /> 
+            <Button variant="ghost" className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"> {/* Changed to w-auto, added padding and space */}
+              <UserCircle className="h-6 w-6" /> {/* Slightly smaller UserCircle */}
+              <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
@@ -77,7 +78,6 @@ export function Header() {
                 修改密码
               </Link>
             </DropdownMenuItem>
-            {/* Settings link removed as per refactoring plan */}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
           </DropdownMenuContent>
@@ -87,4 +87,3 @@ export function Header() {
   );
 }
 
-    
