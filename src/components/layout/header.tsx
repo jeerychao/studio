@@ -24,12 +24,10 @@ export function Header() {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
 
-  // Removed local state and timer logic for user menu
-
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login'; // Force reload to ensure user state is cleared
+      window.location.href = '/login'; 
     }
   };
 
@@ -64,7 +62,7 @@ export function Header() {
         </Button>
       )}
 
-      <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end">
+      <div className="flex w-full items-center gap-3 md:ml-auto md:gap-3 lg:gap-3 justify-end"> {/* Increased gap here */}
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
