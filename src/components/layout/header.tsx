@@ -16,7 +16,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
 import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
-import * as React from "react"; // Import React for useState and useRef
+import * as React from "react"; 
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
@@ -30,35 +30,33 @@ export function Header() {
       userMenuTimerRef.current = null;
     }
   };
-
-  const handleUserMenuOpen = () => {
-    clearUserMenuTimer();
-    setIsUserMenuOpen(true);
-  };
-
-  const handleUserMenuClose = () => {
-    clearUserMenuTimer();
-    userMenuTimerRef.current = setTimeout(() => {
-      setIsUserMenuOpen(false);
-    }, 150); // Adjust delay as needed
-  };
-
-  const handleUserMenuItemClick = () => {
-    setIsUserMenuOpen(false); // Close immediately on item click
-    clearUserMenuTimer();
-  };
   
-  // Sync with Radix's internal state changes (e.g., Escape key)
-  const onRadixUserMenuOpenChange = (openValue: boolean) => {
+  const handleUserMenuOpenChange = (openValue: boolean) => {
     setIsUserMenuOpen(openValue);
     if (!openValue) {
       clearUserMenuTimer();
     }
   };
 
+  const handleUserMenuMouseEnter = () => {
+    clearUserMenuTimer();
+  };
+  
+  const handleUserMenuMouseLeave = () => {
+    clearUserMenuTimer();
+    userMenuTimerRef.current = setTimeout(() => {
+      setIsUserMenuOpen(false);
+    }, 300); // Adjust delay
+  };
+
+  const handleUserMenuItemClick = () => {
+    setIsUserMenuOpen(false); 
+    clearUserMenuTimer();
+  };
+  
 
   const handleLogout = () => {
-    handleUserMenuItemClick(); // Close menu first
+    handleUserMenuItemClick(); 
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
       window.location.href = '/login';
@@ -98,15 +96,14 @@ export function Header() {
 
       <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end">
         <ThemeToggle />
-        <DropdownMenu open={isUserMenuOpen} onOpenChange={onRadixUserMenuOpenChange}>
+        <DropdownMenu open={isUserMenuOpen} onOpenChange={handleUserMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
-              onMouseEnter={handleUserMenuOpen}
-              onMouseLeave={handleUserMenuClose}
-              onFocus={handleUserMenuOpen} // Optional: open on focus for keyboard users
-              onBlur={handleUserMenuClose}   // Optional: close on blur for keyboard users
+              onMouseEnter={handleUserMenuMouseEnter}
+              onMouseLeave={handleUserMenuMouseLeave}
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
             >
               <UserCircle className="h-6 w-6" />
               <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
@@ -115,8 +112,8 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            onMouseEnter={handleUserMenuOpen} // Keep open if mouse moves to content
-            onMouseLeave={handleUserMenuClose} // Close if mouse leaves content
+            onMouseEnter={handleUserMenuMouseEnter} 
+            onMouseLeave={handleUserMenuMouseLeave}
           >
             <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
             <DropdownMenuSeparator />

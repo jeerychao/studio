@@ -25,42 +25,40 @@ export function ThemeToggle() {
     }
   };
 
-  const handleOpen = () => {
-    clearTimer();
-    setIsOpen(true);
-  };
-
-  const handleClose = () => {
-    clearTimer();
-    timerRef.current = setTimeout(() => {
-      setIsOpen(false);
-    }, 150); // Adjust delay as needed (milliseconds)
-  };
-
-  const handleItemClick = (theme: string) => {
-    setTheme(theme);
-    setIsOpen(false); // Close immediately on item click
-    clearTimer();
-  };
-
-  // Sync with Radix's internal state changes (e.g., Escape key)
-  const onRadixOpenChange = (openValue: boolean) => {
+  const handleOpenChange = (openValue: boolean) => {
     setIsOpen(openValue);
     if (!openValue) {
       clearTimer();
     }
   };
+  
+  const handleMouseEnter = () => {
+    clearTimer(); // Clear any pending close timer if mouse re-enters
+  };
+
+  const handleMouseLeave = () => {
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 300); // Adjust delay as needed (milliseconds)
+  };
+
+  const handleItemClick = (theme: string) => {
+    setTheme(theme);
+    setIsOpen(false); 
+    clearTimer();
+  };
+
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={onRadixOpenChange}>
+    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
-          onMouseEnter={handleOpen}
-          onMouseLeave={handleClose}
-          onFocus={handleOpen} // Optional: open on focus for keyboard users
-          onBlur={handleClose}   // Optional: close on blur for keyboard users
+          onMouseEnter={handleMouseEnter} // Keep open if mouse moves back to trigger
+          onMouseLeave={handleMouseLeave} // Start close timer if mouse leaves trigger
+          onClick={() => setIsOpen(!isOpen)} // Toggle on click
         >
           <div className="relative w-[1.1rem] h-[1.1rem] flex items-center justify-center">
             <Sun className="h-full w-full rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -72,8 +70,8 @@ export function ThemeToggle() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        onMouseEnter={handleOpen} // Keep open if mouse moves to content
-        onMouseLeave={handleClose} // Close if mouse leaves content
+        onMouseEnter={handleMouseEnter} // Keep open if mouse moves to content
+        onMouseLeave={handleMouseLeave} // Start close timer if mouse leaves content
       >
         <DropdownMenuItem onClick={() => handleItemClick("light")}>
           <Sun className="mr-2 h-4 w-4" />
