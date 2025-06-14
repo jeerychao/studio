@@ -16,6 +16,7 @@ import {
   mockOperatorDictionaries,
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
+  mockAccessTypeDictionaries, // Import new mock data
 } from '../src/lib/data';
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
 import { Prisma } from '@prisma/client';
@@ -184,7 +185,6 @@ async function main() {
 
   console.log('Seeding IP Addresses (with new optional fields)...');
   for (const ipData of seedIPsData) { 
-    // Phone number is already plaintext in mockIPAddresses
     const phone = ipData.phone || null;
 
     await prisma.iPAddress.upsert({
@@ -196,7 +196,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: phone, // Store plaintext phone
+        phone: phone, 
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -215,7 +215,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: phone, // Store plaintext phone
+        phone: phone, 
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -232,8 +232,7 @@ async function main() {
 
   console.log('Seeding Operator Dictionaries...');
   for (const opData of mockOperatorDictionaries) {
-    // Ensure accessType is not included in the data being upserted
-    const { accessType, ...restOfOpData } = opData;
+    const { ...restOfOpData } = opData; // No accessType to remove
     await prisma.operatorDictionary.upsert({
       where: { operatorName: restOfOpData.operatorName },
       update: restOfOpData,
@@ -261,6 +260,16 @@ async function main() {
     });
   }
   console.log('Payment Source Dictionaries seeded.');
+
+  console.log('Seeding Access Type Dictionaries...'); // New seed block
+  for (const atData of mockAccessTypeDictionaries) {
+    await prisma.accessTypeDictionary.upsert({
+      where: { name: atData.name },
+      update: atData,
+      create: atData,
+    });
+  }
+  console.log('Access Type Dictionaries seeded.');
 
   console.log('Seeding Audit Logs...');
   const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});

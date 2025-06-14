@@ -13,13 +13,14 @@ import {
   ListChecks,
   Search,
   Settings2 as SettingsIconLucide,
-  BookOpen, // Icon for Dictionaries
-  Users2,   // Icon for User & Role Management
-  FileText, // Icon for Audit Logs
-  UploadCloud, // Icon for Data Export
-  HardDrive, // For Local Device Dictionary
-  CreditCard, // For Payment Source Dictionary
-  ChevronDown, // Explicitly import if needed, though AccordionTrigger brings its own
+  BookOpen, 
+  Users2,   
+  FileText, 
+  UploadCloud, 
+  HardDrive, 
+  CreditCard, 
+  Waypoints, // Added for Access Type Dictionary
+  ChevronDown, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -33,14 +34,14 @@ import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/h
 import type { PermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { logger } from "@/lib/logger";
-import { useSidebar } from "@/components/ui/sidebar"; // Import useSidebar
+import { useSidebar } from "@/components/ui/sidebar"; 
 
 
 interface NavItemConfig {
   href: string;
   label: string;
   icon: React.ElementType;
-  requiredPermission?: PermissionId | PermissionId[]; // Can be single or array for parent items
+  requiredPermission?: PermissionId | PermissionId[]; 
   subItems?: NavItemConfig[];
 }
 
@@ -64,22 +65,24 @@ const navItemConfigs: NavItemConfig[] = [
     requiredPermission: PERMISSIONS.VIEW_QUERY_PAGE,
   },
   {
-    href: "/dictionaries", // New top-level parent for dictionaries
+    href: "/dictionaries", 
     label: "字典管理",
     icon: BookOpen,
     requiredPermission: [
         PERMISSIONS.VIEW_DICTIONARY_OPERATOR,
         PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
-        PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE
+        PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
+        PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, // Added permission
     ],
     subItems: [
       { href: "/dictionaries/operator", label: "运营商字典", icon: Network, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_OPERATOR },
       { href: "/dictionaries/local-device", label: "本地设备字典", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE },
       { href: "/dictionaries/payment-source", label: "付费来源字典", icon: CreditCard, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE },
+      { href: "/dictionaries/access-type", label: "接入方式字典", icon: Waypoints, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE }, // New item
     ],
   },
   {
-    href: "/system", // New top-level parent for system-wide settings/logs/tools
+    href: "/system", 
     label: "系统管理",
     icon: SettingsIconLucide,
     requiredPermission: [
@@ -101,7 +104,7 @@ const navItemConfigs: NavItemConfig[] = [
 export function SidebarNav() {
   const pathname = usePathname();
   const { currentUser, isAuthLoading } = useCurrentUser();
-  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar(); // Get sidebar state and control
+  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar(); 
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
     if (!user || !user.permissions || !Array.isArray(user.permissions)) {
@@ -201,17 +204,16 @@ export function SidebarNav() {
             className={triggerClass}
             onClick={(e) => {
               if (sidebarState === "collapsed") {
-                e.preventDefault(); // Prevent Radix default toggle
-                setSidebarOpen(true); // Expand the sidebar
-                // Ensure this accordion item is opened
+                e.preventDefault(); 
+                setSidebarOpen(true); 
+                
                 setOpenAccordionItems(prevItems => {
                   if (!prevItems.includes(item.href)) {
                     return [...prevItems, item.href];
                   }
-                  return prevItems; // If already open, keep it open
+                  return prevItems; 
                 });
               }
-              // If sidebar is already expanded, Radix default behavior will toggle the accordion item
             }}
           >
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
@@ -282,5 +284,4 @@ export function SidebarNav() {
     </>
   );
 }
-
     

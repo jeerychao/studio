@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { IPAddress, Subnet, IPAddressStatus, VLAN, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from "@/types";
+import type { IPAddress, Subnet, IPAddressStatus, VLAN, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types"; // Added AccessTypeDictionary
 import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
@@ -38,7 +38,7 @@ const ipAddressFormSchema = z.object({
   description: z.string().max(200, "描述过长").optional(),
   selectedOperatorName: z.string().optional(),
   selectedOperatorDevice: z.string().optional(),
-  selectedAccessType: z.string().optional(), // Now manually selected
+  selectedAccessType: z.string().optional(), 
   selectedLocalDeviceName: z.string().optional(),
   selectedDevicePort: z.string().max(100, "设备端口过长").optional(),
   selectedPaymentSource: z.string().optional(),
@@ -53,6 +53,7 @@ interface IPAddressFormSheetProps {
   operatorDictionaries: OperatorDictionary[];
   localDeviceDictionaries: LocalDeviceDictionary[];
   paymentSourceDictionaries: PaymentSourceDictionary[];
+  accessTypeDictionaries: AccessTypeDictionary[]; // New prop
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
@@ -65,7 +66,7 @@ const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
 
 
 export function IPAddressFormSheet({
-    ipAddress, subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries,
+    ipAddress, subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, // Added accessTypeDictionaries
     currentSubnetId, children, buttonProps, onIpAddressChange
 }: IPAddressFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -102,21 +103,18 @@ export function IPAddressFormSheet({
             description: ipAddress?.description || "",
             selectedOperatorName: initialOperatorName,
             selectedOperatorDevice: initialOperator?.operatorDevice || ipAddress?.selectedOperatorDevice || "",
-            selectedAccessType: ipAddress?.selectedAccessType || "", // No longer auto-filled from operator dict
+            selectedAccessType: ipAddress?.selectedAccessType || "",
             selectedLocalDeviceName: initialLocalDeviceName,
             selectedDevicePort: initialLocalDevice?.port || ipAddress?.selectedDevicePort || "",
             selectedPaymentSource: ipAddress?.selectedPaymentSource || "",
         });
 
-        // Auto-fill operator device if operator name is selected
         if(ipAddress?.selectedOperatorName) {
             const selectedOp = operatorDictionaries.find(op => op.operatorName === ipAddress.selectedOperatorName);
             if (selectedOp) {
                 form.setValue("selectedOperatorDevice", selectedOp.operatorDevice || "");
-                // Access type is NOT set here anymore
             }
         }
-        // Auto-fill local device port if local device name is selected
         if(initialLocalDeviceName) {
             const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === initialLocalDeviceName);
             if (selectedDev) {
@@ -132,7 +130,6 @@ export function IPAddressFormSheet({
     form.setValue("selectedOperatorName", operatorNameToSet);
     const selectedOp = operatorDictionaries.find(op => op.operatorName === operatorNameToSet);
     form.setValue("selectedOperatorDevice", selectedOp?.operatorDevice || "");
-    // form.setValue("selectedAccessType", selectedOp?.accessType || ""); // Removed: accessType no longer from operator dict
   };
 
   const handleLocalDeviceChange = (value: string) => {
@@ -157,7 +154,7 @@ export function IPAddressFormSheet({
         contactPerson: data.contactPerson || null, phone: data.phone || null, description: data.description || null,
         selectedOperatorName: data.selectedOperatorName === NO_SELECTION_SENTINEL || !data.selectedOperatorName ? null : data.selectedOperatorName,
         selectedOperatorDevice: data.selectedOperatorDevice || null,
-        selectedAccessType: data.selectedAccessType === NO_SELECTION_SENTINEL || !data.selectedAccessType ? null : data.selectedAccessType, // Send null if "no selection"
+        selectedAccessType: data.selectedAccessType === NO_SELECTION_SENTINEL || !data.selectedAccessType ? null : data.selectedAccessType,
         selectedLocalDeviceName: data.selectedLocalDeviceName === NO_SELECTION_SENTINEL || !data.selectedLocalDeviceName ? null : data.selectedLocalDeviceName,
         selectedDevicePort: data.selectedDevicePort || null,
         selectedPaymentSource: data.selectedPaymentSource === NO_SELECTION_SENTINEL || !data.selectedPaymentSource ? null : data.selectedPaymentSource,
@@ -205,7 +202,6 @@ export function IPAddressFormSheet({
       </Button>;
 
   const operatorDeviceValue = form.watch("selectedOperatorDevice");
-  // const accessTypeValue = form.watch("selectedAccessType"); // No longer needed to watch for auto-fill
   const localDevicePortValue = form.watch("selectedDevicePort");
 
   return (
@@ -284,8 +280,9 @@ export function IPAddressFormSheet({
                                 <FormControl><SelectTrigger><SelectValue placeholder="选择接入方式" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                     <SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>
-                                    <SelectItem value="汇聚">汇聚</SelectItem>
-                                    <SelectItem value="专线">专线</SelectItem>
+                                    {accessTypeDictionaries.map(at => (
+                                      <SelectItem key={at.id} value={at.name}>{at.name}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                             <FormMessage />

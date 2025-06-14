@@ -27,9 +27,8 @@ export const PERMISSIONS = {
   VIEW_TOOLS_IMPORT_EXPORT: 'tools.import_export.view',
   PERFORM_TOOLS_EXPORT: 'tools.import_export.export',
   VIEW_QUERY_PAGE: 'querypage.view',
-  VIEW_SETTINGS: 'settings.view', // General settings view, if any global settings page remains
+  VIEW_SETTINGS: 'settings.view',
 
-  // Dictionary Permissions
   VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
   CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
   EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
@@ -45,8 +44,10 @@ export const PERMISSIONS = {
   EDIT_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.edit',
   DELETE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.delete',
 
-  // OLD Device, ISP, DeviceConnection permissions are removed.
-  // If VIEW_SETTINGS is still used for the simplified settings page, keep it. Otherwise, can be removed too.
+  VIEW_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.view',
+  CREATE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.create',
+  EDIT_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.edit',
+  DELETE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.delete',
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -76,7 +77,7 @@ export interface VLAN {
   vlanNumber: number;
   name?: string;
   description?: string;
-  subnetCount?: number; // Represents count of subnets AND direct IPs associated
+  subnetCount?: number;
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -95,7 +96,6 @@ export interface IPAddress {
   description?: string;
   lastSeen?: string;
 
-  // New fields for dictionary selections
   selectedOperatorName?: string;
   selectedOperatorDevice?: string;
   selectedAccessType?: string;
@@ -128,11 +128,10 @@ export interface AuditLog {
   userId?: string;
   username?: string;
   action: string;
-  timestamp: string; 
+  timestamp: string;
   details?: string;
 }
 
-// New Dictionary Types
 export interface OperatorDictionary {
   id: string;
   operatorName: string;
@@ -156,8 +155,13 @@ export interface PaymentSourceDictionary {
   updatedAt?: string;
 }
 
+export interface AccessTypeDictionary {
+  id: string;
+  name: string; // e.g., "汇聚", "专线"
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-// Paginated Response and Batch Operation types
 export interface PaginatedResponse<T> {
   data: T[];
   totalCount: number;
@@ -178,7 +182,6 @@ export interface BatchDeleteResult<TIdentifier = string> {
   failureDetails: Array<BatchOperationFailure<TIdentifier>>;
 }
 
-// Query result types
 export interface SubnetQueryResult {
   id: string;
   cidr: string;
@@ -213,9 +216,6 @@ export interface SubnetFreeIpDetails {
   calculatedAvailableIpRanges: string[];
 }
 
-// Removed old ISP, Device, DeviceType, DeviceConnection types/enums
-// They are replaced by the Dictionary models or fields within IPAddress
-
 export enum DeviceType {
   ROUTER = "ROUTER",
   SWITCH = "SWITCH",
@@ -227,7 +227,6 @@ export enum DeviceType {
   OTHER = "OTHER",
 }
 
-// Types for Dashboard Data
 export interface IPStatusCounts {
   allocated: number;
   free: number;
@@ -235,7 +234,7 @@ export interface IPStatusCounts {
 }
 
 export interface TopNItemCount {
-  item: string; // Represents usageUnit or operatorName or other grouping key
+  item: string;
   count: number;
   fill?: string;
 }
@@ -261,8 +260,8 @@ export interface DashboardData {
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
   ipUsageByOperator: TopNItemCount[];
-  vlanResourceCounts: VLANResourceInfo[]; 
-  busiestVlans: VLANResourceInfo[]; 
-  subnetsNeedingAttention: SubnetUtilizationInfo[]; // Changed from unusedVlanCount
+  vlanResourceCounts: VLANResourceInfo[];
+  busiestVlans: VLANResourceInfo[];
+  subnetsNeedingAttention: SubnetUtilizationInfo[];
 }
     

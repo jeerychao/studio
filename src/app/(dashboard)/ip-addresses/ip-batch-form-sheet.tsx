@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Subnet, VLAN, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from "@/types";
+import type { Subnet, VLAN, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types"; // Added AccessTypeDictionary
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 
@@ -41,9 +41,9 @@ const ipBatchFormSchema = z.object({
   commonPhone: z.string().max(30, "电话号码过长").optional(),
   commonSelectedOperatorName: z.string().optional(),
   commonSelectedOperatorDevice: z.string().optional(),
-  commonSelectedAccessType: z.string().optional(), // Now manually selected
+  commonSelectedAccessType: z.string().optional(), 
   commonSelectedLocalDeviceName: z.string().optional(),
-  commonSelectedDevicePort: z.string().max(100, "设备端口过长").optional(), // Now auto-filled
+  commonSelectedDevicePort: z.string().max(100, "设备端口过长").optional(), 
   commonSelectedPaymentSource: z.string().optional(),
 }).refine(data => {
     try { return ipToNumber(data.startIp) <= ipToNumber(data.endIp); } catch (e) { return false; }
@@ -57,12 +57,13 @@ interface IPBatchFormSheetProps {
   operatorDictionaries: OperatorDictionary[];
   localDeviceDictionaries: LocalDeviceDictionary[];
   paymentSourceDictionaries: PaymentSourceDictionary[];
+  accessTypeDictionaries: AccessTypeDictionary[]; // New prop
   children?: React.ReactNode;
   onIpAddressChange?: () => void;
 }
 
 export function IPBatchFormSheet({
-    subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries,
+    subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, // Added accessTypeDictionaries
     children, onIpAddressChange
 }: IPBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -97,13 +98,12 @@ export function IPBatchFormSheet({
     form.setValue("commonSelectedOperatorName", value === NO_SELECTION_SENTINEL ? "" : value);
     const selectedOp = operatorDictionaries.find(op => op.operatorName === value);
     form.setValue("commonSelectedOperatorDevice", selectedOp?.operatorDevice || "");
-    // form.setValue("commonSelectedAccessType", selectedOp?.accessType || ""); // Removed: accessType no longer from operator dict
   };
 
   const handleLocalDeviceChange = (value: string) => {
     form.setValue("commonSelectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
     const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
-    form.setValue("commonSelectedDevicePort", selectedDev?.port || ""); // Auto-fill port
+    form.setValue("commonSelectedDevicePort", selectedDev?.port || ""); 
   };
 
   async function onSubmit(data: IpBatchFormValues) {
@@ -116,7 +116,7 @@ export function IPBatchFormSheet({
         usageUnit: data.commonUsageUnit || undefined, contactPerson: data.commonContactPerson || undefined, phone: data.commonPhone || undefined,
         selectedOperatorName: data.commonSelectedOperatorName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedOperatorName,
         selectedOperatorDevice: data.commonSelectedOperatorDevice || undefined,
-        selectedAccessType: data.commonSelectedAccessType === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedAccessType, // Send undefined if "no selection"
+        selectedAccessType: data.commonSelectedAccessType === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedAccessType, 
         selectedLocalDeviceName: data.commonSelectedLocalDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedLocalDeviceName,
         selectedDevicePort: data.commonSelectedDevicePort || undefined, 
         selectedPaymentSource: data.commonSelectedPaymentSource === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedPaymentSource,
@@ -143,7 +143,6 @@ export function IPBatchFormSheet({
   const triggerContent = children || <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP</Button>;
 
   const commonOperatorDeviceValue = form.watch("commonSelectedOperatorDevice");
-  // const commonAccessTypeValue = form.watch("commonSelectedAccessType"); // No longer needed
   const commonDevicePortValue = form.watch("commonSelectedDevicePort"); 
 
   return (
@@ -177,8 +176,9 @@ export function IPBatchFormSheet({
                                 <FormControl><SelectTrigger><SelectValue placeholder="选择接入方式" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                     <SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>
-                                    <SelectItem value="汇聚">汇聚</SelectItem>
-                                    <SelectItem value="专线">专线</SelectItem>
+                                    {accessTypeDictionaries.map(at => (
+                                      <SelectItem key={at.id} value={at.name}>{at.name}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                             <FormMessage />

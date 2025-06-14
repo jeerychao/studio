@@ -1,13 +1,49 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
 
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  phone     String?
+  avatar    String?
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  lastLogin DateTime?
+  auditLogs AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  permissions Permission[]
+  users       User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  group       String
+  description String?
+  roles       Role[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Subnet {
@@ -18,127 +54,101 @@ model Subnet {
   ipRange        String?     // e.g., "192.168.1.1 - 192.168.1.254"
   name           String?
   dhcpEnabled    Boolean?    @default(false)
-  vlanId         String?
   description    String?
-  ips            IPAddress[]
-  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: Restrict) // Prevent VLAN deletion if Subnets are attached
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  vlanId         String?
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  ipAddresses    IPAddress[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model VLAN {
-  id          String    @id @default(cuid())
-  vlanNumber  Int       @unique
+  id          String   @id @default(cuid())
+  vlanNumber  Int      @unique
   name        String?
   description String?
   subnets     Subnet[]
-  ipAddresses IPAddress[] @relation("IPAddressDirectVLAN") // Relation for IPs directly associated with this VLAN
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  ipAddresses IPAddress[] @relation("IPAddressToDirectVLAN") // IPs directly assigned to this VLAN, not via subnet
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model IPAddress {
-  id            String  @id @default(cuid())
-  ipAddress     String  // Individual IP, e.g., "192.168.1.100"
-  subnetId      String?
-  directVlanId  String? // For IPs that are directly part of a VLAN, not through a subnet
-  status        String  // e.g., "allocated", "free", "reserved"
-  isGateway     Boolean? @default(false)
-  allocatedTo   String? // e.g., "Server-01", "User Device"
-  usageUnit     String? // e.g., "R&D Dept", "Finance Dept"
+  id          String  @id @default(cuid())
+  ipAddress   String  // e.g., "192.168.1.100"
+  subnetId    String?
+  subnet      Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull)
+  directVlanId String? // For IPs directly on a VLAN, not through a subnet's VLAN
+  directVlan   VLAN?   @relation("IPAddressToDirectVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
+  status      String  // "allocated", "free", "reserved"
+  isGateway   Boolean? @default(false)
+  allocatedTo String?
+  usageUnit   String? // Using unit
   contactPerson String?
-  phone         String? // Store encrypted phone number
-  description   String?
-  lastSeen      DateTime? @updatedAt
+  phone       String?
+  description String?
+  lastSeen    DateTime? @default(now())
 
-  // Dictionary related fields - These store the selected values from dictionaries or manual input
+  // New fields for dictionary selections
   selectedOperatorName    String?
   selectedOperatorDevice  String?
-  selectedAccessType      String? // e.g., "专线", "汇聚" - This field remains for IP, manually selected
+  selectedAccessType      String? // Stores the name of the access type
   selectedLocalDeviceName String?
   selectedDevicePort      String?
   selectedPaymentSource   String?
 
-  subnet        Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull) // If subnet deleted, IP becomes unassigned from subnet
-  directVlan    VLAN?   @relation("IPAddressDirectVLAN", fields: [directVlanId], references: [id], onDelete: SetNull) // If direct VLAN deleted, IP becomes unassigned from it
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([ipAddress, subnetId], name: "unique_ip_in_subnet") // Ensures IP is unique within a subnet
+  @@unique([ipAddress, subnetId], name: "ip_subnet_unique") // IP unique within a subnet
   @@index([status])
   @@index([allocatedTo])
-  @@index([selectedOperatorName])
-  @@index([selectedLocalDeviceName])
-}
-
-model User {
-  id        String    @id @default(cuid())
-  username  String    @unique
-  email     String    @unique
-  password  String    // Encrypted password
-  phone     String?   // Store encrypted phone number for user
-  roleId    String
-  avatar    String?   @default("/images/avatars/default_avatar.png")
-  lastLogin DateTime?
-  role      Role      @relation(fields: [roleId], references: [id])
-  auditLogs AuditLog[] @relation("UserAuditLogs")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
-
-model Role {
-  id          String       @id @default(cuid())
-  name        String       @unique // e.g., "Administrator", "Operator", "Viewer"
-  description String?
-  users       User[]
-  permissions Permission[] @relation("RolePermissions")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-}
-
-model Permission {
-  id          String   @id // e.g., "subnet.create"
-  name        String   @unique
-  group       String   // e.g., "Subnet Management"
-  description String?
-  roles       Role[]   @relation("RolePermissions")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  @@index([usageUnit])
 }
 
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
-  username  String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String?  // Store username denormalized for logs even if user is deleted
   action    String
   details   String?
-  timestamp DateTime @default(now()) // This will store the event time, defaulting to now() for new records
-  // Removed updatedAt DateTime @updatedAt temporarily for diagnosis
-  user      User?    @relation("UserAuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
 }
 
-// Dictionaries for IP Address form dropdowns
-
+// Dictionaries
 model OperatorDictionary {
-  id               String    @id @default(cuid())
-  operatorName     String    @unique // e.g., 中国电信, 中国联通
-  operatorDevice   String?   // e.g., OLT-ZX-C300 (optional)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id               String   @id @default(cuid())
+  operatorName     String   @unique
+  operatorDevice   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model LocalDeviceDictionary {
   id          String   @id @default(cuid())
-  deviceName  String   @unique // e.g., 核心交换机-A栋, 接入交换机-F1-03
-  port        String?  // e.g., GigabitEthernet1/0/1, TenGigabitEthernet1/0/23 (optional)
+  deviceName  String   @unique
+  port        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model PaymentSourceDictionary {
   id          String   @id @default(cuid())
-  sourceName  String   @unique // e.g., 自费, 财政付费-项目A
+  sourceName  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AccessTypeDictionary {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "汇聚", "专线", "拨号"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
