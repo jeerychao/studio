@@ -109,12 +109,12 @@ model Permission {
 
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String?  // Optional: for system actions or if user is deleted
-  username  String?  // Store username for easier display even if user is deleted
-  action    String   // e.g., "create_subnet", "user_login"
+  userId    String?
+  username  String?
+  action    String
   details   String?
-  timestamp DateTime @default(now()) // For the actual event time, seeded from logData.timestamp
-  updatedAt DateTime @updatedAt    // For Prisma to manage record updates
+  timestamp DateTime @default(now()) // This will store the event time, defaulting to now() for new records
+  // Removed updatedAt DateTime @updatedAt temporarily for diagnosis
   user      User?    @relation("UserAuditLogs", fields: [userId], references: [id], onDelete: SetNull)
 }
 
