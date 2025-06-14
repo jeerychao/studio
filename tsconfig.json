@@ -26,8 +26,7 @@
     "compilerOptions": {
       "module": "CommonJS",
       "moduleResolution": "node"
-    },
-    "transpileOnly": true
+    }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
