@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react"; // Removed Github
+import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,22 +14,27 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
+// import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"; // Temporarily removed
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation"; // Temporarily removed
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const router = useRouter();
+  // const { currentUser, isAuthLoading } = useCurrentUser(); // Temporarily removed
+  // const router = useRouter(); // Temporarily removed
 
   const handleLogout = () => {
+    // This will not fully work without useCurrentUser to clear mock user,
+    // but we keep the redirect for basic logout attempt.
     if (typeof window !== "undefined") {
-      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+      // localStorage.removeItem(MOCK_USER_STORAGE_KEY); // Can't use MOCK_USER_STORAGE_KEY without import
+      localStorage.removeItem('mock_current_user_id_v3_prisma_real_data'); // Use string directly
       window.location.href = '/login'; 
     }
   };
+
+  const mockUsernameForDisplay = "用户 (调试)"; // Placeholder
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
@@ -94,7 +99,7 @@ export function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
+            <DropdownMenuLabel>{mockUsernameForDisplay}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/account/change-password" className="flex items-center w-full">
