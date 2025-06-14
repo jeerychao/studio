@@ -1,8 +1,10 @@
 
+"use client"; // Ensure this is at the top
+
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LayoutDashboard, Users, Network, Cable, Link2, Server, DownloadCloud, AlertTriangle, Percent, Palette, FileText, Sigma, Users2, Waypoints, CreditCard, HardDrive, SlidersHorizontal, Search, Globe } from "lucide-react";
+import { LayoutDashboard, Users, Network, Cable, Link2, Server, DownloadCloud, AlertTriangle, Percent, Palette, FileText, Sigma, Users2, Waypoints, CreditCard, HardDrive, SlidersHorizontal, Search, Globe, Loader2 } from "lucide-react"; // Added Loader2
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS, type DashboardData } from "@/types";
 import { getDashboardDataAction } from "@/lib/actions";
@@ -41,55 +43,75 @@ function DashboardStatCard({ title, value, icon, description, link, linkText }: 
 }
 
 export default function DashboardPage() {
-  const { currentUser } = useCurrentUser();
+  // Ensure useCurrentUser is called unconditionally at the top level of the component
+  const { currentUser, isAuthLoading } = useCurrentUser(); 
   const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(true); // Combined loading state
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    // This effect fetches dashboard data. It depends on currentUser.
     async function fetchData() {
+      if (isAuthLoading) { // Wait for auth to resolve
+        return;
+      }
+      
+      setIsLoading(true); // Start loading dashboard data
+
       if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_DASHBOARD)) {
+        setError("您没有权限查看仪表盘。");
         setIsLoading(false);
         return;
       }
+      
       try {
-        setIsLoading(true);
         const response = await getDashboardDataAction();
         if (response.success && response.data) {
           setDashboardData(response.data);
+          setError(null);
         } else {
           setError(response.error?.userMessage || "无法加载仪表盘数据。");
+          setDashboardData(null);
         }
       } catch (e) {
         setError((e as Error).message || "加载数据时发生未知错误。");
+        setDashboardData(null);
       } finally {
         setIsLoading(false);
       }
     }
     fetchData();
-  }, [currentUser]);
+  }, [currentUser, isAuthLoading]); // Dependency array includes currentUser and isAuthLoading
 
-  if (isLoading) {
+  // Handle combined loading state for auth and data
+  if (isAuthLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <LayoutDashboard className="h-12 w-12 animate-ping text-primary" />
-        <p className="ml-3 text-lg">加载仪表盘数据...</p>
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-lg">{isAuthLoading ? "验证用户权限..." : "加载仪表盘数据..."}</p>
       </div>
     );
   }
 
+  // Handle error state (either auth or data fetching error)
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <AlertTriangle className="h-12 w-12 text-destructive mb-3" />
-        <h2 className="text-xl font-semibold text-destructive mb-2">加载仪表盘数据失败</h2>
+        <h2 className="text-xl font-semibold text-destructive mb-2">
+          {error === "您没有权限查看仪表盘。" ? "访问被拒绝" : "加载仪表盘数据失败"}
+        </h2>
         <p className="text-muted-foreground mb-4">{error}</p>
-        <p className="text-xs text-muted-foreground">请尝试刷新页面或稍后再试。如果问题持续存在，请联系管理员。</p>
+        {error !== "您没有权限查看仪表盘。" && 
+          <p className="text-xs text-muted-foreground">请尝试刷新页面或稍后再试。如果问题持续存在，请联系管理员。</p>
+        }
       </div>
     );
   }
   
+  // This should ideally not be reached if auth error is handled above, but as a fallback:
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_DASHBOARD)) {
+     // This case should be caught by the error state already
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <AlertTriangle className="h-12 w-12 text-destructive mb-3" />
@@ -100,10 +122,11 @@ export default function DashboardPage() {
   }
 
   if (!dashboardData) {
+    // This case should ideally be caught by isLoading or error state
     return (
       <div className="flex items-center justify-center h-full text-center p-4">
         <Sigma className="h-12 w-12 text-muted-foreground mb-3" />
-        <p className="text-muted-foreground">仪表盘数据当前不可用。</p>
+        <p className="text-muted-foreground">仪表盘数据当前不可用或正在加载。</p>
       </div>
     );
   }
@@ -119,6 +142,9 @@ export default function DashboardPage() {
     "资源数": vlan.resourceCount,
     fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
+
+  // Ensure that all hooks like useState, useEffect, useCurrentUser are called at the top level
+  // and not inside conditions or loops. The structure above seems to follow this.
 
   return (
     <>
@@ -207,3 +233,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    
