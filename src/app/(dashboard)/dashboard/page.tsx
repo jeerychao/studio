@@ -6,89 +6,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getDashboardDataAction, getAuditLogsAction } from "@/lib/actions";
-import type { DashboardData, AuditLog, TopNItemCount } from "@/types"; // Removed unused VLANResourceInfo for now
+import type { DashboardData, AuditLog } from "@/types";
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-// import Image from "next/image"; // Not used in the current version
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer, PieChart, Pie, Cell as RechartsCell, Sector } from 'recharts';
-import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"; // ChartTooltip not used
-import { TrendingUp, Users, Network as OperatorIcon, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard, Server, Lan, FilePieChart } from "lucide-react";
+import { TrendingUp, FilePieChart, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard } from "lucide-react";
 import { logger } from "@/lib/logger";
 import type { AppError } from "@/lib/errors";
+import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT } from "@/lib/constants";
 
-// Helper for active sector in Pie chart (Currently not used for interactivity in Server Component)
-const renderActiveShape = (props: any) => {
-  const RADIAN = Math.PI / 180;
-  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
-  const sin = Math.sin(-RADIAN * midAngle);
-  const cos = Math.cos(-RADIAN * midAngle);
-  const sx = cx + (outerRadius + 10) * cos;
-  const sy = cy + (outerRadius + 10) * sin;
-  const mx = cx + (outerRadius + 30) * cos;
-  const my = cy + (outerRadius + 30) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
-  const ey = my;
-  const textAnchor = cos >= 0 ? 'start' : 'end';
-
-  return (
-    <g>
-      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} className="text-sm font-semibold">
-        {payload.name}
-      </text>
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={innerRadius}
-        outerRadius={outerRadius}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-      />
-      <Sector
-        cx={cx}
-        cy={cy}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        innerRadius={outerRadius + 6}
-        outerRadius={outerRadius + 10}
-        fill={fill}
-      />
-      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
-      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333" className="text-xs">{`数量 ${value}`}</text>
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999" className="text-xs">
-        {`(占比 ${(percent * 100).toFixed(2)}%)`}
-      </text>
-    </g>
-  );
-};
-
-// Custom ChartLegendContent component to pass to RechartsLegend
-// This is necessary because RechartsLegend's content prop expects a React element.
-const ChartLegendContent = (props: any) => {
-    const { payload } = props;
-    if (!payload || payload.length === 0) {
-        return null;
-    }
-    return (
-        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground mt-2">
-            {payload.map((entry: any, index: number) => (
-                <div key={`item-${index}`} className="flex items-center gap-1.5">
-                    <span style={{ backgroundColor: entry.color }} className="h-2.5 w-2.5 rounded-full inline-block"></span>
-                    <span>{entry.value}</span>
-                </div>
-            ))}
-        </div>
-    );
-};
+// Import new client-side chart components
+import { IPStatusPieChart } from "@/components/dashboard/ip-status-pie-chart";
+import { UsageBarChart } from "@/components/dashboard/usage-bar-chart";
+import { VlanResourceBarChart } from "@/components/dashboard/vlan-resource-bar-chart";
 
 
 export default async function DashboardPage() {
   let dashboardData: DashboardData | null = null;
   let recentLogs: AuditLog[] = [];
   let fetchError: string | null = null;
-  // Removed: const [activeIndex, setActiveIndex] = React.useState(0); 
-  // useState cannot be used in Server Components.
 
   try {
     const [dashboardDataResult, auditLogsResult] = await Promise.all([
@@ -167,30 +102,32 @@ export default async function DashboardPage() {
     { name: '空闲', value: freeIps, fill: "hsl(var(--chart-2))"  },
     { name: '预留', value: reservedIps, fill: "hsl(var(--chart-3))"  },
   ];
-
+  
   const CHART_COLORS_REMAINDER = [
     "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
     "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
   ];
   
   const ipUsageByUnitChartData = ipUsageByUnit.map((item, index) => ({
-    name: item.item,
-    IP数量: item.count,
+    ...item, // contains name and count (which is 'value' for chart)
+    name: item.item, // ensure 'name' field for chart
+    value: item.count, // ensure 'value' field for chart
     fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
 
   const ipUsageByOperatorChartData = ipUsageByOperator.map((item, index) => ({
+    ...item,
     name: item.item,
-    IP数量: item.count,
+    value: item.count,
     fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
   
   const vlanResourceChartData = [...vlanResourceCounts]
     .sort((a, b) => b.resourceCount - a.resourceCount)
-    .slice(0, 10)
+    .slice(0, 10) // Show top 10
     .map((vlan, index) => ({
       name: vlan.name ? `${vlan.name} (VLAN ${vlan.vlanNumber})` : `VLAN ${vlan.vlanNumber}`,
-      资源数: vlan.resourceCount,
+      "资源数": vlan.resourceCount, // Key for the Bar
       fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
     }));
 
@@ -249,29 +186,7 @@ export default async function DashboardPage() {
             <CardDescription>按已分配、空闲和预留状态显示 IP 地址。</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] md:h-[350px]">
-            <ChartContainer config={{}} className="w-full h-full">
-              <PieChart>
-                <RechartsTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
-                />
-                <Pie
-                  data={ipStatusChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={100}
-                  innerRadius={60}
-                  dataKey="value"
-                  // activeShape={renderActiveShape} // Interactivity for Server Component requires client wrapper
-                >
-                  {ipStatusChartData.map((entry, index) => (
-                    <RechartsCell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <RechartsLegend content={<ChartLegendContent />} />
-              </PieChart>
-            </ChartContainer>
+            <IPStatusPieChart data={ipStatusChartData} />
           </CardContent>
         </Card>
         <Card>
@@ -280,15 +195,7 @@ export default async function DashboardPage() {
             <CardDescription>显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个使用单位。</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] md:h-[350px]">
-             <ChartContainer config={{}} className="w-full h-full">
-              <BarChart data={ipUsageByUnitChartData} layout="vertical" margin={{ right: 20, left:20 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 12 }} interval={0} />
-                <RechartsTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-                <Bar dataKey="IP数量" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ChartContainer>
+            <UsageBarChart data={ipUsageByUnitChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
           </CardContent>
         </Card>
       </div>
@@ -300,15 +207,7 @@ export default async function DashboardPage() {
             <CardDescription>显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个运营商。</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] md:h-[350px]">
-            <ChartContainer config={{}} className="w-full h-full">
-              <BarChart data={ipUsageByOperatorChartData} layout="vertical" margin={{ right: 20, left:20 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 12 }} interval={0} />
-                <RechartsTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-                <Bar dataKey="IP数量" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ChartContainer>
+            <UsageBarChart data={ipUsageByOperatorChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
           </CardContent>
         </Card>
         <Card>
@@ -317,15 +216,7 @@ export default async function DashboardPage() {
             <CardDescription>显示关联资源数（子网+直接IP）最多的前10个VLAN。</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] md:h-[350px]">
-             <ChartContainer config={{}} className="w-full h-full">
-              <BarChart data={vlanResourceChartData} margin={{ top: 5, right: 20, left: 20, bottom: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false}/>
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={60} />
-                <YAxis allowDecimals={false} />
-                <RechartsTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-                <Bar dataKey="资源数" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ChartContainer>
+            <VlanResourceBarChart data={vlanResourceChartData} />
           </CardContent>
         </Card>
       </div>
@@ -364,6 +255,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground">个 VLAN 当前未使用</p>
             {unusedVlanCount > 0 && (
                  <Button variant="link" size="sm" className="mt-2 p-0 h-auto" asChild>
+                    {/* This link might need adjustment based on actual query page capabilities */}
                     <Link href="/query?tab=vlan&q_vlan_unused=true">查看未使用列表 (查询待实现)</Link>
                  </Button>
             )}
