@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-// import { useRouter, usePathname } from 'next/navigation'; // Temporarily removed
+import { useRouter, usePathname } from 'next/navigation'; // Re-enabled
 import * as React from "react";
 import { Network, Loader2 } from "lucide-react"; 
 import Image from 'next/image';
@@ -18,7 +18,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
 // import { Button } from "@/components/ui/button"; // Temporarily removed
 import { Toaster } from "@/components/ui/toaster";
-// import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user"; // Temporarily removed
+import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user"; // Re-enabled
 import { logger } from "@/lib/logger";
 
 export default function DashboardLayout({
@@ -26,55 +26,60 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {  
-  // const { currentUser, isAuthLoading } = useCurrentUser(); // Temporarily removed
-  // const router = useRouter(); // Temporarily removed
-  // const pathname = usePathname(); // Temporarily removed
-  // const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading'); // Temporarily removed
+  const { currentUser, isAuthLoading } = useCurrentUser(); // Re-enabled
+  const router = useRouter(); // Re-enabled
+  const pathname = usePathname(); // Re-enabled
+  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading'); // Re-enabled
 
-  // React.useEffect(() => { // Temporarily removed auth logic
-  //   if (isAuthLoading) {
-  //     setAuthStatus('loading');
-  //     logger.info("DashboardLayout: Auth status is loading (isAuthLoading true).");
-  //     return;
-  //   }
+  React.useEffect(() => { // Re-enabled auth logic
+    logger.debug("[DashboardLayout Effect] Running. isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : 'null');
+    if (isAuthLoading) {
+      setAuthStatus('loading');
+      logger.info("DashboardLayout: Auth status is loading (isAuthLoading true).");
+      return;
+    }
 
-  //   if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-  //       setAuthStatus('authenticated');
-  //       logger.info(`DashboardLayout: User authenticated: ${currentUser.username} (ID: ${currentUser.id}).`);
-  //   } else { 
-  //     setAuthStatus('unauthenticated');
-  //     logger.warn(`DashboardLayout: User unauthenticated or guest. Current path: ${pathname}. Attempting redirect to /login if not already there.`);
-  //     if (pathname !== '/login') {
-  //       router.replace('/login');
-  //     }
-  //   }
-  // }, [currentUser, isAuthLoading, router, pathname]);
+    if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
+        setAuthStatus('authenticated');
+        logger.info(`DashboardLayout: User authenticated: ${currentUser.username} (ID: ${currentUser.id}). Current path: ${pathname}`);
+        if (pathname === '/login'){
+             logger.info("DashboardLayout: User authenticated and on /login, redirecting to /dashboard.");
+             router.replace('/dashboard'); // Redirect away from login if authenticated
+        }
+    } else { 
+      setAuthStatus('unauthenticated');
+      logger.warn(`DashboardLayout: User unauthenticated or guest. Current path: ${pathname}. Attempting redirect to /login if not already there.`);
+      if (pathname !== '/login') {
+        router.replace('/login');
+      }
+    }
+  }, [currentUser, isAuthLoading, router, pathname]);
 
-  // if (authStatus === 'loading' || isAuthLoading) { // Temporarily removed
-  //   return (
-  //     <div className="flex items-center justify-center h-screen">
-  //       <Loader2 className="h-12 w-12 animate-spin text-primary" />
-  //       <p className="ml-4 text-lg">加载应用中...</p>
-  //     </div>
-  //   );
-  // }
+  if (authStatus === 'loading') { // Re-enabled loading check
+    logger.info("DashboardLayout: Auth status is 'loading', rendering loading spinner.");
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4 text-lg">加载应用中...</p>
+      </div>
+    );
+  }
 
-  // if (authStatus === 'unauthenticated') { // Temporarily removed
-  //   if (pathname !== '/login') {
-  //       logger.info("DashboardLayout: Rendering redirect message to /login.");
-  //       return (
-  //           <div className="flex flex-col items-center justify-center h-screen">
-  //               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-  //               <p className="text-lg text-muted-foreground">会话无效或已过期。</p>
-  //               <p className="text-md text-muted-foreground">正在重定向到登录页面...</p>
-  //           </div>
-  //       );
-  //   }
-  //   logger.info("DashboardLayout: Auth status unauthenticated, but already on /login or redirect not needed. Rendering null from layout.");
-  //   return null; 
-  // }
+  if (authStatus === 'unauthenticated' && pathname !== '/login') { // Re-enabled unauthenticated check
+    logger.info("DashboardLayout: Auth status 'unauthenticated' and not on /login, rendering redirect message.");
+    return (
+        <div className="flex flex-col items-center justify-center h-screen">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-lg text-muted-foreground">会话无效或已过期。</p>
+            <p className="text-md text-muted-foreground">正在重定向到登录页面...</p>
+        </div>
+    );
+  }
+  
+  // If unauthenticated and on /login, children (login page) should render.
+  // If authenticated, normal layout renders.
 
-  logger.info("DashboardLayout: Rendering SIMPLIFIED layout (auth checks bypassed for debugging).");
+  logger.info("DashboardLayout: Rendering main layout content. AuthStatus:", authStatus);
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
