@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun, Laptop, ChevronDown } from "lucide-react"; // Added ChevronDown
+import { Moon, Sun, Laptop, ChevronDown } from "lucide-react"; 
 import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5">
+        <Button variant="ghost" className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current">
           {/* Relative container for Sun/Moon so ChevronDown flows next to it */}
           <div className="relative w-[1.1rem] h-[1.1rem] flex items-center justify-center"> {/* Slightly smaller icon area */}
             <Sun className="h-full w-full rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

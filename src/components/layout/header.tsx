@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react"; // Added ChevronDown
+import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -63,7 +63,7 @@ export function Header() {
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"> {/* Changed to w-auto, added padding and space */}
+            <Button variant="ghost" className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"> {/* Changed to w-auto, added padding and space */}
               <UserCircle className="h-6 w-6" /> {/* Slightly smaller UserCircle */}
               <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
               <span className="sr-only">切换用户菜单</span>
