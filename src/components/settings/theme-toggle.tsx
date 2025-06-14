@@ -16,48 +16,52 @@ import {
 export function ThemeToggle() {
   const { setTheme } = useTheme();
   const [isOpen, setIsOpen] = React.useState(false);
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCloseTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const clearTimer = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+  const clearAutoCloseTimer = () => {
+    if (autoCloseTimerRef.current) {
+      clearTimeout(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = null;
     }
   };
 
-  const handleOpenChange = (openValue: boolean) => {
-    clearTimer(); // Clear any pending timer immediately when Radix changes state
-    setIsOpen(openValue);
+  // This function is called by Radix's DropdownMenu onOpenChange
+  const handleRadixOpenChange = (openValue: boolean) => {
+    clearAutoCloseTimer(); // Crucial: always clear our timer when Radix's state changes
+    setIsOpen(openValue);   // Sync our state with Radix's
   };
 
-  const handleMouseEnterTriggerOrContent = () => {
-    clearTimer();
+  // When mouse enters the trigger or content, cancel any pending auto-close
+  const handleMouseEnterInteractiveArea = () => {
+    clearAutoCloseTimer();
   };
-  
-  const handleMouseLeaveTriggerOrContent = () => {
-    clearTimer(); 
-    if (isOpen) { 
-      timerRef.current = setTimeout(() => {
-        setIsOpen(false);
-      }, 500); // Increased delay to 500ms
+
+  // When mouse leaves the trigger or content, and the menu is open, start auto-close timer
+  const handleMouseLeaveInteractiveArea = () => {
+    clearAutoCloseTimer(); // Clear any existing one first
+    if (isOpen) { // Only if our state says it's open
+      autoCloseTimerRef.current = setTimeout(() => {
+        setIsOpen(false); // This will trigger handleRadixOpenChange(false) via Radix
+      }, 500); // 500ms delay
     }
   };
 
-  const handleItemClick = (theme: string) => {
+  const handleThemeItemClick = (theme: string) => {
     setTheme(theme);
-    setIsOpen(false); 
-    clearTimer();
+    setIsOpen(false); // Explicitly close our state
+    clearAutoCloseTimer(); // And clear timer
+    // Radix will also attempt to close, which is fine.
   };
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
+    <DropdownMenu open={isOpen} onOpenChange={handleRadixOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
-          onMouseEnter={handleMouseEnterTriggerOrContent}
-          onMouseLeave={handleMouseLeaveTriggerOrContent}
-          // onClick is handled by Radix DropdownMenuTrigger's default behavior
+          onMouseEnter={handleMouseEnterInteractiveArea}
+          onMouseLeave={handleMouseLeaveInteractiveArea}
+          // onClick is handled by Radix to call onOpenChange
         >
           <div className="relative w-[1.1rem] h-[1.1rem] flex items-center justify-center">
             <Sun className="h-full w-full rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -69,18 +73,18 @@ export function ThemeToggle() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        onMouseEnter={handleMouseEnterTriggerOrContent} 
-        onMouseLeave={handleMouseLeaveTriggerOrContent}
+        onMouseEnter={handleMouseEnterInteractiveArea}
+        onMouseLeave={handleMouseLeaveInteractiveArea}
       >
-        <DropdownMenuItem onClick={() => handleItemClick("light")}>
+        <DropdownMenuItem onClick={() => handleThemeItemClick("light")}>
           <Sun className="mr-2 h-4 w-4" />
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleItemClick("dark")}>
+        <DropdownMenuItem onClick={() => handleThemeItemClick("dark")}>
           <Moon className="mr-2 h-4 w-4" />
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleItemClick("system")}>
+        <DropdownMenuItem onClick={() => handleThemeItemClick("system")}>
           <Laptop className="mr-2 h-4 w-4" />
           System
         </DropdownMenuItem>

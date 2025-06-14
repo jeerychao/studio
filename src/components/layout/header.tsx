@@ -16,65 +16,62 @@ import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
 import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
-import * as React from "react"; 
-import { useRouter } from "next/navigation"; // Added for Link navigation within item click
+import * as React from "react";
+import { useRouter } from "next/navigation";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const { currentUser, isAuthLoading } = useCurrentUser();
-  const router = useRouter(); // Added router
+  const router = useRouter();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
-  const userMenuTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userAutoCloseTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const clearUserMenuTimer = () => {
-    if (userMenuTimerRef.current) {
-      clearTimeout(userMenuTimerRef.current);
-      userMenuTimerRef.current = null;
+  const clearUserAutoCloseTimer = () => {
+    if (userAutoCloseTimerRef.current) {
+      clearTimeout(userAutoCloseTimerRef.current);
+      userAutoCloseTimerRef.current = null;
     }
   };
 
-  const handleUserMenuOpenChange = (openValue: boolean) => {
-    clearUserMenuTimer(); // Clear any pending timer immediately when Radix changes state
+  const handleUserMenuRadixOpenChange = (openValue: boolean) => {
+    clearUserAutoCloseTimer();
     setIsUserMenuOpen(openValue);
   };
-  
-  const handleUserMenuMouseEnterTriggerOrContent = () => {
-    clearUserMenuTimer();
+
+  const handleUserMenuMouseEnterInteractiveArea = () => {
+    clearUserAutoCloseTimer();
   };
 
-  const handleUserMenuMouseLeaveTriggerOrContent = () => {
-    clearUserMenuTimer();
+  const handleUserMenuMouseLeaveInteractiveArea = () => {
+    clearUserAutoCloseTimer();
     if (isUserMenuOpen) {
-      userMenuTimerRef.current = setTimeout(() => {
+      userAutoCloseTimerRef.current = setTimeout(() => {
         setIsUserMenuOpen(false);
-      }, 500); // Increased delay to 500ms
+      }, 500);
     }
   };
   
-  // This function will be called by item's onClick if it's not a Link.
-  // For Link items, the asChild + onClick on DropdownMenuItem with Link inside should work.
   const handleUserMenuItemClick = (action?: () => void) => {
-    if(action) action(); // Perform action if any (like router.push for non-Link items)
-    setIsUserMenuOpen(false); 
-    clearUserMenuTimer();
+    if (action) action();
+    setIsUserMenuOpen(false);
+    clearUserAutoCloseTimer();
   };
 
   const handleLogout = () => {
-    // For logout, we perform the action and then ensure menu closes.
-    // The specific action part is inside this handler.
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login'; // Direct navigation for logout
+      window.location.href = '/login';
     }
+    // Explicitly close and clear timer, though Radix would also trigger onOpenChange
     setIsUserMenuOpen(false); 
-    clearUserMenuTimer();
+    clearUserAutoCloseTimer();
   };
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
       {isMobile ? (
-         <Sheet open={false} onOpenChange={(open) => { if (open) toggleSidebar(); }}>{/* Corrected Sheet open state for mobile */}
+         <Sheet> {/* Radix Sheet manages its own open state via Trigger */}
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="shrink-0 md:hidden">
               <Menu className="h-5 w-5" />
@@ -104,14 +101,13 @@ export function Header() {
 
       <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end">
         <ThemeToggle />
-        <DropdownMenu open={isUserMenuOpen} onOpenChange={handleUserMenuOpenChange}>
+        <DropdownMenu open={isUserMenuOpen} onOpenChange={handleUserMenuRadixOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
-              onMouseEnter={handleUserMenuMouseEnterTriggerOrContent}
-              onMouseLeave={handleUserMenuMouseLeaveTriggerOrContent}
-              // onClick is handled by Radix DropdownMenuTrigger's default behavior
+              onMouseEnter={handleUserMenuMouseEnterInteractiveArea}
+              onMouseLeave={handleUserMenuMouseLeaveInteractiveArea}
             >
               <UserCircle className="h-6 w-6" />
               <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
@@ -120,13 +116,12 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            onMouseEnter={handleUserMenuMouseEnterTriggerOrContent} 
-            onMouseLeave={handleUserMenuMouseLeaveTriggerOrContent}
+            onMouseEnter={handleUserMenuMouseEnterInteractiveArea} 
+            onMouseLeave={handleUserMenuMouseLeaveInteractiveArea}
           >
             <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {/* For Link items, ensuring the menu closes on click */}
-            <DropdownMenuItem asChild onClick={() => handleUserMenuItemClick()}>
+            <DropdownMenuItem asChild onClick={() => handleUserMenuItemClick(() => router.push("/account/change-password"))}>
               <Link href="/account/change-password" className="flex items-center w-full">
                 <KeyRound className="mr-2 h-4 w-4" />
                 修改密码
