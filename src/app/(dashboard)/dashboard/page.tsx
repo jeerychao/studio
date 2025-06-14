@@ -171,7 +171,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">IP 地址状态分布</CardTitle> 
-            <CardDescription className="text-xs">按已分配、空闲和预留状态显示 IP 地址。</CardDescription>
+            <CardDescription className="text-sm">按已分配、空闲和预留状态显示 IP 地址。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
             <IPStatusPieChart data={ipStatusChartData} />
@@ -180,7 +180,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
-            <CardDescription className="text-xs">显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个使用单位。</CardDescription>
+            <CardDescription className="text-sm">显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个使用单位。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
             <UsageBarChart data={ipUsageByUnitChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
-            <CardDescription className="text-xs">显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个运营商。</CardDescription>
+            <CardDescription className="text-sm">显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个运营商。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
             <UsageBarChart data={ipUsageByOperatorChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
@@ -201,7 +201,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">VLAN 资源分布 (Top 10)</CardTitle> 
-            <CardDescription className="text-xs">显示关联资源数（子网+直接IP）最多的前10个VLAN。</CardDescription>
+            <CardDescription className="text-sm">显示关联资源数（子网+直接IP）最多的前10个VLAN。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 h-[260px]"> 
             <VlanResourceBarChart data={vlanResourceChartData} />
@@ -213,7 +213,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
-            <CardDescription className="text-xs">按关联的子网和直接 IP 地址总数排名。</CardDescription>
+            <CardDescription className="text-sm">按关联的子网和直接 IP 地址总数排名。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-2"> 
             {busiestVlans && busiestVlans.length > 0 ? (
@@ -236,7 +236,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">即将分配完的子网 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
-            <CardDescription className="text-xs">子网 IP 地址利用率超过 80%。</CardDescription>
+            <CardDescription className="text-sm">子网 IP 地址利用率超过 80%。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-2">
             {subnetsNeedingAttention && subnetsNeedingAttention.length > 0 ? (
@@ -269,7 +269,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="p-4">
             <CardTitle className="text-base font-semibold">最近活动日志</CardTitle> 
-            <CardDescription className="text-xs">系统中最近执行的 {DASHBOARD_AUDIT_LOG_COUNT} 条操作。</CardDescription>
+            <CardDescription className="text-sm">系统中最近执行的 {DASHBOARD_AUDIT_LOG_COUNT} 条操作。</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             {recentLogs.length > 0 ? (
