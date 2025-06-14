@@ -26,21 +26,21 @@ export function ThemeToggle() {
   };
 
   const handleOpenChange = (openValue: boolean) => {
+    clearTimer(); // Clear any pending timer immediately when Radix changes state
     setIsOpen(openValue);
-    if (!openValue) {
-      clearTimer();
-    }
-  };
-  
-  const handleMouseEnter = () => {
-    clearTimer(); // Clear any pending close timer if mouse re-enters
   };
 
-  const handleMouseLeave = () => {
+  const handleMouseEnterTriggerOrContent = () => {
     clearTimer();
-    timerRef.current = setTimeout(() => {
-      setIsOpen(false);
-    }, 300); // Adjust delay as needed (milliseconds)
+  };
+  
+  const handleMouseLeaveTriggerOrContent = () => {
+    clearTimer(); 
+    if (isOpen) { 
+      timerRef.current = setTimeout(() => {
+        setIsOpen(false);
+      }, 500); // Increased delay to 500ms
+    }
   };
 
   const handleItemClick = (theme: string) => {
@@ -49,16 +49,15 @@ export function ThemeToggle() {
     clearTimer();
   };
 
-
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
-          onMouseEnter={handleMouseEnter} // Keep open if mouse moves back to trigger
-          onMouseLeave={handleMouseLeave} // Start close timer if mouse leaves trigger
-          onClick={() => setIsOpen(!isOpen)} // Toggle on click
+          onMouseEnter={handleMouseEnterTriggerOrContent}
+          onMouseLeave={handleMouseLeaveTriggerOrContent}
+          // onClick is handled by Radix DropdownMenuTrigger's default behavior
         >
           <div className="relative w-[1.1rem] h-[1.1rem] flex items-center justify-center">
             <Sun className="h-full w-full rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -70,8 +69,8 @@ export function ThemeToggle() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        onMouseEnter={handleMouseEnter} // Keep open if mouse moves to content
-        onMouseLeave={handleMouseLeave} // Start close timer if mouse leaves content
+        onMouseEnter={handleMouseEnterTriggerOrContent} 
+        onMouseLeave={handleMouseLeaveTriggerOrContent}
       >
         <DropdownMenuItem onClick={() => handleItemClick("light")}>
           <Sun className="mr-2 h-4 w-4" />
