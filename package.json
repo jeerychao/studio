@@ -1,3 +1,4 @@
+
 {
   "name": "nextn",
   "version": "0.1.0",
@@ -14,7 +15,7 @@
     "prisma:db:seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P tsconfig.json ./prisma/seed.ts"
   },
   "prisma": {
-    "seed": "node ./node_modules/.bin/ts-node -P tsconfig.json ./prisma/seed.ts",
+    "seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P tsconfig.json ./prisma/seed.ts",
     "binaryTargets": [
       "native",
       "debian-openssl-3.0.x"
