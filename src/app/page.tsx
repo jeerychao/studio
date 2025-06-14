@@ -1,8 +1,8 @@
+
+import { redirect } from 'next/navigation';
+
 export default function HomePage() {
-  return (
-    <div>
-      <h1>Home Page Works!</h1>
-      <p>If you see this, the root page is being served correctly.</p>
-    </div>
-  );
+  redirect('/dashboard');
+  // eslint-disable-next-line react/jsx-no-useless-fragment
+  return <></>; // Or a loading spinner, but redirect is usually fast enough
 }
