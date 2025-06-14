@@ -1,3 +1,4 @@
+
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -21,7 +22,7 @@ import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, typ
 import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
-import { encrypt, decrypt } from '../app/api/auth/[...nextauth]/route'; // Corrected import path
+import { encrypt, decrypt } from '../app/api/auth/[...nextauth]/route';
 
 export interface ActionResponse<TData = unknown> {
   success: boolean;
@@ -58,7 +59,7 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
       decryptedStoredPassword = decrypt(userFromDb.password);
     } catch (decryptionError) {
       logger.error(`[${actionName}] Password decryption failed for user ${userFromDb.username}.`, decryptionError as Error, { userId: userFromDb.id }, actionName);
-      return { success: false, message: "登录认证失败，请联系管理员。" }; // Generic error for security
+      return { success: false, message: "登录认证失败，请联系管理员。" }; 
     }
 
     if (decryptedStoredPassword !== passwordAttempt) { 
@@ -73,7 +74,6 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     return { success: true, user: { id: userFromDb.id, username: userFromDb.username, email: userFromDb.email, roleId: userFromDb.roleId, roleName: userFromDb.role.name as AppRoleNameType, avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', permissions: permissionsList, lastLogin: userFromDb.lastLogin?.toISOString() } };
   } catch (error) { 
     logger.error(`[${actionName}] Login error`, error as Error, { email }, actionName); 
-    // Check if the error is from our decrypt function due to bad format/key, etc.
     if (error instanceof Error && error.message.includes('Decryption failed')) {
         return { success: false, message: "登录认证参数错误，请联系管理员。" };
     }
@@ -113,7 +113,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
     
     const encryptedPassword = encrypt(data.password);
 
-    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
+    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone || null, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` } });
     revalidatePath("/users");
     const fetchedUser: FetchedUserDetails = { id: newUser.id, username: newUser.username, email: newUser.email, roleId: newUser.roleId, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: newUser.lastLogin?.toISOString() || undefined };
@@ -132,7 +132,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     if (data.email && data.email !== userToUpdate.email) { if (await prisma.user.findFirst({ where: { email: data.email, NOT: { id } } })) throw new ResourceError(`邮箱 ${data.email} 已被使用。`, 'EMAIL_ALREADY_EXISTS', undefined, 'email'); updateData.email = data.email; }
     if (data.roleId && data.roleId !== userToUpdate.roleId) { if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, undefined, 'roleId'); updateData.roleId = data.roleId; }
     if (data.password) updateData.password = encrypt(data.password);
-    if (data.phone) updateData.phone = encrypt(data.phone); else if (data.hasOwnProperty('phone') && data.phone === null) updateData.phone = null; // Allow explicitly clearing phone
+    if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null; 
     if (data.avatar) updateData.avatar = data.avatar;
     if (Object.keys(updateData).length === 0) { const currentUserDetails = await fetchCurrentUserDetailsAction(id); if(!currentUserDetails) throw new NotFoundError(`用户 ID: ${id}`); return { success: true, data: currentUserDetails }; }
     const updatedUser = await prisma.user.update({ where: { id }, data: updateData, include: { role: { include: { permissions: true } } } });
@@ -504,9 +504,9 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
       allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null, 
       contactPerson: data.contactPerson || null, 
-      phone: data.phone ? data.phone || null : null,
+      phone: data.phone || null, 
       description: data.description || null, 
-      lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(), // Default to now if not provided
+      lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(),
       selectedOperatorName: data.selectedOperatorName || null, 
       selectedOperatorDevice: data.selectedOperatorDevice || null, 
       selectedAccessType: data.selectedAccessType || null,
@@ -546,7 +546,7 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
         const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr, status: status, isGateway: isGateway ?? false, allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
             usageUnit: usageUnit||null, contactPerson: contactPerson||null, 
-            phone: phone ? phone : null, 
+            phone: phone || null, 
             description: description || null,
             lastSeen: new Date(),
             selectedOperatorName: selectedOperatorName || null, selectedOperatorDevice: selectedOperatorDevice || null, selectedAccessType: selectedAccessType || null,
@@ -569,7 +569,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const ipToUpdate = await prisma.iPAddress.findUnique({ where: { id } }); if (!ipToUpdate) throw new NotFoundError(`IP 地址 ID: ${id}`);
-    const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() }; // Always update lastSeen
+    const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() }; 
     let finalIpAddress = ipToUpdate.ipAddress;
     if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) { if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress); updateData.ipAddress = data.ipAddress; finalIpAddress = data.ipAddress; }
     if (data.hasOwnProperty('status') && data.status !== undefined) updateData.status = data.status as string;
@@ -577,7 +577,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = (data.allocatedTo === undefined || data.allocatedTo === "") ? null : data.allocatedTo;
     if (data.hasOwnProperty('usageUnit')) updateData.usageUnit = (data.usageUnit === undefined || data.usageUnit === "") ? null : data.usageUnit;
     if (data.hasOwnProperty('contactPerson')) updateData.contactPerson = (data.contactPerson === undefined || data.contactPerson === "") ? null : data.contactPerson;
-    if (data.hasOwnProperty('phone')) updateData.phone = (data.phone === undefined || data.phone === "" || data.phone === null) ? null : data.phone;
+    if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null; 
     if (data.hasOwnProperty('description')) updateData.description = (data.description === undefined || data.description === "") ? null : data.description;
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, undefined, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('selectedOperatorName')) updateData.selectedOperatorName = data.selectedOperatorName || null;
@@ -689,12 +689,7 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } }); 
-      
-      // For phone, since it's encrypted, direct search is not possible.
-      // This part would require fetching all, decrypting, then filtering, which is inefficient for large datasets.
-      // For now, direct search on encrypted phone is omitted. Users can search by other fields.
-      // orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } }); // Cannot do this on encrypted field directly
-
+      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } }); 
       orConditionsForSearchTerm.push({ selectedOperatorName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedOperatorDevice: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm } });
     }
@@ -945,4 +940,21 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
+// Helper function to handle Prisma unique constraint errors for dictionary actions
+function handlePrismaError(error: any, fieldNameMap: Record<string, string>): ActionResponse<any> {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    const target = (error.meta?.target as string[]) || [];
+    const conflictingField = target.length > 0 ? target[0] : "未知字段";
+    const userFriendlyFieldName = fieldNameMap[conflictingField] || conflictingField;
+    return {
+      success: false,
+      error: {
+        userMessage: `${userFriendlyFieldName}已存在，请使用不同的值。`,
+        code: 'UNIQUE_CONSTRAINT_FAILED',
+        field: conflictingField,
+      },
+    };
+  }
+  return createActionErrorResponse(error, 'DICTIONARY_DB_ERROR');
+}
     

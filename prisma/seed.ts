@@ -1,3 +1,4 @@
+
 import dotenv from 'dotenv';
 dotenv.config({ path: require('path').resolve(__dirname, '../.env') }); // Ensure .env at project root is loaded
 
@@ -18,7 +19,7 @@ import {
 } from '../src/lib/data';
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
 import { Prisma } from '@prisma/client';
-import { encrypt } from '../src/app/api/auth/[...nextauth]/route'; // Corrected import
+import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
 
 async function main() {
   console.log('Start seeding ...');
@@ -82,7 +83,6 @@ async function main() {
   }
   console.log('Roles updated with permissions (Pass 2 complete).');
 
-  // Define initial users with plain text passwords to be encrypted before seeding
   const initialUsersToSeedPlain: Array<Omit<AppUser, 'roleName' | 'lastLogin' | 'avatar' | 'permissions'> & { password_plain: string; phone_plain?: string; avatarPath: string }> = [
     { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: SEED_ADMIN_ROLE_ID, password_plain: 'admin', phone_plain: '11111111111', avatarPath: '/images/avatars/admin_avatar.png' },
     { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: SEED_OPERATOR_ROLE_ID, password_plain: 'operator', phone_plain: '22222222222', avatarPath: '/images/avatars/operator_avatar.png' },
@@ -92,7 +92,8 @@ async function main() {
   console.log('Seeding Users...');
   for (const userData of initialUsersToSeedPlain) {
     const encryptedPassword = encrypt(userData.password_plain);
-    const encryptedPhone = userData.phone_plain ? encrypt(userData.phone_plain) : null;
+    // Store phone number in plaintext
+    const plainPhone = userData.phone_plain || null;
 
     await prisma.user.upsert({
       where: { email: userData.email },
@@ -100,7 +101,7 @@ async function main() {
         id: userData.id, 
         username: userData.username, 
         password: encryptedPassword, 
-        phone: encryptedPhone,
+        phone: plainPhone, // Store plaintext phone
         roleId: userData.roleId, 
         avatar: userData.avatarPath, 
         lastLogin: new Date() 
@@ -110,7 +111,7 @@ async function main() {
         username: userData.username, 
         email: userData.email, 
         password: encryptedPassword, 
-        phone: encryptedPhone,
+        phone: plainPhone, // Store plaintext phone
         roleId: userData.roleId, 
         avatar: userData.avatarPath, 
         lastLogin: new Date() 
@@ -183,7 +184,7 @@ async function main() {
 
   console.log('Seeding IP Addresses (with new optional fields)...');
   for (const ipData of seedIPsData) { 
-    // 不再加密电话号码
+    // Phone number is already plaintext in mockIPAddresses
     const phone = ipData.phone || null;
 
     await prisma.iPAddress.upsert({
@@ -195,7 +196,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: phone, // 使用未加密的电话号码
+        phone: phone, // Store plaintext phone
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -214,7 +215,7 @@ async function main() {
         allocatedTo: ipData.allocatedTo,
         usageUnit: ipData.usageUnit,
         contactPerson: ipData.contactPerson,
-        phone: phone, // 使用未加密的电话号码
+        phone: phone, // Store plaintext phone
         description: ipData.description,
         subnetId: ipData.subnetId,
         directVlanId: ipData.directVlanId,
@@ -303,3 +304,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
