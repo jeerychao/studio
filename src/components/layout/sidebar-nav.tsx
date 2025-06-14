@@ -33,6 +33,7 @@ import { useCurrentUser, hasPermission, type CurrentUserContextValue } from "@/h
 import type { PermissionId } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { logger } from "@/lib/logger";
+import { useSidebar } from "@/components/ui/sidebar"; // Import useSidebar
 
 
 interface NavItemConfig {
@@ -100,6 +101,7 @@ const navItemConfigs: NavItemConfig[] = [
 export function SidebarNav() {
   const pathname = usePathname();
   const { currentUser, isAuthLoading } = useCurrentUser();
+  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar(); // Get sidebar state and control
 
   const filterNavItemsByPermission = React.useCallback((items: NavItemConfig[], user: CurrentUserContextValue | null): NavItemConfig[] => {
     if (!user || !user.permissions || !Array.isArray(user.permissions)) {
@@ -119,16 +121,10 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems && item.subItems.length > 0) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        // If the parent item itself doesn't have a specific permission (relies on children having perms),
-        // and all its children are filtered out, then hide the parent too.
         if ((!item.requiredPermission || (Array.isArray(item.requiredPermission) && item.requiredPermission.length === 0)) && filteredSubItems.length === 0) {
             return null;
         }
-         // If parent has required permissions, but ALL children are filtered out, then parent itself also does not render (unless it's a direct link page)
-        if (filteredSubItems.length === 0 && item.href === "/dictionaries" || item.href === "/system" || item.href === "/ip-management") { // Example parent-only links
-            // Check if the parent itself should still be visible even if all children are gone.
-            // This logic might need refinement based on whether parent items are pure groups or also links.
-            // For now, if it's a group and all children are gone, and the group itself doesn't have its own unique required permission that was met, hide it.
+        if (filteredSubItems.length === 0 && item.href === "/dictionaries" || item.href === "/system" || item.href === "/ip-management") { 
             if (Array.isArray(item.requiredPermission) && !item.requiredPermission.some(perm => hasPermission(user, perm))) {
                 return null;
             }
@@ -167,15 +163,12 @@ export function SidebarNav() {
     const activeParentGroup = accessibleNavItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     if (activeParentGroup && !openAccordionItems.includes(activeParentGroup.href)) {
         setOpenAccordionItems(currentOpenItems => {
-            // Ensure not to add duplicate if already handled or if it's a re-render.
             if (!currentOpenItems.includes(activeParentGroup.href)) {
                  return [...currentOpenItems, activeParentGroup.href];
             }
             return currentOpenItems;
         });
     }
-  // Only re-run if pathname or accessibleNavItems change, avoid re-running on openAccordionItems change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, accessibleNavItems, isAuthLoading]);
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
@@ -184,7 +177,7 @@ export function SidebarNav() {
 
     const linkClass = cn(
       "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
-      "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-0", // Centering for collapsed
+      "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-0", 
       isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
       isSubItem ? "text-sm" : "font-medium"
     );
@@ -194,23 +187,37 @@ export function SidebarNav() {
       const isOpen = openAccordionItems.includes(item.href);
 
       const triggerClass = cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent", // Base styles
-        "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>.lucide-chevron-down]:hidden", // Collapsed styles
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent", 
+        "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>.lucide-chevron-down]:hidden", 
         isSubItem ? "text-sm" : "font-medium",
-        "justify-between hover:no-underline w-full", // Layout styles
+        "justify-between hover:no-underline w-full", 
          (isOpen && isActiveGroup) ? "bg-sidebar-primary text-sidebar-primary-foreground" :
          (isOpen) ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
       );
 
       return (
         <AccordionItem key={item.href} value={item.href} className="border-none">
-          <AccordionTrigger className={triggerClass}>
-            {/* Content for expanded sidebar */}
+          <AccordionTrigger
+            className={triggerClass}
+            onClick={(e) => {
+              if (sidebarState === "collapsed") {
+                e.preventDefault(); // Prevent Radix default toggle
+                setSidebarOpen(true); // Expand the sidebar
+                // Ensure this accordion item is opened
+                setOpenAccordionItems(prevItems => {
+                  if (!prevItems.includes(item.href)) {
+                    return [...prevItems, item.href];
+                  }
+                  return prevItems; // If already open, keep it open
+                });
+              }
+              // If sidebar is already expanded, Radix default behavior will toggle the accordion item
+            }}
+          >
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
               <Icon className="h-4 w-4" />
               <span className="truncate">{item.label}</span>
             </div>
-            {/* Content for collapsed (icon-only) sidebar */}
              <div className="hidden items-center group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
               <Icon className="h-4 w-4" />
             </div>
