@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getDashboardDataAction, getAuditLogsAction } from "@/lib/actions";
-import type { DashboardData, AuditLog } from "@/types";
+import type { DashboardData, AuditLog, TopNItemCount, VLANResourceInfo } from "@/types";
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
 import { TrendingUp, FilePieChart, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard } from "lucide-react";
@@ -14,7 +14,6 @@ import { logger } from "@/lib/logger";
 import type { AppError } from "@/lib/errors";
 import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT } from "@/lib/constants";
 
-// Import new client-side chart components
 import { IPStatusPieChart } from "@/components/dashboard/ip-status-pie-chart";
 import { UsageBarChart } from "@/components/dashboard/usage-bar-chart";
 import { VlanResourceBarChart } from "@/components/dashboard/vlan-resource-bar-chart";
@@ -26,6 +25,7 @@ export default async function DashboardPage() {
   let fetchError: string | null = null;
 
   try {
+    // Fetch dashboard data and recent audit logs
     const [dashboardDataResult, auditLogsResult] = await Promise.all([
       getDashboardDataAction(),
       getAuditLogsAction({ page: 1, pageSize: DASHBOARD_AUDIT_LOG_COUNT })
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     if (dashboardDataResult.success && dashboardDataResult.data) {
       dashboardData = dashboardDataResult.data;
     } else {
-      logger.error("[DashboardPage] Failed to load dashboard overview data.", undefined, { error: dashboardDataResult.error });
+      logger.error("[DashboardPage] Failed to load dashboard overview data.", undefined, { error: dashboardDataResult.error as any });
       throw new Error(dashboardDataResult.error?.userMessage || "无法加载仪表盘概览数据。");
     }
 
@@ -42,6 +42,7 @@ export default async function DashboardPage() {
       recentLogs = auditLogsResult.data;
     } else {
       logger.warn("[DashboardPage] Failed to load recent audit logs.", undefined, { error: (auditLogsResult as any).error });
+      // Non-critical, dashboard can still render without recent logs
     }
 
   } catch (e: unknown) {
@@ -94,8 +95,9 @@ export default async function DashboardPage() {
   const freeIps = ipStatusCounts.free;
   const reservedIps = ipStatusCounts.reserved;
   const unusedIpTotal = freeIps + reservedIps;
-  const totalKnownStatusIps = allocatedIps + unusedIpTotal;
+  const totalKnownStatusIps = allocatedIps + unusedIpTotal; // Use this as the denominator for utilization if it makes sense
   const ipUtilizationPercentage = totalKnownStatusIps > 0 ? Math.round((allocatedIps / totalKnownStatusIps) * 100) : 0;
+
 
   const ipStatusChartData = [
     { name: '已分配', value: allocatedIps, fill: "hsl(var(--chart-1))" },
@@ -108,34 +110,33 @@ export default async function DashboardPage() {
     "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
   ];
   
-  const ipUsageByUnitChartData = ipUsageByUnit.map((item, index) => ({
-    ...item, // contains name and count (which is 'value' for chart)
-    name: item.item, // ensure 'name' field for chart
-    value: item.count, // ensure 'value' field for chart
-    fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
+  const ipUsageByUnitChartData = (ipUsageByUnit || []).map((item, index) => ({
+    name: item.item, 
+    value: item.count, 
+    fill: item.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
 
-  const ipUsageByOperatorChartData = ipUsageByOperator.map((item, index) => ({
-    ...item,
+  const ipUsageByOperatorChartData = (ipUsageByOperator || []).map((item, index) => ({
     name: item.item,
     value: item.count,
-    fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
+    fill: item.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
   
-  const vlanResourceChartData = [...vlanResourceCounts]
+  const vlanResourceChartData = [...(vlanResourceCounts || [])]
     .sort((a, b) => b.resourceCount - a.resourceCount)
     .slice(0, 10) // Show top 10
     .map((vlan, index) => ({
       name: vlan.name ? `${vlan.name} (VLAN ${vlan.vlanNumber})` : `VLAN ${vlan.vlanNumber}`,
-      "资源数": vlan.resourceCount, // Key for the Bar
+      "资源数": vlan.resourceCount,
       fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
     }));
 
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4"> {/* Reduced gap */}
       <PageHeader title="仪表盘" description="系统状态概览和关键指标。" icon={<LayoutDashboard className="h-6 w-6 text-primary" />} />
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {/* Reduced gap */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">总 IP 地址数量</CardTitle>
@@ -179,56 +180,56 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2"> {/* Reduced gap */}
         <Card>
           <CardHeader>
-            <CardTitle>IP 地址状态分布</CardTitle>
+            <CardTitle className="text-xl">IP 地址状态分布</CardTitle> {/* Reduced title size */}
             <CardDescription>按已分配、空闲和预留状态显示 IP 地址。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] md:h-[350px]">
+          <CardContent className="h-[280px]"> {/* Reduced height */}
             <IPStatusPieChart data={ipStatusChartData} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
+            <CardTitle className="text-xl">按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> {/* Reduced title size */}
             <CardDescription>显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个使用单位。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] md:h-[350px]">
+          <CardContent className="h-[280px]"> {/* Reduced height */}
             <UsageBarChart data={ipUsageByUnitChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
           </CardContent>
         </Card>
       </div>
       
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2"> {/* Reduced gap */}
         <Card>
           <CardHeader>
-            <CardTitle>按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
+            <CardTitle className="text-xl">按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> {/* Reduced title size */}
             <CardDescription>显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个运营商。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] md:h-[350px]">
+          <CardContent className="h-[280px]"> {/* Reduced height */}
             <UsageBarChart data={ipUsageByOperatorChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>VLAN 资源分布 (Top 10)</CardTitle>
+            <CardTitle className="text-xl">VLAN 资源分布 (Top 10)</CardTitle> {/* Reduced title size */}
             <CardDescription>显示关联资源数（子网+直接IP）最多的前10个VLAN。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px] md:h-[350px]">
+          <CardContent className="h-[280px]"> {/* Reduced height */}
             <VlanResourceBarChart data={vlanResourceChartData} />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2"> {/* Reduced gap */}
         <Card>
           <CardHeader>
-            <CardTitle>最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
+            <CardTitle className="text-xl">最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> {/* Reduced title size */}
             <CardDescription>按关联的子网和直接 IP 地址总数排名。</CardDescription>
           </CardHeader>
           <CardContent>
-            {busiestVlans.length > 0 ? (
+            {busiestVlans && busiestVlans.length > 0 ? (
               <ul className="space-y-2">
                 {busiestVlans.map(vlan => (
                   <li key={vlan.id} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted/50">
@@ -247,7 +248,7 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>未使用的 VLAN</CardTitle>
+            <CardTitle className="text-xl">未使用的 VLAN</CardTitle> {/* Reduced title size */}
             <CardDescription>当前没有任何子网或直接 IP 地址关联的 VLAN。</CardDescription>
           </CardHeader>
           <CardContent>
@@ -255,7 +256,6 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground">个 VLAN 当前未使用</p>
             {unusedVlanCount > 0 && (
                  <Button variant="link" size="sm" className="mt-2 p-0 h-auto" asChild>
-                    {/* This link might need adjustment based on actual query page capabilities */}
                     <Link href="/query?tab=vlan&q_vlan_unused=true">查看未使用列表 (查询待实现)</Link>
                  </Button>
             )}
@@ -263,10 +263,10 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-1">
+      <div className="grid gap-4 md:grid-cols-1"> {/* Reduced gap */}
         <Card>
           <CardHeader>
-            <CardTitle>最近活动日志</CardTitle>
+            <CardTitle className="text-xl">最近活动日志</CardTitle> {/* Reduced title size */}
             <CardDescription>系统中最近执行的 {DASHBOARD_AUDIT_LOG_COUNT} 条操作。</CardDescription>
           </CardHeader>
           <CardContent>
@@ -310,5 +310,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
-
     
