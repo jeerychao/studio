@@ -10,6 +10,10 @@ import type {
   OperatorDictionary as AppOperatorDictionary,
   LocalDeviceDictionary as AppLocalDeviceDictionary,
   PaymentSourceDictionary as AppPaymentSourceDictionary,
+  DashboardData, // New type for dashboard
+  IPStatusCounts,  // New type for dashboard
+  TopNItemCount,   // New type for dashboard
+  VLANResourceInfo // New type for dashboard
 } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
@@ -42,6 +46,9 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
 
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_QUERY_PAGE_SIZE = 10;
+const DASHBOARD_TOP_N_COUNT = 5; // For Top N charts
+const DASHBOARD_AUDIT_LOG_COUNT = 5; // For recent audit logs
+
 interface FetchParams { page?: number; pageSize?: number; subnetId?: string; status?: AppIPAddressStatusType | 'all'; }
 export interface FetchedUserDetails { id: string; username: string; email: string; roleId: string; roleName: AppRoleNameType; avatar?: string; permissions: AppPermissionIdType[]; lastLogin?: string | undefined; }
 interface LoginPayload { email: string; password?: string; }
@@ -731,7 +738,7 @@ export async function getOperatorDictionariesAction(params?: FetchParams): Promi
     const itemsFromDb = params?.page && params?.pageSize 
         ? await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' }, skip, take: pageSize })
         : await prisma.operatorDictionary.findMany({ orderBy: { operatorName: 'asc' } });
-    const appItems: AppOperatorDictionary[] = itemsFromDb.map(item => ({ id: item.id, operatorName: item.operatorName, operatorDevice: item.operatorDevice || undefined, /* accessType: item.accessType || undefined, */ createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
+    const appItems: AppOperatorDictionary[] = itemsFromDb.map(item => ({ id: item.id, operatorName: item.operatorName, operatorDevice: item.operatorDevice || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
     return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -742,10 +749,8 @@ export async function createOperatorDictionaryAction(data: { operatorName: strin
       data: {
         operatorName: data.operatorName,
         operatorDevice: data.operatorDevice,
-        // accessType is removed
       },
     });
-    // Ensure returned data matches the updated AppOperatorDictionary type (without accessType)
     const { ...restOfResult } = result;
     return { success: true, data: restOfResult };
   } catch (error) {
@@ -760,10 +765,8 @@ export async function updateOperatorDictionaryAction(id: string, data: { operato
       data: {
         operatorName: data.operatorName,
         operatorDevice: data.operatorDevice,
-        // accessType is removed
       },
     });
-    // Ensure returned data matches the updated AppOperatorDictionary type (without accessType)
     const { ...restOfResult } = result;
     return { success: true, data: restOfResult };
   } catch (error) {
@@ -776,7 +779,6 @@ export async function deleteOperatorDictionaryAction(id: string, performingUserI
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.operatorDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`运营商字典 ID: ${id}`);
-    // Check only for operatorName and operatorDevice, as accessType is removed
     if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: itemToDelete.operatorName}, {selectedOperatorDevice: itemToDelete.operatorDevice ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${itemToDelete.operatorName}" 正在被 IP 地址使用。`);
     await prisma.operatorDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_operator_dictionary', details: `删除了运营商字典条目: ${itemToDelete.operatorName}` } });
@@ -792,7 +794,6 @@ export async function batchDeleteOperatorDictionariesAction(ids: string[], perfo
   for (const id of ids) {
     try {
       const item = await prisma.operatorDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      // Check only for operatorName and operatorDevice, as accessType is removed
       if (await prisma.iPAddress.count({where: {OR: [{selectedOperatorName: item.operatorName}, {selectedOperatorDevice: item.operatorDevice ?? undefined}]}}) > 0) throw new ResourceError(`运营商字典条目 "${item.operatorName}" 正在被 IP 地址使用。`);
       await prisma.operatorDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.operatorDictionary.findUnique({where: {id}}))?.operatorName || `ID ${id}`, error: errRes.userMessage}); }
@@ -852,7 +853,6 @@ export async function deleteLocalDeviceDictionaryAction(id: string, performingUs
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.localDeviceDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`本地设备字典 ID: ${id}`);
-    //if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: itemToDelete.deviceName}, {selectedDevicePort: itemToDelete.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${itemToDelete.deviceName}" 正在被 IP 地址使用。`);
     await prisma.localDeviceDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_local_device_dictionary', details: `删除了本地设备字典条目: ${itemToDelete.deviceName}` } });
     revalidatePath("/dictionaries/local-device");
@@ -867,7 +867,6 @@ export async function batchDeleteLocalDeviceDictionariesAction(ids: string[], pe
   for (const id of ids) {
     try {
       const item = await prisma.localDeviceDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      //if (await prisma.iPAddress.count({where: {OR: [{selectedLocalDeviceName: item.deviceName}, {selectedDevicePort: item.port ?? undefined}]}}) > 0) throw new ResourceError(`本地设备字典条目 "${item.deviceName}" 正在被 IP 地址使用。`);
       await prisma.localDeviceDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.localDeviceDictionary.findUnique({where: {id}}))?.deviceName || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -925,7 +924,6 @@ export async function deletePaymentSourceDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.paymentSourceDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`付费字典 ID: ${id}`);
-    //if (await prisma.iPAddress.count({where: {selectedPaymentSource: itemToDelete.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${itemToDelete.sourceName}" 正在被 IP 地址使用。`);
     await prisma.paymentSourceDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_payment_source_dictionary', details: `删除了付费字典条目: ${itemToDelete.sourceName}` } });
     revalidatePath("/dictionaries/payment-source");
@@ -940,7 +938,6 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.paymentSourceDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      //if (await prisma.iPAddress.count({where: {selectedPaymentSource: item.sourceName}}) > 0) throw new ResourceError(`付费来源字典条目 "${item.sourceName}" 正在被 IP 地址使用。`);
       await prisma.paymentSourceDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.paymentSourceDictionary.findUnique({where: {id}}))?.sourceName || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -948,7 +945,6 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
-// Helper function to handle Prisma unique constraint errors for dictionary actions
 function handlePrismaError(error: any, fieldNameMap: Record<string, string>): ActionResponse<any> {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     const target = (error.meta?.target as string[]) || [];
@@ -965,5 +961,115 @@ function handlePrismaError(error: any, fieldNameMap: Record<string, string>): Ac
   }
   return createActionErrorResponse(error, 'DICTIONARY_DB_ERROR');
 }
-    
 
+// New Dashboard Action
+export async function getDashboardDataAction(): Promise<ActionResponse<DashboardData>> {
+  const actionName = 'getDashboardDataAction';
+  try {
+    // 1. Total IP Count
+    const totalIpCount = await prisma.iPAddress.count();
+
+    // 2. IP Status Counts
+    const ipStatusGroups = await prisma.iPAddress.groupBy({
+      by: ['status'],
+      _count: { status: true },
+    });
+    const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0, total: totalIpCount };
+    ipStatusGroups.forEach(group => {
+      const statusKey = group.status as keyof Pick<IPStatusCounts, 'allocated' | 'free' | 'reserved'>;
+      if (statusKey in ipStatusCounts) {
+        ipStatusCounts[statusKey] = group._count.status;
+      }
+    });
+
+    // 3. Total VLAN Count
+    const totalVlanCount = await prisma.vLAN.count();
+
+    // 4. Total Subnet Count
+    const totalSubnetCount = await prisma.subnet.count();
+
+    // 5. IP Usage by Unit (Top N + Other)
+    const usageUnitGroups = await prisma.iPAddress.groupBy({
+      by: ['usageUnit'],
+      _count: { _all: true },
+      where: { usageUnit: { not: null, equals: '' } }, // Exclude null and empty strings explicitly if needed
+      orderBy: { _count: { _all: 'desc' } },
+    });
+    let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
+      .slice(0, DASHBOARD_TOP_N_COUNT)
+      .map(g => ({ item: g.usageUnit || "未指定", count: g._count._all }));
+    if (usageUnitGroups.length > DASHBOARD_TOP_N_COUNT) {
+      const otherCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count._all, 0);
+      if (otherCount > 0) {
+        ipUsageByUnit.push({ item: "其他", count: otherCount });
+      }
+    }
+     if (ipUsageByUnit.length === 0 && usageUnitGroups.length > 0) { // Handle case where all are null/empty and filtered out
+        const nullOrEmptyCount = await prisma.iPAddress.count({ where: { OR: [{usageUnit: null}, {usageUnit: ''}] } });
+        if (nullOrEmptyCount > 0) ipUsageByUnit.push({ item: "未指定", count: nullOrEmptyCount });
+    }
+
+
+    // 6. IP Usage by Operator (Top N + Other)
+    const operatorGroups = await prisma.iPAddress.groupBy({
+      by: ['selectedOperatorName'],
+      _count: { _all: true },
+      where: { selectedOperatorName: { not: null, equals: '' } },
+      orderBy: { _count: { _all: 'desc' } },
+    });
+    let ipUsageByOperator: TopNItemCount[] = operatorGroups
+      .slice(0, DASHBOARD_TOP_N_COUNT)
+      .map(g => ({ item: g.selectedOperatorName || "未指定", count: g._count._all }));
+    if (operatorGroups.length > DASHBOARD_TOP_N_COUNT) {
+      const otherCount = operatorGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count._all, 0);
+      if (otherCount > 0) {
+        ipUsageByOperator.push({ item: "其他", count: otherCount });
+      }
+    }
+    if (ipUsageByOperator.length === 0 && operatorGroups.length > 0) {
+        const nullOrEmptyOpCount = await prisma.iPAddress.count({ where: { OR: [{selectedOperatorName: null}, {selectedOperatorName: ''}] } });
+        if (nullOrEmptyOpCount > 0) ipUsageByOperator.push({ item: "未指定", count: nullOrEmptyOpCount });
+    }
+
+
+    // 7. VLAN Resource Counts, Busiest VLANs, Unused VLAN Count
+    const allVlans = await prisma.vLAN.findMany({
+      include: {
+        _count: {
+          select: { subnets: true, ipAddresses: true }, // Counts directly associated IPs and subnets
+        },
+      },
+    });
+
+    const vlanResourceCounts: VLANResourceInfo[] = allVlans.map(vlan => ({
+      id: vlan.id,
+      vlanNumber: vlan.vlanNumber,
+      name: vlan.name || undefined,
+      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.ipAddresses || 0),
+    }));
+
+    const busiestVlans = [...vlanResourceCounts]
+      .sort((a, b) => b.resourceCount - a.resourceCount)
+      .slice(0, DASHBOARD_TOP_N_COUNT);
+
+    const unusedVlanCount = vlanResourceCounts.filter(v => v.resourceCount === 0).length;
+
+    const dashboardData: DashboardData = {
+      totalIpCount,
+      ipStatusCounts,
+      totalVlanCount,
+      totalSubnetCount,
+      ipUsageByUnit,
+      ipUsageByOperator,
+      vlanResourceCounts, // Contains all VLANs with their counts for the distribution chart
+      busiestVlans,
+      unusedVlanCount,
+    };
+
+    return { success: true, data: dashboardData };
+
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+    

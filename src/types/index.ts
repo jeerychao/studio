@@ -128,7 +128,7 @@ export interface AuditLog {
   userId?: string;
   username?: string;
   action: string;
-  timestamp: string;
+  timestamp: string; // Should correspond to `timestamp` field in schema
   details?: string;
 }
 
@@ -137,7 +137,6 @@ export interface OperatorDictionary {
   id: string;
   operatorName: string;
   operatorDevice?: string;
-  // accessType?: string; // Removed
   createdAt?: string;
   updatedAt?: string;
 }
@@ -228,4 +227,35 @@ export enum DeviceType {
   OTHER = "OTHER",
 }
 
+// Types for Dashboard Data
+export interface IPStatusCounts {
+  allocated: number;
+  free: number;
+  reserved: number;
+  total: number;
+}
+
+export interface TopNItemCount {
+  item: string; // Represents usageUnit or operatorName
+  count: number;
+}
+
+export interface VLANResourceInfo {
+  id: string;
+  vlanNumber: number;
+  name?: string;
+  resourceCount: number;
+}
+
+export interface DashboardData {
+  totalIpCount: number;
+  ipStatusCounts: IPStatusCounts;
+  totalVlanCount: number;
+  totalSubnetCount: number;
+  ipUsageByUnit: TopNItemCount[];
+  ipUsageByOperator: TopNItemCount[];
+  vlanResourceCounts: VLANResourceInfo[]; // All VLANs with their resource counts
+  busiestVlans: VLANResourceInfo[]; // Top 5 busiest
+  unusedVlanCount: number;
+}
     
