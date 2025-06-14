@@ -24,54 +24,19 @@ export function Header() {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
 
-  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
-  const userAutoCloseTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  const clearUserAutoCloseTimer = () => {
-    if (userAutoCloseTimerRef.current) {
-      clearTimeout(userAutoCloseTimerRef.current);
-      userAutoCloseTimerRef.current = null;
-    }
-  };
-
-  const handleUserMenuRadixOpenChange = (openValue: boolean) => {
-    clearUserAutoCloseTimer();
-    setIsUserMenuOpen(openValue);
-  };
-
-  const handleUserMenuMouseEnterInteractiveArea = () => {
-    clearUserAutoCloseTimer();
-  };
-
-  const handleUserMenuMouseLeaveInteractiveArea = () => {
-    clearUserAutoCloseTimer();
-    if (isUserMenuOpen) {
-      userAutoCloseTimerRef.current = setTimeout(() => {
-        setIsUserMenuOpen(false);
-      }, 500);
-    }
-  };
-  
-  const handleUserMenuItemClick = (action?: () => void) => {
-    if (action) action();
-    setIsUserMenuOpen(false);
-    clearUserAutoCloseTimer();
-  };
+  // Removed local state and timer logic for user menu
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login';
+      window.location.href = '/login'; // Force reload to ensure user state is cleared
     }
-    // Explicitly close and clear timer, though Radix would also trigger onOpenChange
-    setIsUserMenuOpen(false); 
-    clearUserAutoCloseTimer();
   };
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
       {isMobile ? (
-         <Sheet> {/* Radix Sheet manages its own open state via Trigger */}
+         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="shrink-0 md:hidden">
               <Menu className="h-5 w-5" />
@@ -101,27 +66,21 @@ export function Header() {
 
       <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end">
         <ThemeToggle />
-        <DropdownMenu open={isUserMenuOpen} onOpenChange={handleUserMenuRadixOpenChange}>
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
-              onMouseEnter={handleUserMenuMouseEnterInteractiveArea}
-              onMouseLeave={handleUserMenuMouseLeaveInteractiveArea}
             >
               <UserCircle className="h-6 w-6" />
               <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            onMouseEnter={handleUserMenuMouseEnterInteractiveArea} 
-            onMouseLeave={handleUserMenuMouseLeaveInteractiveArea}
-          >
+          <DropdownMenuContent align="end">
             <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild onClick={() => handleUserMenuItemClick(() => router.push("/account/change-password"))}>
+            <DropdownMenuItem asChild>
               <Link href="/account/change-password" className="flex items-center w-full">
                 <KeyRound className="mr-2 h-4 w-4" />
                 修改密码
