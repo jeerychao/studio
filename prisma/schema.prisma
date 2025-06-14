@@ -36,13 +36,14 @@ model Role {
 }
 
 model Permission {
-  id          String   @id @default(cuid()) // Ensured cuid default
+  id          String   @id @default(cuid()) // Ensured default cuid
   name        String   @unique
   group       String
   description String?
   roles       Role[]   @relation("RolePermissions") // Explicit relation name
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Subnet {
@@ -63,8 +64,8 @@ model Subnet {
 }
 
 model VLAN {
-  id          String      @id @default(cuid())
-  vlanNumber  Int         @unique
+  id          String   @id @default(cuid())
+  vlanNumber  Int      @unique
   name        String?
   description String?
   subnets     Subnet[]
@@ -75,20 +76,20 @@ model VLAN {
 }
 
 model IPAddress {
-  id                      String  @id @default(cuid())
-  ipAddress               String  // e.g., "192.168.1.100"
-  subnetId                String?
-  subnet                  Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull)
-  directVlanId            String? // For IPs directly on a VLAN, not through a subnet's VLAN
-  directVlan              VLAN?   @relation("IPAddressToDirectVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
-  status                  String  // "allocated", "free", "reserved"
-  isGateway               Boolean? @default(false)
-  allocatedTo             String?
-  usageUnit               String? // Using unit
-  contactPerson           String?
-  phone                   String?
-  description             String?
-  lastSeen                DateTime? @default(now())
+  id          String  @id @default(cuid())
+  ipAddress   String  // e.g., "192.168.1.100"
+  subnetId    String?
+  subnet      Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull)
+  directVlanId String? // For IPs directly on a VLAN, not through a subnet's VLAN
+  directVlan   VLAN?   @relation("IPAddressToDirectVLAN", fields: [directVlanId], references: [id], onDelete: SetNull)
+  status      String  // "allocated", "free", "reserved"
+  isGateway   Boolean? @default(false)
+  allocatedTo String?
+  usageUnit   String? // Using unit
+  contactPerson String?
+  phone       String?
+  description String?
+  lastSeen    DateTime? @default(now())
 
   // New fields for dictionary selections
   selectedOperatorName    String?
@@ -153,9 +154,9 @@ model AccessTypeDictionary {
 }
 
 model NetworkInterfaceTypeDictionary {
-  id          String   @id @default(cuid())
-  name        String   @unique // e.g., "GigabitEthernet", "TenGigabitEthernet"
+  id          String    @id @default(cuid())
+  name        String    @unique // e.g., "GigabitEthernet", "TenGigabitEthernet"
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

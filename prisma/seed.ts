@@ -1,4 +1,5 @@
 
+// Existing imports
 import dotenv from 'dotenv';
 import { PrismaClient, Prisma } from '@prisma/client'; // PrismaClient is locally instantiated
 import {
@@ -15,15 +16,17 @@ import {
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
-  mockNetworkInterfaceTypeDictionaries,
+  mockNetworkInterfaceTypeDictionaries, // Added
 } from '../src/lib/data';
 import type { User as AppUser } from '../src/types';
 import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
 
+// --- NEW: Top-level script execution log ---
 console.log("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL) ---");
 
 const prisma = new PrismaClient();
 
+// --- NEW: Wrapper async function to catch all errors ---
 (async () => {
   try {
     console.log("--- PRISMA SEED SCRIPT: ATTEMPTING DOTENV LOAD ---");
@@ -35,16 +38,16 @@ const prisma = new PrismaClient();
     }
 
     console.log("--- PRISMA SEED SCRIPT: ATTEMPTING MAIN FUNCTION EXECUTION ---");
-    await main();
+    await main(); // Call the original main function
     console.log("--- PRISMA SEED SCRIPT: MAIN FUNCTION EXECUTION FINISHED (SUCCESSFULLY OR WITH CAUGHT ERROR INSIDE MAIN) ---");
 
   } catch (e) {
     console.error('--- PRISMA SEED SCRIPT: UNCAUGHT ERROR IN TOP-LEVEL WRAPPER ---');
     console.error(e);
-    process.exit(1);
+    process.exit(1); // Force exit with error code
   } finally {
     console.log("--- PRISMA SEED SCRIPT: TOP-LEVEL WRAPPER FINALLY BLOCK ---");
-    // prisma.$disconnect() is called in main's finally
+    // The prisma.$disconnect() is in main's finally, which is fine.
   }
 })();
 
@@ -298,7 +301,7 @@ async function main() {
   }
   console.log('Access Type Dictionaries seeded.');
 
-  console.log('Seeding Network Interface Type Dictionaries...');
+  console.log('Seeding Network Interface Type Dictionaries...'); // Added
   for (const nitData of mockNetworkInterfaceTypeDictionaries) {
     await prisma.networkInterfaceTypeDictionary.upsert({
       where: { name: nitData.name },
@@ -306,7 +309,7 @@ async function main() {
       create: { name: nitData.name, description: nitData.description },
     });
   }
-  console.log('Network Interface Type Dictionaries seeded.');
+  console.log('Network Interface Type Dictionaries seeded.'); // Added
 
   console.log('Seeding Audit Logs...');
   const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});
@@ -345,15 +348,15 @@ async function main() {
   console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION COMPLETED ---");
 }
 
-main()
-  .catch((e) => {
-    console.error("--- PRISMA SEED SCRIPT MAIN FUNCTION ERROR ---");
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION FINALLY BLOCK ---");
-    await prisma.$disconnect();
-    console.log("--- PRISMA SEED SCRIPT DISCONNECTED ---");
-  });
-
+// Removed the standalone main() call from here
+// main()
+//   .catch((e) => {
+//     console.error("--- PRISMA SEED SCRIPT MAIN FUNCTION ERROR ---");
+//     console.error(e);
+//     process.exit(1); // Ensure non-zero exit code on error
+//   })
+//   .finally(async () => {
+//     console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION FINALLY BLOCK ---");
+//     await prisma.$disconnect();
+//     console.log("--- PRISMA SEED SCRIPT DISCONNECTED ---");
+//   });
