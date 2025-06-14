@@ -82,7 +82,7 @@ export default function DashboardLayout({
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
-        <SidebarHeader className="border-b h-16">
+        <SidebarHeader className="border-b h-16 flex items-center justify-center">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground">
             <Network className="h-7 w-7 text-sidebar-primary" />
             <span className="text-lg group-data-[collapsible=icon]:hidden">IPAM Lite</span>
