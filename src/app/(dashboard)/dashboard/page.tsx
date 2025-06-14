@@ -15,27 +15,27 @@ import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table"; // Added Table components
+import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table";
 
-const CHART_COLORS_REMAINDER = [ // From lib/actions.ts - used for client-side display if needed or fallback
+const CHART_COLORS_REMAINDER = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
   "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
 ];
 
 function DashboardStatCard({ title, value, icon: IconComponent, description, linkTo }: { title: string; value: string | number; icon: React.ElementType; description?: string; linkTo?: string }) {
-  const content = (
-    <Card>
+  const cardElement = (
+    <Card className="h-full flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <IconComponent className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-grow">
         <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
       </CardContent>
     </Card>
   );
-  return linkTo ? <Link href={linkTo} className="hover:shadow-lg transition-shadow">{content}</Link> : content;
+  return linkTo ? <Link href={linkTo} className="block h-full hover:shadow-lg transition-shadow">{cardElement}</Link> : cardElement;
 }
 
 export default function DashboardPage() {
@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [auditLogs, setAuditLogs] = React.useState<AuditLog[]>([]); // For recent activity
+  // Removed auditLogs state as it's part of dashboardData.recentAuditLogs
 
   React.useEffect(() => {
     async function fetchData() {
@@ -57,7 +57,6 @@ export default function DashboardPage() {
         setError("您没有权限查看仪表盘。");
         setIsLoading(false);
         setDashboardData(null);
-        setAuditLogs([]);
         return;
       }
 
@@ -65,19 +64,13 @@ export default function DashboardPage() {
         const response: ActionResponse<DashboardData> = await getDashboardDataAction();
         if (response.success && response.data) {
           setDashboardData(response.data);
-          // Fetch recent audit logs if not included in dashboardData or handle separately
-          // For now, assuming dashboardData might include a snippet of logs or we fetch them
-          // Let's assume audit logs are part of dashboardData for simplicity here or fetched in a dedicated way.
-          // Example: setAuditLogs(response.data.recentAuditLogs || []);
         } else {
           setError(response.error?.userMessage || "加载仪表盘数据失败。");
           setDashboardData(null);
-          setAuditLogs([]);
         }
       } catch (e) {
         setError((e as Error).message || "加载仪表盘数据时发生未知错误。");
         setDashboardData(null);
-        setAuditLogs([]);
       } finally {
         setIsLoading(false);
       }
@@ -180,7 +173,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 mb-6"> {/* Changed lg:grid-cols-3 to lg:grid-cols-1 for single wider chart */}
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 mb-6">
         <Card>
             <CardHeader>
                 <CardTitle className="text-base">最繁忙的 VLAN (按资源数 Top {dashboardData.busiestVlans.length || 0})</CardTitle>
@@ -260,4 +253,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
