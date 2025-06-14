@@ -19,6 +19,7 @@ import {
   UploadCloud, // Icon for Data Export
   HardDrive, // For Local Device Dictionary
   CreditCard, // For Payment Source Dictionary
+  ChevronDown, // Explicitly import if needed, though AccordionTrigger brings its own
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -183,6 +184,7 @@ export function SidebarNav() {
 
     const linkClass = cn(
       "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
+      "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-0", // Centering for collapsed
       isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
       isSubItem ? "text-sm" : "font-medium"
     );
@@ -192,9 +194,10 @@ export function SidebarNav() {
       const isOpen = openAccordionItems.includes(item.href);
 
       const triggerClass = cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:text-sidebar-primary-foreground hover:bg-sidebar-accent", // Base styles
+        "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>.lucide-chevron-down]:hidden", // Collapsed styles
         isSubItem ? "text-sm" : "font-medium",
-        "justify-between hover:no-underline w-full",
+        "justify-between hover:no-underline w-full", // Layout styles
          (isOpen && isActiveGroup) ? "bg-sidebar-primary text-sidebar-primary-foreground" :
          (isOpen) ? "text-sidebar-primary-foreground bg-sidebar-accent" : ""
       );
@@ -202,12 +205,14 @@ export function SidebarNav() {
       return (
         <AccordionItem key={item.href} value={item.href} className="border-none">
           <AccordionTrigger className={triggerClass}>
+            {/* Content for expanded sidebar */}
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
-              <Icon className="h-5 w-5" />
+              <Icon className="h-4 w-4" />
               <span className="truncate">{item.label}</span>
             </div>
-             <div className="hidden items-center gap-3 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
-              <Icon className="h-5 w-5" />
+            {/* Content for collapsed (icon-only) sidebar */}
+             <div className="hidden items-center group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+              <Icon className="h-4 w-4" />
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-0 pl-4 pt-1 group-data-[collapsible=icon]:hidden">
@@ -221,7 +226,7 @@ export function SidebarNav() {
 
     return (
       <Link key={item.href} href={item.href} className={linkClass}>
-        <Icon className="h-5 w-5" />
+        <Icon className="h-4 w-4" />
         <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>
       </Link>
     );
