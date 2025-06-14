@@ -16,17 +16,20 @@ import {
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
-  mockNetworkInterfaceTypeDictionaries, // Added
+  mockNetworkInterfaceTypeDictionaries,
 } from '../src/lib/data';
 import type { User as AppUser } from '../src/types';
 import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
 
-// --- NEW: Top-level script execution log ---
-console.log("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL) ---");
+// --- NEW: Top-level script execution and error test ---
+console.error("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL - IMMEDIATE ERROR TEST) ---");
+process.exit(1); // Force exit with error code to test propagation
+
+// The rest of your script will not be executed due to process.exit(1) above.
+// This is purely for diagnostics.
 
 const prisma = new PrismaClient();
 
-// --- NEW: Wrapper async function to catch all errors ---
 (async () => {
   try {
     console.log("--- PRISMA SEED SCRIPT: ATTEMPTING DOTENV LOAD ---");
@@ -38,16 +41,16 @@ const prisma = new PrismaClient();
     }
 
     console.log("--- PRISMA SEED SCRIPT: ATTEMPTING MAIN FUNCTION EXECUTION ---");
-    await main(); // Call the original main function
+    await main();
     console.log("--- PRISMA SEED SCRIPT: MAIN FUNCTION EXECUTION FINISHED (SUCCESSFULLY OR WITH CAUGHT ERROR INSIDE MAIN) ---");
 
   } catch (e) {
     console.error('--- PRISMA SEED SCRIPT: UNCAUGHT ERROR IN TOP-LEVEL WRAPPER ---');
     console.error(e);
-    process.exit(1); // Force exit with error code
+    process.exit(1); 
   } finally {
     console.log("--- PRISMA SEED SCRIPT: TOP-LEVEL WRAPPER FINALLY BLOCK ---");
-    // The prisma.$disconnect() is in main's finally, which is fine.
+    // prisma.$disconnect() is called in main's finally
   }
 })();
 
@@ -301,7 +304,7 @@ async function main() {
   }
   console.log('Access Type Dictionaries seeded.');
 
-  console.log('Seeding Network Interface Type Dictionaries...'); // Added
+  console.log('Seeding Network Interface Type Dictionaries...');
   for (const nitData of mockNetworkInterfaceTypeDictionaries) {
     await prisma.networkInterfaceTypeDictionary.upsert({
       where: { name: nitData.name },
@@ -309,7 +312,7 @@ async function main() {
       create: { name: nitData.name, description: nitData.description },
     });
   }
-  console.log('Network Interface Type Dictionaries seeded.'); // Added
+  console.log('Network Interface Type Dictionaries seeded.');
 
   console.log('Seeding Audit Logs...');
   const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});
@@ -360,3 +363,5 @@ async function main() {
 //     await prisma.$disconnect();
 //     console.log("--- PRISMA SEED SCRIPT DISCONNECTED ---");
 //   });
+
+    
