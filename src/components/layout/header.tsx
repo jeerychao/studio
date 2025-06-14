@@ -1,7 +1,7 @@
 
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react"; 
+import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,17 +14,54 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user"; 
+import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
+import * as React from "react"; // Import React for useState and useRef
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
-  const { currentUser, isAuthLoading } = useCurrentUser(); 
+  const { currentUser, isAuthLoading } = useCurrentUser();
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+  const userMenuTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearUserMenuTimer = () => {
+    if (userMenuTimerRef.current) {
+      clearTimeout(userMenuTimerRef.current);
+      userMenuTimerRef.current = null;
+    }
+  };
+
+  const handleUserMenuOpen = () => {
+    clearUserMenuTimer();
+    setIsUserMenuOpen(true);
+  };
+
+  const handleUserMenuClose = () => {
+    clearUserMenuTimer();
+    userMenuTimerRef.current = setTimeout(() => {
+      setIsUserMenuOpen(false);
+    }, 150); // Adjust delay as needed
+  };
+
+  const handleUserMenuItemClick = () => {
+    setIsUserMenuOpen(false); // Close immediately on item click
+    clearUserMenuTimer();
+  };
+  
+  // Sync with Radix's internal state changes (e.g., Escape key)
+  const onRadixUserMenuOpenChange = (openValue: boolean) => {
+    setIsUserMenuOpen(openValue);
+    if (!openValue) {
+      clearUserMenuTimer();
+    }
+  };
+
 
   const handleLogout = () => {
+    handleUserMenuItemClick(); // Close menu first
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login'; 
+      window.location.href = '/login';
     }
   };
 
@@ -39,10 +76,10 @@ export function Header() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex flex-col p-0 bg-sidebar text-sidebar-foreground">
-            <SheetHeader className="border-b h-16 flex items-center px-6">
+            <SheetHeader className="border-b h-16 flex items-center justify-center px-6">
               <SheetTitle asChild>
                 <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground">
-                  <Network className="h-6 w-6 text-sidebar-primary" />
+                  <Network className="h-7 w-7 text-sidebar-primary" />
                   <span className="text-lg">IPAM Lite</span>
                 </Link>
               </SheetTitle>
@@ -59,20 +96,31 @@ export function Header() {
         </Button>
       )}
 
-      <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end"> {/* Adjusted gap for tighter packing */}
+      <div className="flex w-full items-center gap-2 md:ml-auto md:gap-2 lg:gap-2 justify-end">
         <ThemeToggle />
-        <DropdownMenu>
+        <DropdownMenu open={isUserMenuOpen} onOpenChange={onRadixUserMenuOpenChange}>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"> {/* Changed to w-auto, added padding and space */}
-              <UserCircle className="h-6 w-6" /> {/* Slightly smaller UserCircle */}
+            <Button
+              variant="ghost"
+              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
+              onMouseEnter={handleUserMenuOpen}
+              onMouseLeave={handleUserMenuClose}
+              onFocus={handleUserMenuOpen} // Optional: open on focus for keyboard users
+              onBlur={handleUserMenuClose}   // Optional: close on blur for keyboard users
+            >
+              <UserCircle className="h-6 w-6" />
               <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onMouseEnter={handleUserMenuOpen} // Keep open if mouse moves to content
+            onMouseLeave={handleUserMenuClose} // Close if mouse leaves content
+          >
             <DropdownMenuLabel>{isAuthLoading ? '加载中...' : (currentUser?.username || '我的账户')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild onClick={handleUserMenuItemClick}>
               <Link href="/account/change-password" className="flex items-center">
                 <KeyRound className="mr-2 h-4 w-4" />
                 修改密码
@@ -86,4 +134,3 @@ export function Header() {
     </header>
   );
 }
-
