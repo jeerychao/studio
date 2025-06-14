@@ -61,6 +61,7 @@ export default function DashboardPage() {
       if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_DASHBOARD)) {
         setError("您没有权限查看仪表盘。");
         setIsLoading(false);
+        setDashboardData(null); // Explicitly set dashboardData to null on permission error
         return;
       }
       
@@ -84,7 +85,7 @@ export default function DashboardPage() {
   }, [currentUser, isAuthLoading]); // Dependency array includes currentUser and isAuthLoading
 
   // Handle combined loading state for auth and data
-  if (isAuthLoading || isLoading) {
+  if (isAuthLoading || isLoading && !error && !dashboardData) { // Adjusted condition to check for error/data as well
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -123,6 +124,7 @@ export default function DashboardPage() {
 
   if (!dashboardData) {
     // This case should ideally be caught by isLoading or error state
+    // If it reaches here and isLoading is false and no error, but no data, it's an unexpected state
     return (
       <div className="flex items-center justify-center h-full text-center p-4">
         <Sigma className="h-12 w-12 text-muted-foreground mb-3" />
@@ -142,9 +144,6 @@ export default function DashboardPage() {
     "资源数": vlan.resourceCount,
     fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
   }));
-
-  // Ensure that all hooks like useState, useEffect, useCurrentUser are called at the top level
-  // and not inside conditions or loops. The structure above seems to follow this.
 
   return (
     <>
