@@ -2,19 +2,20 @@
 import dotenv from 'dotenv';
 try {
   console.log('--- Attempting to load .env file ---');
-  const dotenvResult = dotenv.config({ path: require('path').resolve(__dirname, '../.env') });
+  const dotenvResult = dotenv.config({ path: require('path').resolve(__dirname, '../../.env') }); // Adjusted path for src/prisma
   if (dotenvResult.error) {
     console.error('--- ERROR loading .env file ---', dotenvResult.error);
   } else {
     console.log('--- .env file loaded successfully (or no .env file found, which is also okay if vars are globally set) ---');
-    // console.log('--- Parsed .env content (first few vars): ---', Object.fromEntries(Object.entries(dotenvResult.parsed || {}).slice(0,3)) );
   }
 } catch (e) {
   console.error('--- CRITICAL ERROR during dotenv.config() call ---', e);
 }
 
+// Instantiate PrismaClient directly in the seed script
+import { PrismaClient, Prisma } from '@prisma/client';
+const prisma = new PrismaClient();
 
-import prisma from '../src/lib/prisma';
 import {
   mockPermissions as seedPermissionsData,
   mockRoles as seedRolesData,
@@ -28,11 +29,10 @@ import {
   mockOperatorDictionaries,
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
-  mockAccessTypeDictionaries, // Import new mock data
-} from '../src/lib/data';
-import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../src/types';
-import { Prisma } from '@prisma/client';
-import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
+  mockAccessTypeDictionaries,
+} from '../lib/data'; // Adjusted path
+import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../types'; // Adjusted path
+import { encrypt } from '../app/api/auth/[...nextauth]/route'; // Adjusted path
 
 async function main() {
   console.log('--- PRISMA SEED SCRIPT MAIN FUNCTION STARTED ---');
@@ -106,7 +106,6 @@ async function main() {
   console.log('Seeding Users...');
   for (const userData of initialUsersToSeedPlain) {
     const encryptedPassword = encrypt(userData.password_plain);
-    // Store phone number in plaintext
     const plainPhone = userData.phone_plain || null;
 
     await prisma.user.upsert({
@@ -115,7 +114,7 @@ async function main() {
         id: userData.id, 
         username: userData.username, 
         password: encryptedPassword, 
-        phone: plainPhone, // Store plaintext phone
+        phone: plainPhone,
         roleId: userData.roleId, 
         avatar: userData.avatarPath, 
         lastLogin: new Date() 
@@ -125,7 +124,7 @@ async function main() {
         username: userData.username, 
         email: userData.email, 
         password: encryptedPassword, 
-        phone: plainPhone, // Store plaintext phone
+        phone: plainPhone,
         roleId: userData.roleId, 
         avatar: userData.avatarPath, 
         lastLogin: new Date() 
@@ -245,7 +244,7 @@ async function main() {
 
   console.log('Seeding Operator Dictionaries...');
   for (const opData of mockOperatorDictionaries) {
-    const { ...restOfOpData } = opData; // No accessType to remove
+    const { ...restOfOpData } = opData;
     await prisma.operatorDictionary.upsert({
       where: { operatorName: restOfOpData.operatorName },
       update: restOfOpData,
@@ -274,7 +273,7 @@ async function main() {
   }
   console.log('Payment Source Dictionaries seeded.');
 
-  console.log('Seeding Access Type Dictionaries...'); // New seed block
+  console.log('Seeding Access Type Dictionaries...');
   for (const atData of mockAccessTypeDictionaries) {
     await prisma.accessTypeDictionary.upsert({
       where: { name: atData.name },
@@ -331,5 +330,3 @@ main()
     await prisma.$disconnect();
     console.log('--- PRISMA SEED SCRIPT DISCONNECTED ---');
   });
-
-    
