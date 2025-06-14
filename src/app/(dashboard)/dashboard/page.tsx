@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getDashboardDataAction, getAuditLogsAction } from "@/lib/actions";
-import type { DashboardData, AuditLog, TopNItemCount, VLANResourceInfo, SubnetUtilizationInfo } from "@/types";
+import type { DashboardData, AuditLog } from "@/types";
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
 import { TrendingUp, FilePieChart, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard, AlertCircle } from "lucide-react";
@@ -18,6 +18,11 @@ import { IPStatusPieChart } from "@/components/dashboard/ip-status-pie-chart";
 import { UsageBarChart } from "@/components/dashboard/usage-bar-chart";
 import { VlanResourceBarChart } from "@/components/dashboard/vlan-resource-bar-chart";
 
+// Define CHART_COLORS_REMAINDER at the top of the component scope
+const CHART_COLORS_REMAINDER = [
+  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
+];
 
 export default async function DashboardPage() {
   let dashboardData: DashboardData | null = null;
@@ -85,9 +90,9 @@ export default async function DashboardPage() {
     totalSubnetCount,
     ipUsageByUnit,
     ipUsageByOperator,
-    vlanResourceCounts,
-    busiestVlans,
-    subnetsNeedingAttention
+    vlanResourceCounts, // This is now VLANResourceInfo[]
+    busiestVlans,       // This is VLANResourceInfo[]
+    subnetsNeedingAttention // This is SubnetUtilizationInfo[]
   } = dashboardData;
 
   const allocatedIps = ipStatusCounts.allocated;
@@ -104,24 +109,18 @@ export default async function DashboardPage() {
     { name: '预留', value: reservedIps, fill: "hsl(var(--chart-3))"  },
   ];
   
-  const ipUsageByUnitChartData = ipUsageByUnit;
-  const ipUsageByOperatorChartData = ipUsageByOperator;
+  // Data for UsageBarChart is already prepared with 'fill' in actions.ts
+  const ipUsageByUnitChartData = ipUsageByUnit; // This is TopNItemCount[]
+  const ipUsageByOperatorChartData = ipUsageByOperator; // This is TopNItemCount[]
   
   const vlanResourceChartData = [...(vlanResourceCounts || [])]
-    .sort((a, b) => b.resourceCount - a.resourceCount)
+    .sort((a, b) => b.resourceCount - a.resourceCount) // Already sorted in action, but good to be defensive
     .slice(0, 10) 
     .map((vlan, index) => ({
       name: vlan.name ? `${vlan.name} (VLAN ${vlan.vlanNumber})` : `VLAN ${vlan.vlanNumber}`,
       "资源数": vlan.resourceCount,
-      fill: vlan.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
+      fill: vlan.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] // fill is now part of VLANResourceInfo from action
     }));
-
-  // Define CHART_COLORS_REMAINDER if it's used for vlanResourceChartData and not defined elsewhere
-  const CHART_COLORS_REMAINDER = [
-    "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
-    "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
-  ];
-
 
   return (
     <div className="flex flex-col gap-4"> 
