@@ -6,10 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getDashboardDataAction, getAuditLogsAction } from "@/lib/actions";
-import type { DashboardData, AuditLog, TopNItemCount, VLANResourceInfo } from "@/types";
+import type { DashboardData, AuditLog, TopNItemCount, VLANResourceInfo, SubnetUtilizationInfo } from "@/types";
 import { PageHeader } from "@/components/page-header";
 import Link from "next/link";
-import { TrendingUp, FilePieChart, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard } from "lucide-react";
+import { TrendingUp, FilePieChart, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard, AlertCircle } from "lucide-react";
 import { logger } from "@/lib/logger";
 import type { AppError } from "@/lib/errors";
 import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT } from "@/lib/constants";
@@ -25,7 +25,6 @@ export default async function DashboardPage() {
   let fetchError: string | null = null;
 
   try {
-    // Fetch dashboard data and recent audit logs
     const [dashboardDataResult, auditLogsResult] = await Promise.all([
       getDashboardDataAction(),
       getAuditLogsAction({ page: 1, pageSize: DASHBOARD_AUDIT_LOG_COUNT })
@@ -88,14 +87,14 @@ export default async function DashboardPage() {
     ipUsageByOperator,
     vlanResourceCounts,
     busiestVlans,
-    unusedVlanCount
+    subnetsNeedingAttention
   } = dashboardData;
 
   const allocatedIps = ipStatusCounts.allocated;
   const freeIps = ipStatusCounts.free;
   const reservedIps = ipStatusCounts.reserved;
   const unusedIpTotal = freeIps + reservedIps;
-  const totalKnownStatusIps = allocatedIps + unusedIpTotal; // Use this as the denominator for utilization if it makes sense
+  const totalKnownStatusIps = allocatedIps + unusedIpTotal; 
   const ipUtilizationPercentage = totalKnownStatusIps > 0 ? Math.round((allocatedIps / totalKnownStatusIps) * 100) : 0;
 
 
@@ -105,38 +104,30 @@ export default async function DashboardPage() {
     { name: '预留', value: reservedIps, fill: "hsl(var(--chart-3))"  },
   ];
   
+  const ipUsageByUnitChartData = ipUsageByUnit;
+  const ipUsageByOperatorChartData = ipUsageByOperator;
+  
+  const vlanResourceChartData = [...(vlanResourceCounts || [])]
+    .sort((a, b) => b.resourceCount - a.resourceCount)
+    .slice(0, 10) 
+    .map((vlan, index) => ({
+      name: vlan.name ? `${vlan.name} (VLAN ${vlan.vlanNumber})` : `VLAN ${vlan.vlanNumber}`,
+      "资源数": vlan.resourceCount,
+      fill: vlan.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
+    }));
+
+  // Define CHART_COLORS_REMAINDER if it's used for vlanResourceChartData and not defined elsewhere
   const CHART_COLORS_REMAINDER = [
     "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
     "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
   ];
-  
-  const ipUsageByUnitChartData = (ipUsageByUnit || []).map((item, index) => ({
-    name: item.item, 
-    value: item.count, 
-    fill: item.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
-  }));
-
-  const ipUsageByOperatorChartData = (ipUsageByOperator || []).map((item, index) => ({
-    name: item.item,
-    value: item.count,
-    fill: item.fill || CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
-  }));
-  
-  const vlanResourceChartData = [...(vlanResourceCounts || [])]
-    .sort((a, b) => b.resourceCount - a.resourceCount)
-    .slice(0, 10) // Show top 10
-    .map((vlan, index) => ({
-      name: vlan.name ? `${vlan.name} (VLAN ${vlan.vlanNumber})` : `VLAN ${vlan.vlanNumber}`,
-      "资源数": vlan.resourceCount,
-      fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length]
-    }));
 
 
   return (
-    <div className="flex flex-col gap-4"> {/* Reduced gap */}
+    <div className="flex flex-col gap-4"> 
       <PageHeader title="仪表盘" description="系统状态概览和关键指标。" icon={<LayoutDashboard className="h-6 w-6 text-primary" />} />
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> {/* Reduced gap */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">总 IP 地址数量</CardTitle>
@@ -180,52 +171,52 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2"> {/* Reduced gap */}
+      <div className="grid gap-4 lg:grid-cols-2"> 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">IP 地址状态分布</CardTitle> {/* Reduced title size */}
+            <CardTitle className="text-xl">IP 地址状态分布</CardTitle> 
             <CardDescription>按已分配、空闲和预留状态显示 IP 地址。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[280px]"> {/* Reduced height */}
+          <CardContent className="h-[280px]"> 
             <IPStatusPieChart data={ipStatusChartData} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> {/* Reduced title size */}
+            <CardTitle className="text-xl">按使用单位的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
             <CardDescription>显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个使用单位。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[280px]"> {/* Reduced height */}
+          <CardContent className="h-[280px]"> 
             <UsageBarChart data={ipUsageByUnitChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
           </CardContent>
         </Card>
       </div>
       
-      <div className="grid gap-4 lg:grid-cols-2"> {/* Reduced gap */}
+      <div className="grid gap-4 lg:grid-cols-2"> 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> {/* Reduced title size */}
+            <CardTitle className="text-xl">按运营商的 IP 分布 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
             <CardDescription>显示 IP 地址数量最多的前 {DASHBOARD_TOP_N_COUNT} 个运营商。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[280px]"> {/* Reduced height */}
+          <CardContent className="h-[280px]"> 
             <UsageBarChart data={ipUsageByOperatorChartData} dataKey="value" layout="vertical" yAxisWidth={100} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">VLAN 资源分布 (Top 10)</CardTitle> {/* Reduced title size */}
+            <CardTitle className="text-xl">VLAN 资源分布 (Top 10)</CardTitle> 
             <CardDescription>显示关联资源数（子网+直接IP）最多的前10个VLAN。</CardDescription>
           </CardHeader>
-          <CardContent className="h-[280px]"> {/* Reduced height */}
+          <CardContent className="h-[280px]"> 
             <VlanResourceBarChart data={vlanResourceChartData} />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2"> {/* Reduced gap */}
+      <div className="grid gap-4 lg:grid-cols-2"> 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> {/* Reduced title size */}
+            <CardTitle className="text-xl">最繁忙的 VLAN (Top {DASHBOARD_TOP_N_COUNT})</CardTitle> 
             <CardDescription>按关联的子网和直接 IP 地址总数排名。</CardDescription>
           </CardHeader>
           <CardContent>
@@ -248,25 +239,40 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">未使用的 VLAN</CardTitle> {/* Reduced title size */}
-            <CardDescription>当前没有任何子网或直接 IP 地址关联的 VLAN。</CardDescription>
+            <CardTitle className="text-xl">即将分配完的子网 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
+            <CardDescription>子网 IP 地址利用率超过 80%。</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{unusedVlanCount}</div>
-            <p className="text-xs text-muted-foreground">个 VLAN 当前未使用</p>
-            {unusedVlanCount > 0 && (
-                 <Button variant="link" size="sm" className="mt-2 p-0 h-auto" asChild>
-                    <Link href="/query?tab=vlan&q_vlan_unused=true">查看未使用列表 (查询待实现)</Link>
-                 </Button>
+            {subnetsNeedingAttention && subnetsNeedingAttention.length > 0 ? (
+                <ul className="space-y-2">
+                    {subnetsNeedingAttention.map(subnet => (
+                        <li key={subnet.id} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-muted/50">
+                            <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline">
+                                {subnet.cidr} {subnet.name ? `(${subnet.name})` : ''}
+                            </Link>
+                            <Badge variant={subnet.utilization > 90 ? "destructive" : "default"}>
+                                {subnet.utilization}% 使用率
+                            </Badge>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                 <div className="flex flex-col items-center justify-center py-6">
+                    <AlertCircle className="h-10 w-10 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">目前没有即将分配完的子网。</p>
+                </div>
             )}
+            <Button variant="outline" size="sm" className="mt-4 w-full" asChild>
+                <Link href="/subnets">查看所有子网</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-1"> {/* Reduced gap */}
+      <div className="grid gap-4 md:grid-cols-1"> 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">最近活动日志</CardTitle> {/* Reduced title size */}
+            <CardTitle className="text-xl">最近活动日志</CardTitle> 
             <CardDescription>系统中最近执行的 {DASHBOARD_AUDIT_LOG_COUNT} 条操作。</CardDescription>
           </CardHeader>
           <CardContent>

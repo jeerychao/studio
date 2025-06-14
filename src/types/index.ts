@@ -128,7 +128,7 @@ export interface AuditLog {
   userId?: string;
   username?: string;
   action: string;
-  timestamp: string; // Should correspond to `timestamp` field in schema
+  timestamp: string; 
   details?: string;
 }
 
@@ -232,13 +232,12 @@ export interface IPStatusCounts {
   allocated: number;
   free: number;
   reserved: number;
-  // total: number; // Total can be derived or fetched separately if needed for dashboard specific total
 }
 
 export interface TopNItemCount {
   item: string; // Represents usageUnit or operatorName or other grouping key
   count: number;
-  fill?: string; // Optional color for charts
+  fill?: string;
 }
 
 export interface VLANResourceInfo {
@@ -248,6 +247,13 @@ export interface VLANResourceInfo {
   resourceCount: number;
 }
 
+export interface SubnetUtilizationInfo {
+  id: string;
+  cidr: string;
+  name?: string;
+  utilization: number;
+}
+
 export interface DashboardData {
   totalIpCount: number;
   ipStatusCounts: IPStatusCounts;
@@ -255,8 +261,8 @@ export interface DashboardData {
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
   ipUsageByOperator: TopNItemCount[];
-  vlanResourceCounts: VLANResourceInfo[]; // All VLANs with their counts
-  busiestVlans: VLANResourceInfo[]; // Top N busiest based on resourceCount
-  unusedVlanCount: number;
+  vlanResourceCounts: VLANResourceInfo[]; 
+  busiestVlans: VLANResourceInfo[]; 
+  subnetsNeedingAttention: SubnetUtilizationInfo[]; // Changed from unusedVlanCount
 }
     
