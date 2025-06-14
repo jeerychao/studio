@@ -88,12 +88,12 @@ export default function DashboardLayout({
             {/* Full logo for expanded view, hidden when collapsed */}
             <div className="group-data-[collapsible=icon]:hidden">
               <Image
-                src="/images/your-logo-filename.png" // <<REPLACE THIS with your actual image path, e.g., /images/my-logo.png
-                alt="Company Logo" // << REPLACE THIS with your company name
-                width={300} // Intrinsic width of your 300x80 image
-                height={80}  // Intrinsic height of your 300x80 image
-                className="h-10 w-auto" // Renders at 40px height, width adjusts automatically
-                priority // Good for LCP elements like logos
+                src="/images/my-logo.png" 
+                alt="Company Logo" 
+                width={300} 
+                height={80}  
+                className="h-10 w-auto" 
+                priority 
               />
             </div>
             {/* Icon for collapsed view, shown only when collapsed */}
