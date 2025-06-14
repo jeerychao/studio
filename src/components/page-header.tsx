@@ -19,7 +19,7 @@ export function PageHeader({ title, description, icon, actionElement }: PageHead
           </div>
         )}
         <div>
-          <h1 className="text-xl font-bold tracking-tight md:text-2xl leading-tight">{title}</h1> {/* Added leading-tight */}
+          <h1 className="text-lg font-bold tracking-tight md:text-xl leading-tight">{title}</h1> {/* Changed text-xl to text-lg and md:text-2xl to md:text-xl */}
           {description && <p className="text-muted-foreground leading-snug">{description}</p>} {/* Added leading-snug */}
         </div>
       </div>
