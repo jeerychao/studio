@@ -232,12 +232,13 @@ export interface IPStatusCounts {
   allocated: number;
   free: number;
   reserved: number;
-  total: number;
+  // total: number; // Total can be derived or fetched separately if needed for dashboard specific total
 }
 
 export interface TopNItemCount {
-  item: string; // Represents usageUnit or operatorName
+  item: string; // Represents usageUnit or operatorName or other grouping key
   count: number;
+  fill?: string; // Optional color for charts
 }
 
 export interface VLANResourceInfo {
@@ -254,8 +255,8 @@ export interface DashboardData {
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
   ipUsageByOperator: TopNItemCount[];
-  vlanResourceCounts: VLANResourceInfo[]; // All VLANs with their resource counts
-  busiestVlans: VLANResourceInfo[]; // Top 5 busiest
+  vlanResourceCounts: VLANResourceInfo[]; // All VLANs with their counts
+  busiestVlans: VLANResourceInfo[]; // Top N busiest based on resourceCount
   unusedVlanCount: number;
 }
     

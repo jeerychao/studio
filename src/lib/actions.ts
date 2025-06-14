@@ -10,10 +10,10 @@ import type {
   OperatorDictionary as AppOperatorDictionary,
   LocalDeviceDictionary as AppLocalDeviceDictionary,
   PaymentSourceDictionary as AppPaymentSourceDictionary,
-  DashboardData, // New type for dashboard
-  IPStatusCounts,  // New type for dashboard
-  TopNItemCount,   // New type for dashboard
-  VLANResourceInfo // New type for dashboard
+  DashboardData, 
+  IPStatusCounts, 
+  TopNItemCount,  
+  VLANResourceInfo 
 } from '@/types';
 import { PERMISSIONS } from '@/types';
 import prisma from "./prisma";
@@ -46,8 +46,8 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
 
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_QUERY_PAGE_SIZE = 10;
-const DASHBOARD_TOP_N_COUNT = 5; // For Top N charts
-const DASHBOARD_AUDIT_LOG_COUNT = 5; // For recent audit logs
+const DASHBOARD_TOP_N_COUNT = 5; 
+const DASHBOARD_AUDIT_LOG_COUNT = 5; 
 
 interface FetchParams { page?: number; pageSize?: number; subnetId?: string; status?: AppIPAddressStatusType | 'all'; }
 export interface FetchedUserDetails { id: string; username: string; email: string; roleId: string; roleName: AppRoleNameType; avatar?: string; permissions: AppPermissionIdType[]; lastLogin?: string | undefined; }
@@ -962,86 +962,78 @@ function handlePrismaError(error: any, fieldNameMap: Record<string, string>): Ac
   return createActionErrorResponse(error, 'DICTIONARY_DB_ERROR');
 }
 
-// New Dashboard Action
 export async function getDashboardDataAction(): Promise<ActionResponse<DashboardData>> {
   const actionName = 'getDashboardDataAction';
   try {
-    // 1. Total IP Count
     const totalIpCount = await prisma.iPAddress.count();
-
-    // 2. IP Status Counts
     const ipStatusGroups = await prisma.iPAddress.groupBy({
       by: ['status'],
       _count: { status: true },
     });
-    const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0, total: totalIpCount };
+    const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
     ipStatusGroups.forEach(group => {
-      const statusKey = group.status as keyof Pick<IPStatusCounts, 'allocated' | 'free' | 'reserved'>;
+      const statusKey = group.status as keyof IPStatusCounts;
       if (statusKey in ipStatusCounts) {
         ipStatusCounts[statusKey] = group._count.status;
       }
     });
 
-    // 3. Total VLAN Count
     const totalVlanCount = await prisma.vLAN.count();
-
-    // 4. Total Subnet Count
     const totalSubnetCount = await prisma.subnet.count();
 
-    // 5. IP Usage by Unit (Top N + Other)
+    // IP Usage by Unit
     const usageUnitGroups = await prisma.iPAddress.groupBy({
       by: ['usageUnit'],
       _count: { _all: true },
-      where: { usageUnit: { not: null, equals: '' } }, // Exclude null and empty strings explicitly if needed
       orderBy: { _count: { _all: 'desc' } },
     });
     let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
+      .filter(g => g.usageUnit !== null && g.usageUnit !== "")
       .slice(0, DASHBOARD_TOP_N_COUNT)
-      .map(g => ({ item: g.usageUnit || "未指定", count: g._count._all }));
-    if (usageUnitGroups.length > DASHBOARD_TOP_N_COUNT) {
-      const otherCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count._all, 0);
-      if (otherCount > 0) {
-        ipUsageByUnit.push({ item: "其他", count: otherCount });
-      }
-    }
-     if (ipUsageByUnit.length === 0 && usageUnitGroups.length > 0) { // Handle case where all are null/empty and filtered out
-        const nullOrEmptyCount = await prisma.iPAddress.count({ where: { OR: [{usageUnit: null}, {usageUnit: ''}] } });
-        if (nullOrEmptyCount > 0) ipUsageByUnit.push({ item: "未指定", count: nullOrEmptyCount });
-    }
+      .map(g => ({ item: g.usageUnit!, count: g._count._all }));
+    const otherUsageUnitCount = usageUnitGroups
+      .filter(g => g.usageUnit !== null && g.usageUnit !== "")
+      .slice(DASHBOARD_TOP_N_COUNT)
+      .reduce((sum, g) => sum + g._count._all, 0);
+    const unspecifiedUsageUnitCount = usageUnitGroups
+      .filter(g => g.usageUnit === null || g.usageUnit === "")
+      .reduce((sum, g) => sum + g._count._all, 0);
+    if (otherUsageUnitCount > 0) ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount });
+    if (unspecifiedUsageUnitCount > 0) ipUsageByUnit.push({item: "未指定", count: unspecifiedUsageUnitCount });
 
 
-    // 6. IP Usage by Operator (Top N + Other)
+    // IP Usage by Operator
     const operatorGroups = await prisma.iPAddress.groupBy({
       by: ['selectedOperatorName'],
       _count: { _all: true },
-      where: { selectedOperatorName: { not: null, equals: '' } },
       orderBy: { _count: { _all: 'desc' } },
     });
-    let ipUsageByOperator: TopNItemCount[] = operatorGroups
+     let ipUsageByOperator: TopNItemCount[] = operatorGroups
+      .filter(g => g.selectedOperatorName !== null && g.selectedOperatorName !== "")
       .slice(0, DASHBOARD_TOP_N_COUNT)
-      .map(g => ({ item: g.selectedOperatorName || "未指定", count: g._count._all }));
-    if (operatorGroups.length > DASHBOARD_TOP_N_COUNT) {
-      const otherCount = operatorGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count._all, 0);
-      if (otherCount > 0) {
-        ipUsageByOperator.push({ item: "其他", count: otherCount });
-      }
-    }
-    if (ipUsageByOperator.length === 0 && operatorGroups.length > 0) {
-        const nullOrEmptyOpCount = await prisma.iPAddress.count({ where: { OR: [{selectedOperatorName: null}, {selectedOperatorName: ''}] } });
-        if (nullOrEmptyOpCount > 0) ipUsageByOperator.push({ item: "未指定", count: nullOrEmptyOpCount });
-    }
+      .map(g => ({ item: g.selectedOperatorName!, count: g._count._all }));
+    const otherOperatorCount = operatorGroups
+      .filter(g => g.selectedOperatorName !== null && g.selectedOperatorName !== "")
+      .slice(DASHBOARD_TOP_N_COUNT)
+      .reduce((sum, g) => sum + g._count._all, 0);
+    const unspecifiedOperatorCount = operatorGroups
+        .filter(g => g.selectedOperatorName === null || g.selectedOperatorName === "")
+        .reduce((sum, g) => sum + g._count._all, 0);
+    if (otherOperatorCount > 0) ipUsageByOperator.push({ item: "其他", count: otherOperatorCount });
+    if (unspecifiedOperatorCount > 0) ipUsageByOperator.push({item: "未指定", count: unspecifiedOperatorCount});
 
 
-    // 7. VLAN Resource Counts, Busiest VLANs, Unused VLAN Count
-    const allVlans = await prisma.vLAN.findMany({
+    // VLAN Resource Counts, Busiest VLANs, Unused VLAN Count
+    const allVlansFromDb = await prisma.vLAN.findMany({
       include: {
         _count: {
-          select: { subnets: true, ipAddresses: true }, // Counts directly associated IPs and subnets
+          select: { subnets: true, ipAddresses: true },
         },
       },
+      orderBy: { vlanNumber: 'asc' }
     });
 
-    const vlanResourceCounts: VLANResourceInfo[] = allVlans.map(vlan => ({
+    const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({
       id: vlan.id,
       vlanNumber: vlan.vlanNumber,
       name: vlan.name || undefined,
@@ -1061,11 +1053,11 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       totalSubnetCount,
       ipUsageByUnit,
       ipUsageByOperator,
-      vlanResourceCounts, // Contains all VLANs with their counts for the distribution chart
+      vlanResourceCounts,
       busiestVlans,
       unusedVlanCount,
     };
-
+    revalidatePath("/dashboard"); // Revalidate the dashboard path
     return { success: true, data: dashboardData };
 
   } catch (error: unknown) {
