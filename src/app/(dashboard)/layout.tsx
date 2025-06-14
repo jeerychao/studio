@@ -97,8 +97,7 @@ export default function DashboardLayout({
               />
             </div>
             {/* Icon for collapsed view, shown only when collapsed */}
-            <div className="hidden group-data-[collapsible=icon]:flex">
-              {/* You can replace this Network icon with a smaller square version of your logo if desired */}
+            <div className="hidden items-center group-data-[collapsible=icon]:flex">
               <Network className="h-7 w-7 text-sidebar-primary" />
             </div>
           </Link>
@@ -113,7 +112,7 @@ export default function DashboardLayout({
       </Sidebar>
       <SidebarInset>
         <Header />
-        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+        <main className="flex-1 px-4 py-2 md:px-6 md:py-3 lg:px-8 lg:py-4 overflow-auto">
           {children}
         </main>
         <footer className="py-4 px-4 md:px-6 lg:px-8 text-center text-xs text-muted-foreground border-t">
@@ -124,5 +123,3 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
-
-    
