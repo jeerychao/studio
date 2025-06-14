@@ -10,7 +10,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, icon, actionElement }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       <div className="flex items-center gap-3">
         {/* Render the icon node directly. Wrapper for consistent layout if needed. */}
         {icon && (
