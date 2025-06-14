@@ -169,7 +169,7 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
                         onClick={() => {
                           form.setValue("name", "");
                           form.trigger("name");
