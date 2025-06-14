@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary } from "@/types";
 import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions";
@@ -98,7 +98,7 @@ export function IPAddressFormSheet({
             allocatedTo: ipAddress?.allocatedTo || "",
             usageUnit: ipAddress?.usageUnit || "",
             contactPerson: ipAddress?.contactPerson || "",
-            phone: ipAddress?.phone || "", 
+            phone: ipAddress?.phone || "",
             description: ipAddress?.description || "",
             selectedOperatorName: initialOperatorName,
             selectedOperatorDevice: initialOperator?.operatorDevice || ipAddress?.selectedOperatorDevice || "",
@@ -107,7 +107,7 @@ export function IPAddressFormSheet({
             selectedDevicePort: initialLocalDevice?.port || ipAddress?.selectedDevicePort || "",
             selectedPaymentSource: ipAddress?.selectedPaymentSource || "",
         });
-        
+
         // Auto-fill operator device if operator name is selected
         if(ipAddress?.selectedOperatorName) {
             const selectedOp = operatorDictionaries.find(op => op.operatorName === ipAddress.selectedOperatorName);
@@ -216,22 +216,67 @@ export function IPAddressFormSheet({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden">
             <ScrollArea className="flex-1 px-6 pt-6 pb-2"><div className="space-y-6">
-                <FormField control={form.control} name="ipAddress" render={({ field }) => (<FormItem><FormLabel>IP 地址</FormLabel><FormControl><Input placeholder="例如 192.168.1.100" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="ipAddress" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>IP 地址</FormLabel>
+                    <div className="relative">
+                      <FormControl><Input placeholder="例如 192.168.1.100" {...field} className="pr-8"/></FormControl>
+                      {field.value && (<Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current" onClick={() => {form.setValue(field.name, ""); form.trigger(field.name);}} aria-label="清除IP地址"><X className="h-4 w-4" /></Button>)}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
                 <FormField control={form.control} name="subnetId" render={({ field }) => (<FormItem><FormLabel>子网</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SUBNET_SELECTED_SENTINEL ? "" : value)} value={field.value || NO_SUBNET_SELECTED_SENTINEL} disabled={subnets.length === 0 && !field.value}><FormControl><SelectTrigger><SelectValue placeholder={subnets.length > 0 ? "选择一个子网" : "无可用子网"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SUBNET_SELECTED_SENTINEL}>无子网 / 全局池</SelectItem>{subnets.map((subnet) => (<SelectItem key={subnet.id} value={subnet.id}>{subnet.cidr} ({subnet.name || subnet.description || "无描述"})</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="directVlanId" render={({ field }) => (<FormItem><FormLabel>直接关联 VLAN (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_DIRECT_VLAN_SENTINEL ? "" : value)} value={field.value === "" || field.value === null || field.value === undefined ? NO_DIRECT_VLAN_SENTINEL : field.value } disabled={vlans.length === 0 && field.value !== NO_DIRECT_VLAN_SENTINEL && field.value !== ""}><FormControl><SelectTrigger><SelectValue placeholder={vlans.length > 0 ? "选择一个VLAN或无" : "无可用VLAN"} /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_DIRECT_VLAN_SENTINEL}>无直接VLAN</SelectItem>{vlans.map((vlan) => (<SelectItem key={vlan.id} value={vlan.id}>VLAN {vlan.vlanNumber} ({vlan.name || vlan.description || "无描述"})</SelectItem>))}</SelectContent></Select><FormDescription>IP直接属于此VLAN，独立于其子网的VLAN设置。</FormDescription><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>状态</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="选择状态" /></SelectTrigger></FormControl><SelectContent>{ipAddressStatusOptions.map((status) => (<SelectItem key={status} value={status} className="capitalize">{ipAddressStatusLabels[status]}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="isGateway" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>是否网关</FormLabel><FormDescription>此IP地址是否作为其子网的网关地址？</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="allocatedTo" render={({ field }) => (<FormItem><FormLabel>分配给 (可选)</FormLabel><FormControl><Input placeholder="例如 服务器-01, 用户设备" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="usageUnit" render={({ field }) => (<FormItem><FormLabel>使用单位 (可选)</FormLabel><FormControl><Input placeholder="例如 研发部, 财务科" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="contactPerson" render={({ field }) => (<FormItem><FormLabel>联系人 (可选)</FormLabel><FormControl><Input placeholder="例如 张三" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>电话 (可选)</FormLabel><FormControl><Input placeholder="例如 13800138000" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                
+                <FormField control={form.control} name="allocatedTo" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>分配给 (可选)</FormLabel>
+                    <div className="relative">
+                      <FormControl><Input placeholder="例如 服务器-01, 用户设备" {...field} className="pr-8"/></FormControl>
+                      {field.value && (<Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current" onClick={() => {form.setValue(field.name, ""); form.trigger(field.name);}} aria-label="清除分配给"><X className="h-4 w-4" /></Button>)}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="usageUnit" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>使用单位 (可选)</FormLabel>
+                    <div className="relative">
+                      <FormControl><Input placeholder="例如 研发部, 财务科" {...field} className="pr-8"/></FormControl>
+                      {field.value && (<Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current" onClick={() => {form.setValue(field.name, ""); form.trigger(field.name);}} aria-label="清除使用单位"><X className="h-4 w-4" /></Button>)}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="contactPerson" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>联系人 (可选)</FormLabel>
+                    <div className="relative">
+                      <FormControl><Input placeholder="例如 张三" {...field} className="pr-8"/></FormControl>
+                      {field.value && (<Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current" onClick={() => {form.setValue(field.name, ""); form.trigger(field.name);}} aria-label="清除联系人"><X className="h-4 w-4" /></Button>)}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="phone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>电话 (可选)</FormLabel>
+                    <div className="relative">
+                      <FormControl><Input placeholder="例如 13800138000" {...field} className="pr-8"/></FormControl>
+                      {field.value && (<Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current" onClick={() => {form.setValue(field.name, ""); form.trigger(field.name);}} aria-label="清除电话"><X className="h-4 w-4" /></Button>)}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
                 <FormField control={form.control} name="selectedOperatorName" render={({ field }) => (<FormItem><FormLabel>运营商名称 (可选)</FormLabel><Select onValueChange={handleOperatorChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择运营商" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{operatorDictionaries.map(op => (<SelectItem key={op.id} value={op.operatorName}>{op.operatorName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="selectedOperatorDevice" render={({ field }) => (<FormItem><FormLabel>运营商设备 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={operatorDeviceValue || ""} readOnly disabled /></FormControl></FormItem>)} />
-                
-                <FormField 
-                    control={form.control} 
-                    name="selectedAccessType" 
+
+                <FormField
+                    control={form.control}
+                    name="selectedAccessType"
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>接入方式</FormLabel>
@@ -245,7 +290,7 @@ export function IPAddressFormSheet({
                             </Select>
                             <FormMessage />
                         </FormItem>
-                    )} 
+                    )}
                 />
 
                 <FormField control={form.control} name="selectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备名称 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />

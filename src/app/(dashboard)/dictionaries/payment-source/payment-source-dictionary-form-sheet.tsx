@@ -13,7 +13,7 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { PaymentSourceDictionary } from "@/types";
 import { createPaymentSourceDictionaryAction, updatePaymentSourceDictionaryAction, type ActionResponse } from "@/lib/actions";
@@ -90,7 +90,32 @@ export function PaymentSourceDictionaryFormSheet({ dictionaryEntry, children, bu
         <SheetHeader><SheetTitle>{isEditing ? "编辑付费来源字典条目" : "添加新付费来源字典条目"}</SheetTitle><SheetDescription>{isEditing ? "更新现有条目的详细信息。" : "填写新条目的详细信息。"}</SheetDescription></SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">
-            <FormField control={form.control} name="sourceName" render={({ field }) => (<FormItem><FormLabel>来源名称</FormLabel><FormControl><Input placeholder="例如 自费, 财政付费-项目A" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="sourceName" render={({ field }) => (
+              <FormItem>
+                <FormLabel>来源名称</FormLabel>
+                <div className="relative">
+                  <FormControl>
+                    <Input placeholder="例如 自费, 财政付费-项目A" {...field} className="pr-8"/>
+                  </FormControl>
+                  {field.value && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                      onClick={() => {
+                        form.setValue(field.name, "");
+                        form.trigger(field.name);
+                      }}
+                      aria-label="清除来源名称"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )} />
             <SheetFooter className="mt-8"><SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose><Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建条目")}</Button></SheetFooter>
           </form>
         </Form>
@@ -98,5 +123,3 @@ export function PaymentSourceDictionaryFormSheet({ dictionaryEntry, children, bu
     </Sheet>
   );
 }
-
-    

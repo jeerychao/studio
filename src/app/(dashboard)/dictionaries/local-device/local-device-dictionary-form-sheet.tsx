@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { LocalDeviceDictionary } from "@/types";
 import { createLocalDeviceDictionaryAction, updateLocalDeviceDictionaryAction, type ActionResponse } from "@/lib/actions";
@@ -52,12 +52,12 @@ const formSchema = z.object({
       path: ["portNumberSuffix"],
     });
   }
-  
+
   if (fullPort.length > 50) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "完整端口号（前缀+后缀）总长度不能超过50个字符。",
-      path: ["portNumberSuffix"], 
+      path: ["portNumberSuffix"],
     });
   }
 });
@@ -78,10 +78,10 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { 
-      deviceName: "", 
-      portPrefix: NO_PREFIX_SENTINEL, 
-      portNumberSuffix: "" 
+    defaultValues: {
+      deviceName: "",
+      portPrefix: NO_PREFIX_SENTINEL,
+      portNumberSuffix: ""
     },
   });
 
@@ -93,7 +93,7 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
         const existingPort = dictionaryEntry.port;
         const sortedPrefixOptions = [...portPrefixOptions].sort((a, b) => b.value.length - a.value.length);
         const foundPrefix = sortedPrefixOptions.find(p => p.value !== NO_PREFIX_SENTINEL && existingPort.startsWith(p.value));
-        
+
         if (foundPrefix) {
           initialPrefix = foundPrefix.value;
           initialSuffix = existingPort.substring(foundPrefix.value.length);
@@ -116,9 +116,9 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
     try {
       const prefixToUse = data.portPrefix === NO_PREFIX_SENTINEL ? "" : (data.portPrefix || "");
       const fullPort = prefixToUse + (data.portNumberSuffix || "");
-      const payload = { 
-        deviceName: data.deviceName, 
-        port: fullPort.trim().length > 0 ? fullPort.trim() : undefined 
+      const payload = {
+        deviceName: data.deviceName,
+        port: fullPort.trim().length > 0 ? fullPort.trim() : undefined
       };
 
       if (isEditing && dictionaryEntry) {
@@ -158,8 +158,31 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
         <SheetHeader><SheetTitle>{isEditing ? "编辑本地设备字典条目" : "添加新本地设备字典条目"}</SheetTitle><SheetDescription>{isEditing ? "更新现有条目的详细信息。" : "填写新条目的详细信息。"}</SheetDescription></SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">
-            <FormField control={form.control} name="deviceName" render={({ field }) => (<FormItem><FormLabel>设备名称</FormLabel><FormControl><Input placeholder="例如 核心交换机-A栋" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            
+            <FormField control={form.control} name="deviceName" render={({ field }) => (
+              <FormItem>
+                <FormLabel>设备名称</FormLabel>
+                <div className="relative">
+                  <FormControl><Input placeholder="例如 核心交换机-A栋" {...field} className="pr-8"/></FormControl>
+                  {field.value && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                      onClick={() => {
+                        form.setValue(field.name, "");
+                        form.trigger(field.name);
+                      }}
+                      aria-label="清除设备名称"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <FormItem>
               <FormLabel>端口号 (可选)</FormLabel>
               <div className="flex flex-col sm:flex-row gap-2 items-start">
@@ -191,9 +214,26 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
                   name="portNumberSuffix"
                   render={({ field }) => (
                     <FormItem className="flex-grow">
-                      <FormControl>
-                        <Input placeholder="例如 1/0/1 或 23" {...field} />
-                      </FormControl>
+                      <div className="relative">
+                        <FormControl>
+                          <Input placeholder="例如 1/0/1 或 23" {...field} className="pr-8"/>
+                        </FormControl>
+                        {field.value && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                            onClick={() => {
+                              form.setValue(field.name, "");
+                              form.trigger(field.name);
+                            }}
+                            aria-label="清除端口号后缀"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch"; // Ensure Switch is imported
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
 import { createSubnetAction, updateSubnetAction, type ActionResponse, type UpdateSubnetData, type CreateSubnetData } from "@/lib/actions";
@@ -69,8 +69,8 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     resolver: zodResolver(subnetFormSchema),
     defaultValues: {
       cidr: "",
-      name: "", 
-      dhcpEnabled: false, 
+      name: "",
+      dhcpEnabled: false,
       vlanId: "",
       description: "",
     },
@@ -80,8 +80,8 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     if (isOpen) {
       form.reset({
         cidr: subnet?.cidr || "",
-        name: subnet?.name || "", 
-        dhcpEnabled: subnet?.dhcpEnabled || false, 
+        name: subnet?.name || "",
+        dhcpEnabled: subnet?.dhcpEnabled || false,
         vlanId: subnet?.vlanId || "",
         description: subnet?.description || "",
       });
@@ -191,9 +191,26 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>网络地址 (CIDR)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 192.168.1.0/24" {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input placeholder="例如 192.168.1.0/24" {...field} className="pr-8" />
+                    </FormControl>
+                    {field.value && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                        onClick={() => {
+                          form.setValue(field.name, "");
+                          form.trigger(field.name);
+                        }}
+                        aria-label="清除网络地址"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -204,9 +221,26 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>子网名称 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 办公网络A区" {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input placeholder="例如 办公网络A区" {...field} className="pr-8" />
+                    </FormControl>
+                    {field.value && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                        onClick={() => {
+                          form.setValue(field.name, "");
+                          form.trigger(field.name);
+                        }}
+                        aria-label="清除子网名称"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

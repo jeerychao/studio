@@ -13,7 +13,7 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { OperatorDictionary } from "@/types";
 import { createOperatorDictionaryAction, updateOperatorDictionaryAction, type ActionResponse } from "@/lib/actions";
@@ -130,9 +130,26 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>运营商名称</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 中国电信" {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input placeholder="例如 中国电信" {...field} className="pr-8"/>
+                    </FormControl>
+                    {field.value && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                        onClick={() => {
+                          form.setValue(field.name, "");
+                          form.trigger(field.name);
+                        }}
+                        aria-label="清除运营商名称"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -143,9 +160,26 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>运营商设备 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 OLT-ZX-C300" {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input placeholder="例如 OLT-ZX-C300" {...field} className="pr-8"/>
+                    </FormControl>
+                     {field.value && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                        onClick={() => {
+                          form.setValue(field.name, "");
+                          form.trigger(field.name);
+                        }}
+                        aria-label="清除运营商设备"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -165,5 +199,3 @@ export function OperatorDictionaryFormSheet({ dictionaryEntry, children, buttonP
     </Sheet>
   );
 }
-
-    
