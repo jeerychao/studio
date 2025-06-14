@@ -1,4 +1,5 @@
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from '../types/index';
+
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, NetworkInterfaceTypeDictionary } from '../types/index';
 import { PERMISSIONS, DeviceType } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 // Import the centralized encrypt function
@@ -52,6 +53,10 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.CREATE_DICTIONARY_ACCESS_TYPE, name: '创建接入方式字典条目', group: '字典管理', description: '可以添加新的接入方式字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_ACCESS_TYPE, name: '编辑接入方式字典条目', group: '字典管理', description: '可以修改现有的接入方式字典条目。' },
   { id: PERMISSIONS.DELETE_DICTIONARY_ACCESS_TYPE, name: '删除接入方式字典条目', group: '字典管理', description: '可以删除接入方式字典条目。' },
+  { id: PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '查看网络接口类型字典', group: '字典管理', description: '可以查看网络接口类型字典条目。' },
+  { id: PERMISSIONS.CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '创建网络接口类型字典条目', group: '字典管理', description: '可以添加新的网络接口类型字典条目。' },
+  { id: PERMISSIONS.EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '编辑网络接口类型字典条目', group: '字典管理', description: '可以修改现有的网络接口类型字典条目。' },
+  { id: PERMISSIONS.DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '删除网络接口类型字典条目', group: '字典管理', description: '可以删除网络接口类型字典条目。' },
 ];
 
 function createInitialSubnetSeedData(
@@ -159,6 +164,7 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE,
       PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.DELETE_DICTIONARY_PAYMENT_SOURCE,
       PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, PERMISSIONS.CREATE_DICTIONARY_ACCESS_TYPE, PERMISSIONS.EDIT_DICTIONARY_ACCESS_TYPE, PERMISSIONS.DELETE_DICTIONARY_ACCESS_TYPE,
+      PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE,
     ] as PermissionId[]
   },
   {
@@ -176,6 +182,7 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
       PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
       PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE,
+      PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE,
     ] as PermissionId[]
   },
 ];
@@ -233,4 +240,21 @@ export const mockAccessTypeDictionaries: Omit<AccessTypeDictionary, 'id' | 'crea
   { name: '无线' },
   { name: '其他' },
 ];
-    
+
+export const mockNetworkInterfaceTypeDictionaries: Omit<NetworkInterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { name: 'GigabitEthernet', description: '千兆以太网接口' },
+  { name: 'TenGigabitEthernet', description: '万兆以太网接口' },
+  { name: 'FastEthernet', description: '百兆以太网接口' },
+  { name: 'Ethernet', description: '十兆以太网接口' },
+  { name: 'ge-', description: 'Juniper风格千兆接口前缀' },
+  { name: 'fe-', description: 'Juniper风格百兆接口前缀' },
+  { name: 'Te', description: '简写万兆 (例如 Te1/0/1)' },
+  { name: 'Gi', description: '简写千兆 (例如 Gi0/1)' },
+  { name: 'Fa', description: '简写百兆 (例如 Fa0/0)' },
+  { name: 'Eth', description: '简写十兆 (例如 Eth0)' },
+  { name: 'XGigabitEthernet', description: '另一种万兆以太网接口表示' },
+  { name: 'xe-', description: 'Juniper风格万兆接口前缀' },
+  { name: 'Port-channel', description: '端口聚合组' },
+  { name: 'Loopback', description: '逻辑环回接口' },
+  { name: 'Vlan-interface', description: 'VLAN逻辑接口/SVI' },
+];

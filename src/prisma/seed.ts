@@ -30,6 +30,7 @@ import {
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
+  mockNetworkInterfaceTypeDictionaries, // Import new mock data
 } from '../lib/data'; // Adjusted path
 import type { PermissionId as AppPermissionId, User as AppUser, IPAddressStatus as AppIPAddressStatusType } from '../types'; // Adjusted path
 import { encrypt } from '../app/api/auth/[...nextauth]/route'; // Adjusted path
@@ -282,6 +283,17 @@ async function main() {
     });
   }
   console.log('Access Type Dictionaries seeded.');
+
+  console.log('Seeding Network Interface Type Dictionaries...'); // New seed block
+  for (const nitData of mockNetworkInterfaceTypeDictionaries) {
+    await prisma.networkInterfaceTypeDictionary.upsert({
+      where: { name: nitData.name },
+      update: { name: nitData.name, description: nitData.description },
+      create: { name: nitData.name, description: nitData.description },
+    });
+  }
+  console.log('Network Interface Type Dictionaries seeded.');
+
 
   console.log('Seeding Audit Logs...');
   const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});

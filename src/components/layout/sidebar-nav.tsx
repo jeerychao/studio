@@ -19,7 +19,8 @@ import {
   UploadCloud, 
   HardDrive, 
   CreditCard, 
-  Waypoints, // Added for Access Type Dictionary
+  Waypoints, 
+  SlidersHorizontal, // New icon for Network Interface Type
   ChevronDown, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -72,13 +73,15 @@ const navItemConfigs: NavItemConfig[] = [
         PERMISSIONS.VIEW_DICTIONARY_OPERATOR,
         PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
         PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
-        PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, // Added permission
+        PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, 
+        PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, // Added permission
     ],
     subItems: [
       { href: "/dictionaries/operator", label: "运营商字典", icon: Network, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_OPERATOR },
       { href: "/dictionaries/local-device", label: "本地设备字典", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE },
       { href: "/dictionaries/payment-source", label: "付费来源字典", icon: CreditCard, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE },
-      { href: "/dictionaries/access-type", label: "接入方式字典", icon: Waypoints, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE }, // New item
+      { href: "/dictionaries/access-type", label: "接入方式字典", icon: Waypoints, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE },
+      { href: "/dictionaries/network-interface-type", label: "网络接口类型字典", icon: SlidersHorizontal, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE }, // New item
     ],
   },
   {
@@ -284,4 +287,3 @@ export function SidebarNav() {
     </>
   );
 }
-    

@@ -16,30 +16,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { LocalDeviceDictionary } from "@/types";
+import type { LocalDeviceDictionary, NetworkInterfaceTypeDictionary } from "@/types";
 import { createLocalDeviceDictionaryAction, updateLocalDeviceDictionaryAction, type ActionResponse } from "@/lib/actions";
 
 const NO_PREFIX_SENTINEL = "__NO_PREFIX_INTERNAL__";
 
-const portPrefixOptions = [
-  { value: NO_PREFIX_SENTINEL, label: "无前缀 / 自定义" },
-  { value: "GigabitEthernet", label: "GigabitEthernet" },
-  { value: "TenGigabitEthernet", label: "TenGigabitEthernet" },
-  { value: "FastEthernet", label: "FastEthernet" },
-  { value: "Ethernet", label: "Ethernet" },
-  { value: "ge-", label: "ge-" },
-  { value: "fe-", label: "fe-" },
-  { value: "Te", label: "Te" }, // 对应 TenGigabitEthernet
-  { value: "Gi", label: "Gi" }, // 对应 GigabitEthernet
-  { value: "Fa", label: "Fa" }, // 对应 FastEthernet
-  { value: "Eth", label: "Eth" }, // 对应 Ethernet
-  { value: "XGigabitEthernet", label: "XGigabitEthernet" }, // 万兆别名
-  { value: "xe-", label: "xe-" }, // 万兆别名
-];
-
 const formSchema = z.object({
   deviceName: z.string().min(1, "设备名称不能为空。").max(100, "设备名称过长。"),
-  portPrefix: z.string().optional(),
+  portPrefix: z.string().optional(), // This will store the selected prefix string (e.g., "GigabitEthernet") or NO_PREFIX_SENTINEL
   portNumberSuffix: z.string().max(40, "端口号后缀过长（最多40字符）。").optional(),
 }).superRefine((data, ctx) => {
   const prefixValue = data.portPrefix === NO_PREFIX_SENTINEL ? "" : (data.portPrefix || "");
@@ -66,12 +50,13 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface LocalDeviceDictionaryFormSheetProps {
   dictionaryEntry?: LocalDeviceDictionary;
+  networkInterfaceTypes: NetworkInterfaceTypeDictionary[];
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
   onDataChange?: () => void;
 }
 
-export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, buttonProps, onDataChange }: LocalDeviceDictionaryFormSheetProps) {
+export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, networkInterfaceTypes, children, buttonProps, onDataChange }: LocalDeviceDictionaryFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!dictionaryEntry;
@@ -84,6 +69,12 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
       portNumberSuffix: ""
     },
   });
+  
+  // Sort interface types by length of name descending to match longest prefix first
+  const sortedInterfaceTypes = React.useMemo(() => 
+    [...networkInterfaceTypes].sort((a, b) => b.name.length - a.name.length), 
+  [networkInterfaceTypes]);
+
 
   React.useEffect(() => {
     if (isOpen) {
@@ -91,12 +82,11 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
       let initialSuffix = "";
       if (isEditing && dictionaryEntry?.port) {
         const existingPort = dictionaryEntry.port;
-        const sortedPrefixOptions = [...portPrefixOptions].sort((a, b) => b.value.length - a.value.length);
-        const foundPrefix = sortedPrefixOptions.find(p => p.value !== NO_PREFIX_SENTINEL && existingPort.startsWith(p.value));
+        const foundPrefixEntry = sortedInterfaceTypes.find(p => existingPort.startsWith(p.name));
 
-        if (foundPrefix) {
-          initialPrefix = foundPrefix.value;
-          initialSuffix = existingPort.substring(foundPrefix.value.length);
+        if (foundPrefixEntry) {
+          initialPrefix = foundPrefixEntry.name; // Store the name (prefix string)
+          initialSuffix = existingPort.substring(foundPrefixEntry.name.length);
         } else {
           initialSuffix = existingPort; // If no known prefix, whole thing is suffix, prefix is "no prefix"
         }
@@ -108,7 +98,7 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
       });
       form.clearErrors();
     }
-  }, [isOpen, dictionaryEntry, form, isEditing]);
+  }, [isOpen, dictionaryEntry, form, isEditing, sortedInterfaceTypes]);
 
   async function onSubmit(data: FormValues) {
     form.clearErrors();
@@ -198,9 +188,10 @@ export function LocalDeviceDictionaryFormSheet({ dictionaryEntry, children, butt
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {portPrefixOptions.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          <SelectItem value={NO_PREFIX_SENTINEL}>无前缀 / 自定义</SelectItem>
+                          {sortedInterfaceTypes.map(option => (
+                            <SelectItem key={option.id} value={option.name}>
+                              {option.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

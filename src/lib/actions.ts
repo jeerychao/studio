@@ -10,6 +10,8 @@ import type {
   OperatorDictionary as AppOperatorDictionary,
   LocalDeviceDictionary as AppLocalDeviceDictionary,
   PaymentSourceDictionary as AppPaymentSourceDictionary,
+  AccessTypeDictionary as AppAccessTypeDictionary, // Added
+  NetworkInterfaceTypeDictionary as AppNetworkInterfaceTypeDictionary, // Added
   DashboardData, 
   IPStatusCounts, 
   TopNItemCount,  
@@ -948,6 +950,148 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
+// --- AccessTypeDictionary Actions ---
+export async function getAccessTypeDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppAccessTypeDictionary>>> {
+  const actionName = 'getAccessTypeDictionariesAction';
+  try {
+    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
+    const totalCount = await prisma.accessTypeDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const itemsFromDb = params?.page && params?.pageSize
+        ? await prisma.accessTypeDictionary.findMany({ orderBy: { name: 'asc' }, skip, take: pageSize })
+        : await prisma.accessTypeDictionary.findMany({ orderBy: { name: 'asc' } });
+    const appItems: AppAccessTypeDictionary[] = itemsFromDb.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
+    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function createAccessTypeDictionaryAction(data: Omit<AppAccessTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppAccessTypeDictionary>> {
+  const actionName = 'createAccessTypeDictionaryAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    if (!data.name || data.name.trim() === "") throw new ValidationError("接入方式名称是必需的。", "name");
+    if (await prisma.accessTypeDictionary.findUnique({ where: { name: data.name } })) throw new ResourceError(`接入方式 "${data.name}" 已存在。`, 'ACCESS_TYPE_DICT_NAME_EXISTS', undefined, 'name');
+    const newItem = await prisma.accessTypeDictionary.create({ data: { name: data.name } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_access_type_dictionary', details: `创建了接入方式字典条目: ${newItem.name}` } });
+    revalidatePath("/dictionaries/access-type"); revalidatePath("/ip-addresses");
+    const appItem: AppAccessTypeDictionary = { ...newItem, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString() };
+    return { success: true, data: appItem };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function updateAccessTypeDictionaryAction(id: string, data: Partial<Omit<AppAccessTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppAccessTypeDictionary>> {
+  const actionName = 'updateAccessTypeDictionaryAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const itemToUpdate = await prisma.accessTypeDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`接入方式字典 ID: ${id}`);
+    const updatePayload: Prisma.AccessTypeDictionaryUpdateInput = {};
+    if (data.name && data.name !== itemToUpdate.name) { if (await prisma.accessTypeDictionary.findFirst({ where: { name: data.name, NOT: { id } } })) throw new ResourceError(`接入方式 "${data.name}" 已存在。`, 'ACCESS_TYPE_DICT_NAME_EXISTS', undefined, 'name'); updatePayload.name = data.name; }
+    if (Object.keys(updatePayload).length === 0) { const currentItem: AppAccessTypeDictionary = { ...itemToUpdate, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString() }; return { success: true, data: currentItem }; }
+    const updatedItem = await prisma.accessTypeDictionary.update({ where: { id }, data: updatePayload });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_access_type_dictionary', details: `更新了接入方式字典条目: ${updatedItem.name}` } });
+    revalidatePath("/dictionaries/access-type"); revalidatePath("/ip-addresses");
+    const appItem: AppAccessTypeDictionary = { ...updatedItem, createdAt: updatedItem.createdAt.toISOString(), updatedAt: updatedItem.updatedAt.toISOString() };
+    return { success: true, data: appItem };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function deleteAccessTypeDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
+  const actionName = 'deleteAccessTypeDictionaryAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const itemToDelete = await prisma.accessTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`接入方式字典 ID: ${id}`);
+    await prisma.accessTypeDictionary.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_access_type_dictionary', details: `删除了接入方式字典条目: ${itemToDelete.name}` } });
+    revalidatePath("/dictionaries/access-type"); revalidatePath("/ip-addresses");
+    return { success: true };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function batchDeleteAccessTypeDictionariesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteAccessTypeDictionariesAction';
+  const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = [];
+  for (const id of ids) {
+    try {
+      const item = await prisma.accessTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
+      await prisma.accessTypeDictionary.delete({ where: { id } }); successCount++;
+    } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.accessTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
+  }
+  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_access_type_dictionary', details: `批量删除了 ${successCount} 个接入方式字典条目。`}}); revalidatePath("/dictionaries/access-type"); revalidatePath("/ip-addresses"); }
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
+
+// --- NetworkInterfaceTypeDictionary Actions ---
+export async function getNetworkInterfaceTypeDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppNetworkInterfaceTypeDictionary>>> {
+  const actionName = 'getNetworkInterfaceTypeDictionariesAction';
+  try {
+    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
+    const totalCount = await prisma.networkInterfaceTypeDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const itemsFromDb = params?.page && params?.pageSize
+        ? await prisma.networkInterfaceTypeDictionary.findMany({ orderBy: { name: 'asc' }, skip, take: pageSize })
+        : await prisma.networkInterfaceTypeDictionary.findMany({ orderBy: { name: 'asc' } });
+    const appItems: AppNetworkInterfaceTypeDictionary[] = itemsFromDb.map(item => ({ ...item, description: item.description || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
+    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function createNetworkInterfaceTypeDictionaryAction(data: Omit<AppNetworkInterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppNetworkInterfaceTypeDictionary>> {
+  const actionName = 'createNetworkInterfaceTypeDictionaryAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    if (!data.name || data.name.trim() === "") throw new ValidationError("接口类型名称是必需的。", "name");
+    if (await prisma.networkInterfaceTypeDictionary.findUnique({ where: { name: data.name } })) throw new ResourceError(`网络接口类型 "${data.name}" 已存在。`, 'NETWORK_INTERFACE_TYPE_DICT_NAME_EXISTS', undefined, 'name');
+    const newItem = await prisma.networkInterfaceTypeDictionary.create({ data: { name: data.name, description: data.description || null } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_network_interface_type_dictionary', details: `创建了网络接口类型字典条目: ${newItem.name}` } });
+    revalidatePath("/dictionaries/network-interface-type");
+    const appItem: AppNetworkInterfaceTypeDictionary = { ...newItem, description: newItem.description || undefined, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString() };
+    return { success: true, data: appItem };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function updateNetworkInterfaceTypeDictionaryAction(id: string, data: Partial<Omit<AppNetworkInterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppNetworkInterfaceTypeDictionary>> {
+  const actionName = 'updateNetworkInterfaceTypeDictionaryAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const itemToUpdate = await prisma.networkInterfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`网络接口类型字典 ID: ${id}`);
+    const updatePayload: Prisma.NetworkInterfaceTypeDictionaryUpdateInput = {};
+    if (data.name && data.name !== itemToUpdate.name) { if (await prisma.networkInterfaceTypeDictionary.findFirst({ where: { name: data.name, NOT: { id } } })) throw new ResourceError(`网络接口类型 "${data.name}" 已存在。`, 'NETWORK_INTERFACE_TYPE_DICT_NAME_EXISTS', undefined, 'name'); updatePayload.name = data.name; }
+    if (data.hasOwnProperty('description')) updatePayload.description = data.description || null;
+    if (Object.keys(updatePayload).length === 0) { const currentItem: AppNetworkInterfaceTypeDictionary = { ...itemToUpdate, description: itemToUpdate.description || undefined, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString() }; return { success: true, data: currentItem }; }
+    const updatedItem = await prisma.networkInterfaceTypeDictionary.update({ where: { id }, data: updatePayload });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_network_interface_type_dictionary', details: `更新了网络接口类型字典条目: ${updatedItem.name}` } });
+    revalidatePath("/dictionaries/network-interface-type");
+    const appItem: AppNetworkInterfaceTypeDictionary = { ...updatedItem, description: updatedItem.description || undefined, createdAt: updatedItem.createdAt.toISOString(), updatedAt: updatedItem.updatedAt.toISOString() };
+    return { success: true, data: appItem };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function deleteNetworkInterfaceTypeDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
+  const actionName = 'deleteNetworkInterfaceTypeDictionaryAction';
+  try {
+    const auditUser = await getAuditUserInfo(performingUserId);
+    const itemToDelete = await prisma.networkInterfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`网络接口类型字典 ID: ${id}`);
+    // Add check if this dictionary entry is in use by LocalDeviceDictionary.port prefixes if necessary
+    await prisma.networkInterfaceTypeDictionary.delete({ where: { id } });
+    await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_network_interface_type_dictionary', details: `删除了网络接口类型字典条目: ${itemToDelete.name}` } });
+    revalidatePath("/dictionaries/network-interface-type");
+    return { success: true };
+  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function batchDeleteNetworkInterfaceTypeDictionariesAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
+  const actionName = 'batchDeleteNetworkInterfaceTypeDictionariesAction';
+  const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = [];
+  for (const id of ids) {
+    try {
+      const item = await prisma.networkInterfaceTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
+      // Add check if in use
+      await prisma.networkInterfaceTypeDictionary.delete({ where: { id } }); successCount++;
+    } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.networkInterfaceTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
+  }
+  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_network_interface_type_dictionary', details: `批量删除了 ${successCount} 个网络接口类型字典条目。`}}); revalidatePath("/dictionaries/network-interface-type"); }
+  return { successCount, failureCount: failureDetails.length, failureDetails };
+}
+
+
 function handlePrismaError(error: any, fieldNameMap: Record<string, string>): ActionResponse<any> {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     const target = (error.meta?.target as string[]) || [];
@@ -1104,4 +1248,3 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-    

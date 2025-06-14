@@ -48,6 +48,11 @@ export const PERMISSIONS = {
   CREATE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.create',
   EDIT_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.edit',
   DELETE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.delete',
+
+  VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.view',
+  CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.create',
+  EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.edit',
+  DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.delete',
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -157,7 +162,15 @@ export interface PaymentSourceDictionary {
 
 export interface AccessTypeDictionary {
   id: string;
-  name: string; // e.g., "汇聚", "专线"
+  name: string; // e.g., "汇聚", "专线", "拨号"
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface NetworkInterfaceTypeDictionary {
+  id: string;
+  name: string; // e.g., "GigabitEthernet", "TenGigabitEthernet"
+  description?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -264,4 +277,3 @@ export interface DashboardData {
   busiestVlans: VLANResourceInfo[];
   subnetsNeedingAttention: SubnetUtilizationInfo[];
 }
-    
