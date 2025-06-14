@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from 'next/navigation';
 import * as React from "react";
 import { Network, Settings2, Loader2 } from "lucide-react"; 
+import Image from 'next/image'; // Added for custom logo
 import {
   SidebarProvider,
   Sidebar,
@@ -82,10 +83,24 @@ export default function DashboardLayout({
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
-        <SidebarHeader className="border-b h-16 flex items-center justify-center">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-sidebar-primary-foreground">
-            <Network className="h-7 w-7 text-sidebar-primary" />
-            <span className="text-lg group-data-[collapsible=icon]:hidden">IPAM Lite</span>
+        <SidebarHeader className="border-b h-16 flex items-center justify-center px-2"> {/* Added px-2 for slight padding */}
+          <Link href="/dashboard" className="flex items-center justify-center h-full w-full">
+            {/* Full logo for expanded view, hidden when collapsed */}
+            <div className="group-data-[collapsible=icon]:hidden">
+              <Image
+                src="/images/your-logo-filename.png" // <<REPLACE THIS with your actual image path, e.g., /images/my-logo.png
+                alt="Company Logo" // << REPLACE THIS with your company name
+                width={300} // Intrinsic width of your 300x80 image
+                height={80}  // Intrinsic height of your 300x80 image
+                className="h-10 w-auto" // Renders at 40px height, width adjusts automatically
+                priority // Good for LCP elements like logos
+              />
+            </div>
+            {/* Icon for collapsed view, shown only when collapsed */}
+            <div className="hidden group-data-[collapsible=icon]:flex">
+              {/* You can replace this Network icon with a smaller square version of your logo if desired */}
+              <Network className="h-7 w-7 text-sidebar-primary" />
+            </div>
           </Link>
         </SidebarHeader>
         <SidebarContent className="p-2">
