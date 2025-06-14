@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getDashboardDataAction, getAuditLogsAction } from "@/lib/actions";
 import type { DashboardData, AuditLog } from "@/types";
-import { PageHeader } from "@/components/page-header";
+// PageHeader import is no longer needed
 import Link from "next/link";
 import { TrendingUp, FilePieChart, Cable, Globe, ListChecks, AlertTriangle, LayoutDashboard, AlertCircle } from "lucide-react";
 import { logger } from "@/lib/logger";
@@ -121,7 +121,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4"> 
-      <PageHeader title="仪表盘" description="系统状态概览和关键指标。" icon={<LayoutDashboard className="h-6 w-6 text-primary" />} />
+      {/* PageHeader removed from here */}
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"> 
         <Card>
@@ -312,4 +312,6 @@ export default async function DashboardPage() {
     </div>
   );
 }
+    
+
     
