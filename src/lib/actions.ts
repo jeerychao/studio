@@ -3,7 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import type {
-  Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog, // Changed AppAuditLog to AuditLog
+  Subnet as AppSubnet, VLAN as AppVLAN, IPAddress as AppIPAddress, User as AppUser, Role as AppRole, AuditLog,
   IPAddressStatus as AppIPAddressStatusType, RoleName as AppRoleNameType, PermissionId as AppPermissionIdType,
   Permission as AppPermission, SubnetQueryResult, VlanQueryResult, BatchDeleteResult, BatchOperationFailure,
   SubnetFreeIpDetails, PaginatedResponse,
@@ -22,7 +22,7 @@ import prisma from "./prisma";
 import {
   getSubnetPropertiesFromCidr, getUsableIpCount, isIpInCidrRange, ipToNumber, numberToIp, doSubnetsOverlap, compareIpStrings, groupConsecutiveIpsToRanges,
 } from "./ip-utils";
-import { validateCIDR as validateCidrInputFormat } from "./error-utils"; // Renamed for clarity
+import { validateCIDR as validateCidrInputFormat } from "./error-utils";
 import { logger } from './logger';
 import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, type ActionErrorResponse } from './errors';
 import { createActionErrorResponse } from './error-utils';
@@ -807,7 +807,7 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const queryString = params.queryString?.trim(); if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
-    const orConditions: Prisma.SubnetWhereInput[] = [ { cidr: { contains: queryString } }, { name: { contains: queryString } }, { description: { contains: queryString } }, { networkAddress: { contains: queryString } }, ];
+    const orConditions: Prisma.SubnetWhereInput[] = [ { cidr: { contains: queryString, mode: 'insensitive' } }, { name: { contains: queryString, mode: 'insensitive' } }, { description: { contains: queryString, mode: 'insensitive' } }, { networkAddress: { contains: queryString, mode: 'insensitive' } }, ];
     let whereClause: Prisma.SubnetWhereInput = { OR: orConditions }; if (orConditions.length === 0) whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET" };
     const totalCount = await prisma.subnet.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const subnetsFromDb = await prisma.subnet.findMany({ where: whereClause, include: { vlan: { select: { vlanNumber: true, name: true } } }, orderBy: { cidr: 'asc' }, skip, take: pageSize });
@@ -821,11 +821,23 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const queryString = params.queryString?.trim(); if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
-    const isNumericQuery = /^\d+$/.test(queryString); const vlanNumberQuery = isNumericQuery ? parseInt(queryString, 10) : null;
-    const orConditions: Prisma.VLANWhereInput[] = [];
-    if (vlanNumberQuery !== null && vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) orConditions.push({ vlanNumber: vlanNumberQuery });
-    orConditions.push({ name: { contains: queryString } }); orConditions.push({ description: { contains: queryString } });
-    let whereClause: Prisma.VLANWhereInput = { OR: orConditions }; if (orConditions.length === 0) whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_VLAN" };
+    
+    const isNumericQuery = /^\d+$/.test(queryString);
+    const vlanNumberQuery = isNumericQuery ? parseInt(queryString, 10) : null;
+
+    let whereClause: Prisma.VLANWhereInput;
+
+    if (vlanNumberQuery !== null && vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
+      whereClause = { vlanNumber: vlanNumberQuery };
+    } else {
+      whereClause = {
+        OR: [
+          { name: { contains: queryString, mode: 'insensitive' } },
+          { description: { contains: queryString, mode: 'insensitive' } }
+        ]
+      };
+    }
+    
     const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const vlansFromDb = await prisma.vLAN.findMany({ where: whereClause, include: { subnets: { select: { id: true, cidr: true, name: true, description: true } } , ipAddresses: { select: { id: true, ipAddress: true, description: true } } }, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize, });
     const results: VlanQueryResult[] = vlansFromDb.map(v => ({ id: v.id, vlanNumber: v.vlanNumber, name: v.name || undefined, description: v.description || undefined, associatedSubnets: v.subnets.map(s => ({id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})), associatedDirectIPs: v.ipAddresses.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})), resourceCount: v.subnets.length + v.ipAddresses.length }));
@@ -844,12 +856,12 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       let matchedIpPattern = false; for (const p of ipWildcardPatterns) { const m = trimmedSearchTerm.match(p.regex); if (m) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: p.prefixBuilder(m) } }); matchedIpPattern = true; break; } }
       const isPotentiallyIpSegment = !matchedIpPattern && trimmedSearchTerm.length > 0 && trimmedSearchTerm.length <= 15 && /[\d]/.test(trimmedSearchTerm) && /^[0-9.*]+$/.test(trimmedSearchTerm) && !/^\.+$/.test(trimmedSearchTerm) && !/^\*+$/.test(trimmedSearchTerm);
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ peerDeviceName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } }); orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm, mode: 'insensitive' } }); orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm, mode: 'insensitive' } });
+      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm, mode: 'insensitive' } }); orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm, mode: 'insensitive' } }); 
+      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm, mode: 'insensitive' } }); 
+      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm, mode: 'insensitive' } }); orConditionsForSearchTerm.push({ peerDeviceName: { contains: trimmedSearchTerm, mode: 'insensitive' } }); orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm, mode: 'insensitive' } });
+      orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm, mode: 'insensitive' } });
+      orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm, mode: 'insensitive' } }); orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm, mode: 'insensitive' } }); orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm, mode: 'insensitive' } });
     }
     if (orConditionsForSearchTerm.length > 0) andConditions.push({ OR: orConditionsForSearchTerm }); else if (trimmedSearchTerm) andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
     if (statusFilter && statusFilter !== 'all') andConditions.push({ status: statusFilter as AppIPAddressStatusType });
@@ -1246,3 +1258,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   }
 }
     
+
