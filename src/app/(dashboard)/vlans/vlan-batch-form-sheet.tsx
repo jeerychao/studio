@@ -27,10 +27,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, PlusCircle, CheckCircle2 } from "lucide-react"; // Added CheckCircle2
+import { AlertCircle, PlusCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { batchCreateVLANsAction, type ActionResponse, type BatchVlanCreationResult } from "@/lib/actions";
-import { useCurrentUser } from "@/hooks/use-current-user"; // Added for performingUserId
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 const vlanBatchFormSchema = z.object({
   startVlanNumber: z.coerce.number().int().min(1, "起始VLAN号码必须至少为1").max(4094, "起始VLAN号码不能超过4094"),
@@ -54,7 +54,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
   const [isOpen, setIsOpen] = React.useState(false);
   const [submissionResult, setSubmissionResult] = React.useState<BatchVlanCreationResult | null>(null);
   const { toast } = useToast();
-  const { currentUser } = useCurrentUser(); // Get current user
+  const { currentUser } = useCurrentUser();
 
   const form = useForm<VlanBatchFormValues>({
     resolver: zodResolver(vlanBatchFormSchema),
@@ -69,6 +69,17 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
   React.useEffect(() => {
     if (isOpen) {
+      form.reset({
+        startVlanNumber: undefined,
+        endVlanNumber: undefined,
+        step: 1,
+        commonName: "",
+        commonDescription: "",
+      });
+      setSubmissionResult(null);
+      form.clearErrors();
+    } else {
+      // Ensure cleanup when sheet is closed by any means (e.g., programmatically or by user)
       form.reset({
         startVlanNumber: undefined,
         endVlanNumber: undefined,
@@ -99,40 +110,46 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
     if (vlansToCreate.length === 0) {
       toast({ title: "无VLAN可创建", description: "指定的范围和步长未产生任何VLAN号码。", variant: "destructive" });
+      setIsOpen(false); // Close if no operation
       return;
     }
      if (vlansToCreate.length > 200) { 
       toast({ title: "范围过大", description: `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`, variant: "destructive" });
+      // Do not close sheet, allow user to correct input
       return;
     }
 
     try {
-      const result = await batchCreateVLANsAction(vlansToCreate, currentUser?.id); // Pass performingUserId
-      setSubmissionResult(result);
+      const result = await batchCreateVLANsAction(vlansToCreate, currentUser?.id);
+      setSubmissionResult(result); // Set result to display in sheet if it remains open
 
-      if (result.successCount > 0 && result.failureDetails.length === 0) {
+      if (result.successCount > 0 && result.failureDetails.length === 0) { // All successful
         toast({
           title: "批量创建成功",
           description: `${result.successCount} 个VLAN已成功创建。`,
         });
+        setIsOpen(false); // Close sheet on full success
         if (onVlanChange) onVlanChange();
-      } else if (result.successCount > 0 && result.failureDetails.length > 0) {
+      } else if (result.successCount > 0 && result.failureDetails.length > 0) { // Partial success
         toast({
           title: "批量处理部分成功",
           description: `${result.successCount} 个VLAN创建成功，${result.failureDetails.length} 个失败。详情请见下方。`,
-          variant: "default", // Kept as default, could be "warning" if available
+          variant: "default",
           duration: 8000,
         });
-        if (onVlanChange) onVlanChange();
-      } else if (result.failureDetails.length > 0) {
+        // Sheet remains open to show failureDetails
+        if (onVlanChange) onVlanChange(); // Refresh list for successful items
+      } else if (result.failureDetails.length > 0) { // All failed
          toast({
           title: "批量创建失败",
           description: `所有 ${vlansToCreate.length} 个VLAN均创建失败。详情请见下方。`,
           variant: "destructive",
           duration: 8000,
         });
-      } else {
+         // Sheet remains open
+      } else { // No operation (e.g. if vlansToCreate was empty, though handled above)
         toast({ title: "无操作", description: "没有VLAN被创建或失败。", variant: "default" });
+        setIsOpen(false); // Close sheet if no actual operation occurred
       }
 
     } catch (clientError) {
@@ -145,15 +162,15 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             successCount: 0,
             failureDetails: [{ vlanNumberAttempted: data.startVlanNumber || 0, error: "客户端错误: " + (clientError instanceof Error ? clientError.message : "未知错误") }]
         });
+        // Sheet remains open
     }
   }
 
+  // handleOpenChange is used by Sheet's onOpenChange.
+  // The useEffect watching `isOpen` is more comprehensive for cleanup.
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (!open) {
-        form.reset();
-        setSubmissionResult(null);
-    }
+    // The useEffect hook will handle resetting form and submissionResult when `isOpen` changes to false.
   };
 
   const triggerContent = children || (
@@ -177,8 +194,8 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         </SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-            <ScrollArea className="flex-1 px-6 pt-4 pb-2"> {/* Adjusted padding */}
-              <div className="space-y-4"> {/* Inner div for spacing */}
+            <ScrollArea className="flex-1 px-6 pt-4 pb-2">
+              <div className="space-y-4 pb-4"> {/* Added pb-4 to ensure space for last element before footer potentially */}
                 <FormField
                   control={form.control}
                   name="startVlanNumber"
@@ -246,7 +263,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                 />
 
                 {submissionResult && (
-                  <div className="mt-6 space-y-3"> {/* Increased top margin for spacing */}
+                  <div className="mt-6 space-y-3">
                     <h3 className="font-semibold text-base border-b pb-1 mb-2">处理结果:</h3>
                     <Alert variant={submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 ? "destructive" : "default"}>
                       {submissionResult.failureDetails.length > 0 ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -276,7 +293,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                 )}
               </div>
             </ScrollArea>
-            <SheetFooter className="p-6 pt-4 border-t"> {/* Standardized padding */}
+            <SheetFooter className="p-6 pt-4 border-t">
               <SheetClose asChild>
                 <Button type="button" variant="outline">
                   取消
@@ -292,5 +309,6 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
+    
 
     
