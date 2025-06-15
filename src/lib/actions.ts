@@ -504,7 +504,8 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
                 where: { id: ip.id }, 
                 data: { 
                     subnet: { disconnect: true }, 
-                    directVlan: { disconnect: true } 
+                    directVlan: { disconnect: true },
+                    description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
                 } 
             })
         );
@@ -807,7 +808,14 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const queryString = params.queryString?.trim(); if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
-    const orConditions: Prisma.SubnetWhereInput[] = [ { cidr: { contains: queryString, mode: 'insensitive' } }, { name: { contains: queryString, mode: 'insensitive' } }, { description: { contains: queryString, mode: 'insensitive' } }, { networkAddress: { contains: queryString, mode: 'insensitive' } }, ];
+    
+    const orConditions: Prisma.SubnetWhereInput[] = [
+      { cidr: { contains: queryString } }, // Removed mode: 'insensitive'
+      { name: { contains: queryString, mode: 'insensitive' } },
+      { description: { contains: queryString, mode: 'insensitive' } },
+      { networkAddress: { contains: queryString } }, // Removed mode: 'insensitive'
+    ];
+
     let whereClause: Prisma.SubnetWhereInput = { OR: orConditions }; if (orConditions.length === 0) whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET" };
     const totalCount = await prisma.subnet.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const subnetsFromDb = await prisma.subnet.findMany({ where: whereClause, include: { vlan: { select: { vlanNumber: true, name: true } } }, orderBy: { cidr: 'asc' }, skip, take: pageSize });
