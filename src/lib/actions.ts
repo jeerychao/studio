@@ -388,9 +388,9 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
             id: ip.id,
             updates: {
               subnet: { disconnect: true },
-              status: 'free',
+              status: 'free' as AppIPAddressStatusType, 
               allocatedTo: null, usageUnit: null, contactPerson: null, phone: null, isGateway: false,
-              directVlanId: null, 
+              directVlan: { disconnect: true }, 
               peerUnitName: null, peerDeviceName: null, peerPortName: null,
               selectedAccessType: null, selectedLocalDeviceName: null, selectedDevicePort: null, selectedPaymentSource: null,
               description: `(原属于子网 ${originalCidrForLog}) ${ip.description || ''}`.trim(),
@@ -436,7 +436,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
 async function calculateSubnetUtilization(subnetId: string): Promise<number> {
   const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!subnet || !subnet.cidr) return 0;
   const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
-  const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0; // Avoid division by zero
+  const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0; 
   const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" } });
   const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
   if (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) {
@@ -470,7 +470,7 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
           where: { id: ip.id }, 
           data: { 
             subnet: { disconnect: true }, 
-            directVlanId: null, 
+            directVlan: { disconnect: true }, 
             description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
           } 
         })
@@ -499,7 +499,15 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
       
       const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
       if (freeIpsInSubnet.length > 0) {
-        const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip => prisma.iPAddress.update({ where: { id: ip.id }, data: { subnet: { disconnect: true }, directVlanId: null } }));
+        const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip => 
+            prisma.iPAddress.update({ 
+                where: { id: ip.id }, 
+                data: { 
+                    subnet: { disconnect: true }, 
+                    directVlan: { disconnect: true } 
+                } 
+            })
+        );
         await prisma.$transaction(ipsToDisassociateUpdates);
       }
       await prisma.subnet.delete({ where: { id } }); deletedSubnetCidrs.push(subnetToDelete.cidr); successCount++;
@@ -537,7 +545,7 @@ export async function batchCreateVLANsAction(vlansToCreateInput: Array<{ vlanNum
   for (const vlanInput of vlansToCreateInput) {
     try {
       if (isNaN(vlanInput.vlanNumber) || vlanInput.vlanNumber < 1 || vlanInput.vlanNumber > 4094) throw new ValidationError("VLAN 号码必须是 1 到 4094 之间的整数。", 'vlanNumber', vlanInput.vlanNumber, "VLAN 号码必须是 1 到 4094 之间的整数。");
-      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', `VLAN ${vlanInput.vlanNumber} 已存在。`, 'startVlanNumber'); // Changed field to startVlanNumber to match form
+      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', `VLAN ${vlanInput.vlanNumber} 已存在。`, 'startVlanNumber'); 
       const newVlan = await prisma.vLAN.create({ data: { vlanNumber: vlanInput.vlanNumber, name: vlanInput.name || null, description: vlanInput.description || null } });
       createdVlanSummaries.push(`${newVlan.vlanNumber}${newVlan.name ? ` (${newVlan.name})` : ''}`); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, 'batchCreateVLANsAction_single'); failureDetails.push({ vlanNumberAttempted: vlanInput.vlanNumber, error: errRes.userMessage }); }
