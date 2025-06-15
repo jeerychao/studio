@@ -811,8 +811,8 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     
     const orConditions: Prisma.SubnetWhereInput[] = [
       { cidr: { contains: queryString } }, 
-      { name: { contains: queryString, mode: 'insensitive' } },
-      { description: { contains: queryString, mode: 'insensitive' } },
+      { name: { contains: queryString } },
+      { description: { contains: queryString } },
       { networkAddress: { contains: queryString } }, 
     ];
 
@@ -833,16 +833,21 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     
     const isNumericQuery = /^\d+$/.test(queryString);
     const vlanNumberQuery = isNumericQuery ? parseInt(queryString, 10) : null;
-
     let whereClause: Prisma.VLANWhereInput;
 
     if (vlanNumberQuery !== null && vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
-      whereClause = { vlanNumber: vlanNumberQuery };
+      whereClause = {
+        OR: [
+          { vlanNumber: vlanNumberQuery },
+          { name: { contains: queryString } },
+          { description: { contains: queryString } }
+        ]
+      };
     } else {
       whereClause = {
         OR: [
-          { name: { contains: queryString } }, // Removed mode: 'insensitive'
-          { description: { contains: queryString } } // Removed mode: 'insensitive'
+          { name: { contains: queryString } },
+          { description: { contains: queryString } }
         ]
       };
     }
@@ -1273,3 +1278,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   }
 }
     
+
