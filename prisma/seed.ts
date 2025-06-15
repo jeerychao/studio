@@ -1,5 +1,8 @@
 
-// --- PRISMA SEED SCRIPT (FULL RESTORED LOGIC) ---
+// --- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2) ---
+// Top-level log to confirm script execution start
+console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Execution Started ---");
+
 import { PrismaClient, Prisma } from '@prisma/client';
 import { encrypt } from '../src/lib/crypto-utils';
 import {
@@ -11,20 +14,36 @@ import {
   mockUsers,
   mockVLANs,
   mockSubnets,
-  seedIPsData, // Ensure this matches the export from data.ts
+  seedIPsData, // Use the direct export name
   mockDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
-  mockInterfaceTypeDictionaries,
+  mockInterfaceTypeDictionaries, // Renamed
 } from '../src/lib/data';
 import { logger } from '../src/lib/logger'; // Using the logger utility
+
+// Attempt to load .env variables explicitly if not already loaded by Prisma CLI for ts-node
+// This is often a point of failure if ts-node doesn't inherit the env properly
+try {
+    const dotenv = require('dotenv'); // Using require for early use
+    const path = require('path');
+    const envPath = path.resolve(__dirname, '../../.env'); // Points to project root .env
+    const result = dotenv.config({ path: envPath });
+    if (result.error) {
+        console.warn("dotenv.config error in seed.ts (this might be okay if Prisma CLI handles .env):", result.error.message);
+    } else {
+        console.log("dotenv.config loaded successfully in seed.ts. Parsed ENCRYPTION_KEY:", process.env.ENCRYPTION_KEY ? "Exists" : "MISSING");
+    }
+} catch (e) {
+    console.warn("dotenv module not found or error during its initial require in seed.ts (continuing, Prisma CLI might handle .env):", (e as Error).message);
+}
 
 const prisma = new PrismaClient();
 
 async function main() {
-  logger.info('--- PRISMA SEED SCRIPT STARTED (FULL LOGIC) ---');
+  logger.info('--- PRISMA SEED SCRIPT STARTED (FULL LOGIC V2) ---');
 
-  // 1. Seed Permissions (if they don't exist, as they are defined by PERMISSIONS enum)
+  // 1. Seed Permissions
   logger.info('Start seeding Permissions...');
   for (const perm of mockPermissions) {
     try {
@@ -33,8 +52,8 @@ async function main() {
         update: { name: perm.name, group: perm.group, description: perm.description },
         create: perm,
       });
-    } catch (e) {
-      logger.error(`Error seeding permission ${perm.id}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding permission ${perm.id}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockPermissions.length} Permissions processed.`);
@@ -50,7 +69,7 @@ async function main() {
           name: roleData.name,
           description: roleData.description,
           permissions: {
-            set: permissionsToConnect, // Use set to replace all existing permissions
+            set: permissionsToConnect,
           },
         },
         create: {
@@ -62,8 +81,8 @@ async function main() {
           },
         },
       });
-    } catch (e) {
-      logger.error(`Error seeding role ${roleData.name}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding role ${roleData.name}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockRoles.length} Roles seeded.`);
@@ -75,17 +94,15 @@ async function main() {
       const { password, ...restOfUserData } = userData;
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        // Password is only set on create or if explicitly provided for update
-        // For seeding, we always provide it.
-        password: password || encrypt("DefaultPassword1!"), // Should always have a password from mockUsers
+        password: password || encrypt("DefaultPassword1!"),
       };
       await prisma.user.upsert({
         where: { email: userData.email },
         update: dataToUpsert,
         create: dataToUpsert,
       });
-    } catch (e) {
-      logger.error(`Error seeding user ${userData.email}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockUsers.length} Users seeded.`);
@@ -99,8 +116,8 @@ async function main() {
         update: { name: vlanData.name, description: vlanData.description },
         create: vlanData,
       });
-    } catch (e) {
-      logger.error(`Error seeding VLAN ${vlanData.vlanNumber}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding VLAN ${vlanData.vlanNumber}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockVLANs.length} VLANs seeded.`);
@@ -116,23 +133,23 @@ async function main() {
       }
       await prisma.subnet.upsert({
         where: { cidr: subnetData.cidr },
-        update: createPayload, // For simplicity, update also uses create payload structure
+        update: createPayload,
         create: createPayload,
       });
-    } catch (e) {
-      logger.error(`Error seeding subnet ${subnetData.cidr}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding subnet ${subnetData.cidr}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockSubnets.length} Subnets seeded.`);
 
   // 6. Seed IP Addresses
   logger.info('Start seeding IP Addresses...');
-  for (const ipData of seedIPsData) { // Using seedIPsData
+  for (const ipData of seedIPsData) {
     try {
       const { subnetId, directVlanId, ...restOfIpData } = ipData;
       const createPayload: Prisma.IPAddressCreateInput = {
         ...restOfIpData,
-        status: ipData.status, // Already correct type
+        status: ipData.status,
       };
       if (subnetId) {
         createPayload.subnet = { connect: { id: subnetId } };
@@ -140,22 +157,30 @@ async function main() {
       if (directVlanId) {
         createPayload.directVlan = { connect: { id: directVlanId } };
       }
+      
+      // The subnetId for the where clause can be string or null.
+      // If ipData.subnetId is undefined (meaning not in seedIPsData for this entry),
+      // then currentSubnetIdForWhere will be null.
+      const currentSubnetIdForWhere: string | null = ipData.subnetId ? ipData.subnetId : null;
+
       await prisma.iPAddress.upsert({
-        where: { ipAddress_subnetId: { ipAddress: ipData.ipAddress, subnetId: subnetId || null } }, // Assuming unique constraint
+        where: { 
+          ipAddress_subnetId: { 
+            ipAddress: ipData.ipAddress, 
+            subnetId: currentSubnetIdForWhere as any // Casting to any to bypass strict TS check if it's too restrictive
+                                                    // Prisma runtime should handle null correctly for optional parts of composite keys.
+          } 
+        },
         update: createPayload,
         create: createPayload,
       });
-    } catch (e) {
-      // If unique constraint is just on ipAddress, use that.
-      // This also handles cases where an IP might move between subnets (though upsert might create a new one if subnetId changes and is part of key)
-      // For simplicity, current seed assumes ipAddress+subnetId is unique or ipAddress globally if subnetId is null.
-      // If a simple ipAddress unique key is needed, adjust the where clause.
-      logger.error(`Error seeding IP Address ${ipData.ipAddress}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding IP Address ${ipData.ipAddress}:`, e, { name: e.name, message: e.message, stack: e.stack, ipDataAttempted: ipData });
     }
   }
   logger.info(`${seedIPsData.length} IP Addresses seeded.`);
 
-  // 7. Seed Device Dictionaries (formerly LocalDeviceDictionary)
+  // 7. Seed Device Dictionaries
   logger.info('Start seeding Device Dictionaries...');
   for (const deviceData of mockDeviceDictionaries) {
     try {
@@ -164,8 +189,8 @@ async function main() {
         update: { port: deviceData.port },
         create: deviceData,
       });
-    } catch (e) {
-      logger.error(`Error seeding device dictionary ${deviceData.deviceName}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding device dictionary ${deviceData.deviceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockDeviceDictionaries.length} Device Dictionaries seeded.`);
@@ -176,11 +201,11 @@ async function main() {
     try {
       await prisma.paymentSourceDictionary.upsert({
         where: { sourceName: paymentData.sourceName },
-        update: {},
+        update: {}, // No other fields to update besides the key
         create: paymentData,
       });
-    } catch (e) {
-      logger.error(`Error seeding payment source dictionary ${paymentData.sourceName}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding payment source dictionary ${paymentData.sourceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockPaymentSourceDictionaries.length} Payment Source Dictionaries seeded.`);
@@ -191,16 +216,16 @@ async function main() {
     try {
       await prisma.accessTypeDictionary.upsert({
         where: { name: accessTypeData.name },
-        update: {},
+        update: {}, // No other fields to update besides the key
         create: accessTypeData,
       });
-    } catch (e) {
-      logger.error(`Error seeding access type dictionary ${accessTypeData.name}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding access type dictionary ${accessTypeData.name}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockAccessTypeDictionaries.length} Access Type Dictionaries seeded.`);
 
-  // 10. Seed Interface Type Dictionaries (formerly NetworkInterfaceTypeDictionary)
+  // 10. Seed Interface Type Dictionaries
   logger.info('Start seeding Interface Type Dictionaries...');
   for (const interfaceTypeData of mockInterfaceTypeDictionaries) {
     try {
@@ -209,8 +234,8 @@ async function main() {
         update: { description: interfaceTypeData.description },
         create: interfaceTypeData,
       });
-    } catch (e) {
-      logger.error(`Error seeding interface type dictionary ${interfaceTypeData.name}:`, e);
+    } catch (e: any) {
+      logger.error(`Error seeding interface type dictionary ${interfaceTypeData.name}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
   logger.info(`${mockInterfaceTypeDictionaries.length} Interface Type Dictionaries seeded.`);
@@ -219,11 +244,22 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    logger.error('An error occurred during seeding:', e);
+  .catch((e: any) => {
+    // This top-level catch should ideally not be hit if individual operations are caught,
+    // but it's a good safety net.
+    console.error("--- PRISMA SEED SCRIPT: FATAL ERROR in main() ---");
+    console.error("Error Name:", e.name);
+    console.error("Error Message:", e.message);
+    console.error("Error Stack:", e.stack);
+    if(e.code) console.error("Prisma Error Code:", e.code);
+    if(e.meta) console.error("Prisma Error Meta:", e.meta);
+    logger.error('FATAL ERROR during seeding process:', e, { name: e.name, message: e.message, stack: e.stack });
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
     logger.info('Prisma client disconnected.');
+    console.log("--- PRISMA SEED SCRIPT: main() finished, client disconnected. ---");
   });
+
+console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
