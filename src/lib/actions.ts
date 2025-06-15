@@ -470,7 +470,7 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
           where: { id: ip.id },
           data: {
             subnet: { disconnect: true },
-            directVlan: { disconnect: true }, // Corrected from directVlanId: null
+            directVlan: { disconnect: true },
             description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
           }
         })
@@ -504,7 +504,7 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
                 where: { id: ip.id },
                 data: {
                     subnet: { disconnect: true },
-                    directVlan: { disconnect: true }, // Corrected from directVlanId: null
+                    directVlan: { disconnect: true },
                     description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
                 }
             })
@@ -810,10 +810,10 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     const queryString = params.queryString?.trim(); if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
 
     const orConditions: Prisma.SubnetWhereInput[] = [
-      { cidr: { contains: queryString } }, // No mode: 'insensitive' for CIDR
-      { name: { contains: queryString } }, // Keep mode: 'insensitive' for text fields if DB supports, else remove
+      { cidr: { contains: queryString } },
+      { name: { contains: queryString } },
       { description: { contains: queryString } },
-      { networkAddress: { contains: queryString } }, // No mode: 'insensitive' for networkAddress
+      { networkAddress: { contains: queryString } },
     ];
 
     let whereClause: Prisma.SubnetWhereInput = { OR: orConditions };
@@ -837,15 +837,14 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     }
 
     const orConditions: Prisma.VLANWhereInput[] = [
-      { name: { contains: queryString } }, // No mode: 'insensitive'
-      { description: { contains: queryString } }, // No mode: 'insensitive'
+      { name: { contains: queryString } },
+      { description: { contains: queryString } },
     ];
 
     const isNumericQuery = /^\d+$/.test(queryString);
     if (isNumericQuery) {
       const vlanNumberQuery = parseInt(queryString, 10);
       if (vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
-        // For numeric query, add exact match on vlanNumber to the OR conditions
         orConditions.push({ vlanNumber: vlanNumberQuery });
       }
     }
@@ -893,7 +892,6 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       let matchedIpPattern = false; for (const p of ipWildcardPatterns) { const m = trimmedSearchTerm.match(p.regex); if (m) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: p.prefixBuilder(m) } }); matchedIpPattern = true; break; } }
       const isPotentiallyIpSegment = !matchedIpPattern && trimmedSearchTerm.length > 0 && trimmedSearchTerm.length <= 15 && /[\d]/.test(trimmedSearchTerm) && /^[0-9.*]+$/.test(trimmedSearchTerm) && !/^\.+$/.test(trimmedSearchTerm) && !/^\*+$/.test(trimmedSearchTerm);
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
-      // Removed mode: "insensitive" from all contains filters
       orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } });
@@ -1211,7 +1209,6 @@ export async function deleteInterfaceTypeDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.interfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`接口类型字典 ID: ${id}`, `接口类型字典 ID ${id} 未找到。`);
-    // No direct IPAddress usage check needed as this dictionary is primarily for DeviceDictionary port prefix suggestions.
     await prisma.interfaceTypeDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_interface_type_dictionary', details: `删除了接口类型字典条目: ${itemToDelete.name}` } });
     revalidatePath("/dictionaries/interface-type");
@@ -1225,7 +1222,6 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.interfaceTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      // No direct IPAddress usage check needed
       await prisma.interfaceTypeDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.interfaceTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -1304,4 +1300,3 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   }
 }
     
-
