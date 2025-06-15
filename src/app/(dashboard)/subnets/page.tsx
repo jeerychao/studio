@@ -21,6 +21,12 @@ import { Button } from "@/components/ui/button";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -215,112 +221,127 @@ function SubnetsView() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]">
-                    {canDelete && (
-                      <Checkbox
-                        checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
-                        onCheckedChange={handleSelectAll}
-                        aria-label="全选当前页"
-                      />
-                    )}
-                  </TableHead>
-                  <TableHead>CIDR</TableHead>
-                  <TableHead>名称</TableHead>
-                  <TableHead>VLAN</TableHead>
-                  <TableHead>DHCP</TableHead>
-                  <TableHead>描述</TableHead>
-                  <TableHead>利用率</TableHead>
-                  {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {subnetsToDisplay.map((subnet) => {
-                  const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
-                  const vlanDisplay = vlanInfo
-                    ? `VLAN ${vlanInfo.vlanNumber}${vlanInfo.name ? ` (${vlanInfo.name})` : ''}`
-                    : <span className="text-muted-foreground text-xs">无</span>;
-                  return (
-                    <TableRow key={subnet.id} data-state={selectedIds.has(subnet.id) && "selected"}>
-                      <TableCell>
-                        {canDelete && (
-                           <Checkbox
-                            checked={selectedIds.has(subnet.id)}
-                            onCheckedChange={(checked) => handleSelectItem(subnet.id, checked)}
-                            aria-label={`选择子网 ${subnet.cidr}`}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline font-medium">
-                          {subnet.cidr}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="max-w-[150px] truncate text-sm">{subnet.name || "无"}</TableCell>
-                      <TableCell>
-                        {vlanInfo ? (
-                          <Badge variant="outline">{vlanDisplay}</Badge>
-                        ) : (
-                          vlanDisplay
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {subnet.dhcpEnabled ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{subnet.description || "无"}</TableCell>
-                      <TableCell>
-                        <Badge variant={ (subnet.utilization ?? 0) > 85 ? "destructive" : "secondary"}>
-                          {subnet.utilization ?? 0}%
-                        </Badge>
-                      </TableCell>
-                      {(canEdit || canDelete) && (
-                        <TableCell className="text-right">
-                          {canEdit && (
-                            <SubnetFormSheet
-                              subnet={subnet}
-                              vlans={vlans}
-                              onSubnetChange={fetchData}
-                            >
-                              <Button variant="ghost" size="icon" aria-label="编辑子网">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </SubnetFormSheet>
-                          )}
+            <TooltipProvider>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">
+                      {canDelete && (
+                        <Checkbox
+                          checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="全选当前页"
+                        />
+                      )}
+                    </TableHead>
+                    <TableHead>CIDR</TableHead>
+                    <TableHead>名称</TableHead>
+                    <TableHead>VLAN</TableHead>
+                    <TableHead>DHCP</TableHead>
+                    <TableHead>利用率</TableHead>
+                    <TableHead>描述</TableHead>
+                    {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subnetsToDisplay.map((subnet) => {
+                    const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
+                    const vlanDisplay = vlanInfo
+                      ? `VLAN ${vlanInfo.vlanNumber}${vlanInfo.name ? ` (${vlanInfo.name})` : ''}`
+                      : <span className="text-muted-foreground text-xs">无</span>;
+                    return (
+                      <TableRow key={subnet.id} data-state={selectedIds.has(subnet.id) && "selected"}>
+                        <TableCell>
                           {canDelete && (
-                            <DeleteConfirmationDialog
-                              itemId={subnet.id}
-                              itemName={`${subnet.name || subnet.cidr}`}
-                              deleteAction={deleteSubnetAction}
-                              onDeleted={fetchData}
-                              dialogTitle="删除子网?"
-                              dialogDescription={`您确定要删除子网 ${subnet.name || subnet.cidr} 吗？此操作无法撤销。`}
-                              triggerButton={
-                                <Button variant="ghost" size="icon" aria-label="删除子网">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              }
+                            <Checkbox
+                              checked={selectedIds.has(subnet.id)}
+                              onCheckedChange={(checked) => handleSelectItem(subnet.id, checked)}
+                              aria-label={`选择子网 ${subnet.cidr}`}
                             />
                           )}
                         </TableCell>
-                      )}
+                        <TableCell>
+                          <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline font-medium">
+                            {subnet.cidr}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate text-sm">{subnet.name || "无"}</TableCell>
+                        <TableCell>
+                          {vlanInfo ? (
+                            <Badge variant="outline">{vlanDisplay}</Badge>
+                          ) : (
+                            vlanDisplay
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {subnet.dhcpEnabled ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={ (subnet.utilization ?? 0) > 85 ? "destructive" : "secondary"}>
+                            {subnet.utilization ?? 0}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                          {subnet.description ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-default">{subnet.description}</span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="start">
+                                <p className="max-w-xs whitespace-pre-wrap break-words">{subnet.description}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            "无"
+                          )}
+                        </TableCell>
+                        {(canEdit || canDelete) && (
+                          <TableCell className="text-right">
+                            {canEdit && (
+                              <SubnetFormSheet
+                                subnet={subnet}
+                                vlans={vlans}
+                                onSubnetChange={fetchData}
+                              >
+                                <Button variant="ghost" size="icon" aria-label="编辑子网">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </SubnetFormSheet>
+                            )}
+                            {canDelete && (
+                              <DeleteConfirmationDialog
+                                itemId={subnet.id}
+                                itemName={`${subnet.name || subnet.cidr}`}
+                                deleteAction={deleteSubnetAction}
+                                onDeleted={fetchData}
+                                dialogTitle="删除子网?"
+                                dialogDescription={`您确定要删除子网 ${subnet.name || subnet.cidr} 吗？此操作无法撤销。`}
+                                triggerButton={
+                                  <Button variant="ghost" size="icon" aria-label="删除子网">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {subnetsToDisplay.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={(canEdit || canDelete) ? 8 : 7} className="text-center h-24 text-muted-foreground">
+                        未找到子网。{canCreate && "尝试创建一个！"}
+                      </TableCell>
                     </TableRow>
-                  );
-                })}
-                {subnetsToDisplay.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={(canEdit || canDelete) ? 8 : 7} className="text-center h-24 text-muted-foreground">
-                      未找到子网。{canCreate && "尝试创建一个！"}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </TooltipProvider>
             {totalPages > 1 && (
               <PaginationControls
                 currentPage={finalCurrentPage}
@@ -348,4 +369,5 @@ export default function SubnetsPage() {
     
 
     
+
 
