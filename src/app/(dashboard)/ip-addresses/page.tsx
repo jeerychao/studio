@@ -13,11 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { 
   getIPAddressesAction, getSubnetsAction, getVLANsAction, deleteIPAddressAction, batchDeleteIPAddressesAction,
-  getOperatorDictionariesAction, getLocalDeviceDictionariesAction, getPaymentSourceDictionariesAction,
-  getAccessTypeDictionariesAction // Import new action
+  getLocalDeviceDictionariesAction, getPaymentSourceDictionariesAction,
+  getAccessTypeDictionariesAction
 } from "@/lib/actions";
-import type { AppIPAddressWithRelations } from "@/lib/actions";
-import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types"; // Import AccessTypeDictionary
+import type { AppIPAddressWithRelations } from "@/lib/actions"; // This will need update for new peer fields
+import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
@@ -52,10 +52,9 @@ function IPAddressesView() {
   const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<AppIPAddressWithRelations> | null>(null);
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
-  const [operatorDictionaries, setOperatorDictionaries] = React.useState<OperatorDictionary[]>([]);
   const [localDeviceDictionaries, setLocalDeviceDictionaries] = React.useState<LocalDeviceDictionary[]>([]);
   const [paymentSourceDictionaries, setPaymentSourceDictionaries] = React.useState<PaymentSourceDictionary[]>([]);
-  const [accessTypeDictionaries, setAccessTypeDictionaries] = React.useState<AccessTypeDictionary[]>([]); // New state
+  const [accessTypeDictionaries, setAccessTypeDictionaries] = React.useState<AccessTypeDictionary[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
@@ -68,31 +67,29 @@ function IPAddressesView() {
     try {
       if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
         setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
-        setSubnets([]); setVlans([]); setOperatorDictionaries([]); setLocalDeviceDictionaries([]); setPaymentSourceDictionaries([]); setAccessTypeDictionaries([]);
+        setSubnets([]); setVlans([]); setLocalDeviceDictionaries([]); setPaymentSourceDictionaries([]); setAccessTypeDictionaries([]);
         setIsLoading(false);
         return;
       }
       const [
         fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult, 
-        fetchedOpsDictResult, fetchedLocalDictResult, fetchedPaymentDictResult,
-        fetchedAccessTypeDictResult // Fetch new dictionary
+        fetchedLocalDictResult, fetchedPaymentDictResult,
+        fetchedAccessTypeDictResult
       ] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
         getSubnetsAction(),
         getVLANsAction(),
-        getOperatorDictionariesAction(), 
         getLocalDeviceDictionariesAction(), 
         getPaymentSourceDictionariesAction(), 
-        getAccessTypeDictionariesAction(), // Call new action
+        getAccessTypeDictionariesAction(),
       ]);
 
       setIpAddressesData(fetchedIpsResult);
       setSubnets(fetchedSubnetsResult.data);
       setVlans(fetchedVlansResult.data);
-      if (fetchedOpsDictResult.success) setOperatorDictionaries(fetchedOpsDictResult.data?.data || []); else setOperatorDictionaries([]);
       if (fetchedLocalDictResult.success) setLocalDeviceDictionaries(fetchedLocalDictResult.data?.data || []); else setLocalDeviceDictionaries([]);
       if (fetchedPaymentDictResult.success) setPaymentSourceDictionaries(fetchedPaymentDictResult.data?.data || []); else setPaymentSourceDictionaries([]);
-      if (fetchedAccessTypeDictResult.success) setAccessTypeDictionaries(fetchedAccessTypeDictResult.data?.data || []); else setAccessTypeDictionaries([]); // Set new dictionary state
+      if (fetchedAccessTypeDictResult.success) setAccessTypeDictionaries(fetchedAccessTypeDictResult.data?.data || []); else setAccessTypeDictionaries([]);
       
       if (fetchedIpsResult.data.length === 0 && fetchedIpsResult.currentPage > 1) {
         const newTargetPage = fetchedIpsResult.totalPages > 0 ? fetchedIpsResult.totalPages : 1;
@@ -188,14 +185,14 @@ function IPAddressesView() {
         <>
         <IPBatchFormSheet 
             subnets={subnets} vlans={vlans} 
-            operatorDictionaries={operatorDictionaries} localDeviceDictionaries={localDeviceDictionaries} 
+            localDeviceDictionaries={localDeviceDictionaries} 
             paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries}
             onIpAddressChange={handleIpAddressChangeSuccess}>
           <Button variant="outline" className="w-full sm:w-auto"><PlusCircle className="mr-2 h-4 w-4" />批量添加IP</Button>
         </IPBatchFormSheet>
         <IPAddressFormSheet 
             subnets={subnets} vlans={vlans} 
-            operatorDictionaries={operatorDictionaries} localDeviceDictionaries={localDeviceDictionaries} 
+            localDeviceDictionaries={localDeviceDictionaries} 
             paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries}
             currentSubnetId={selectedSubnetId} onIpAddressChange={handleIpAddressChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
         </>
@@ -230,8 +227,9 @@ function IPAddressesView() {
                     <TableHead className="w-[50px]">{canDelete && <Checkbox checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)} onCheckedChange={handleSelectAll} aria-label="全选当前页"/>}</TableHead>
                     <TableHead>IP 地址</TableHead><TableHead>状态</TableHead><TableHead>网关?</TableHead>
                     <TableHead>分配给</TableHead><TableHead>使用单位</TableHead><TableHead>联系人</TableHead><TableHead>电话</TableHead>
-                    <TableHead>运营商名称</TableHead><TableHead>运营商设备</TableHead><TableHead>接入方式</TableHead>
-                    <TableHead>本端设备</TableHead><TableHead>设备端口</TableHead><TableHead>费用来源</TableHead>
+                    <TableHead>对端单位</TableHead><TableHead>对端设备</TableHead><TableHead>对端端口</TableHead>
+                    <TableHead>接入方式</TableHead>
+                    <TableHead>本端设备</TableHead><TableHead>本端端口</TableHead><TableHead>费用来源</TableHead>
                     <TableHead>子网</TableHead><TableHead>VLAN</TableHead><TableHead>描述</TableHead>
                     {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                 </TableRow></TableHeader>
@@ -246,8 +244,11 @@ function IPAddressesView() {
                       <TableCell className="max-w-[100px] truncate">{ip.usageUnit || "无"}</TableCell>
                       <TableCell className="max-w-[80px] truncate">{ip.contactPerson || "无"}</TableCell>
                       <TableCell className="max-w-[100px] truncate">{ip.phone || "无"}</TableCell>
-                      <TableCell className="max-w-[100px] truncate">{ip.selectedOperatorName || "无"}</TableCell>
-                      <TableCell className="max-w-[100px] truncate">{ip.selectedOperatorDevice || "无"}</TableCell>
+                      
+                      <TableCell className="max-w-[100px] truncate">{ip.peerUnitName || "无"}</TableCell>
+                      <TableCell className="max-w-[100px] truncate">{ip.peerDeviceName || "无"}</TableCell>
+                      <TableCell className="max-w-[100px] truncate">{ip.peerPortName || "无"}</TableCell>
+
                       <TableCell className="max-w-[80px] truncate">{ip.selectedAccessType || "无"}</TableCell>
                       <TableCell className="max-w-[100px] truncate">{ip.selectedLocalDeviceName || "无"}</TableCell>
                       <TableCell className="max-w-[80px] truncate">{ip.selectedDevicePort || "无"}</TableCell>
@@ -257,7 +258,7 @@ function IPAddressesView() {
                       <TableCell className="max-w-[150px] truncate">{ip.description || "无"}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right whitespace-nowrap">
-                          {canEdit && <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} operatorDictionaries={operatorDictionaries} localDeviceDictionaries={localDeviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑IP地址"><Edit className="h-4 w-4" /></Button></IPAddressFormSheet>}
+                          {canEdit && <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} localDeviceDictionaries={localDeviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑IP地址"><Edit className="h-4 w-4" /></Button></IPAddressFormSheet>}
                           {canDelete && <DeleteConfirmationDialog itemId={ip.id} itemName={ip.ipAddress} deleteAction={deleteIPAddressAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除IP地址"><Trash2 className="h-4 w-4" /></Button>}/>}
                         </TableCell>
                       )}
@@ -270,7 +271,7 @@ function IPAddressesView() {
           ) : (
             <div className="text-center py-10">
               <p className="text-muted-foreground">{selectedSubnetId || selectedStatus !== 'all' ? "未找到符合当前筛选条件的IP地址。" : "未找到IP地址。选择一个子网或添加新的IP。"}</p>
-              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} operatorDictionaries={operatorDictionaries} localDeviceDictionaries={localDeviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} currentSubnetId={selectedSubnetId} onIpAddressChange={handleIpAddressChangeSuccess} buttonProps={{className: "mt-4"}} />}
+              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} localDeviceDictionaries={localDeviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} currentSubnetId={selectedSubnetId} onIpAddressChange={handleIpAddressChangeSuccess} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>

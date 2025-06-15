@@ -43,7 +43,6 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  // Removed auditLogs state as it's part of dashboardData.recentAuditLogs
 
   React.useEffect(() => {
     async function fetchData() {
@@ -121,8 +120,10 @@ export default function DashboardPage() {
 
   const {
     totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
-    ipUsageByUnit, ipUsageByOperator, busiestVlans,
+    ipUsageByUnit, // ipUsageByOperator removed for now
+    busiestVlans,
     subnetsNeedingAttention,
+    recentAuditLogs
   } = dashboardData;
 
   const ipUsagePercentage = totalIpCount > 0 ? Math.round((ipStatusCounts.allocated / totalIpCount) * 100) : 0;
@@ -158,7 +159,7 @@ export default function DashboardPage() {
         <DashboardStatCard title="总子网数" value={totalSubnetCount} icon={NetworkIcon} linkTo="/subnets"/>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-6">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 mb-6"> {/* Adjusted to 2 columns due to removal of one chart */}
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle className="text-base">IP 地址状态分布</CardTitle></CardHeader>
           <CardContent className="h-[250px]"><IPStatusPieChart data={ipStatusChartData} /></CardContent>
@@ -167,10 +168,12 @@ export default function DashboardPage() {
           <CardHeader><CardTitle className="text-base">按使用单位的 IP 分配 (Top N)</CardTitle></CardHeader>
           <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByUnit} dataKey="value" layout="vertical" yAxisWidth={120} /></CardContent>
         </Card>
+        {/* Removed Operator Usage Chart
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle className="text-base">按运营商的 IP 分配 (Top N)</CardTitle></CardHeader>
           <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByOperator} dataKey="value" layout="vertical" yAxisWidth={120}/></CardContent>
-        </Card>
+        </Card> 
+        */}
       </div>
 
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 mb-6">
@@ -222,14 +225,14 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">最近活动日志 (Top {dashboardData.recentAuditLogs?.length || 0})</CardTitle>
+            <CardTitle className="text-base">最近活动日志 (Top {recentAuditLogs?.length || 0})</CardTitle>
             <CardDescription>系统最近的操作记录。</CardDescription>
           </CardHeader>
           <CardContent>
-            {dashboardData.recentAuditLogs && dashboardData.recentAuditLogs.length > 0 ? (
+            {recentAuditLogs && recentAuditLogs.length > 0 ? (
               <ScrollArea className="h-[200px]">
                 <ul className="space-y-2">
-                  {dashboardData.recentAuditLogs.map(log => (
+                  {recentAuditLogs.map(log => (
                     <li key={log.id} className="text-xs border-b pb-1">
                       <p className="font-medium truncate">
                         <span className="text-muted-foreground">{new Date(log.timestamp).toLocaleString()}</span> - {log.username || "系统"}

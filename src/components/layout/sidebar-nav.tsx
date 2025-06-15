@@ -20,7 +20,7 @@ import {
   HardDrive, 
   CreditCard, 
   Waypoints, 
-  SlidersHorizontal, // New icon for Network Interface Type
+  SlidersHorizontal, 
   ChevronDown, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -70,18 +70,18 @@ const navItemConfigs: NavItemConfig[] = [
     label: "字典管理",
     icon: BookOpen,
     requiredPermission: [
-        PERMISSIONS.VIEW_DICTIONARY_OPERATOR,
+        // PERMISSIONS.VIEW_DICTIONARY_OPERATOR, // Removed
         PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
         PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
         PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, 
-        PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, // Added permission
+        PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE,
     ],
     subItems: [
-      { href: "/dictionaries/operator", label: "运营商字典", icon: Network, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_OPERATOR },
+      // { href: "/dictionaries/operator", label: "运营商字典", icon: Network, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_OPERATOR }, // Removed
       { href: "/dictionaries/local-device", label: "本地设备字典", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE },
       { href: "/dictionaries/payment-source", label: "付费来源字典", icon: CreditCard, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE },
       { href: "/dictionaries/access-type", label: "接入方式字典", icon: Waypoints, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE },
-      { href: "/dictionaries/network-interface-type", label: "网络接口类型字典", icon: SlidersHorizontal, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE }, // New item
+      { href: "/dictionaries/network-interface-type", label: "网络接口类型字典", icon: SlidersHorizontal, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE },
     ],
   },
   {
@@ -118,7 +118,9 @@ export function SidebarNav() {
       let hasAccessToCurrentItem = true;
       if (item.requiredPermission) {
         if (Array.isArray(item.requiredPermission)) {
-          hasAccessToCurrentItem = item.requiredPermission.some(perm => hasPermission(user, perm));
+          // For a group item, user needs access to *at least one* of its defined required permissions
+          // or if the requiredPermission array itself is empty (meaning it's just a container).
+          hasAccessToCurrentItem = item.requiredPermission.length === 0 || item.requiredPermission.some(perm => hasPermission(user, perm));
         } else {
           hasAccessToCurrentItem = hasPermission(user, item.requiredPermission);
         }
@@ -127,22 +129,30 @@ export function SidebarNav() {
       let filteredSubItems: NavItemConfig[] | undefined = undefined;
       if (item.subItems && item.subItems.length > 0) {
         filteredSubItems = filterNavItemsByPermission(item.subItems, user);
-        if ((!item.requiredPermission || (Array.isArray(item.requiredPermission) && item.requiredPermission.length === 0)) && filteredSubItems.length === 0) {
+         // If a group item has no visible sub-items, and it's one of the main groups, it shouldn't be rendered.
+        if (filteredSubItems.length === 0 && ["/ip-management", "/dictionaries", "/system"].includes(item.href) ) {
             return null;
-        }
-        if (filteredSubItems.length === 0 && item.href === "/dictionaries" || item.href === "/system" || item.href === "/ip-management") { 
-            if (Array.isArray(item.requiredPermission) && !item.requiredPermission.some(perm => hasPermission(user, perm))) {
-                return null;
-            }
-            if (!Array.isArray(item.requiredPermission) && item.requiredPermission && !hasPermission(user,item.requiredPermission)){
-                return null;
-            }
         }
       }
       
       if (!hasAccessToCurrentItem) {
+        // If the main item itself isn't accessible due to its own requiredPermission (not an array one), hide it.
+        if (item.requiredPermission && !Array.isArray(item.requiredPermission) && !hasPermission(user, item.requiredPermission)) {
+            return null;
+        }
+        // If it's an array-based permission for a group and none are met, and there are no visible sub-items either.
+        if (Array.isArray(item.requiredPermission) && !item.requiredPermission.some(perm => hasPermission(user, perm)) && (!filteredSubItems || filteredSubItems.length === 0)) {
+            return null;
+        }
+      }
+      
+      // If a group item initially had required permissions, but all its sub-items are filtered out,
+      // and the user doesn't meet ANY of the group's own required permissions, then hide the group.
+      // This is a more specific check for groups that rely on sub-item visibility.
+      if (item.subItems && filteredSubItems?.length === 0 && Array.isArray(item.requiredPermission) && item.requiredPermission.length > 0 && !item.requiredPermission.some(perm => hasPermission(user, perm))) {
         return null;
       }
+
 
       return { ...item, subItems: filteredSubItems };
     }).filter(item => item !== null) as NavItemConfig[];

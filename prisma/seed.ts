@@ -12,14 +12,14 @@ import {
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
-  mockOperatorDictionaries,
+  // mockOperatorDictionaries is removed from import, will use the empty array from data.ts
   mockLocalDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
   mockNetworkInterfaceTypeDictionaries,
 } from '../src/lib/data';
 import type { User as AppUser } from '../src/types';
-import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
+import { encrypt } from '../src/app/api/auth/[...nextauth]/route'; // Path might need update if crypto utils are moved
 
 console.log("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL) ---");
 
@@ -105,7 +105,11 @@ async function main() {
         console.log(`Assigning all ${allDbPermissions.length} DB permissions to Administrator role.`);
         permissionsToSet = allDbPermissions.map(p => ({ id: p.id }));
       } else {
-        permissionsToSet = roleData.permissions.map(appPermId => ({ id: appPermId as string }));
+        // Filter out any permissions that might have been removed (e.g., operator dictionary ones)
+        const validRolePermissions = roleData.permissions.filter(appPermId => 
+          allDbPermissions.some(dbPerm => dbPerm.id === (appPermId as string))
+        );
+        permissionsToSet = validRolePermissions.map(appPermId => ({ id: appPermId as string }));
       }
       await prisma.role.update({
         where: { id: roleData.id },
@@ -212,12 +216,12 @@ async function main() {
     }
     console.log('Subnets seeded.');
 
-    console.log('Seeding IP Addresses (with new optional fields)...');
+    console.log('Seeding IP Addresses (with new peer fields)...');
     for (const ipData of seedIPsData) {
       const phone = ipData.phone || null;
 
       await prisma.iPAddress.upsert({
-        where: { id: ipData.id },
+        where: { id: ipData.id }, // Assuming ipAddress is unique for upsert, or use a proper unique id
         update: {
           ipAddress: ipData.ipAddress,
           status: ipData.status as string,
@@ -229,8 +233,11 @@ async function main() {
           description: ipData.description,
           subnetId: ipData.subnetId,
           directVlanId: ipData.directVlanId,
-          selectedOperatorName: ipData.selectedOperatorName || null,
-          selectedOperatorDevice: ipData.selectedOperatorDevice || null,
+          // New peer fields
+          peerUnitName: ipData.peerUnitName || null,
+          peerDeviceName: ipData.peerDeviceName || null,
+          peerPortName: ipData.peerPortName || null,
+
           selectedAccessType: ipData.selectedAccessType || null,
           selectedLocalDeviceName: ipData.selectedLocalDeviceName || null,
           selectedDevicePort: ipData.selectedDevicePort || null,
@@ -248,8 +255,11 @@ async function main() {
           description: ipData.description,
           subnetId: ipData.subnetId,
           directVlanId: ipData.directVlanId,
-          selectedOperatorName: ipData.selectedOperatorName || null,
-          selectedOperatorDevice: ipData.selectedOperatorDevice || null,
+           // New peer fields
+          peerUnitName: ipData.peerUnitName || null,
+          peerDeviceName: ipData.peerDeviceName || null,
+          peerPortName: ipData.peerPortName || null,
+
           selectedAccessType: ipData.selectedAccessType || null,
           selectedLocalDeviceName: ipData.selectedLocalDeviceName || null,
           selectedDevicePort: ipData.selectedDevicePort || null,
@@ -259,23 +269,17 @@ async function main() {
     }
     console.log('IP Addresses seeded.');
 
-    console.log('Seeding Operator Dictionaries...');
-    for (const opData of mockOperatorDictionaries) {
-      const { ...restOfOpData } = opData;
-      await prisma.operatorDictionary.upsert({
-        where: { operatorName: restOfOpData.operatorName },
-        update: restOfOpData,
-        create: restOfOpData,
-      });
-    }
-    console.log('Operator Dictionaries seeded.');
+    // Operator Dictionaries seeding is removed
+    // console.log('Seeding Operator Dictionaries...');
+    // for (const opData of mockOperatorDictionaries) { ... }
+    // console.log('Operator Dictionaries seeded.');
 
     console.log('Seeding Local Device Dictionaries...');
     for (const ldData of mockLocalDeviceDictionaries) {
       await prisma.localDeviceDictionary.upsert({
         where: { deviceName: ldData.deviceName },
-        update: ldData,
-        create: ldData,
+        update: { deviceName: ldData.deviceName, port: ldData.port || null },
+        create: { deviceName: ldData.deviceName, port: ldData.port || null },
       });
     }
     console.log('Local Device Dictionaries seeded.');
@@ -284,8 +288,8 @@ async function main() {
     for (const psData of mockPaymentSourceDictionaries) {
       await prisma.paymentSourceDictionary.upsert({
         where: { sourceName: psData.sourceName },
-        update: psData,
-        create: psData,
+        update: { sourceName: psData.sourceName },
+        create: { sourceName: psData.sourceName },
       });
     }
     console.log('Payment Source Dictionaries seeded.');
@@ -294,8 +298,8 @@ async function main() {
     for (const atData of mockAccessTypeDictionaries) {
       await prisma.accessTypeDictionary.upsert({
         where: { name: atData.name },
-        update: atData,
-        create: atData,
+        update: { name: atData.name },
+        create: { name: atData.name },
       });
     }
     console.log('Access Type Dictionaries seeded.');
@@ -304,8 +308,8 @@ async function main() {
     for (const nitData of mockNetworkInterfaceTypeDictionaries) {
       await prisma.networkInterfaceTypeDictionary.upsert({
         where: { name: nitData.name },
-        update: { name: nitData.name, description: nitData.description },
-        create: { name: nitData.name, description: nitData.description },
+        update: { name: nitData.name, description: nitData.description || null },
+        create: { name: nitData.name, description: nitData.description || null },
       });
     }
     console.log('Network Interface Type Dictionaries seeded.');
@@ -315,7 +319,7 @@ async function main() {
     for (const logData of seedAuditLogsData) {
       const userToLink = usersForLogLinking.find(u => u.username === logData.username);
       const validUserId = userToLink ? userToLink.id : undefined;
-      const validUsername = userToLink ? userToLink.username : logData.username;
+      const validUsername = userToLink ? userToLink.username : logData.username; // Use username from log if user not found
       const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id } });
       if (!existingLog) {
         await prisma.auditLog.create({
@@ -354,5 +358,3 @@ async function main() {
     console.log("--- PRISMA SEED SCRIPT DISCONNECTED ---");
   }
 }
-
-    

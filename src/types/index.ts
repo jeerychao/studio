@@ -29,10 +29,11 @@ export const PERMISSIONS = {
   VIEW_QUERY_PAGE: 'querypage.view',
   VIEW_SETTINGS: 'settings.view',
 
-  VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
-  CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
-  EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
-  DELETE_DICTIONARY_OPERATOR: 'dictionary.operator.delete',
+  // OperatorDictionary permissions are removed
+  // VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
+  // CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
+  // EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
+  // DELETE_DICTIONARY_OPERATOR: 'dictionary.operator.delete',
 
   VIEW_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.view',
   CREATE_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.create',
@@ -101,8 +102,11 @@ export interface IPAddress {
   description?: string;
   lastSeen?: string;
 
-  selectedOperatorName?: string;
-  selectedOperatorDevice?: string;
+  // New generic peer fields
+  peerUnitName?: string;          // Manual input for peer/customer/partner name
+  peerDeviceName?: string;         // Name of the device on the peer side (from LocalDeviceDictionary)
+  peerPortName?: string;           // Port on the peer device (derived from selected LocalDeviceDictionary entry's port)
+
   selectedAccessType?: string;
   selectedLocalDeviceName?: string;
   selectedDevicePort?: string;
@@ -137,15 +141,16 @@ export interface AuditLog {
   details?: string;
 }
 
-export interface OperatorDictionary {
-  id: string;
-  operatorName: string;
-  operatorDevice?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
+// OperatorDictionary type is removed
+// export interface OperatorDictionary {
+//   id: string;
+//   operatorName: string;
+//   operatorDevice?: string;
+//   createdAt?: string;
+//   updatedAt?: string;
+// }
 
-export interface LocalDeviceDictionary {
+export interface LocalDeviceDictionary { // Name remains LocalDeviceDictionary for now, can be refactored later if needed
   id: string;
   deviceName: string;
   port?: string;
@@ -272,9 +277,8 @@ export interface DashboardData {
   totalVlanCount: number;
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
-  ipUsageByOperator: TopNItemCount[];
-  busiestVlans: VLANResourceInfo[]; // Changed from vlanResourceCounts
+  // ipUsageByOperator: TopNItemCount[]; // This will be removed or re-evaluated
+  busiestVlans: VLANResourceInfo[];
   subnetsNeedingAttention: SubnetUtilizationInfo[];
-  recentAuditLogs?: AppAuditLog[]; // Added for recent activity logs
+  recentAuditLogs?: AppAuditLog[];
 }
-

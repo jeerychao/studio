@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Subnet, VLAN, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types"; // Added AccessTypeDictionary
+import type { Subnet, VLAN, IPAddressStatus, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types";
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 
@@ -39,8 +39,11 @@ const ipBatchFormSchema = z.object({
   commonUsageUnit: z.string().max(100, "使用单位过长").optional(),
   commonContactPerson: z.string().max(50, "联系人姓名过长").optional(),
   commonPhone: z.string().max(30, "电话号码过长").optional(),
-  commonSelectedOperatorName: z.string().optional(),
-  commonSelectedOperatorDevice: z.string().optional(),
+  
+  commonPeerUnitName: z.string().max(100, "通用对端单位名称过长").optional(),
+  commonPeerDeviceName: z.string().optional(),
+  commonPeerPortName: z.string().optional(), // Derived, read-only in UI
+
   commonSelectedAccessType: z.string().optional(), 
   commonSelectedLocalDeviceName: z.string().optional(),
   commonSelectedDevicePort: z.string().max(100, "设备端口过长").optional(), 
@@ -54,16 +57,15 @@ type IpBatchFormValues = z.infer<typeof ipBatchFormSchema>;
 interface IPBatchFormSheetProps {
   subnets: Subnet[];
   vlans: VLAN[];
-  operatorDictionaries: OperatorDictionary[];
   localDeviceDictionaries: LocalDeviceDictionary[];
   paymentSourceDictionaries: PaymentSourceDictionary[];
-  accessTypeDictionaries: AccessTypeDictionary[]; // New prop
+  accessTypeDictionaries: AccessTypeDictionary[];
   children?: React.ReactNode;
   onIpAddressChange?: () => void;
 }
 
 export function IPBatchFormSheet({
-    subnets, vlans, operatorDictionaries, localDeviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, // Added accessTypeDictionaries
+    subnets, vlans, localDeviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries,
     children, onIpAddressChange
 }: IPBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -76,7 +78,8 @@ export function IPBatchFormSheet({
       startIp: "", endIp: "", subnetId: subnets.length > 0 ? subnets[0].id : "",
       directVlanId: NO_DIRECT_VLAN_SENTINEL, status: "free", commonDescription: "",
       commonIsGateway: false, commonUsageUnit: "", commonContactPerson: "", commonPhone: "",
-      commonSelectedOperatorName: NO_SELECTION_SENTINEL, commonSelectedOperatorDevice: "", commonSelectedAccessType: NO_SELECTION_SENTINEL,
+      commonPeerUnitName: "", commonPeerDeviceName: NO_SELECTION_SENTINEL, commonPeerPortName: "",
+      commonSelectedAccessType: NO_SELECTION_SENTINEL,
       commonSelectedLocalDeviceName: NO_SELECTION_SENTINEL, commonSelectedDevicePort: "", commonSelectedPaymentSource: NO_SELECTION_SENTINEL,
     },
   });
@@ -87,23 +90,25 @@ export function IPBatchFormSheet({
             startIp: "", endIp: "", subnetId: subnets.length > 0 ? subnets[0].id : "",
             directVlanId: NO_DIRECT_VLAN_SENTINEL, status: "free", commonDescription: "",
             commonIsGateway: false, commonUsageUnit: "", commonContactPerson: "", commonPhone: "",
-            commonSelectedOperatorName: NO_SELECTION_SENTINEL, commonSelectedOperatorDevice: "", commonSelectedAccessType: NO_SELECTION_SENTINEL,
+            commonPeerUnitName: "", commonPeerDeviceName: NO_SELECTION_SENTINEL, commonPeerPortName: "",
+            commonSelectedAccessType: NO_SELECTION_SENTINEL,
             commonSelectedLocalDeviceName: NO_SELECTION_SENTINEL, commonSelectedDevicePort: "", commonSelectedPaymentSource: NO_SELECTION_SENTINEL,
         });
         setSubmissionResult(null); form.clearErrors();
     }
   }, [isOpen, subnets, form]);
 
-  const handleOperatorChange = (value: string) => {
-    form.setValue("commonSelectedOperatorName", value === NO_SELECTION_SENTINEL ? "" : value);
-    const selectedOp = operatorDictionaries.find(op => op.operatorName === value);
-    form.setValue("commonSelectedOperatorDevice", selectedOp?.operatorDevice || "");
-  };
 
-  const handleLocalDeviceChange = (value: string) => {
+  const handleCommonLocalDeviceChange = (value: string) => {
     form.setValue("commonSelectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
     const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
     form.setValue("commonSelectedDevicePort", selectedDev?.port || ""); 
+  };
+
+  const handleCommonPeerDeviceChange = (value: string) => {
+    form.setValue("commonPeerDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
+    const selectedDev = localDeviceDictionaries.find(dev => dev.deviceName === value);
+    form.setValue("commonPeerPortName", selectedDev?.port || ""); 
   };
 
   async function onSubmit(data: IpBatchFormValues) {
@@ -114,8 +119,11 @@ export function IPBatchFormSheet({
         directVlanId: directVlanIdToSubmit, description: data.commonDescription || undefined,
         status: data.status, isGateway: data.commonIsGateway,
         usageUnit: data.commonUsageUnit || undefined, contactPerson: data.commonContactPerson || undefined, phone: data.commonPhone || undefined,
-        selectedOperatorName: data.commonSelectedOperatorName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedOperatorName,
-        selectedOperatorDevice: data.commonSelectedOperatorDevice || undefined,
+        
+        peerUnitName: data.commonPeerUnitName || undefined,
+        peerDeviceName: data.commonPeerDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonPeerDeviceName,
+        peerPortName: data.commonPeerPortName || undefined,
+
         selectedAccessType: data.commonSelectedAccessType === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedAccessType, 
         selectedLocalDeviceName: data.commonSelectedLocalDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedLocalDeviceName,
         selectedDevicePort: data.commonSelectedDevicePort || undefined, 
@@ -142,8 +150,8 @@ export function IPBatchFormSheet({
   const handleOpenChange = (open: boolean) => { setIsOpen(open); if (!open) { form.reset(); setSubmissionResult(null); } };
   const triggerContent = children || <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP</Button>;
 
-  const commonOperatorDeviceValue = form.watch("commonSelectedOperatorDevice");
-  const commonDevicePortValue = form.watch("commonSelectedDevicePort"); 
+  const commonSelectedDevicePortValue = form.watch("commonSelectedDevicePort"); 
+  const commonPeerPortNameValue = form.watch("commonPeerPortName");
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
@@ -163,8 +171,9 @@ export function IPBatchFormSheet({
                 <FormField control={form.control} name="commonContactPerson" render={({ field }) => (<FormItem><FormLabel>联系人 (可选)</FormLabel><FormControl><Input placeholder="例如 王经理" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="commonPhone" render={({ field }) => (<FormItem><FormLabel>电话 (可选)</FormLabel><FormControl><Input placeholder="例如 010-12345678" {...field} /></FormControl><FormMessage /></FormItem>)} />
 
-                <FormField control={form.control} name="commonSelectedOperatorName" render={({ field }) => (<FormItem><FormLabel>运营商名称 (可选)</FormLabel><Select onValueChange={handleOperatorChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择运营商" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{operatorDictionaries.map(op => (<SelectItem key={op.id} value={op.operatorName}>{op.operatorName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="commonSelectedOperatorDevice" render={({ field }) => (<FormItem><FormLabel>运营商设备 (自动)</FormLabel><FormControl><Input placeholder="根据运营商自动填充" {...field} value={commonOperatorDeviceValue || ""} readOnly disabled /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="commonPeerUnitName" render={({ field }) => (<FormItem><FormLabel>通用对端单位名称 (可选)</FormLabel><FormControl><Input placeholder="例如 客户A" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="commonPeerDeviceName" render={({ field }) => (<FormItem><FormLabel>通用对端设备 (可选)</FormLabel><Select onValueChange={handleCommonPeerDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择对端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="commonPeerPortName" render={({ field }) => (<FormItem><FormLabel>通用对端端口 (自动)</FormLabel><FormControl><Input placeholder="根据对端设备自动填充" {...field} value={commonPeerPortNameValue || ""} readOnly disabled /></FormControl></FormItem>)} />
                 
                 <FormField 
                     control={form.control} 
@@ -186,8 +195,8 @@ export function IPBatchFormSheet({
                     )} 
                 />
 
-                <FormField control={form.control} name="commonSelectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="commonSelectedDevicePort" render={({ field }) => (<FormItem><FormLabel>设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={commonDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />
+                <FormField control={form.control} name="commonSelectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备 (可选)</FormLabel><Select onValueChange={handleCommonLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{localDeviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="commonSelectedDevicePort" render={({ field }) => (<FormItem><FormLabel>本端设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={commonSelectedDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />
 
                 <FormField control={form.control} name="commonSelectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="commonDescription" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><FormControl><Input placeholder="例如 批量创建的设备" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -207,4 +216,3 @@ export function IPBatchFormSheet({
     </Sheet>
   );
 }
-    

@@ -1,8 +1,8 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, OperatorDictionary, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, NetworkInterfaceTypeDictionary } from '../types/index';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, NetworkInterfaceTypeDictionary } from '../types/index';
+// Removed OperatorDictionary from import
 import { PERMISSIONS, DeviceType } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
-// Import the centralized encrypt function
 import { encrypt } from '../app/api/auth/[...nextauth]/route';
 
 
@@ -37,10 +37,13 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.PERFORM_TOOLS_EXPORT, name: '执行数据导出', group: '工具', description: '可以将数据导出到文件（例如CSV）。' },
   { id: PERMISSIONS.VIEW_QUERY_PAGE, name: '查看信息查询页面', group: '查询工具', description: '访问综合查询工具。' },
   { id: PERMISSIONS.VIEW_SETTINGS, name: '查看设置', group: '系统设置', description: '可以查看应用范围的设置（如果存在全局设置页面）。' },
-  { id: PERMISSIONS.VIEW_DICTIONARY_OPERATOR, name: '查看运营商字典', group: '字典管理', description: '可以查看运营商字典条目。' },
-  { id: PERMISSIONS.CREATE_DICTIONARY_OPERATOR, name: '创建运营商字典条目', group: '字典管理', description: '可以添加新的运营商字典条目。' },
-  { id: PERMISSIONS.EDIT_DICTIONARY_OPERATOR, name: '编辑运营商字典条目', group: '字典管理', description: '可以修改现有的运营商字典条目。' },
-  { id: PERMISSIONS.DELETE_DICTIONARY_OPERATOR, name: '删除运营商字典条目', group: '字典管理', description: '可以删除运营商字典条目。' },
+
+  // OperatorDictionary permissions removed
+  // { id: PERMISSIONS.VIEW_DICTIONARY_OPERATOR, name: '查看运营商字典', group: '字典管理', description: '可以查看运营商字典条目。' },
+  // { id: PERMISSIONS.CREATE_DICTIONARY_OPERATOR, name: '创建运营商字典条目', group: '字典管理', description: '可以添加新的运营商字典条目。' },
+  // { id: PERMISSIONS.EDIT_DICTIONARY_OPERATOR, name: '编辑运营商字典条目', group: '字典管理', description: '可以修改现有的运营商字典条目。' },
+  // { id: PERMISSIONS.DELETE_DICTIONARY_OPERATOR, name: '删除运营商字典条目', group: '字典管理', description: '可以删除运营商字典条目。' },
+
   { id: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, name: '查看本地设备字典', group: '字典管理', description: '可以查看本地设备字典条目。' },
   { id: PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, name: '创建本地设备字典条目', group: '字典管理', description: '可以添加新的本地设备字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, name: '编辑本地设备字典条目', group: '字典管理', description: '可以修改现有的本地设备字典条目。' },
@@ -103,42 +106,47 @@ export const mockIPAddresses: IPAddress[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
-    selectedOperatorName: '中国电信', selectedOperatorDevice: 'OLT-ZX-C300', selectedAccessType: '专线',
+    peerUnitName: '外部网络提供商 A', peerDeviceName: 'ISP Router X1', peerPortName: 'GigabitEthernet0/0',
+    selectedAccessType: '专线',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/1', selectedPaymentSource: '自费'
- },
+  },
   {
     id: 'seed_ip_002', ipAddress: '192.168.1.10', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: '123-101', description: 'John - Primary Workstation',
-    selectedOperatorName: '中国联通', selectedOperatorDevice: 'Router-HW-NE40', selectedAccessType: '汇聚',
+    peerUnitName: '部门打印服务器', peerDeviceName: 'Printer HP LJ M500', peerPortName: 'Ethernet',
+    selectedAccessType: '汇聚',
     selectedLocalDeviceName: '接入交换机-B栋-F3', selectedDevicePort: 'GigabitEthernet0/24', selectedPaymentSource: '财政付费-项目A'
- },
+  },
   {
     id: 'seed_ip_003', ipAddress: '192.168.1.11', subnetId: 'seed_subnet_001', status: 'free' as IPAddressStatus,
     isGateway: false, selectedAccessType: '其他'
- },
+  },
   {
     id: 'seed_ip_004', ipAddress: '192.168.1.12', subnetId: 'seed_subnet_001', status: 'reserved' as IPAddressStatus,
     isGateway: false, description: 'Future Printer IP', usageUnit: 'Admin Office',
     selectedPaymentSource: '财政付费-项目B', selectedAccessType: '专线'
- },
+  },
   {
     id: 'seed_ip_005', ipAddress: '10.0.0.1', subnetId: 'seed_subnet_002', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Server Farm Router', description: 'Gateway for Servers',
-    selectedOperatorName: '中国移动', selectedOperatorDevice: 'Switch-H3C-S5500', selectedAccessType: '专线',
+    peerUnitName: '数据中心骨干', peerDeviceName: 'Datacenter Core Switch 1', peerPortName: 'TenGigabitEthernet2/1',
+    selectedAccessType: '专线',
     selectedLocalDeviceName: '防火墙-总部出口', selectedDevicePort: 'eth1/1', selectedPaymentSource: '自费'
   },
- {
+  {
     id: 'seed_ip_006', ipAddress: '10.0.1.5', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
     isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: '123-201', description: 'Main Web Server',
-    selectedOperatorName: '教育网', selectedOperatorDevice: 'Router-Ruijie-RSR77', selectedAccessType: '专线',
+    peerUnitName: '负载均衡器A', peerDeviceName: 'F5 Load Balancer', peerPortName: '1.1',
+    selectedAccessType: '专线',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/2', selectedPaymentSource: '自费'
- },
+  },
   {
     id: 'seed_ip_007', ipAddress: '10.0.1.6', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
     isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: '123-202', description: 'Primary Database Server',
-    selectedOperatorName: '广电网络', selectedOperatorDevice: 'CableModem-ARRIS-CM8200', selectedAccessType: '汇聚',
+    peerUnitName: '存储网络交换机', peerDeviceName: 'SAN Switch Brocade', peerPortName: 'port 5',
+    selectedAccessType: '汇聚',
     selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/3', selectedPaymentSource: '财政付费-项目A'
- },
+  },
 ];
 
 export const mockRoles: Role[] = [
@@ -146,7 +154,7 @@ export const mockRoles: Role[] = [
     id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: Object.values(PERMISSIONS) as PermissionId[]
+    permissions: Object.values(PERMISSIONS).filter(p => !p.startsWith('dictionary.operator.')) as PermissionId[] // Filter out operator dictionary permissions
   },
   {
     id: OPERATOR_ROLE_ID,
@@ -160,12 +168,11 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
       PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT,
-      PERMISSIONS.VIEW_DICTIONARY_OPERATOR, PERMISSIONS.CREATE_DICTIONARY_OPERATOR, PERMISSIONS.EDIT_DICTIONARY_OPERATOR, PERMISSIONS.DELETE_DICTIONARY_OPERATOR,
       PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE,
       PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.DELETE_DICTIONARY_PAYMENT_SOURCE,
       PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, PERMISSIONS.CREATE_DICTIONARY_ACCESS_TYPE, PERMISSIONS.EDIT_DICTIONARY_ACCESS_TYPE, PERMISSIONS.DELETE_DICTIONARY_ACCESS_TYPE,
       PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE,
-    ] as PermissionId[]
+    ].filter(p => !p.startsWith('dictionary.operator.')) as PermissionId[] // Ensure operator perms are also filtered
   },
   {
     id: VIEWER_ROLE_ID,
@@ -178,12 +185,11 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
-      PERMISSIONS.VIEW_DICTIONARY_OPERATOR,
       PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
       PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
       PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE,
       PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE,
-    ] as PermissionId[]
+    ].filter(p => !p.startsWith('dictionary.operator.')) as PermissionId[] // Ensure viewer perms are also filtered
   },
 ];
 
@@ -209,13 +215,8 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-export const mockOperatorDictionaries: Omit<OperatorDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { operatorName: '中国电信', operatorDevice: 'OLT-ZX-C300' },
-  { operatorName: '中国联通', operatorDevice: 'Router-HW-NE40' },
-  { operatorName: '中国移动', operatorDevice: 'Switch-H3C-S5500' },
-  { operatorName: '广电网络', operatorDevice: 'CableModem-ARRIS-CM8200' },
-  { operatorName: '教育网', operatorDevice: 'Router-Ruijie-RSR77' },
-];
+// mockOperatorDictionaries is removed
+export const mockOperatorDictionaries: any[] = []; // Kept for seed script compatibility, but empty
 
 export const mockLocalDeviceDictionaries: Omit<LocalDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
@@ -223,6 +224,11 @@ export const mockLocalDeviceDictionaries: Omit<LocalDeviceDictionary, 'id' | 'cr
   { deviceName: '防火墙-总部出口', port: 'eth1/1' },
   { deviceName: '服务器-WEB集群-节点1', port: 'eth0' },
   { deviceName: '无线控制器-主楼', port: 'Port-channel1' },
+  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' }, // Added for peer example
+  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' }, // Added for peer example
+  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'}, // Added for peer example
+  { deviceName: 'F5 Load Balancer', port: '1.1' }, // Added for peer example
+  { deviceName: 'SAN Switch Brocade', port: 'port 5' }, // Added for peer example
 ];
 
 export const mockPaymentSourceDictionaries: Omit<PaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
