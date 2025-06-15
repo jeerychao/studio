@@ -56,6 +56,7 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.CREATE_INTERFACE_TYPE_DICTIONARY, name: '创建接口类型字典条目', group: '字典管理', description: '可以添加新的网络接口类型字典条目。' },
   { id: PERMISSIONS.EDIT_INTERFACE_TYPE_DICTIONARY, name: '编辑接口类型字典条目', group: '字典管理', description: '可以修改现有的网络接口类型字典条目。' },
   { id: PERMISSIONS.DELETE_INTERFACE_TYPE_DICTIONARY, name: '删除接口类型字典条目', group: '字典管理', description: '可以删除网络接口类型字典条目。' },
+  // OperatorDictionary permissions removed
 ];
 
 function createInitialSubnetSeedData(
@@ -211,7 +212,7 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [ // Renamed from mockLocalDeviceDictionaries
   { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
   { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
   { deviceName: '防火墙-总部出口', port: 'eth1/1' },
@@ -240,7 +241,7 @@ export const mockAccessTypeDictionaries: Omit<AccessTypeDictionary, 'id' | 'crea
   { name: '其他' },
 ];
 
-export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [ // Renamed from mockNetworkInterfaceTypeDictionaries
   { name: 'GigabitEthernet', description: '千兆以太网接口' },
   { name: 'TenGigabitEthernet', description: '万兆以太网接口' },
   { name: 'FastEthernet', description: '百兆以太网接口' },
@@ -257,3 +258,4 @@ export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' |
   { name: 'Loopback', description: '逻辑环回接口' },
   { name: 'Vlan-interface', description: 'VLAN逻辑接口/SVI' },
 ];
+// mockOperatorDictionaries removed

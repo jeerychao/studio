@@ -13,22 +13,22 @@ function DeprecatedDevicePage() {
     <>
       <PageHeader
         title="设备管理 (已移动)"
-        description="此功能已移至“字典管理”下的“设备字典”。" // Updated
+        description="此功能已移至“字典管理”下的“设备字典”。"
         icon={<HardDrive className="h-6 w-6 text-primary" />}
       />
       <Card>
         <CardHeader>
           <CardTitle>功能已迁移</CardTitle>
           <CardDescription>
-            设备管理现已作为“设备字典”的一部分。 {/* Updated */}
+            设备管理现已作为“设备字典”的一部分。
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center py-10">
           <p className="text-muted-foreground mb-4">
-            请访问新的设备字典页面管理此数据。 {/* Updated */}
+            请访问新的设备字典页面管理此数据。
           </p>
           <Button asChild>
-            <Link href="/dictionaries/device">前往设备字典</Link> {/* Updated link */}
+            <Link href="/dictionaries/device">前往设备字典</Link>
           </Button>
         </CardContent>
       </Card>

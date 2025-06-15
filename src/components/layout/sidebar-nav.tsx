@@ -14,14 +14,12 @@ import {
   Search,
   Settings2 as SettingsIconLucide,
   BookOpen, 
-  Users2,   
   FileText, 
   UploadCloud, 
   HardDrive, 
   CreditCard, 
   Waypoints, 
   SlidersHorizontal, 
-  ChevronDown, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -70,16 +68,16 @@ const navItemConfigs: NavItemConfig[] = [
     label: "字典管理",
     icon: BookOpen,
     requiredPermission: [
-        PERMISSIONS.VIEW_DEVICE_DICTIONARY, // Renamed from LOCAL_DEVICE
+        PERMISSIONS.VIEW_DEVICE_DICTIONARY, 
         PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
         PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, 
-        PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY, // Renamed from NETWORK_INTERFACE_TYPE
+        PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY,
     ],
     subItems: [
-      { href: "/dictionaries/device", label: "设备字典", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DEVICE_DICTIONARY }, // Renamed
+      { href: "/dictionaries/device", label: "设备字典", icon: HardDrive, requiredPermission: PERMISSIONS.VIEW_DEVICE_DICTIONARY },
       { href: "/dictionaries/payment-source", label: "付费来源字典", icon: CreditCard, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE },
       { href: "/dictionaries/access-type", label: "接入方式字典", icon: Waypoints, requiredPermission: PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE },
-      { href: "/dictionaries/interface-type", label: "接口类型字典", icon: SlidersHorizontal, requiredPermission: PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY }, // Renamed
+      { href: "/dictionaries/interface-type", label: "接口类型字典", icon: SlidersHorizontal, requiredPermission: PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY },
     ],
   },
   {
@@ -174,7 +172,7 @@ export function SidebarNav() {
             return currentOpenItems;
         });
     }
-  }, [pathname, accessibleNavItems, isAuthLoading, openAccordionItems]); // Added openAccordionItems to dependency array
+  }, [pathname, accessibleNavItems, isAuthLoading, openAccordionItems]);
 
   const renderNavItem = (item: NavItemConfig, isSubItem = false) => {
     const Icon = item.icon;

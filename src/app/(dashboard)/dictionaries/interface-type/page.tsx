@@ -9,12 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Network, Loader2, PlusCircle, Edit, Trash2, ShieldAlert, SlidersHorizontal } from "lucide-react"; // Changed icon to SlidersHorizontal
+import { Loader2, PlusCircle, Edit, Trash2, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { PERMISSIONS, type InterfaceTypeDictionary, type PaginatedResponse } from "@/types"; // Renamed type
-import { getInterfaceTypeDictionariesAction, deleteInterfaceTypeDictionaryAction, batchDeleteInterfaceTypeDictionariesAction } from "@/lib/actions"; // Renamed actions
+import { PERMISSIONS, type InterfaceTypeDictionary, type PaginatedResponse } from "@/types";
+import { getInterfaceTypeDictionariesAction, deleteInterfaceTypeDictionaryAction, batchDeleteInterfaceTypeDictionariesAction } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
-import { InterfaceTypeDictionaryFormSheet } from "./interface-type-dictionary-form-sheet"; // Renamed component
+import { InterfaceTypeDictionaryFormSheet } from "./interface-type-dictionary-form-sheet";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -30,8 +30,8 @@ function LoadingPage() {
   );
 }
 
-function InterfaceTypeDictionaryView() { // Renamed component
-  const [dictData, setDictData] = React.useState<PaginatedResponse<InterfaceTypeDictionary> | null>(null); // Renamed type
+function InterfaceTypeDictionaryView() {
+  const [dictData, setDictData] = React.useState<PaginatedResponse<InterfaceTypeDictionary> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const { currentUser, isAuthLoading } = useCurrentUser();
@@ -46,8 +46,8 @@ function InterfaceTypeDictionaryView() { // Renamed component
     if (isAuthLoading || !currentUser) return;
     setIsLoading(true);
     try {
-      if (hasPermission(currentUser, PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY)) { // Renamed permission
-        const fetchedResult = await getInterfaceTypeDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }); // Renamed action
+      if (hasPermission(currentUser, PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY)) {
+        const fetchedResult = await getInterfaceTypeDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
          if (fetchedResult.success && fetchedResult.data) {
           setDictData(fetchedResult.data);
           if (fetchedResult.data.data.length === 0 && fetchedResult.data.currentPage > 1 && fetchedResult.data.currentPage > fetchedResult.data.totalPages) {
@@ -79,7 +79,7 @@ function InterfaceTypeDictionaryView() { // Renamed component
 
  const handleChangeSuccess = React.useCallback(async () => {
     const queryParams = { page: 1, pageSize: 1 };
-    const paginationInfo = await getInterfaceTypeDictionariesAction(queryParams); // Renamed action
+    const paginationInfo = await getInterfaceTypeDictionariesAction(queryParams);
     if (paginationInfo.success && paginationInfo.data) {
         const newTotalPages = paginationInfo.data.totalPages;
         const targetPage = newTotalPages > 0 ? newTotalPages : 1;
@@ -110,7 +110,7 @@ function InterfaceTypeDictionaryView() { // Renamed component
   };
 
   if (isAuthLoading || (isLoading && !dictData)) return <LoadingPage />;
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY)) { // Renamed permission
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY)) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
         <ShieldAlert className="h-16 w-16 text-destructive mb-4" /><h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2><p className="text-muted-foreground">您没有权限查看接口类型字典。</p>
@@ -118,14 +118,14 @@ function InterfaceTypeDictionaryView() { // Renamed component
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_INTERFACE_TYPE_DICTIONARY); // Renamed permission
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_INTERFACE_TYPE_DICTIONARY);     // Renamed permission
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_INTERFACE_TYPE_DICTIONARY); // Renamed permission
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_INTERFACE_TYPE_DICTIONARY);
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_INTERFACE_TYPE_DICTIONARY);
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_INTERFACE_TYPE_DICTIONARY);
 
   const pageActionButtons = (
     <div className="flex flex-col sm:flex-row gap-2">
-      {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="接口类型字典条目" batchDeleteAction={batchDeleteInterfaceTypeDictionariesAction} onBatchDeleted={fetchData} />} {/* Renamed action */}
-      {canCreate && <InterfaceTypeDictionaryFormSheet onDataChange={handleChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}}/>} {/* Renamed component */}
+      {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="接口类型字典条目" batchDeleteAction={batchDeleteInterfaceTypeDictionariesAction} onBatchDeleted={fetchData} />}
+      {canCreate && <InterfaceTypeDictionaryFormSheet onDataChange={handleChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}}/>}
     </div>
   );
   
@@ -139,7 +139,7 @@ function InterfaceTypeDictionaryView() { // Renamed component
 
   return (
     <>
-      <PageHeader title="接口类型字典管理" description="管理网络接口类型或前缀。" icon={<SlidersHorizontal className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} /> {/* Changed icon */}
+      <PageHeader title="接口类型字典管理" description="管理网络接口类型或前缀。" icon={<SlidersHorizontal className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} />
       <Card>
         <CardHeader><CardTitle>接口类型列表</CardTitle><CardDescription>显示 {itemsToDisplay.length} 条，共 {finalTotalCount} 条接口类型字典条目。</CardDescription></CardHeader>
         <CardContent>
@@ -160,8 +160,8 @@ function InterfaceTypeDictionaryView() { // Renamed component
                       <TableCell className="max-w-md truncate">{item.description || "无"}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
-                          {canEdit && <InterfaceTypeDictionaryFormSheet dictionaryEntry={item} onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></InterfaceTypeDictionaryFormSheet>} {/* Renamed component */}
-                          {canDelete && <DeleteConfirmationDialog itemId={item.id} itemName={item.name} deleteAction={deleteInterfaceTypeDictionaryAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除条目"><Trash2 className="h-4 w-4" /></Button>} />} {/* Renamed action */}
+                          {canEdit && <InterfaceTypeDictionaryFormSheet dictionaryEntry={item} onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></InterfaceTypeDictionaryFormSheet>}
+                          {canDelete && <DeleteConfirmationDialog itemId={item.id} itemName={item.name} deleteAction={deleteInterfaceTypeDictionaryAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除条目"><Trash2 className="h-4 w-4" /></Button>} />}
                         </TableCell>
                       )}
                     </TableRow>
@@ -173,7 +173,7 @@ function InterfaceTypeDictionaryView() { // Renamed component
           ) : (
              <div className="text-center py-10">
               <p className="text-muted-foreground">未找到接口类型字典数据。</p>
-              {canCreate && <InterfaceTypeDictionaryFormSheet onDataChange={handleChangeSuccess} buttonProps={{className: "mt-4"}}/>} {/* Renamed component */}
+              {canCreate && <InterfaceTypeDictionaryFormSheet onDataChange={handleChangeSuccess} buttonProps={{className: "mt-4"}}/>}
             </div>
           )}
         </CardContent>
@@ -182,4 +182,4 @@ function InterfaceTypeDictionaryView() { // Renamed component
   );
 }
 
-export default function InterfaceTypeDictionaryPage() { return <Suspense fallback={<LoadingPage />}><InterfaceTypeDictionaryView /></Suspense>; } // Renamed component
+export default function InterfaceTypeDictionaryPage() { return <Suspense fallback={<LoadingPage />}><InterfaceTypeDictionaryView /></Suspense>; }

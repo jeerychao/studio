@@ -50,7 +50,7 @@ function DeviceDictionaryView() {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_DEVICE_DICTIONARY)) {
         const [fetchedResult, fetchedInterfaceTypesResult] = await Promise.all([
             getDeviceDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-            getInterfaceTypeDictionariesAction({ pageSize: 1000 }) // Fetch all interface types for the form
+            getInterfaceTypeDictionariesAction({ pageSize: 1000 }) 
         ]);
         
          if (fetchedResult.success && fetchedResult.data) {
@@ -93,7 +93,7 @@ function DeviceDictionaryView() {
   }, [fetchData]);
 
   const handleChangeSuccess = React.useCallback(async () => {
-    const queryParams = { page: 1, pageSize: 1 }; // Minimal query to get pagination info
+    const queryParams = { page: 1, pageSize: 1 }; 
     const paginationInfo = await getDeviceDictionariesAction(queryParams);
      if (paginationInfo.success && paginationInfo.data) {
         const newTotalPages = paginationInfo.data.totalPages;
@@ -101,19 +101,15 @@ function DeviceDictionaryView() {
         
         const currentUrlPage = Number(searchParams.get('page')) || 1;
 
-        // Check if adding a new item would push it to a new last page
-        // Or if current page is beyond the new total pages (e.g. after deleting last item on a page)
         if ( (dictData && dictData.data.length === ITEMS_PER_PAGE && targetPage > currentUrlPage && dictData.totalCount % ITEMS_PER_PAGE === 0 && dictData.totalCount > 0) ||
              (currentUrlPage > targetPage) ) {
             const params = new URLSearchParams(searchParams.toString());
             params.set("page", String(targetPage));
             router.push(`${pathname}?${params.toString()}`);
-            // fetchData will be called by useEffect watching searchParams
         } else {
-           fetchData(); // Refresh current page
+           fetchData(); 
         }
     } else {
-        // Fallback if pagination info fetch fails
         fetchData();
     }
   }, [fetchData, router, pathname, searchParams, dictData]);

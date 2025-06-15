@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Subnet, VLAN, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types"; // Renamed LocalDeviceDictionary
+import type { Subnet, VLAN, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types";
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 
@@ -41,12 +41,12 @@ const ipBatchFormSchema = z.object({
   commonPhone: z.string().max(30, "电话号码过长").optional(),
   
   commonPeerUnitName: z.string().max(100, "通用对端单位名称过长").optional(),
-  commonPeerDeviceName: z.string().optional(), // From DeviceDictionary
-  commonPeerPortName: z.string().optional(), // Derived, read-only in UI
+  commonPeerDeviceName: z.string().optional(), 
+  commonPeerPortName: z.string().optional(), 
 
   commonSelectedAccessType: z.string().optional(), 
-  commonSelectedLocalDeviceName: z.string().optional(), // From DeviceDictionary
-  commonSelectedDevicePort: z.string().max(100, "本端设备端口过长").optional(), // Derived, read-only
+  commonSelectedLocalDeviceName: z.string().optional(), 
+  commonSelectedDevicePort: z.string().max(100, "本端设备端口过长").optional(), 
   commonSelectedPaymentSource: z.string().optional(),
 }).refine(data => {
     try { return ipToNumber(data.startIp) <= ipToNumber(data.endIp); } catch (e) { return false; }
@@ -57,7 +57,7 @@ type IpBatchFormValues = z.infer<typeof ipBatchFormSchema>;
 interface IPBatchFormSheetProps {
   subnets: Subnet[];
   vlans: VLAN[];
-  deviceDictionaries: DeviceDictionary[]; // Renamed from localDeviceDictionaries
+  deviceDictionaries: DeviceDictionary[]; 
   paymentSourceDictionaries: PaymentSourceDictionary[];
   accessTypeDictionaries: AccessTypeDictionary[];
   children?: React.ReactNode;
@@ -65,7 +65,7 @@ interface IPBatchFormSheetProps {
 }
 
 export function IPBatchFormSheet({
-    subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, // Renamed prop
+    subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries,
     children, onIpAddressChange
 }: IPBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -120,13 +120,13 @@ export function IPBatchFormSheet({
         status: data.status, isGateway: data.commonIsGateway,
         usageUnit: data.commonUsageUnit || undefined, contactPerson: data.commonContactPerson || undefined, phone: data.commonPhone || undefined,
         
-        peerUnitName: data.commonPeerUnitName || undefined, // New field
-        peerDeviceName: data.commonPeerDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonPeerDeviceName, // New field
-        peerPortName: data.commonPeerPortName || undefined, // New field (derived)
+        peerUnitName: data.commonPeerUnitName || undefined, 
+        peerDeviceName: data.commonPeerDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonPeerDeviceName, 
+        peerPortName: data.commonPeerPortName || undefined, 
 
         selectedAccessType: data.commonSelectedAccessType === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedAccessType, 
         selectedLocalDeviceName: data.commonSelectedLocalDeviceName === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedLocalDeviceName,
-        selectedDevicePort: data.commonSelectedDevicePort || undefined, // Derived
+        selectedDevicePort: data.commonSelectedDevicePort || undefined, 
         selectedPaymentSource: data.commonSelectedPaymentSource === NO_SELECTION_SENTINEL ? undefined : data.commonSelectedPaymentSource,
     };
     const numToCreate = ipToNumber(data.endIp) - ipToNumber(data.startIp) + 1;

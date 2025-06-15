@@ -1,7 +1,5 @@
 
 "use client";
-// This file should ideally be removed, or its route removed from navigation.
-// It now points to the removed Operator Dictionary, which is also gone.
 
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
@@ -15,7 +13,7 @@ function DeprecatedIspPage() {
     <>
       <PageHeader
         title="ISP 管理 (已废弃)"
-        description="此功能已被移除。运营商相关信息已整合到IP地址的对端信息中。设备信息请查看设备字典。"
+        description="此功能已被移除。对端相关信息已整合到IP地址的“对端信息”中。设备信息请查看“设备字典”。"
         icon={<SignalOff className="h-6 w-6 text-destructive" />}
       />
       <Card>

@@ -16,8 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { InterfaceTypeDictionary } from "@/types"; // Renamed type
-import { createInterfaceTypeDictionaryAction, updateInterfaceTypeDictionaryAction, type ActionResponse } from "@/lib/actions"; // Renamed actions
+import type { InterfaceTypeDictionary } from "@/types";
+import { createInterfaceTypeDictionaryAction, updateInterfaceTypeDictionaryAction, type ActionResponse } from "@/lib/actions";
 
 const formSchema = z.object({
   name: z.string().min(1, "接口类型名称/前缀不能为空。").max(50, "接口类型名称/前缀过长。"),
@@ -26,14 +26,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface InterfaceTypeDictionaryFormSheetProps { // Renamed interface
-  dictionaryEntry?: InterfaceTypeDictionary; // Renamed type
+interface InterfaceTypeDictionaryFormSheetProps {
+  dictionaryEntry?: InterfaceTypeDictionary;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
   onDataChange?: () => void;
 }
 
-export function InterfaceTypeDictionaryFormSheet({ dictionaryEntry, children, buttonProps, onDataChange }: InterfaceTypeDictionaryFormSheetProps) { // Renamed component
+export function InterfaceTypeDictionaryFormSheet({ dictionaryEntry, children, buttonProps, onDataChange }: InterfaceTypeDictionaryFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!dictionaryEntry;
@@ -55,16 +55,16 @@ export function InterfaceTypeDictionaryFormSheet({ dictionaryEntry, children, bu
 
   async function onSubmit(data: FormValues) {
     form.clearErrors();
-    let response: ActionResponse<InterfaceTypeDictionary>; // Renamed type
+    let response: ActionResponse<InterfaceTypeDictionary>;
     try {
       const payload = { 
         name: data.name,
         description: data.description || undefined 
       };
       if (isEditing && dictionaryEntry) {
-        response = await updateInterfaceTypeDictionaryAction(dictionaryEntry.id, payload); // Renamed action
+        response = await updateInterfaceTypeDictionaryAction(dictionaryEntry.id, payload);
       } else {
-        response = await createInterfaceTypeDictionaryAction(payload); // Renamed action
+        response = await createInterfaceTypeDictionaryAction(payload);
       }
 
       if (response.success && response.data) {

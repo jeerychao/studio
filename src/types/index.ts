@@ -29,7 +29,7 @@ export const PERMISSIONS = {
   VIEW_QUERY_PAGE: 'querypage.view',
   VIEW_SETTINGS: 'settings.view',
 
-  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view', // Renamed from LOCAL_DEVICE
+  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view',
   CREATE_DEVICE_DICTIONARY: 'dictionary.device.create',
   EDIT_DEVICE_DICTIONARY: 'dictionary.device.edit',
   DELETE_DEVICE_DICTIONARY: 'dictionary.device.delete',
@@ -44,10 +44,11 @@ export const PERMISSIONS = {
   EDIT_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.edit',
   DELETE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.delete',
 
-  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view', // Renamed from NETWORK_INTERFACE_TYPE
+  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view',
   CREATE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.create',
   EDIT_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.edit',
   DELETE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.delete',
+  // OperatorDictionary permissions are removed
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -96,12 +97,12 @@ export interface IPAddress {
   description?: string;
   lastSeen?: string;
 
-  peerUnitName?: string;      // New: Manual input for peer/customer/partner name
-  peerDeviceName?: string;    // New: Name of the device on the peer side (from DeviceDictionary)
-  peerPortName?: string;      // New: Port on the peer device (derived from selected DeviceDictionary entry's port)
+  peerUnitName?: string;
+  peerDeviceName?: string;
+  peerPortName?: string;
 
-  selectedLocalDeviceName?: string; // Existing: Name of local device (from DeviceDictionary)
-  selectedDevicePort?: string;      // Existing: Port on local device (derived)
+  selectedLocalDeviceName?: string;
+  selectedDevicePort?: string;
   
   selectedAccessType?: string;
   selectedPaymentSource?: string;
@@ -135,11 +136,10 @@ export interface AuditLog {
   details?: string;
 }
 
-// Renamed from LocalDeviceDictionary
-export interface DeviceDictionary {
+export interface DeviceDictionary { // Renamed from LocalDeviceDictionary
   id: string;
   deviceName: string;
-  port?: string; // e.g., "GigabitEthernet1/0/1", "Port-channel10"
+  port?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -158,14 +158,14 @@ export interface AccessTypeDictionary {
   updatedAt?: string;
 }
 
-// Renamed from NetworkInterfaceTypeDictionary
-export interface InterfaceTypeDictionary {
+export interface InterfaceTypeDictionary { // Renamed from NetworkInterfaceTypeDictionary
   id: string;
   name: string; 
   description?: string;
   createdAt?: string;
   updatedAt?: string;
 }
+// OperatorDictionary type removed
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -264,7 +264,7 @@ export interface DashboardData {
   totalVlanCount: number;
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
-  // ipUsageByOperator removed as per discussion
+  // ipUsageByOperator removed
   busiestVlans: VLANResourceInfo[];
   subnetsNeedingAttention: SubnetUtilizationInfo[];
   recentAuditLogs?: AppAuditLog[];

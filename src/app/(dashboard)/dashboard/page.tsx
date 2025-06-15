@@ -4,7 +4,7 @@
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { LayoutDashboard, Globe, Cable, Network as NetworkIcon, Percent, Users, ListChecks, AlertTriangle, Loader2 } from "lucide-react";
+import { LayoutDashboard, Globe, Cable, Network as NetworkIcon, Percent, ListChecks, AlertTriangle, Loader2 } from "lucide-react";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS, type DashboardData, type AuditLog } from "@/types";
 import { getDashboardDataAction, type ActionResponse } from "@/lib/actions";
@@ -120,7 +120,7 @@ export default function DashboardPage() {
 
   const {
     totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
-    ipUsageByUnit, // ipUsageByOperator removed
+    ipUsageByUnit,
     busiestVlans,
     subnetsNeedingAttention,
     recentAuditLogs

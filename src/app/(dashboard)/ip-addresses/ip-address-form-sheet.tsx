@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { IPAddress, Subnet, IPAddressStatus, VLAN, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types"; // Renamed LocalDeviceDictionary
+import type { IPAddress, Subnet, IPAddressStatus, VLAN, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types";
 import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
@@ -38,12 +38,12 @@ const ipAddressFormSchema = z.object({
   description: z.string().max(200, "描述过长").optional(),
   
   peerUnitName: z.string().max(100, "对端单位名称过长").optional(),
-  peerDeviceName: z.string().optional(), // From DeviceDictionary
-  peerPortName: z.string().optional(), // Derived from selected peerDeviceName's port (read-only in form)
+  peerDeviceName: z.string().optional(), 
+  peerPortName: z.string().optional(), 
 
   selectedAccessType: z.string().optional(), 
-  selectedLocalDeviceName: z.string().optional(), // From DeviceDictionary
-  selectedDevicePort: z.string().max(100, "本端设备端口过长").optional(), // Derived (read-only in form)
+  selectedLocalDeviceName: z.string().optional(), 
+  selectedDevicePort: z.string().max(100, "本端设备端口过长").optional(), 
   selectedPaymentSource: z.string().optional(),
 });
 
@@ -53,7 +53,7 @@ interface IPAddressFormSheetProps {
   ipAddress?: IPAddress;
   subnets: Subnet[];
   vlans: VLAN[];
-  deviceDictionaries: DeviceDictionary[]; // Renamed from localDeviceDictionaries
+  deviceDictionaries: DeviceDictionary[]; 
   paymentSourceDictionaries: PaymentSourceDictionary[];
   accessTypeDictionaries: AccessTypeDictionary[];
   currentSubnetId?: string;
@@ -68,7 +68,7 @@ const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
 
 
 export function IPAddressFormSheet({
-    ipAddress, subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, // Renamed prop
+    ipAddress, subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries,
     currentSubnetId, children, buttonProps, onIpAddressChange
 }: IPAddressFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -108,11 +108,11 @@ export function IPAddressFormSheet({
             
             peerUnitName: ipAddress?.peerUnitName || "",
             peerDeviceName: initialPeerDeviceName || NO_SELECTION_SENTINEL,
-            peerPortName: initialPeerDevice?.port || ipAddress?.peerPortName || "", // Auto-fill from DeviceDictionary
+            peerPortName: initialPeerDevice?.port || ipAddress?.peerPortName || "", 
 
             selectedAccessType: ipAddress?.selectedAccessType || NO_SELECTION_SENTINEL,
             selectedLocalDeviceName: initialLocalDeviceName || NO_SELECTION_SENTINEL,
-            selectedDevicePort: initialLocalDevice?.port || ipAddress?.selectedDevicePort || "", // Auto-fill
+            selectedDevicePort: initialLocalDevice?.port || ipAddress?.selectedDevicePort || "",
             selectedPaymentSource: ipAddress?.selectedPaymentSource || NO_SELECTION_SENTINEL,
         });
         form.clearErrors();
@@ -131,7 +131,7 @@ export function IPAddressFormSheet({
     const deviceNameToSet = value === NO_SELECTION_SENTINEL ? "" : value;
     form.setValue("peerDeviceName", deviceNameToSet);
     const selectedDev = deviceDictionaries.find(dev => dev.deviceName === deviceNameToSet);
-    form.setValue("peerPortName", selectedDev?.port || ""); // Auto-set peerPortName
+    form.setValue("peerPortName", selectedDev?.port || ""); 
   };
 
 
@@ -148,13 +148,13 @@ export function IPAddressFormSheet({
         allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null,
         contactPerson: data.contactPerson || null, phone: data.phone || null, description: data.description || null,
         
-        peerUnitName: data.peerUnitName || null, // Updated field
-        peerDeviceName: data.peerDeviceName === NO_SELECTION_SENTINEL || !data.peerDeviceName ? null : data.peerDeviceName, // Updated field
-        peerPortName: data.peerPortName || null, // New field, derived from selected peerDeviceName
+        peerUnitName: data.peerUnitName || null, 
+        peerDeviceName: data.peerDeviceName === NO_SELECTION_SENTINEL || !data.peerDeviceName ? null : data.peerDeviceName, 
+        peerPortName: data.peerPortName || null, 
 
         selectedAccessType: data.selectedAccessType === NO_SELECTION_SENTINEL || !data.selectedAccessType ? null : data.selectedAccessType,
         selectedLocalDeviceName: data.selectedLocalDeviceName === NO_SELECTION_SENTINEL || !data.selectedLocalDeviceName ? null : data.selectedLocalDeviceName,
-        selectedDevicePort: data.selectedDevicePort || null, // Derived
+        selectedDevicePort: data.selectedDevicePort || null, 
         selectedPaymentSource: data.selectedPaymentSource === NO_SELECTION_SENTINEL || !data.selectedPaymentSource ? null : data.selectedPaymentSource,
       };
 
@@ -270,7 +270,7 @@ export function IPAddressFormSheet({
                   </FormItem>
                 )} />
 
-                <FormField control={form.control} name="peerUnitName" render={({ field }) => ( // New field for peer unit name
+                <FormField control={form.control} name="peerUnitName" render={({ field }) => (
                   <FormItem>
                     <FormLabel>对端单位名称 (可选)</FormLabel>
                      <div className="relative">

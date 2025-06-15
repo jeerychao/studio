@@ -11,10 +11,10 @@ import {
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
-  mockDeviceDictionaries, // Renamed from mockLocalDeviceDictionaries
+  mockDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
-  mockInterfaceTypeDictionaries, // Renamed from mockNetworkInterfaceTypeDictionaries
+  mockInterfaceTypeDictionaries,
 } from '../src/lib/data';
 import type { User as AppUser } from '../src/types';
 import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
@@ -267,9 +267,9 @@ async function main() {
 
     // OperatorDictionary seeding removed
 
-    console.log('Seeding Device Dictionaries...'); // Renamed from LocalDeviceDictionary
-    for (const ddData of mockDeviceDictionaries) { // Renamed from mockLocalDeviceDictionaries
-      await prisma.deviceDictionary.upsert({ // Renamed from localDeviceDictionary
+    console.log('Seeding Device Dictionaries...');
+    for (const ddData of mockDeviceDictionaries) {
+      await prisma.deviceDictionary.upsert({
         where: { deviceName: ddData.deviceName },
         update: { deviceName: ddData.deviceName, port: ddData.port || null },
         create: { deviceName: ddData.deviceName, port: ddData.port || null },
@@ -297,9 +297,9 @@ async function main() {
     }
     console.log('Access Type Dictionaries seeded.');
 
-    console.log('Seeding Interface Type Dictionaries...'); // Renamed from NetworkInterfaceTypeDictionary
-    for (const itData of mockInterfaceTypeDictionaries) { // Renamed from mockNetworkInterfaceTypeDictionaries
-      await prisma.interfaceTypeDictionary.upsert({ // Renamed from networkInterfaceTypeDictionary
+    console.log('Seeding Interface Type Dictionaries...');
+    for (const itData of mockInterfaceTypeDictionaries) {
+      await prisma.interfaceTypeDictionary.upsert({
         where: { name: itData.name },
         update: { name: itData.name, description: itData.description || null },
         create: { name: itData.name, description: itData.description || null },
