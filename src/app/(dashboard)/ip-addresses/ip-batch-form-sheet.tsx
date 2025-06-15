@@ -116,9 +116,12 @@ export function IPBatchFormSheet({
     const directVlanIdToSubmit = data.directVlanId === NO_DIRECT_VLAN_SENTINEL ? undefined : data.directVlanId;
     const payload = {
         startIp: data.startIp, endIp: data.endIp, subnetId: data.subnetId,
-        directVlanId: directVlanIdToSubmit, description: data.description || undefined,
+        directVlanId: directVlanIdToSubmit, 
+        description: data.description || undefined,
         status: data.status, isGateway: data.isGateway,
-        usageUnit: data.usageUnit || undefined, contactPerson: data.contactPerson || undefined, phone: data.phone || undefined,
+        usageUnit: data.usageUnit || undefined, 
+        contactPerson: data.contactPerson || undefined, 
+        phone: data.phone || undefined,
         
         peerUnitName: data.peerUnitName || undefined, 
         peerDeviceName: data.peerDeviceName === NO_SELECTION_SENTINEL ? undefined : data.peerDeviceName, 
@@ -134,16 +137,63 @@ export function IPBatchFormSheet({
 
     try {
       const result = await batchCreateIPAddressesAction(payload);
-      setSubmissionResult(result);
-      if (result.successCount > 0 && result.failureDetails.length === 0) { toast({ title: "批量创建成功", description: `${result.successCount} 个IP地址已成功创建。` }); if (onIpAddressChange) onIpAddressChange(); form.reset(); }
-      else if (result.successCount > 0 && result.failureDetails.length > 0) { toast({ title: "批量处理部分成功", description: `${result.successCount} 个IP创建成功，${result.failureDetails.length} 个失败。详情请见下方。` }); if (onIpAddressChange) onIpAddressChange(); }
-      else if (result.failureDetails.length > 0) { toast({ title: "批量创建失败", description: `所有 ${numToCreate} 个IP地址均创建失败。详情请见下方。`, variant: "destructive" }); }
-      else { toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" }); }
+      
+      if (result.successCount > 0 && result.failureDetails.length === 0) { 
+        toast({ title: "批量创建成功", description: `${result.successCount} 个IP地址已成功创建。` }); 
+        if (onIpAddressChange) onIpAddressChange(); 
+        setIsOpen(false); // Close sheet on full success
+      } else if (result.successCount > 0 && result.failureDetails.length > 0) { 
+        setSubmissionResult(result); // Keep sheet open to show partial results
+        toast({ 
+            title: "批量处理部分成功", 
+            description: (
+                <div>
+                  <p>{result.successCount} 个IP创建成功，{result.failureDetails.length} 个失败。</p>
+                  <p className="mt-2 text-xs">失败详情 (部分显示):</p>
+                  <ScrollArea className="h-[60px] mt-1 rounded-md border p-2 bg-destructive/10">
+                    <ul className="list-disc list-inside text-xs">
+                      {result.failureDetails.slice(0, 5).map((f, i) => <li key={i}><strong>IP {f.ipAttempted}:</strong> {f.error}</li>)}
+                      {result.failureDetails.length > 5 && <li>...更多错误未显示。</li>}
+                    </ul>
+                  </ScrollArea>
+                </div>
+            ),
+            variant: "default",
+            duration: 10000,
+        }); 
+        if (onIpAddressChange) onIpAddressChange(); 
+      } else if (result.failureDetails.length > 0) { 
+        setSubmissionResult(result); // Keep sheet open to show failure details
+        toast({ 
+            title: "批量创建失败", 
+            description: (
+                 <div>
+                  <p>所有 {numToCreate} 个IP地址均创建失败。</p>
+                  <p className="mt-2 text-xs">失败详情 (部分显示):</p>
+                  <ScrollArea className="h-[60px] mt-1 rounded-md border p-2 bg-destructive/10">
+                    <ul className="list-disc list-inside text-xs">
+                      {result.failureDetails.slice(0, 5).map((f, i) => <li key={i}><strong>IP {f.ipAttempted}:</strong> {f.error}</li>)}
+                       {result.failureDetails.length > 5 && <li>...更多错误未显示。</li>}
+                    </ul>
+                  </ScrollArea>
+                </div>
+            ), 
+            variant: "destructive",
+            duration: 10000,
+        }); 
+      } else { 
+        toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" }); 
+        setIsOpen(false); // Close if no operation happened (e.g. empty range valid)
+      }
     } catch (error) {
       const actionError = (error as ActionResponse<any>)?.error;
-      if (actionError) { toast({ title: "批量创建预处理错误", description: actionError.userMessage, variant: "destructive" }); if (actionError.field) form.setError(actionError.field as FieldPath<IpBatchFormValues>, { type: "server", message: actionError.userMessage }); }
-      else { toast({ title: "客户端错误", description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。", variant: "destructive" }); }
-      setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp, error: (error as Error).message || "未知错误" }] });
+      if (actionError) { 
+        toast({ title: "批量创建预处理错误", description: actionError.userMessage, variant: "destructive" }); 
+        if (actionError.field) form.setError(actionError.field as FieldPath<IpBatchFormValues>, { type: "server", message: actionError.userMessage }); 
+      } else { 
+        toast({ title: "客户端错误", description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。", variant: "destructive" }); 
+      }
+      setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp + (data.startIp !== data.endIp ? ('-' + data.endIp) : ''), error: (error as Error).message || "未知错误" }] });
     }
   }
 
@@ -160,7 +210,7 @@ export function IPBatchFormSheet({
       size="icon"
       className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
       onClick={() => {
-        form.setValue(fieldName, "" as any); // Type assertion might be needed depending on field type
+        form.setValue(fieldName, "" as any); 
         form.trigger(fieldName);
       }}
       aria-label={`清除${label}`}
@@ -217,7 +267,7 @@ export function IPBatchFormSheet({
                 <FormField control={form.control} name="selectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><div className="relative"><FormControl><Input placeholder="例如 批量创建的设备" {...field} className="pr-8"/></FormControl>{field.value && clearButton("description", "描述")}</div><FormMessage /></FormItem>)} />
 
-                {submissionResult && (<div className="mt-6 space-y-3">
+                {submissionResult && (submissionResult.failureDetails.length > 0 || submissionResult.successCount === 0 && submissionResult.failureDetails.length === 0 /* Show for full failure or no-op */) && (<div className="mt-6 space-y-3">
                     <h3 className="text-lg font-semibold border-b pb-2 mb-3">处理结果:</h3>
                     <Alert variant={submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 ? "destructive" : "default"}><AlertCircle className="h-4 w-4"/><AlertTitle>概要</AlertTitle><AlertDescription>成功创建: {submissionResult.successCount} 个IP。<br />失败尝试: {submissionResult.failureDetails.length} 个。</AlertDescription></Alert>
                     {submissionResult.failureDetails.length > 0 && (<div className="border border-dashed border-destructive p-3 mt-3 rounded-md">
