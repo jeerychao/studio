@@ -81,11 +81,11 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
 
   async function onSubmit(data: VlanBatchFormValues) {
-    form.clearErrors();
-    setSubmissionResult(null);
+    form.clearErrors(); // Clear previous form errors
+    setSubmissionResult(null); // Clear previous submission results
 
     const vlansToCreate = [];
-    const stepValue = data.step || 1; // Ensure step is at least 1
+    const stepValue = data.step || 1; 
 
     for (let i = data.startVlanNumber; i <= data.endVlanNumber; i += stepValue) {
       vlansToCreate.push({
@@ -99,7 +99,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       toast({ title: "无VLAN可创建", description: "指定的范围和步长未产生任何VLAN号码。", variant: "destructive" });
       return;
     }
-     if (vlansToCreate.length > 200) { // Adjusted limit, can be fine-tuned
+     if (vlansToCreate.length > 200) { 
       toast({ title: "范围过大", description: `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`, variant: "destructive" });
       return;
     }
@@ -114,7 +114,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           description: `${result.successCount} 个VLAN已成功创建。`,
         });
         if (onVlanChange) onVlanChange();
-        form.reset();
+        // form.reset(); // Reset form only on full success, or let user decide if they want to tweak and resubmit for failures
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
           title: "批量处理部分成功",
@@ -153,7 +153,10 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             variant: "destructive",
         });
       }
-      setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message || "未知错误" }] });
+      // Ensure submissionResult is set even for top-level catch to display error if needed
+      if (!submissionResult) { // Only set if not already set by successful/partial API call
+          setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message || "未知错误" }] });
+      }
     }
   }
 
