@@ -20,6 +20,12 @@ import { VlanBatchFormSheet } from "./vlan-batch-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -90,9 +96,8 @@ function VlansView() {
         const params = new URLSearchParams(searchParams.toString());
         params.set("page", String(targetPage));
         router.push(`${pathname}?${params.toString()}`);
-        // fetchData will be triggered by useEffect watching searchParams
       } else {
-        fetchData(); // Refresh current page if target is the same
+        fetchData();
       }
     } catch (error) {
       toast({
@@ -100,7 +105,7 @@ function VlansView() {
         description: "创建VLAN后无法导航到目标页面，正在刷新当前页面。",
         variant: "destructive",
       });
-      fetchData(); // Fallback to refreshing current page
+      fetchData(); 
     }
   }, [fetchData, router, pathname, searchParams, toast]);
 
@@ -175,7 +180,7 @@ function VlansView() {
 
 
   return (
-    <>
+    <TooltipProvider>
       <PageHeader
         title="VLAN 管理"
         description="组织和管理您的虚拟局域网。"
@@ -205,8 +210,8 @@ function VlansView() {
                     </TableHead>
                     <TableHead>VLAN 号码</TableHead>
                     <TableHead>VLAN 名称</TableHead>
-                    <TableHead>描述</TableHead>
                     <TableHead>关联资源数</TableHead>
+                    <TableHead>描述</TableHead>
                     {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -224,8 +229,21 @@ function VlansView() {
                       </TableCell>
                       <TableCell className="font-medium">{vlan.vlanNumber}</TableCell>
                       <TableCell className="max-w-xs truncate">{vlan.name || "无"}</TableCell>
-                      <TableCell className="max-w-md truncate">{vlan.description || "无"}</TableCell>
                       <TableCell>{vlan.subnetCount ?? 0}</TableCell>
+                      <TableCell className="max-w-md truncate">
+                        {vlan.description ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default">{vlan.description}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start">
+                              <p className="max-w-xs whitespace-pre-wrap break-words">{vlan.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          "无"
+                        )}
+                      </TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (
@@ -271,7 +289,7 @@ function VlansView() {
           )}
         </CardContent>
       </Card>
-    </>
+    </TooltipProvider>
   );
 }
 

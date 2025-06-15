@@ -28,6 +28,12 @@ import { IPStatusFilter } from "./ip-status-filter";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -209,7 +215,7 @@ function IPAddressesView() {
   const ipsToDisplay = ipAddressesData?.data || [];
 
   return (
-    <>
+    <TooltipProvider>
       <PageHeader title="IP 地址管理" description={`管理IP地址。当前查看: ${currentSubnetName || '所有子网'}`} icon={<Globe className="h-6 w-6 text-primary" />} />
       <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex flex-col sm:flex-row gap-4"><IPSubnetFilter subnets={subnets} currentSubnetId={selectedSubnetId} /><IPStatusFilter currentStatus={selectedStatus} /></div>
@@ -255,7 +261,20 @@ function IPAddressesView() {
                       <TableCell className="max-w-[100px] truncate">{ip.selectedPaymentSource || "无"}</TableCell>
                       <TableCell>{ip.subnet?.cidr || "无"}</TableCell>
                       <TableCell><Badge variant="outline">{getVlanDisplayForIp(ip)}</Badge></TableCell>
-                      <TableCell className="max-w-[150px] truncate">{ip.description || "无"}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">
+                        {ip.description ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default">{ip.description}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start">
+                              <p className="max-w-xs whitespace-pre-wrap break-words">{ip.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          "无"
+                        )}
+                      </TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right whitespace-nowrap">
                           {canEdit && <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} deviceDictionaries={deviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑IP地址"><Edit className="h-4 w-4" /></Button></IPAddressFormSheet>}
@@ -276,7 +295,7 @@ function IPAddressesView() {
           )}
         </CardContent>
       </Card>
-    </>
+    </TooltipProvider>
   );
 }
 

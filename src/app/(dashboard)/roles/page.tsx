@@ -16,8 +16,14 @@ import { RoleFormSheet } from "./role-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-const ITEMS_PER_PAGE = 10; // Or a suitable number for roles
+const ITEMS_PER_PAGE = 10; 
 
 function LoadingRolesPage() {
   return (
@@ -81,7 +87,7 @@ function RolesView() {
 
 
   return (
-    <>
+    <TooltipProvider>
       <PageHeader
         title="角色管理"
         description="查看系统角色并管理其描述和权限。"
@@ -103,9 +109,9 @@ function RolesView() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>角色名称</TableHead>
-                    <TableHead>描述</TableHead>
                     <TableHead>已分配权限数</TableHead>
                     <TableHead>用户数</TableHead>
+                    <TableHead>描述</TableHead>
                     {canEditAnyPartOfRole && <TableHead className="text-right">操作</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -113,9 +119,22 @@ function RolesView() {
                   {rolesData.data.map((role) => (
                     <TableRow key={role.id}>
                       <TableCell className="font-medium">{role.name}</TableCell>
-                      <TableCell className="max-w-md truncate">{role.description || "无"}</TableCell>
                       <TableCell>{role.permissions.length}</TableCell>
                       <TableCell>{role.userCount ?? 0}</TableCell>
+                      <TableCell className="max-w-md truncate">
+                        {role.description ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default">{role.description}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start">
+                              <p className="max-w-xs whitespace-pre-wrap break-words">{role.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          "无"
+                        )}
+                      </TableCell>
                       {canEditAnyPartOfRole && (
                         <TableCell className="text-right">
                           <RoleFormSheet role={role} onRoleChange={fetchData}>
@@ -143,7 +162,7 @@ function RolesView() {
           )}
         </CardContent>
       </Card>
-    </>
+    </TooltipProvider>
   );
 }
 

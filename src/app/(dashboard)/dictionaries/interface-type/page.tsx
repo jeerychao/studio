@@ -18,6 +18,12 @@ import { InterfaceTypeDictionaryFormSheet } from "./interface-type-dictionary-fo
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { PaginationControls } from "@/components/pagination-controls";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -138,7 +144,7 @@ function InterfaceTypeDictionaryView() {
   const finalTotalPages = dictData?.totalPages || 0;
 
   return (
-    <>
+    <TooltipProvider>
       <PageHeader title="接口类型字典管理" description="管理网络接口类型或前缀。" icon={<SlidersHorizontal className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} />
       <Card>
         <CardHeader><CardTitle>接口类型列表</CardTitle><CardDescription>显示 {itemsToDisplay.length} 条，共 {finalTotalCount} 条接口类型字典条目。</CardDescription></CardHeader>
@@ -157,7 +163,20 @@ function InterfaceTypeDictionaryView() {
                     <TableRow key={item.id} data-state={selectedIds.has(item.id) ? "selected" : ""}>
                       <TableCell>{canDelete && <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={(checked) => handleSelectItem(item.id, checked)} aria-label={`选择条目 ${item.name}`}/>}</TableCell>
                       <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="max-w-md truncate">{item.description || "无"}</TableCell>
+                      <TableCell className="max-w-md truncate">
+                        {item.description ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default">{item.description}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start">
+                              <p className="max-w-xs whitespace-pre-wrap break-words">{item.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          "无"
+                        )}
+                      </TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && <InterfaceTypeDictionaryFormSheet dictionaryEntry={item} onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></InterfaceTypeDictionaryFormSheet>}
@@ -178,7 +197,7 @@ function InterfaceTypeDictionaryView() {
           )}
         </CardContent>
       </Card>
-    </>
+    </TooltipProvider>
   );
 }
 
