@@ -2,8 +2,10 @@
 // --- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2) ---
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Execution Started ---");
 
+// Removed explicit dotenv.config() call here. Relying on Prisma CLI's .env loading.
+
 import { PrismaClient, Prisma } from '@prisma/client';
-import { encrypt } from '../src/lib/crypto-utils'; // Ensure this path is correct relative to prisma/seed.ts
+import { encrypt } from '../src/lib/crypto-utils';
 import {
   ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID,
@@ -13,31 +15,23 @@ import {
   mockUsers,
   mockVLANs,
   mockSubnets,
-  seedIPsData, // Using the direct export name
-  mockDeviceDictionaries, // Renamed from mockLocalDeviceDictionaries
+  seedIPsData,
+  mockDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
-  mockInterfaceTypeDictionaries, // Renamed from mockNetworkInterfaceTypeDictionaries
+  mockInterfaceTypeDictionaries,
 } from '../src/lib/data';
-import { logger } from '../src/lib/logger'; // Using the logger utility
+import { logger } from '../src/lib/logger';
 
-// Attempt to load .env variables explicitly if not already loaded by Prisma CLI for ts-node
-try {
-    const dotenv = require('dotenv');
-    const path = require('path');
-    const envPath = path.resolve(__dirname, '../../.env'); // Points to project root .env
-    const result = dotenv.config({ path: envPath });
-    if (result.error) {
-        console.warn("dotenv.config error in seed.ts (this might be okay if Prisma CLI handles .env):", result.error.message);
-         if ((result.error as any).code === 'ENOENT') {
-            console.warn(`Specific ENOENT: .env file not found at expected path: ${envPath}`);
-        }
-    } else {
-        console.log("dotenv.config loaded successfully in seed.ts from:", envPath, "Parsed ENCRYPTION_KEY:", process.env.ENCRYPTION_KEY ? "Exists" : "MISSING");
-    }
-} catch (e) {
-    console.warn("dotenv module not found or error during its initial require in seed.ts (continuing, Prisma CLI might handle .env):", (e as Error).message);
+// Log the ENCRYPTION_KEY visible to this script for debugging
+const keyVisible = process.env.ENCRYPTION_KEY;
+if (keyVisible) {
+  console.log(`ENCRYPTION_KEY starts with: ${keyVisible.substring(0, 4)}... and ends with: ...${keyVisible.substring(keyVisible.length - 4)} (Length: ${keyVisible.length})`);
+} else {
+  console.warn("ENCRYPTION_KEY is NOT SET in the environment for seed.ts. Passwords will be encrypted with the default dev key if crypto-utils falls back.");
 }
+// If NODE_ENV is not 'production' and ENCRYPTION_KEY is missing, crypto-utils will use a default key and warn.
+// We want to ensure the seed script uses the *same* key as the runtime.
 
 const prisma = new PrismaClient();
 
@@ -95,7 +89,9 @@ async function main() {
       const { password, ...restOfUserData } = userData;
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        password: password || encrypt("DefaultPassword1!"), // Password will be encrypted
+        // Password will be encrypted. If password is not in mockUsers, ensure a default or handle.
+        // The mockUsers data now includes encrypted passwords directly.
+        password: password || encrypt("DefaultPassword1!"), // Fallback if password somehow missing
       };
       await prisma.user.upsert({
         where: { email: userData.email },
@@ -147,16 +143,24 @@ async function main() {
   logger.info('Start seeding IP Addresses...');
   for (const ipData of seedIPsData) {
     try {
-      // Destructure all expected fields from ipData, including new peer fields
       const { 
-        subnetId, directVlanId, peerUnitName, peerDeviceName, peerPortName,
-        selectedAccessType, selectedLocalDeviceName, selectedDevicePort, selectedPaymentSource,
+        subnetId: ipSubnetId, // Renamed to avoid conflict with outer scope subnetId if any
+        directVlanId, 
+        // Remove selectedOperatorName, selectedOperatorDevice
+        // Use peerUnitName, peerDeviceName, peerPortName
+        peerUnitName, 
+        peerDeviceName, 
+        peerPortName,
+        selectedAccessType, 
+        selectedLocalDeviceName, 
+        selectedDevicePort, 
+        selectedPaymentSource,
         ...restOfIpData 
       } = ipData;
 
       const createPayload: Prisma.IPAddressCreateInput = {
-        ...restOfIpData, // id, ipAddress, status, isGateway, allocatedTo, usageUnit, contactPerson, phone, description
-        status: ipData.status, // Ensure status is explicitly set
+        ...restOfIpData,
+        status: ipData.status, 
         peerUnitName: peerUnitName || null,
         peerDeviceName: peerDeviceName || null,
         peerPortName: peerPortName || null,
@@ -166,8 +170,8 @@ async function main() {
         selectedPaymentSource: selectedPaymentSource || null,
       };
 
-      if (subnetId) {
-        createPayload.subnet = { connect: { id: subnetId } };
+      if (ipSubnetId) {
+        createPayload.subnet = { connect: { id: ipSubnetId } };
       }
       if (directVlanId) {
         createPayload.directVlan = { connect: { id: directVlanId } };
@@ -179,7 +183,7 @@ async function main() {
         where: { 
           ipAddress_subnetId: { 
             ipAddress: ipData.ipAddress, 
-            subnetId: currentSubnetIdForWhere as any // Casting to any to bypass strict TS check if it's too restrictive
+            subnetId: currentSubnetIdForWhere as any 
           } 
         },
         update: createPayload,
@@ -191,13 +195,13 @@ async function main() {
   }
   logger.info(`${seedIPsData.length} IP Addresses seeded.`);
 
-  // 7. Seed Device Dictionaries (formerly LocalDeviceDictionary)
+  // 7. Seed Device Dictionaries
   logger.info('Start seeding Device Dictionaries...');
   for (const deviceData of mockDeviceDictionaries) {
     try {
-      await prisma.deviceDictionary.upsert({ // Renamed prisma.localDeviceDictionary
+      await prisma.deviceDictionary.upsert({
         where: { deviceName: deviceData.deviceName },
-        update: { port: deviceData.port },
+        update: { port: deviceData.port }, // Only 'port' is updatable besides deviceName for where
         create: deviceData,
       });
     } catch (e: any) {
@@ -236,11 +240,11 @@ async function main() {
   }
   logger.info(`${mockAccessTypeDictionaries.length} Access Type Dictionaries seeded.`);
 
-  // 10. Seed Interface Type Dictionaries (formerly NetworkInterfaceTypeDictionary)
+  // 10. Seed Interface Type Dictionaries
   logger.info('Start seeding Interface Type Dictionaries...');
   for (const interfaceTypeData of mockInterfaceTypeDictionaries) {
     try {
-      await prisma.interfaceTypeDictionary.upsert({ // Renamed prisma.networkInterfaceTypeDictionary
+      await prisma.interfaceTypeDictionary.upsert({
         where: { name: interfaceTypeData.name },
         update: { description: interfaceTypeData.description },
         create: interfaceTypeData,
@@ -272,3 +276,4 @@ main()
   });
 
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
+
