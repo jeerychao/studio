@@ -1,14 +1,14 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index';
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index'; // Updated DeviceDictionary and InterfaceTypeDictionary
 import { PERMISSIONS } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 import { encrypt } from './crypto-utils'; // Corrected import path
-
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
 export const OPERATOR_ROLE_ID = 'role_operator_fixed_id';
 export const VIEWER_ROLE_ID = 'role_viewer_fixed_id';
 
+// Updated permission names for DeviceDictionary and InterfaceTypeDictionary
 export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.VIEW_DASHBOARD, name: '查看仪表盘', group: '仪表盘', description: '可以查看主仪表盘概览。' },
   { id: PERMISSIONS.VIEW_SUBNET, name: '查看子网', group: '子网管理', description: '可以查看子网详情和列表。' },
@@ -98,17 +98,18 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
   { id: 'seed_vlan_004', vlanNumber: 40, name: 'Legacy Devices', description: 'Legacy Devices VLAN' },
 ];
 
-export const seedIPsData: IPAddress[] = [ // Renamed from mockIPs to seedIPsData
+// Updated to include peerUnitName, peerDeviceName, peerPortName
+export const seedIPsData: IPAddress[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
     peerUnitName: '外部网络提供商 A',
-    peerDeviceName: 'ISP Router X1', // Must exist in mockDeviceDictionaries
-    peerPortName: 'GigabitEthernet0/0', // Auto-filled from DeviceDictionary if device found
+    peerDeviceName: 'ISP Router X1', // Sourced from DeviceDictionary
+    peerPortName: 'GigabitEthernet0/0', // Corresponds to ISP Router X1's port in DeviceDictionary
 
     selectedAccessType: '专线',
-    selectedLocalDeviceName: '核心交换机-A栋', // Must exist in mockDeviceDictionaries
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/1', // Auto-filled from DeviceDictionary if device found
+    selectedLocalDeviceName: '核心交换机-A栋', // Sourced from DeviceDictionary
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/1', // Corresponds to 核心交换机-A栋's port
     selectedPaymentSource: '自费'
   },
   {
@@ -153,7 +154,7 @@ export const seedIPsData: IPAddress[] = [ // Renamed from mockIPs to seedIPsData
 
     selectedAccessType: '专线',
     selectedLocalDeviceName: '核心交换机-A栋',
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/2', // Adjusted to a more common port name
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/2',
     selectedPaymentSource: '自费'
   },
   {
@@ -165,7 +166,7 @@ export const seedIPsData: IPAddress[] = [ // Renamed from mockIPs to seedIPsData
 
     selectedAccessType: '汇聚',
     selectedLocalDeviceName: '核心交换机-A栋',
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/3', // Adjusted
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/3',
     selectedPaymentSource: '财政付费-项目A'
   },
 ];
@@ -237,18 +238,18 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-// mockDeviceDictionaries (formerly mockLocalDeviceDictionaries)
+// Renamed from mockLocalDeviceDictionaries to mockDeviceDictionaries
 export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' }, // Used by seed_ip_001 (local), seed_ip_006 (local), seed_ip_007 (local)
-  { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' }, // Used by seed_ip_002 (local)
-  { deviceName: '防火墙-总部出口', port: 'eth1/1' }, // Used by seed_ip_005 (local)
+  { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
+  { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
+  { deviceName: '防火墙-总部出口', port: 'eth1/1' },
   { deviceName: '服务器-WEB集群-节点1', port: 'eth0' },
   { deviceName: '无线控制器-主楼', port: 'Port-channel1' },
-  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' }, // Used by seed_ip_001 (peer)
-  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' }, // Used by seed_ip_002 (peer)
-  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'}, // Used by seed_ip_005 (peer)
-  { deviceName: 'F5 Load Balancer', port: '1.1' }, // Used by seed_ip_006 (peer)
-  { deviceName: 'SAN Switch Brocade', port: 'port 5' }, // Used by seed_ip_007 (peer)
+  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' },
+  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' },
+  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'},
+  { deviceName: 'F5 Load Balancer', port: '1.1' },
+  { deviceName: 'SAN Switch Brocade', port: 'port 5' },
 ];
 
 export const mockPaymentSourceDictionaries: Omit<PaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
@@ -267,10 +268,10 @@ export const mockAccessTypeDictionaries: Omit<AccessTypeDictionary, 'id' | 'crea
   { name: '其他' },
 ];
 
-// mockInterfaceTypeDictionaries (formerly mockNetworkInterfaceTypeDictionaries)
+// Renamed from mockNetworkInterfaceTypeDictionaries to mockInterfaceTypeDictionaries
 export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: 'GigabitEthernet', description: '千兆以太网接口' },
-  { name: 'Ten-GigabitEthernet', description: '万兆以太网接口' }, // Corrected hyphenation
+  { name: 'Ten-GigabitEthernet', description: '万兆以太网接口' },
   { name: 'FastEthernet', description: '百兆以太网接口' },
   { name: 'Ethernet', description: '十兆以太网接口' },
   { name: 'ge-', description: 'Juniper风格千兆接口前缀' },
