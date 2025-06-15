@@ -1,8 +1,8 @@
 
 import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index';
-import { PERMISSIONS, DeviceType } from '../types/index';
+import { PERMISSIONS } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
-import { encrypt } from '../app/api/auth/[...nextauth]/route';
+import { encrypt } from './crypto-utils'; // CORRECTED IMPORT PATH for encrypt
 
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
@@ -56,7 +56,6 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.CREATE_INTERFACE_TYPE_DICTIONARY, name: '创建接口类型字典条目', group: '字典管理', description: '可以添加新的网络接口类型字典条目。' },
   { id: PERMISSIONS.EDIT_INTERFACE_TYPE_DICTIONARY, name: '编辑接口类型字典条目', group: '字典管理', description: '可以修改现有的网络接口类型字典条目。' },
   { id: PERMISSIONS.DELETE_INTERFACE_TYPE_DICTIONARY, name: '删除接口类型字典条目', group: '字典管理', description: '可以删除网络接口类型字典条目。' },
-  // OperatorDictionary permissions removed
 ];
 
 function createInitialSubnetSeedData(
@@ -99,20 +98,30 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
   { id: 'seed_vlan_004', vlanNumber: 40, name: 'Legacy Devices', description: 'Legacy Devices VLAN' },
 ];
 
-export const mockIPAddresses: IPAddress[] = [
+export const seedIPsData: IPAddress[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
-    peerUnitName: '外部网络提供商 A', peerDeviceName: 'ISP Router X1', peerPortName: 'GigabitEthernet0/0',
+    peerUnitName: '外部网络提供商 A',
+    peerDeviceName: 'ISP Router X1',
+    peerPortName: 'GigabitEthernet0/0',
+
     selectedAccessType: '专线',
-    selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/1', selectedPaymentSource: '自费'
+    selectedLocalDeviceName: '核心交换机-A栋',
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/1',
+    selectedPaymentSource: '自费'
   },
   {
     id: 'seed_ip_002', ipAddress: '192.168.1.10', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: false, allocatedTo: 'John Doe\'s PC', usageUnit: 'Marketing Department', contactPerson: 'John Doe', phone: '123-101', description: 'John - Primary Workstation',
-    peerUnitName: '部门打印服务器', peerDeviceName: 'Printer HP LJ M500', peerPortName: 'Ethernet',
+    peerUnitName: '部门打印服务器',
+    peerDeviceName: 'Printer HP LJ M500',
+    peerPortName: 'Ethernet',
+
     selectedAccessType: '汇聚',
-    selectedLocalDeviceName: '接入交换机-B栋-F3', selectedDevicePort: 'GigabitEthernet0/24', selectedPaymentSource: '财政付费-项目A'
+    selectedLocalDeviceName: '接入交换机-B栋-F3',
+    selectedDevicePort: 'GigabitEthernet0/24',
+    selectedPaymentSource: '财政付费-项目A'
   },
   {
     id: 'seed_ip_003', ipAddress: '192.168.1.11', subnetId: 'seed_subnet_001', status: 'free' as IPAddressStatus,
@@ -126,23 +135,38 @@ export const mockIPAddresses: IPAddress[] = [
   {
     id: 'seed_ip_005', ipAddress: '10.0.0.1', subnetId: 'seed_subnet_002', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Server Farm Router', description: 'Gateway for Servers',
-    peerUnitName: '数据中心骨干', peerDeviceName: 'Datacenter Core Switch 1', peerPortName: 'TenGigabitEthernet2/1',
+    peerUnitName: '数据中心骨干',
+    peerDeviceName: 'Datacenter Core Switch 1',
+    peerPortName: 'TenGigabitEthernet2/1',
+
     selectedAccessType: '专线',
-    selectedLocalDeviceName: '防火墙-总部出口', selectedDevicePort: 'eth1/1', selectedPaymentSource: '自费'
+    selectedLocalDeviceName: '防火墙-总部出口',
+    selectedDevicePort: 'eth1/1',
+    selectedPaymentSource: '自费'
   },
   {
     id: 'seed_ip_006', ipAddress: '10.0.1.5', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
     isGateway: false, allocatedTo: 'WebServer01', usageUnit: 'Web Services Team', contactPerson: 'Jane Smith', phone: '123-201', description: 'Main Web Server',
-    peerUnitName: '负载均衡器A', peerDeviceName: 'F5 Load Balancer', peerPortName: '1.1',
+    peerUnitName: '负载均衡器A',
+    peerDeviceName: 'F5 Load Balancer',
+    peerPortName: '1.1',
+
     selectedAccessType: '专线',
-    selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/2', selectedPaymentSource: '自费'
+    selectedLocalDeviceName: '核心交换机-A栋',
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/2',
+    selectedPaymentSource: '自费'
   },
   {
     id: 'seed_ip_007', ipAddress: '10.0.1.6', subnetId: 'seed_subnet_002', directVlanId: 'seed_vlan_002', status: 'allocated' as IPAddressStatus,
     isGateway: false, allocatedTo: 'DBServer01', usageUnit: 'Database Team', contactPerson: 'Robert Brown', phone: '123-202', description: 'Primary Database Server',
-    peerUnitName: '存储网络交换机', peerDeviceName: 'SAN Switch Brocade', peerPortName: 'port 5',
+    peerUnitName: '存储网络交换机',
+    peerDeviceName: 'SAN Switch Brocade',
+    peerPortName: 'port 5',
+
     selectedAccessType: '汇聚',
-    selectedLocalDeviceName: '核心交换机-A栋', selectedDevicePort: 'Ten-GigabitEthernet1/0/3', selectedPaymentSource: '财政付费-项目A'
+    selectedLocalDeviceName: '核心交换机-A栋',
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/3',
+    selectedPaymentSource: '财政付费-项目A'
   },
 ];
 
@@ -205,6 +229,7 @@ export const mockUsers: Array<Omit<User, 'roleName' | 'permissions'> & { passwor
     avatar: '/images/avatars/viewer_avatar.png', lastLogin: new Date().toISOString() },
 ];
 
+
 export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_001', userId: 'seed_user_admin', username: 'admin', action: 'create_subnet_seed', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Seeded subnet 172.16.0.0/20 (Guest WiFi Zone)' },
   { id: 'seed_log_002', userId: 'seed_user_operator', username: 'operator', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
@@ -212,7 +237,7 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [ // Renamed from mockLocalDeviceDictionaries
+export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
   { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
   { deviceName: '防火墙-总部出口', port: 'eth1/1' },
@@ -241,7 +266,7 @@ export const mockAccessTypeDictionaries: Omit<AccessTypeDictionary, 'id' | 'crea
   { name: '其他' },
 ];
 
-export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [ // Renamed from mockNetworkInterfaceTypeDictionaries
+export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: 'GigabitEthernet', description: '千兆以太网接口' },
   { name: 'TenGigabitEthernet', description: '万兆以太网接口' },
   { name: 'FastEthernet', description: '百兆以太网接口' },
@@ -258,4 +283,4 @@ export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' |
   { name: 'Loopback', description: '逻辑环回接口' },
   { name: 'Vlan-interface', description: 'VLAN逻辑接口/SVI' },
 ];
-// mockOperatorDictionaries removed
+

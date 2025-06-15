@@ -6,7 +6,7 @@ import {
   mockRoles as seedRolesData,
   mockVLANs as seedVLANsData,
   mockSubnets as seedSubnetsData,
-  mockIPAddresses as seedIPsData,
+  seedIPsData, // Ensured this matches the export from data.ts
   mockAuditLogs as seedAuditLogsData,
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
@@ -17,7 +17,7 @@ import {
   mockInterfaceTypeDictionaries,
 } from '../src/lib/data';
 import type { User as AppUser } from '../src/types';
-import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
+import { encrypt } from '../src/lib/crypto-utils'; // CORRECTED IMPORT PATH
 
 console.log("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL) ---");
 
@@ -39,10 +39,16 @@ const prisma = new PrismaClient();
 
   } catch (e) {
     console.error('--- PRISMA SEED SCRIPT: UNCAUGHT ERROR IN TOP-LEVEL WRAPPER ---');
-    console.error(e);
+    console.error("Full error object:", e); // Log the full error object
+    if (e instanceof Error) {
+        console.error("Error name:", e.name);
+        console.error("Error message:", e.message);
+        console.error("Error stack:", e.stack);
+    }
     process.exit(1); 
   } finally {
     console.log("--- PRISMA SEED SCRIPT: TOP-LEVEL WRAPPER FINALLY BLOCK ---");
+    // No explicit disconnect here, Prisma handles it or it's done in main.
   }
 })();
 
@@ -265,12 +271,10 @@ async function main() {
     }
     console.log('IP Addresses seeded.');
 
-    // OperatorDictionary seeding removed
-
     console.log('Seeding Device Dictionaries...');
     for (const ddData of mockDeviceDictionaries) {
       await prisma.deviceDictionary.upsert({
-        where: { deviceName: ddData.deviceName },
+        where: { deviceName: ddData.deviceName }, // Assuming deviceName is unique for upsert
         update: { deviceName: ddData.deviceName, port: ddData.port || null },
         create: { deviceName: ddData.deviceName, port: ddData.port || null },
       });
@@ -342,8 +346,15 @@ async function main() {
 
     console.log('Seeding finished.');
     console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION COMPLETED ---");
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("--- PRISMA SEED SCRIPT ERROR WITHIN MAIN FUNCTION ---");
+    console.error("Full error object in main:", e); // Log the full error object
+    if (e instanceof Error) {
+        console.error("Error name in main:", e.name);
+        console.error("Error message in main:", e.message);
+        console.error("Error stack in main:", e.stack);
+    }
+    // Re-throw the error to be caught by the top-level wrapper which will process.exit(1)
     throw e; 
   } finally {
     console.log("--- PRISMA SEED SCRIPT MAIN FUNCTION FINALLY BLOCK ---");
@@ -351,3 +362,5 @@ async function main() {
     console.log("--- PRISMA SEED SCRIPT DISCONNECTED ---");
   }
 }
+
+    
