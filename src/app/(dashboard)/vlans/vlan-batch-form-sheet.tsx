@@ -27,9 +27,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, PlusCircle } from "lucide-react";
+import { AlertCircle, PlusCircle, CheckCircle2 } from "lucide-react"; // Added CheckCircle2
 import { useToast } from "@/hooks/use-toast";
 import { batchCreateVLANsAction, type ActionResponse, type BatchVlanCreationResult } from "@/lib/actions";
+import { useCurrentUser } from "@/hooks/use-current-user"; // Added for performingUserId
 
 const vlanBatchFormSchema = z.object({
   startVlanNumber: z.coerce.number().int().min(1, "起始VLAN号码必须至少为1").max(4094, "起始VLAN号码不能超过4094"),
@@ -53,6 +54,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
   const [isOpen, setIsOpen] = React.useState(false);
   const [submissionResult, setSubmissionResult] = React.useState<BatchVlanCreationResult | null>(null);
   const { toast } = useToast();
+  const { currentUser } = useCurrentUser(); // Get current user
 
   const form = useForm<VlanBatchFormValues>({
     resolver: zodResolver(vlanBatchFormSchema),
@@ -81,8 +83,8 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
 
 
   async function onSubmit(data: VlanBatchFormValues) {
-    form.clearErrors(); // Clear previous form errors
-    setSubmissionResult(null); // Clear previous submission results
+    form.clearErrors(); 
+    setSubmissionResult(null); 
 
     const vlansToCreate = [];
     const stepValue = data.step || 1; 
@@ -105,7 +107,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     }
 
     try {
-      const result = await batchCreateVLANsAction(vlansToCreate);
+      const result = await batchCreateVLANsAction(vlansToCreate, currentUser?.id); // Pass performingUserId
       setSubmissionResult(result);
 
       if (result.successCount > 0 && result.failureDetails.length === 0) {
@@ -114,12 +116,12 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           description: `${result.successCount} 个VLAN已成功创建。`,
         });
         if (onVlanChange) onVlanChange();
-        // form.reset(); // Reset form only on full success, or let user decide if they want to tweak and resubmit for failures
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
           title: "批量处理部分成功",
           description: `${result.successCount} 个VLAN创建成功，${result.failureDetails.length} 个失败。详情请见下方。`,
-          variant: "default",
+          variant: "default", // Kept as default, could be "warning" if available
+          duration: 8000,
         });
         if (onVlanChange) onVlanChange();
       } else if (result.failureDetails.length > 0) {
@@ -127,36 +129,22 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           title: "批量创建失败",
           description: `所有 ${vlansToCreate.length} 个VLAN均创建失败。详情请见下方。`,
           variant: "destructive",
+          duration: 8000,
         });
       } else {
         toast({ title: "无操作", description: "没有VLAN被创建或失败。", variant: "default" });
       }
 
-    } catch (error) {
-      const actionError = (error as ActionResponse<any>)?.error;
-      if (actionError) {
+    } catch (clientError) {
         toast({
-            title: "批量创建预处理错误",
-            description: actionError.userMessage,
+            title: "客户端提交错误",
+            description: clientError instanceof Error ? clientError.message : "尝试批量创建VLAN时发生意外错误。",
             variant: "destructive",
         });
-         if (actionError.field) {
-          form.setError(actionError.field as FieldPath<VlanBatchFormValues>, {
-            type: "server",
-            message: actionError.userMessage,
-          });
-        }
-      } else {
-        toast({
-            title: "客户端错误",
-            description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。",
-            variant: "destructive",
+        setSubmissionResult({
+            successCount: 0,
+            failureDetails: [{ vlanNumberAttempted: data.startVlanNumber || 0, error: "客户端错误: " + (clientError instanceof Error ? clientError.message : "未知错误") }]
         });
-      }
-      // Ensure submissionResult is set even for top-level catch to display error if needed
-      if (!submissionResult) { // Only set if not already set by successful/partial API call
-          setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: (error as Error).message || "未知错误" }] });
-      }
     }
   }
 
@@ -178,8 +166,8 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{triggerContent}</SheetTrigger>
-      <SheetContent className="sm:max-w-md w-full flex flex-col">
-        <SheetHeader>
+      <SheetContent className="sm:max-w-md w-full flex flex-col p-0">
+        <SheetHeader className="p-6 pb-4 border-b">
           <SheetTitle>批量添加VLAN (范围)</SheetTitle>
           <SheetDescription>
             输入起始和结束VLAN号码及步长以创建VLAN序列。
@@ -188,107 +176,107 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 flex-grow flex flex-col">
-            <FormField
-              control={form.control}
-              name="startVlanNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>起始VLAN号码</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="例如 100" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="endVlanNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>结束VLAN号码</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="例如 110" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="step"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>步长 (可选, 默认为1)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="例如 1 或 10" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="commonName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>通用名称 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 用户VLAN" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="commonDescription"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>通用描述 (可选)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如 一楼用户区" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
+            <ScrollArea className="flex-1 px-6 pt-4 pb-2"> {/* Adjusted padding */}
+              <div className="space-y-4"> {/* Inner div for spacing */}
+                <FormField
+                  control={form.control}
+                  name="startVlanNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>起始VLAN号码</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="例如 100" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="endVlanNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>结束VLAN号码</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="例如 110" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="step"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>步长 (可选, 默认为1)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="例如 1 或 10" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="commonName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>通用名称 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 用户VLAN" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="commonDescription"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>通用描述 (可选)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="例如 一楼用户区" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {submissionResult && (
-              <div className="mt-4 space-y-3">
-                <h3 className="font-semibold">处理结果:</h3>
-                <Alert variant={submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 ? "destructive" : "default"}>
-                   <AlertCircle className="h-4 w-4"/>
-                  <AlertTitle>概要</AlertTitle>
-                  <AlertDescription>
-                    成功创建: {submissionResult.successCount} 个VLAN。
-                    <br />
-                    失败尝试: {submissionResult.failureDetails.length} 个。
-                  </AlertDescription>
-                </Alert>
+                {submissionResult && (
+                  <div className="mt-6 space-y-3"> {/* Increased top margin for spacing */}
+                    <h3 className="font-semibold text-base border-b pb-1 mb-2">处理结果:</h3>
+                    <Alert variant={submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 ? "destructive" : "default"}>
+                      {submissionResult.failureDetails.length > 0 ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                      <AlertTitle>{submissionResult.failureDetails.length > 0 ? (submissionResult.successCount > 0 ? "部分成功" : "操作失败") : "全部成功"}</AlertTitle>
+                      <AlertDescription>
+                        成功创建: {submissionResult.successCount} 个VLAN。
+                        <br />
+                        失败尝试: {submissionResult.failureDetails.length} 个。
+                      </AlertDescription>
+                    </Alert>
 
-                {submissionResult.failureDetails.length > 0 && (
-                  <div className="border border-dashed border-destructive p-2 mt-2">
-                    <h4 className="font-medium text-destructive">失败详情 (共 {submissionResult.failureDetails.length} 条):</h4>
-                    <ScrollArea className="h-[120px] mt-1 rounded-md border p-2 bg-destructive/10">
-                      <ul className="space-y-1 text-sm">
-                        {submissionResult.failureDetails.map((failure, index) => (
-                          <li key={index} className="text-destructive font-medium">
-                            VLAN {failure.vlanNumberAttempted}: {failure.error || "错误信息未提供"}
-                          </li>
-                        ))}
-                        {submissionResult.failureDetails.length === 0 && (
-                           <li>无失败详情记录。</li>
-                        )}
-                      </ul>
-                    </ScrollArea>
+                    {submissionResult.failureDetails.length > 0 && (
+                      <div className="border border-dashed border-destructive p-3 rounded-md">
+                        <h4 className="font-medium text-destructive text-sm mb-1">失败详情 ({submissionResult.failureDetails.length} 条):</h4>
+                        <ScrollArea className="h-[100px] mt-1 rounded-md border bg-destructive/5 p-2">
+                          <ul className="space-y-1 text-xs">
+                            {submissionResult.failureDetails.map((failure, index) => (
+                              <li key={index} className="text-destructive">
+                                <strong>VLAN {failure.vlanNumberAttempted}:</strong> {failure.error || "错误信息未提供"}
+                              </li>
+                            ))}
+                          </ul>
+                        </ScrollArea>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-
-            <SheetFooter className="mt-auto pt-4">
+            </ScrollArea>
+            <SheetFooter className="p-6 pt-4 border-t"> {/* Standardized padding */}
               <SheetClose asChild>
                 <Button type="button" variant="outline">
                   取消
@@ -304,3 +292,5 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
+
+    
