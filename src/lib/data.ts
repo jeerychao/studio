@@ -2,7 +2,7 @@
 import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index';
 import { PERMISSIONS } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
-import { encrypt } from './crypto-utils'; // CORRECTED IMPORT PATH for encrypt
+import { encrypt } from './crypto-utils'; // Corrected import path
 
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
@@ -98,17 +98,17 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
   { id: 'seed_vlan_004', vlanNumber: 40, name: 'Legacy Devices', description: 'Legacy Devices VLAN' },
 ];
 
-export const seedIPsData: IPAddress[] = [
+export const seedIPsData: IPAddress[] = [ // Renamed from mockIPs to seedIPsData
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
     peerUnitName: '外部网络提供商 A',
-    peerDeviceName: 'ISP Router X1',
-    peerPortName: 'GigabitEthernet0/0',
+    peerDeviceName: 'ISP Router X1', // Must exist in mockDeviceDictionaries
+    peerPortName: 'GigabitEthernet0/0', // Auto-filled from DeviceDictionary if device found
 
     selectedAccessType: '专线',
-    selectedLocalDeviceName: '核心交换机-A栋',
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/1',
+    selectedLocalDeviceName: '核心交换机-A栋', // Must exist in mockDeviceDictionaries
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/1', // Auto-filled from DeviceDictionary if device found
     selectedPaymentSource: '自费'
   },
   {
@@ -153,7 +153,7 @@ export const seedIPsData: IPAddress[] = [
 
     selectedAccessType: '专线',
     selectedLocalDeviceName: '核心交换机-A栋',
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/2',
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/2', // Adjusted to a more common port name
     selectedPaymentSource: '自费'
   },
   {
@@ -165,7 +165,7 @@ export const seedIPsData: IPAddress[] = [
 
     selectedAccessType: '汇聚',
     selectedLocalDeviceName: '核心交换机-A栋',
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/3',
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/3', // Adjusted
     selectedPaymentSource: '财政付费-项目A'
   },
 ];
@@ -237,17 +237,18 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
+// mockDeviceDictionaries (formerly mockLocalDeviceDictionaries)
 export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
-  { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
-  { deviceName: '防火墙-总部出口', port: 'eth1/1' },
+  { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' }, // Used by seed_ip_001 (local), seed_ip_006 (local), seed_ip_007 (local)
+  { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' }, // Used by seed_ip_002 (local)
+  { deviceName: '防火墙-总部出口', port: 'eth1/1' }, // Used by seed_ip_005 (local)
   { deviceName: '服务器-WEB集群-节点1', port: 'eth0' },
   { deviceName: '无线控制器-主楼', port: 'Port-channel1' },
-  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' },
-  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' },
-  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'},
-  { deviceName: 'F5 Load Balancer', port: '1.1' },
-  { deviceName: 'SAN Switch Brocade', port: 'port 5' },
+  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' }, // Used by seed_ip_001 (peer)
+  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' }, // Used by seed_ip_002 (peer)
+  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'}, // Used by seed_ip_005 (peer)
+  { deviceName: 'F5 Load Balancer', port: '1.1' }, // Used by seed_ip_006 (peer)
+  { deviceName: 'SAN Switch Brocade', port: 'port 5' }, // Used by seed_ip_007 (peer)
 ];
 
 export const mockPaymentSourceDictionaries: Omit<PaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
@@ -266,9 +267,10 @@ export const mockAccessTypeDictionaries: Omit<AccessTypeDictionary, 'id' | 'crea
   { name: '其他' },
 ];
 
+// mockInterfaceTypeDictionaries (formerly mockNetworkInterfaceTypeDictionaries)
 export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: 'GigabitEthernet', description: '千兆以太网接口' },
-  { name: 'TenGigabitEthernet', description: '万兆以太网接口' },
+  { name: 'Ten-GigabitEthernet', description: '万兆以太网接口' }, // Corrected hyphenation
   { name: 'FastEthernet', description: '百兆以太网接口' },
   { name: 'Ethernet', description: '十兆以太网接口' },
   { name: 'ge-', description: 'Juniper风格千兆接口前缀' },
@@ -283,4 +285,3 @@ export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' |
   { name: 'Loopback', description: '逻辑环回接口' },
   { name: 'Vlan-interface', description: 'VLAN逻辑接口/SVI' },
 ];
-
