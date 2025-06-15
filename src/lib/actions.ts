@@ -9,11 +9,11 @@ import type {
   SubnetFreeIpDetails, PaginatedResponse,
   DeviceDictionary as AppDeviceDictionary,
   PaymentSourceDictionary as AppPaymentSourceDictionary,
-  AccessTypeDictionary as AppAccessTypeDictionary, 
+  AccessTypeDictionary as AppAccessTypeDictionary,
   InterfaceTypeDictionary as AppInterfaceTypeDictionary,
-  DashboardData, 
-  IPStatusCounts, 
-  TopNItemCount,  
+  DashboardData,
+  IPStatusCounts,
+  TopNItemCount,
   VLANResourceInfo,
   SubnetUtilizationInfo
 } from '@/types';
@@ -63,18 +63,18 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
   try {
     const userFromDb = await prisma.user.findUnique({ where: { email }, include: { role: { include: { permissions: true } } } });
     if (!userFromDb) { logger.error(`[${actionName}] Login failed: User not found for email ${email}.`, new AuthError(`User with email ${email} not found.`), { email }, actionName); return { success: false, message: "邮箱或密码无效。" }; }
-    
+
     let decryptedStoredPassword;
     try {
       decryptedStoredPassword = decrypt(userFromDb.password);
     } catch (decryptionError) {
       logger.error(`[${actionName}] Password decryption failed for user ${userFromDb.username}.`, decryptionError as Error, { userId: userFromDb.id }, actionName);
-      return { success: false, message: "登录认证失败，请联系管理员。" }; 
+      return { success: false, message: "登录认证失败，请联系管理员。" };
     }
 
-    if (decryptedStoredPassword !== passwordAttempt) { 
-      logger.warn(`[${actionName}] Login failed: Invalid password for user ${userFromDb.username}.`, new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName); 
-      return { success: false, message: "邮箱或密码无效。" }; 
+    if (decryptedStoredPassword !== passwordAttempt) {
+      logger.warn(`[${actionName}] Login failed: Invalid password for user ${userFromDb.username}.`, new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName);
+      return { success: false, message: "邮箱或密码无效。" };
     }
 
     if (!userFromDb.role || !userFromDb.role.name) { logger.error(`[${actionName}] User ${userFromDb.id} (${userFromDb.username}) missing role.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName); return { success: false, message: "用户角色信息不完整。" }; }
@@ -82,12 +82,12 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
     await prisma.user.update({ where: { id: userFromDb.id }, data: { lastLogin: new Date() } });
     await prisma.auditLog.create({ data: { userId: userFromDb.id, username: userFromDb.username, action: 'user_login', details: `用户 ${userFromDb.username} 成功登录。` } });
     return { success: true, user: { id: userFromDb.id, username: userFromDb.username, email: userFromDb.email, roleId: userFromDb.roleId, roleName: userFromDb.role.name as AppRoleNameType, avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', permissions: permissionsList, lastLogin: userFromDb.lastLogin?.toISOString() } };
-  } catch (error) { 
-    logger.error(`[${actionName}] Login error`, error as Error, { email }, actionName); 
+  } catch (error) {
+    logger.error(`[${actionName}] Login error`, error as Error, { email }, actionName);
     if (error instanceof Error && error.message.includes('Decryption failed')) {
         return { success: false, message: "登录认证参数错误，请联系管理员。" };
     }
-    return { success: false, message: "登录过程中发生意外错误。" }; 
+    return { success: false, message: "登录过程中发生意外错误。" };
   }
 }
 
@@ -120,7 +120,7 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
     if (await prisma.user.findUnique({ where: { email: data.email } })) throw new ResourceError(`邮箱 "${data.email}" 已被使用。`, 'EMAIL_ALREADY_EXISTS', `邮箱 "${data.email}" 已被使用。`, 'email');
     if (await prisma.user.findUnique({ where: { username: data.username } })) throw new ResourceError(`用户名 "${data.username}" 已被使用。`, 'USERNAME_ALREADY_EXISTS', `用户名 "${data.username}" 已被使用。`, 'username');
     if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, `角色 ID ${data.roleId} 未找到。`, 'roleId');
-    
+
     const encryptedPassword = encrypt(data.password);
 
     const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone || null, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
@@ -142,7 +142,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     if (data.email && data.email !== userToUpdate.email) { if (await prisma.user.findFirst({ where: { email: data.email, NOT: { id } } })) throw new ResourceError(`邮箱 "${data.email}" 已被使用。`, 'EMAIL_ALREADY_EXISTS', `邮箱 "${data.email}" 已被使用。`, 'email'); updateData.email = data.email; }
     if (data.roleId && data.roleId !== userToUpdate.roleId) { if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, `角色 ID ${data.roleId} 未找到。`, 'roleId'); updateData.roleId = data.roleId; }
     if (data.password) updateData.password = encrypt(data.password);
-    if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null; 
+    if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null;
     if (data.avatar) updateData.avatar = data.avatar;
     if (Object.keys(updateData).length === 0) { const currentUserDetails = await fetchCurrentUserDetailsAction(id); if(!currentUserDetails) throw new NotFoundError(`用户 ID: ${id}`, `用户 ID ${id} 未找到。`); return { success: true, data: currentUserDetails }; }
     const updatedUser = await prisma.user.update({ where: { id }, data: updateData, include: { role: { include: { permissions: true } } } });
@@ -160,7 +160,7 @@ export async function updateOwnPasswordAction(userId: string, payload: { current
         if (!currentPassword || !newPassword) throw new ValidationError("当前密码和新密码都是必需的。", "currentPassword", undefined, "当前密码和新密码都是必需的。");
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) throw new AuthError("用户未找到。", "用户身份验证失败。");
-        
+
         let decryptedStoredPassword;
         try {
             decryptedStoredPassword = decrypt(user.password);
@@ -171,7 +171,7 @@ export async function updateOwnPasswordAction(userId: string, payload: { current
 
         if (decryptedStoredPassword !== currentPassword) throw new AuthError("当前密码不正确。", "当前密码不正确。", "currentPassword");
         if (currentPassword === newPassword) throw new ValidationError("新密码不能与当前密码相同。", "newPassword", undefined, "新密码不能与当前密码相同。");
-        
+
         const encryptedNewPassword = encrypt(newPassword);
         await prisma.user.update({ where: { id: userId }, data: { password: encryptedNewPassword } });
         await prisma.auditLog.create({ data: { userId: user.id, username: user.username, action: 'update_own_password', details: `用户 ${user.username} 更改了自己的密码。` } });
@@ -186,7 +186,7 @@ export async function deleteUserAction(id: string, performingUserId?: string): P
     const userToDelete = await prisma.user.findUnique({ where: { id } });
     if (!userToDelete) throw new NotFoundError(`用户 ID: ${id}`, `用户 ID ${id} 未找到。`);
     if (userToDelete.id === performingUserId) throw new ResourceError("无法删除当前登录的用户。", "CANNOT_DELETE_SELF", "无法删除当前登录的用户。");
-    await prisma.auditLog.updateMany({ where: { userId: id }, data: { userId: null }}); 
+    await prisma.auditLog.updateMany({ where: { userId: id }, data: { userId: null }});
     await prisma.user.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_user', details: `删除了用户 ${userToDelete.username}` } });
     revalidatePath("/users");
@@ -228,7 +228,7 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function getAllPermissionsAction(): Promise<AppPermission[]> { return seedPermissionsData.map(p => ({ ...p, description: p.description || undefined })); } 
+export async function getAllPermissionsAction(): Promise<AppPermission[]> { return seedPermissionsData.map(p => ({ ...p, description: p.description || undefined })); }
 
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AuditLog>> {
   const actionName = 'getAuditLogsAction';
@@ -286,18 +286,18 @@ export interface CreateSubnetData { cidr: string; name?: string | null | undefin
 export async function createSubnetAction(data: CreateSubnetData, performingUserId?: string): Promise<ActionResponse<AppSubnet>> {
   const actionName = 'createSubnetAction';
   try {
-    const auditUser = await getAuditUserInfo(performingUserId); 
+    const auditUser = await getAuditUserInfo(performingUserId);
     validateCidrInputFormat(data.cidr, 'cidr');
-    const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr); 
+    const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr);
     if (!newSubnetProperties) throw new AppError('Failed to parse CIDR properties for new subnet.', 500, 'CIDR_PARSE_UNEXPECTED_ERROR', '无法解析提供的CIDR。');
-    
+
     const canonicalCidrToStore = newSubnetProperties.networkAddress + "/" + newSubnetProperties.prefix;
     if (await prisma.subnet.findUnique({ where: { cidr: canonicalCidrToStore } })) {
         throw new ResourceError(`子网 ${canonicalCidrToStore} 已存在。`, 'SUBNET_ALREADY_EXISTS', `子网 ${canonicalCidrToStore} 已存在。`, 'cidr');
     }
     const allExistingSubnets = await prisma.subnet.findMany();
     const overlappingSubnets: string[] = [];
-    for (const existingSub of allExistingSubnets) { 
+    for (const existingSub of allExistingSubnets) {
       const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
       if (existingSubProps && doSubnetsOverlap(newSubnetProperties, existingSubProps)) {
         overlappingSubnets.push(existingSub.cidr);
@@ -305,27 +305,27 @@ export async function createSubnetAction(data: CreateSubnetData, performingUserI
     }
     if (overlappingSubnets.length > 0) {
       throw new ResourceError(
-        `子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`, 
-        'SUBNET_OVERLAP_ERROR', 
-        `子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`, 
+        `子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
+        'SUBNET_OVERLAP_ERROR',
+        `子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
         'cidr'
       );
     }
 
-    const createPayload: Prisma.SubnetCreateInput = { 
-        cidr: canonicalCidrToStore, 
-        networkAddress: newSubnetProperties.networkAddress, 
-        subnetMask: newSubnetProperties.subnetMask, 
-        ipRange: newSubnetProperties.ipRange || null, 
-        name: (data.name === undefined || data.name === "") ? null : data.name, 
-        dhcpEnabled: data.dhcpEnabled ?? false, 
-        description: (data.description === undefined || data.description === "") ? null : data.description, 
+    const createPayload: Prisma.SubnetCreateInput = {
+        cidr: canonicalCidrToStore,
+        networkAddress: newSubnetProperties.networkAddress,
+        subnetMask: newSubnetProperties.subnetMask,
+        ipRange: newSubnetProperties.ipRange || null,
+        name: (data.name === undefined || data.name === "") ? null : data.name,
+        dhcpEnabled: data.dhcpEnabled ?? false,
+        description: (data.description === undefined || data.description === "") ? null : data.description,
     };
-    if (data.vlanId) { 
+    if (data.vlanId) {
         if (!(await prisma.vLAN.findUnique({ where: { id: data.vlanId } }))) {
           throw new NotFoundError(`VLAN ID: ${data.vlanId}`, `VLAN ID ${data.vlanId} 未找到。`, 'vlanId');
         }
-        createPayload.vlan = { connect: { id: data.vlanId } }; 
+        createPayload.vlan = { connect: { id: data.vlanId } };
     }
     const newSubnetPrisma = await prisma.subnet.create({ data: createPayload, include: { vlan: true } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_subnet', details: `创建了子网 ${newSubnetPrisma.cidr}` } });
@@ -340,16 +340,16 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
   const actionName = 'updateSubnetAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const subnetToUpdate = await prisma.subnet.findUnique({ where: { id } }); 
+    const subnetToUpdate = await prisma.subnet.findUnique({ where: { id } });
     if (!subnetToUpdate) throw new NotFoundError(`子网 ID: ${id}`, `子网 ID ${id} 未找到。`);
-    
-    const updateData: Prisma.SubnetUpdateInput = {}; 
-    const originalCidrForLog = subnetToUpdate.cidr; 
+
+    const updateData: Prisma.SubnetUpdateInput = {};
+    const originalCidrForLog = subnetToUpdate.cidr;
     let newCanonicalCidrForLog = subnetToUpdate.cidr;
 
     if (data.cidr && data.cidr !== subnetToUpdate.cidr) {
       validateCidrInputFormat(data.cidr, 'cidr');
-      const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr); 
+      const newSubnetProperties = getSubnetPropertiesFromCidr(data.cidr);
       if (!newSubnetProperties) throw new AppError('Failed to parse new CIDR properties.', 500, 'CIDR_PARSE_UNEXPECTED_ERROR', '无法解析新的CIDR。');
       newCanonicalCidrForLog = newSubnetProperties.networkAddress + "/" + newSubnetProperties.prefix;
 
@@ -358,7 +358,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
       }
       const otherExistingSubnets = await prisma.subnet.findMany({ where: { NOT: { id } } });
       const overlappingSubnets: string[] = [];
-      for (const existingSub of otherExistingSubnets) { 
+      for (const existingSub of otherExistingSubnets) {
         const existingSubProps = getSubnetPropertiesFromCidr(existingSub.cidr);
         if (existingSubProps && doSubnetsOverlap(newSubnetProperties, existingSubProps)) {
           overlappingSubnets.push(existingSub.cidr);
@@ -366,16 +366,16 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
       }
       if (overlappingSubnets.length > 0) {
         throw new ResourceError(
-          `更新后的子网 ${newCanonicalCidrForLog} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`, 
-          'SUBNET_OVERLAP_ERROR', 
-          `更新后的子网 ${newCanonicalCidrForLog} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`, 
+          `更新后的子网 ${newCanonicalCidrForLog} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
+          'SUBNET_OVERLAP_ERROR',
+          `更新后的子网 ${newCanonicalCidrForLog} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
           'cidr'
         );
       }
 
-      updateData.cidr = newCanonicalCidrForLog; 
-      updateData.networkAddress = newSubnetProperties.networkAddress; 
-      updateData.subnetMask = newSubnetProperties.subnetMask; 
+      updateData.cidr = newCanonicalCidrForLog;
+      updateData.networkAddress = newSubnetProperties.networkAddress;
+      updateData.subnetMask = newSubnetProperties.subnetMask;
       updateData.ipRange = newSubnetProperties.ipRange || null;
 
       const associatedIPs = await prisma.iPAddress.findMany({ where: { subnetId: id } });
@@ -388,9 +388,9 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
             id: ip.id,
             updates: {
               subnet: { disconnect: true },
-              status: 'free' as AppIPAddressStatusType, 
+              status: 'free' as AppIPAddressStatusType,
               allocatedTo: null, usageUnit: null, contactPerson: null, phone: null, isGateway: false,
-              directVlan: { disconnect: true }, 
+              directVlan: { disconnect: true },
               peerUnitName: null, peerDeviceName: null, peerPortName: null,
               selectedAccessType: null, selectedLocalDeviceName: null, selectedDevicePort: null, selectedPaymentSource: null,
               description: `(原属于子网 ${originalCidrForLog}) ${ip.description || ''}`.trim(),
@@ -406,23 +406,23 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
     }
     if (data.hasOwnProperty('name')) updateData.name = (data.name === undefined || data.name === "") ? null : data.name;
     if (data.hasOwnProperty('dhcpEnabled')) updateData.dhcpEnabled = data.dhcpEnabled ?? false;
-    if (data.hasOwnProperty('vlanId')) { 
-        const newVlanId = data.vlanId; 
-        if (newVlanId === null || newVlanId === "" || newVlanId === undefined) { 
-            updateData.vlan = { disconnect: true }; 
-        } else { 
+    if (data.hasOwnProperty('vlanId')) {
+        const newVlanId = data.vlanId;
+        if (newVlanId === null || newVlanId === "" || newVlanId === undefined) {
+            updateData.vlan = { disconnect: true };
+        } else {
             if (!(await prisma.vLAN.findUnique({where: {id: newVlanId}}))) {
               throw new NotFoundError(`VLAN ID: ${newVlanId}`, `VLAN ID ${newVlanId} 未找到。`, 'vlanId');
             }
-            updateData.vlan = { connect: { id: newVlanId } }; 
-        } 
+            updateData.vlan = { connect: { id: newVlanId } };
+        }
     }
     if (data.hasOwnProperty('description')) updateData.description = (data.description === undefined || data.description === "") ? null : data.description;
-    
-    if (Object.keys(updateData).length === 0) { 
+
+    if (Object.keys(updateData).length === 0) {
       const utilization = await calculateSubnetUtilization(id);
-      const currentAppSubnet: AppSubnet = { ...subnetToUpdate, name: subnetToUpdate.name || undefined, dhcpEnabled: subnetToUpdate.dhcpEnabled ?? false, vlanId: subnetToUpdate.vlanId || undefined, description: subnetToUpdate.description || undefined, ipRange: subnetToUpdate.ipRange || undefined, utilization }; 
-      return { success: true, data: currentAppSubnet }; 
+      const currentAppSubnet: AppSubnet = { ...subnetToUpdate, name: subnetToUpdate.name || undefined, dhcpEnabled: subnetToUpdate.dhcpEnabled ?? false, vlanId: subnetToUpdate.vlanId || undefined, description: subnetToUpdate.description || undefined, ipRange: subnetToUpdate.ipRange || undefined, utilization };
+      return { success: true, data: currentAppSubnet };
     }
     const updatedSubnetPrisma = await prisma.subnet.update({ where: { id }, data: updateData, include: { vlan: true } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_subnet', details: `更新了子网 ID ${id} (旧 CIDR: ${originalCidrForLog}, 新 CIDR: ${newCanonicalCidrForLog})` } });
@@ -436,11 +436,11 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
 async function calculateSubnetUtilization(subnetId: string): Promise<number> {
   const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!subnet || !subnet.cidr) return 0;
   const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
-  const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0; 
+  const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0;
   const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" } });
   const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
   if (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) {
-    return 1; 
+    return 1;
   }
   return Math.round(rawPercentage);
 }
@@ -449,12 +449,12 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
   const actionName = 'deleteSubnetAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } }); 
+    const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } });
     if (!subnetToDelete) throw new NotFoundError(`子网 ID: ${id}`, `子网 ID ${id} 未找到。`);
-    
-    if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") { 
-      const vlanMsg = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`; 
-      throw new ResourceError(`子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}，无法删除。`, 'SUBNET_HAS_VLAN_ASSOCIATION', `子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}，无法删除。`); 
+
+    if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") {
+      const vlanMsg = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`;
+      throw new ResourceError(`子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}，无法删除。`, 'SUBNET_HAS_VLAN_ASSOCIATION', `子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}，无法删除。`);
     }
     if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } }) > 0) {
       throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有已分配的 IP，无法删除。`, 'SUBNET_HAS_ALLOCATED_IPS', `子网 ${subnetToDelete.cidr} 中仍有已分配的 IP，无法删除。`);
@@ -465,14 +465,14 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
 
     const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
     if (freeIpsInSubnet.length > 0) {
-      const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip => 
-        prisma.iPAddress.update({ 
-          where: { id: ip.id }, 
-          data: { 
-            subnet: { disconnect: true }, 
-            directVlan: { disconnect: true }, 
+      const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip =>
+        prisma.iPAddress.update({
+          where: { id: ip.id },
+          data: {
+            subnet: { disconnect: true },
+            directVlan: { disconnect: true }, // Corrected from directVlanId: null
             description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
-          } 
+          }
         })
       );
       await prisma.$transaction(ipsToDisassociateUpdates);
@@ -491,22 +491,22 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = []; const deletedSubnetCidrs: string[] = [];
   for (const id of ids) {
     try {
-      const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } }); 
+      const subnetToDelete = await prisma.subnet.findUnique({ where: { id }, include: { vlan: true } });
       if (!subnetToDelete) { failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: '子网未找到。' }); continue; }
       if (subnetToDelete.vlanId && subnetToDelete.vlanId.trim() !== "") { const vlanMsg = subnetToDelete.vlan ? `VLAN ${subnetToDelete.vlan.vlanNumber}` : `VLAN (ID: ${subnetToDelete.vlanId})`; throw new ResourceError(`子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}。`, 'SUBNET_HAS_VLAN_ASSOCIATION_BATCH', `子网 ${subnetToDelete.cidr} 已关联到 ${vlanMsg}。`); }
       if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'allocated' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有已分配的 IP。`, 'SUBNET_HAS_ALLOCATED_IPS_BATCH', `子网 ${subnetToDelete.cidr} 中仍有已分配的 IP。`);
       if (await prisma.iPAddress.count({ where: { subnetId: id, status: 'reserved' } }) > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有预留的 IP。`, 'SUBNET_HAS_RESERVED_IPS_BATCH', `子网 ${subnetToDelete.cidr} 中仍有预留的 IP。`);
-      
+
       const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
       if (freeIpsInSubnet.length > 0) {
-        const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip => 
-            prisma.iPAddress.update({ 
-                where: { id: ip.id }, 
-                data: { 
-                    subnet: { disconnect: true }, 
-                    directVlan: { disconnect: true },
+        const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip =>
+            prisma.iPAddress.update({
+                where: { id: ip.id },
+                data: {
+                    subnet: { disconnect: true },
+                    directVlan: { disconnect: true }, // Corrected from directVlanId: null
                     description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
-                } 
+                }
             })
         );
         await prisma.$transaction(ipsToDisassociateUpdates);
@@ -546,7 +546,7 @@ export async function batchCreateVLANsAction(vlansToCreateInput: Array<{ vlanNum
   for (const vlanInput of vlansToCreateInput) {
     try {
       if (isNaN(vlanInput.vlanNumber) || vlanInput.vlanNumber < 1 || vlanInput.vlanNumber > 4094) throw new ValidationError("VLAN 号码必须是 1 到 4094 之间的整数。", 'vlanNumber', vlanInput.vlanNumber, "VLAN 号码必须是 1 到 4094 之间的整数。");
-      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', `VLAN ${vlanInput.vlanNumber} 已存在。`, 'startVlanNumber'); 
+      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', `VLAN ${vlanInput.vlanNumber} 已存在。`, 'startVlanNumber');
       const newVlan = await prisma.vLAN.create({ data: { vlanNumber: vlanInput.vlanNumber, name: vlanInput.name || null, description: vlanInput.description || null } });
       createdVlanSummaries.push(`${newVlan.vlanNumber}${newVlan.name ? ` (${newVlan.name})` : ''}`); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, 'batchCreateVLANsAction_single'); failureDetails.push({ vlanNumberAttempted: vlanInput.vlanNumber, error: errRes.userMessage }); }
@@ -634,8 +634,8 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined,
     subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null,
     directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null,
-    peerUnitName: ip.peerUnitName || undefined, 
-    peerDeviceName: ip.peerDeviceName || undefined, 
+    peerUnitName: ip.peerUnitName || undefined,
+    peerDeviceName: ip.peerDeviceName || undefined,
     peerPortName: ip.peerPortName || undefined,
     selectedAccessType: ip.selectedAccessType || undefined,
     selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined,
@@ -655,26 +655,26 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       if (!isIpInCidrRange(data.ipAddress, parsedCidr)) throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress', data.ipAddress, `IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
       if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: data.subnetId } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.cidr} 中。`, 'IP_EXISTS_IN_SUBNET', `IP ${data.ipAddress} 已存在于子网 ${targetSubnet.cidr} 中。`, 'ipAddress');
     } else { if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', `IP ${data.ipAddress} 已存在于全局池中。`, 'ipAddress'); }
-    
+
     const createPayload: Prisma.IPAddressCreateInput = {
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
-      allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null, 
-      contactPerson: data.contactPerson || null, 
-      phone: data.phone || null, 
-      description: data.description || null, 
+      allocatedTo: data.allocatedTo || null, usageUnit: data.usageUnit || null,
+      contactPerson: data.contactPerson || null,
+      phone: data.phone || null,
+      description: data.description || null,
       lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(),
-      peerUnitName: data.peerUnitName || null, 
-      peerDeviceName: data.peerDeviceName || null, 
+      peerUnitName: data.peerUnitName || null,
+      peerDeviceName: data.peerDeviceName || null,
       peerPortName: data.peerPortName || null,
       selectedAccessType: data.selectedAccessType || null,
-      selectedLocalDeviceName: data.selectedLocalDeviceName || null, 
-      selectedDevicePort: data.selectedDevicePort || null, 
+      selectedLocalDeviceName: data.selectedLocalDeviceName || null,
+      selectedDevicePort: data.selectedDevicePort || null,
       selectedPaymentSource: data.selectedPaymentSource || null,
     };
 
     if (data.subnetId) createPayload.subnet = { connect: { id: data.subnetId } };
     if (data.directVlanId) { if (!(await prisma.vLAN.findUnique({ where: { id: data.directVlanId } }))) throw new NotFoundError(`VLAN ID: ${data.directVlanId}`, `VLAN ID ${data.directVlanId} 未找到。`, 'directVlanId'); createPayload.directVlan = { connect: { id: data.directVlanId } }; }
-    
+
     const newIP = await prisma.iPAddress.create({ data: createPayload });
     const subnetCidr = data.subnetId ? (await prisma.subnet.findUnique({where: {id: data.subnetId}}))?.cidr : null;
     const subnetInfo = subnetCidr ? ` 在子网 ${subnetCidr} 中` : ' 在全局池中';
@@ -702,8 +702,8 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
         if (await prisma.iPAddress.findFirst({ where: { ipAddress: currentIpStr, subnetId: subnetId } })) throw new ResourceError(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.cidr} 中。`, 'IP_EXISTS_IN_SUBNET', `IP ${currentIpStr} 已存在于子网 ${targetSubnet.cidr} 中。`, 'startIp/endIp');
         const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr, status: status, isGateway: isGateway ?? false, allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
-            usageUnit: usageUnit||null, contactPerson: contactPerson||null, 
-            phone: phone || null, 
+            usageUnit: usageUnit||null, contactPerson: contactPerson||null,
+            phone: phone || null,
             description: description || null,
             lastSeen: new Date(),
             peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null,
@@ -726,7 +726,7 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const ipToUpdate = await prisma.iPAddress.findUnique({ where: { id } }); if (!ipToUpdate) throw new NotFoundError(`IP 地址 ID: ${id}`, `IP 地址 ID ${id} 未找到。`);
-    const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() }; 
+    const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() };
     let finalIpAddress = ipToUpdate.ipAddress;
     if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) { if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress, `无效的 IP 地址格式更新: ${data.ipAddress}`); updateData.ipAddress = data.ipAddress; finalIpAddress = data.ipAddress; }
     if (data.hasOwnProperty('status') && data.status !== undefined) updateData.status = data.status as string;
@@ -734,13 +734,13 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = (data.allocatedTo === undefined || data.allocatedTo === "") ? null : data.allocatedTo;
     if (data.hasOwnProperty('usageUnit')) updateData.usageUnit = (data.usageUnit === undefined || data.usageUnit === "") ? null : data.usageUnit;
     if (data.hasOwnProperty('contactPerson')) updateData.contactPerson = (data.contactPerson === undefined || data.contactPerson === "") ? null : data.contactPerson;
-    if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null; 
+    if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null;
     if (data.hasOwnProperty('description')) updateData.description = (data.description === undefined || data.description === "") ? null : data.description;
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null || vlanIdToSet === "" || vlanIdToSet === undefined) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `VLAN ID ${vlanIdToSet} 未找到。`, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('peerUnitName')) updateData.peerUnitName = data.peerUnitName || null;
     if (data.hasOwnProperty('peerDeviceName')) updateData.peerDeviceName = data.peerDeviceName || null;
     if (data.hasOwnProperty('peerPortName')) updateData.peerPortName = data.peerPortName || null;
-    if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null; 
+    if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null;
     if (data.hasOwnProperty('selectedLocalDeviceName')) updateData.selectedLocalDeviceName = data.selectedLocalDeviceName || null;
     if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null;
     if (data.hasOwnProperty('selectedPaymentSource')) updateData.selectedPaymentSource = data.selectedPaymentSource || null;
@@ -808,15 +808,15 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const queryString = params.queryString?.trim(); if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
-    
+
     const orConditions: Prisma.SubnetWhereInput[] = [
-      { cidr: { contains: queryString } }, 
-      { name: { contains: queryString } },
+      { cidr: { contains: queryString } }, // No mode: 'insensitive' for CIDR
+      { name: { contains: queryString } }, // Keep mode: 'insensitive' for text fields if DB supports, else remove
       { description: { contains: queryString } },
-      { networkAddress: { contains: queryString } }, 
+      { networkAddress: { contains: queryString } }, // No mode: 'insensitive' for networkAddress
     ];
 
-    let whereClause: Prisma.SubnetWhereInput = { OR: orConditions }; if (orConditions.length === 0) whereClause = { id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_SUBNET" };
+    let whereClause: Prisma.SubnetWhereInput = { OR: orConditions };
     const totalCount = await prisma.subnet.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const subnetsFromDb = await prisma.subnet.findMany({ where: whereClause, include: { vlan: { select: { vlanNumber: true, name: true } } }, orderBy: { cidr: 'asc' }, skip, take: pageSize });
     const results: SubnetQueryResult[] = await Promise.all(subnetsFromDb.map(async (s) => { const props = getSubnetPropertiesFromCidr(s.cidr); const totalUsableIPs = props ? getUsableIpCount(props.prefix) : 0; const allocatedIPsCount = await prisma.iPAddress.count({ where: { subnetId: s.id, status: 'allocated' } }); const dbFreeIPsCount = await prisma.iPAddress.count({ where: { subnetId: s.id, status: 'free' } }); const reservedIPsCount = await prisma.iPAddress.count({ where: { subnetId: s.id, status: 'reserved' } }); return { id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined, dhcpEnabled: s.dhcpEnabled ?? false, vlanNumber: s.vlan?.vlanNumber, vlanName: s.vlan?.name || undefined, totalUsableIPs, allocatedIPsCount, dbFreeIPsCount, reservedIPsCount }; }));
@@ -827,37 +827,60 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
   try {
-    const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const queryString = params.queryString?.trim(); 
-    if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
-    
-    const isNumericQuery = /^\d+$/.test(queryString);
-    const vlanNumberQuery = isNumericQuery ? parseInt(queryString, 10) : null;
-    let whereClause: Prisma.VLANWhereInput;
+    const page = params.page || 1;
+    const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+    const queryString = params.queryString?.trim();
 
-    if (vlanNumberQuery !== null && vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
-      whereClause = {
-        OR: [
-          { vlanNumber: vlanNumberQuery },
-          { name: { contains: queryString } },
-          { description: { contains: queryString } }
-        ]
-      };
-    } else {
-      whereClause = {
-        OR: [
-          { name: { contains: queryString } },
-          { description: { contains: queryString } }
-        ]
-      };
+    if (!queryString) {
+      return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
-    
-    const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const vlansFromDb = await prisma.vLAN.findMany({ where: whereClause, include: { subnets: { select: { id: true, cidr: true, name: true, description: true } } , ipAddresses: { select: { id: true, ipAddress: true, description: true } } }, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize, });
-    const results: VlanQueryResult[] = vlansFromDb.map(v => ({ id: v.id, vlanNumber: v.vlanNumber, name: v.name || undefined, description: v.description || undefined, associatedSubnets: v.subnets.map(s => ({id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})), associatedDirectIPs: v.ipAddresses.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})), resourceCount: v.subnets.length + v.ipAddresses.length }));
+
+    const orConditions: Prisma.VLANWhereInput[] = [
+      { name: { contains: queryString } }, // No mode: 'insensitive'
+      { description: { contains: queryString } }, // No mode: 'insensitive'
+    ];
+
+    const isNumericQuery = /^\d+$/.test(queryString);
+    if (isNumericQuery) {
+      const vlanNumberQuery = parseInt(queryString, 10);
+      if (vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
+        // For numeric query, add exact match on vlanNumber to the OR conditions
+        orConditions.push({ vlanNumber: vlanNumberQuery });
+      }
+    }
+
+    const whereClause: Prisma.VLANWhereInput = { OR: orConditions };
+
+    const totalCount = await prisma.vLAN.count({ where: whereClause });
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const vlansFromDb = await prisma.vLAN.findMany({
+      where: whereClause,
+      include: {
+        subnets: { select: { id: true, cidr: true, name: true, description: true } },
+        ipAddresses: { select: { id: true, ipAddress: true, description: true } },
+      },
+      orderBy: { vlanNumber: 'asc' },
+      skip,
+      take: pageSize,
+    });
+
+    const results: VlanQueryResult[] = vlansFromDb.map(v => ({
+      id: v.id,
+      vlanNumber: v.vlanNumber,
+      name: v.name || undefined,
+      description: v.description || undefined,
+      associatedSubnets: v.subnets.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined })),
+      associatedDirectIPs: v.ipAddresses.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined })),
+      resourceCount: v.subnets.length + v.ipAddresses.length
+    }));
+
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+  } catch (error: unknown) {
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
 }
+
 
 export async function queryIpAddressesAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<AppIPAddressWithRelations>>> {
   const actionName = 'queryIpAddressesAction';
@@ -870,17 +893,18 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       let matchedIpPattern = false; for (const p of ipWildcardPatterns) { const m = trimmedSearchTerm.match(p.regex); if (m) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: p.prefixBuilder(m) } }); matchedIpPattern = true; break; } }
       const isPotentiallyIpSegment = !matchedIpPattern && trimmedSearchTerm.length > 0 && trimmedSearchTerm.length <= 15 && /[\d]/.test(trimmedSearchTerm) && /^[0-9.*]+$/.test(trimmedSearchTerm) && !/^\.+$/.test(trimmedSearchTerm) && !/^\*+$/.test(trimmedSearchTerm);
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); 
+      // Removed mode: "insensitive" from all contains filters
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ peerDeviceName: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ peerDeviceName: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm } });
     }
     if (orConditionsForSearchTerm.length > 0) andConditions.push({ OR: orConditionsForSearchTerm }); else if (trimmedSearchTerm) andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
@@ -1187,6 +1211,7 @@ export async function deleteInterfaceTypeDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.interfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`接口类型字典 ID: ${id}`, `接口类型字典 ID ${id} 未找到。`);
+    // No direct IPAddress usage check needed as this dictionary is primarily for DeviceDictionary port prefix suggestions.
     await prisma.interfaceTypeDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_interface_type_dictionary', details: `删除了接口类型字典条目: ${itemToDelete.name}` } });
     revalidatePath("/dictionaries/interface-type");
@@ -1200,6 +1225,7 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.interfaceTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
+      // No direct IPAddress usage check needed
       await prisma.interfaceTypeDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.interfaceTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -1233,7 +1259,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
 
     const usageUnitGroups = await prisma.iPAddress.groupBy({
       by: ['usageUnit'],
-      _count: { usageUnit: true }, 
+      _count: { usageUnit: true },
       where: { usageUnit: { not: null, not: "" } },
       orderBy: { _count: { usageUnit: 'desc' } },
     });
@@ -1253,7 +1279,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         }
     }
     ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
-    
+
     const allVlansFromDb = await prisma.vLAN.findMany({ include: { _count: { select: { subnets: true, ipAddresses: true } } }, orderBy: { vlanNumber: 'asc' } });
     const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({ id: vlan.id, vlanNumber: vlan.vlanNumber, name: vlan.name || undefined, resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.ipAddresses || 0), }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
@@ -1270,7 +1296,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       ipUsageByUnit, busiestVlans,
       subnetsNeedingAttention, recentAuditLogs,
     };
-    revalidatePath("/dashboard"); 
+    revalidatePath("/dashboard");
     return { success: true, data: dashboardData };
   } catch (error: unknown) {
     logger.error(actionName, error as Error, { context: actionName });
