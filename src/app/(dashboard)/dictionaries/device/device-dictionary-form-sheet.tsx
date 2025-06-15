@@ -16,8 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { DeviceDictionary, InterfaceTypeDictionary } from "@/types"; // Renamed types
-import { createDeviceDictionaryAction, updateDeviceDictionaryAction, type ActionResponse } from "@/lib/actions"; // Renamed actions
+import type { DeviceDictionary, InterfaceTypeDictionary } from "@/types";
+import { createDeviceDictionaryAction, updateDeviceDictionaryAction, type ActionResponse } from "@/lib/actions";
 
 const NO_PREFIX_SENTINEL = "__NO_PREFIX_INTERNAL__";
 
@@ -41,22 +41,22 @@ const formSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "完整端口号（前缀+后缀）总长度不能超过50个字符。",
-      path: ["portNumberSuffix"],
+      path: ["portNumberSuffix"], // Or potentially a more general path if it makes sense
     });
   }
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface DeviceDictionaryFormSheetProps { // Renamed interface
-  dictionaryEntry?: DeviceDictionary; // Renamed type
-  interfaceTypes: InterfaceTypeDictionary[]; // Renamed type
+interface DeviceDictionaryFormSheetProps {
+  dictionaryEntry?: DeviceDictionary;
+  interfaceTypes: InterfaceTypeDictionary[];
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
   onDataChange?: () => void;
 }
 
-export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, children, buttonProps, onDataChange }: DeviceDictionaryFormSheetProps) { // Renamed component
+export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, children, buttonProps, onDataChange }: DeviceDictionaryFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!dictionaryEntry;
@@ -70,6 +70,7 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, chi
     },
   });
   
+  // Sort interface types by name length (longest first) to prioritize more specific prefixes
   const sortedInterfaceTypes = React.useMemo(() => 
     [...interfaceTypes].sort((a, b) => b.name.length - a.name.length), 
   [interfaceTypes]);
@@ -79,17 +80,22 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, chi
     if (isOpen) {
       let initialPrefix = NO_PREFIX_SENTINEL;
       let initialSuffix = "";
+
+      // If editing and a port exists, try to parse it into prefix and suffix
       if (isEditing && dictionaryEntry?.port) {
         const existingPort = dictionaryEntry.port;
+        // Find the longest matching prefix from sortedInterfaceTypes
         const foundPrefixEntry = sortedInterfaceTypes.find(p => existingPort.startsWith(p.name));
 
         if (foundPrefixEntry) {
-          initialPrefix = foundPrefixEntry.name; 
+          initialPrefix = foundPrefixEntry.name; // This is the ID/name of the InterfaceTypeDictionary entry
           initialSuffix = existingPort.substring(foundPrefixEntry.name.length);
         } else {
-          initialSuffix = existingPort; 
+          // No matching prefix found, assume the whole port is a suffix (or custom)
+          initialSuffix = existingPort; // Keep prefix as NO_PREFIX_SENTINEL
         }
       }
+
       form.reset({
         deviceName: dictionaryEntry?.deviceName || "",
         portPrefix: initialPrefix,
@@ -97,23 +103,25 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, chi
       });
       form.clearErrors();
     }
-  }, [isOpen, dictionaryEntry, form, isEditing, sortedInterfaceTypes]);
+  }, [isOpen, dictionaryEntry, form, isEditing, sortedInterfaceTypes]); // Added sortedInterfaceTypes
 
   async function onSubmit(data: FormValues) {
     form.clearErrors();
-    let response: ActionResponse<DeviceDictionary>; // Renamed type
+    let response: ActionResponse<DeviceDictionary>;
     try {
+      // Construct the full port string from prefix and suffix
       const prefixToUse = data.portPrefix === NO_PREFIX_SENTINEL ? "" : (data.portPrefix || "");
       const fullPort = prefixToUse + (data.portNumberSuffix || "");
+      
       const payload = {
         deviceName: data.deviceName,
-        port: fullPort.trim().length > 0 ? fullPort.trim() : undefined
+        port: fullPort.trim().length > 0 ? fullPort.trim() : undefined // Send undefined if empty
       };
 
       if (isEditing && dictionaryEntry) {
-        response = await updateDeviceDictionaryAction(dictionaryEntry.id, payload); // Renamed action
+        response = await updateDeviceDictionaryAction(dictionaryEntry.id, payload);
       } else {
-        response = await createDeviceDictionaryAction(payload); // Renamed action
+        response = await createDeviceDictionaryAction(payload);
       }
 
       if (response.success && response.data) {
@@ -172,6 +180,7 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, chi
               </FormItem>
             )} />
 
+            {/* Port Input Section */}
             <FormItem>
               <FormLabel>端口号 (可选)</FormLabel>
               <div className="flex flex-col sm:flex-row gap-2 items-start">
@@ -188,7 +197,7 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, chi
                         </FormControl>
                         <SelectContent>
                           <SelectItem value={NO_PREFIX_SENTINEL}>无前缀 / 自定义</SelectItem>
-                          {sortedInterfaceTypes.map(option => (
+                          {interfaceTypes.map(option => (
                             <SelectItem key={option.id} value={option.name}>
                               {option.name}
                             </SelectItem>
@@ -229,7 +238,8 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, interfaceTypes, chi
                   )}
                 />
               </div>
-               {form.formState.errors.portNumberSuffix && form.formState.errors.portNumberSuffix.message?.includes("总长度") && (
+               {/* Display the superRefine error for full port length here */}
+              {form.formState.errors.portNumberSuffix && form.formState.errors.portNumberSuffix.message?.includes("总长度") && (
                 <p className="text-sm font-medium text-destructive">{form.formState.errors.portNumberSuffix.message}</p>
               )}
             </FormItem>

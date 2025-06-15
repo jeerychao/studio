@@ -10,7 +10,7 @@ import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS } from "@/types";
 import { getSubnetsAction, getVLANsAction, getIPAddressesAction } from "@/lib/actions";
 import Image from "next/image";
-import { Loader2, UploadCloud, FileText } from "lucide-react"; // Added UploadCloud and FileText
+import { Loader2, UploadCloud, FileText } from "lucide-react";
 
 
 export default function ImportExportPage() {
@@ -39,9 +39,9 @@ export default function ImportExportPage() {
           const value = row[header as keyof typeof row];
           if (value === null || value === undefined) return "";
           let stringValue = String(value);
-          stringValue = stringValue.replace(/"/g, '""'); // Escape double quotes
+          stringValue = stringValue.replace(/"/g, '""'); 
           if (stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes('"')) {
-            stringValue = `"${stringValue}"`; // Enclose in double quotes if it contains comma, newline, or double quote
+            stringValue = `"${stringValue}"`; 
           }
           return stringValue;
         }).join(",") + lineSeparator;
@@ -56,7 +56,7 @@ export default function ImportExportPage() {
       let sequentialId = 1;
 
       if (dataType === "subnets") {
-        const subnetsResponse = await getSubnetsAction(); // Fetch all
+        const subnetsResponse = await getSubnetsAction(); 
         const allVlansForLookupSubnet = (await getVLANsAction()).data;
         const subnetsForCsv = subnetsResponse.data.map(subnet => {
           const vlanDetails = subnet.vlanId ? allVlansForLookupSubnet.find(v => v.id === subnet.vlanId) : null;
@@ -69,17 +69,16 @@ export default function ImportExportPage() {
         dataToExport = subnetsForCsv;
         csvHeaders = ["id", "cidr", "networkAddress", "subnetMask", "ipRange", "name", "vlanNumber", "vlanName", "dhcpEnabled", "description", "utilization"];
       } else if (dataType === "vlans") {
-        const vlansResponse = await getVLANsAction(); // Fetch all
+        const vlansResponse = await getVLANsAction(); 
         const vlansForCsv = vlansResponse.data.map(vlan => ({
           id: sequentialId++, vlanNumber: vlan.vlanNumber, name: vlan.name || "", description: vlan.description || "",
-          resourceCount: vlan.subnetCount || 0, // subnetCount on VLAN already aggregates subnets + direct IPs
+          resourceCount: vlan.subnetCount || 0, 
         }));
         dataToExport = vlansForCsv;
         csvHeaders = ["id", "vlanNumber", "name", "description", "resourceCount"];
       } else if (dataType === "ips") {
         filenameFragment = "ip_addresses";
-        // getIPAddressesAction already includes related subnet and vlan details
-        const ipsResponse = await getIPAddressesAction(); // Fetch all
+        const ipsResponse = await getIPAddressesAction(); 
 
         const ipsForCsv = ipsResponse.data.map(ip => ({
             id: sequentialId++,
@@ -94,8 +93,9 @@ export default function ImportExportPage() {
             contactPerson: ip.contactPerson || "",
             phone: ip.phone || "",
             description: ip.description || "",
-            selectedOperatorName: ip.selectedOperatorName || "",
-            selectedOperatorDevice: ip.selectedOperatorDevice || "",
+            peerUnitName: ip.peerUnitName || "", // New field
+            peerDeviceName: ip.peerDeviceName || "", // New field
+            peerPortName: ip.peerPortName || "", // New field
             selectedAccessType: ip.selectedAccessType || "",
             selectedLocalDeviceName: ip.selectedLocalDeviceName || "",
             selectedDevicePort: ip.selectedDevicePort || "",
@@ -105,8 +105,8 @@ export default function ImportExportPage() {
         csvHeaders = [
             "id", "ipAddress", "subnetCidr", "vlanNumber", "vlanName", "status", "isGateway",
             "allocatedTo", "usageUnit", "contactPerson", "phone", "description",
-            "selectedOperatorName", "selectedOperatorDevice", "selectedAccessType",
-            "selectedLocalDeviceName", "selectedDevicePort", "selectedPaymentSource"
+            "peerUnitName", "peerDeviceName", "peerPortName", // New fields
+            "selectedAccessType", "selectedLocalDeviceName", "selectedDevicePort", "selectedPaymentSource"
         ];
       } else {
         toast({ title: "错误", description: "未知的数据类型导出请求。", variant: "destructive" });
@@ -125,7 +125,7 @@ export default function ImportExportPage() {
       }
 
       const filename = `${filenameFragment}_export_${new Date().toISOString().split('T')[0]}.csv`;
-      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); 
       const link = document.createElement("a");
       if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);

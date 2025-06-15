@@ -12,8 +12,8 @@ export default function SettingsPage() {
   const { currentUser, isAuthLoading: isCurrentUserLoading } = useCurrentUser();
 
   const texts = {
-    pageTitle: "系统信息", // Changed title
-    pageDescription: "系统管理功能已移至侧边栏的“系统管理”和“字典管理”菜单。", // Updated description
+    pageTitle: "系统信息", 
+    pageDescription: "系统管理功能已移至侧边栏的“系统管理”和“字典管理”菜单。", 
     accessDeniedTitle: "访问被拒绝",
     accessDeniedMessage: "您没有权限查看此页面。",
     loadingMessage: "加载设置中...",
@@ -42,17 +42,15 @@ export default function SettingsPage() {
     );
   }
   
-  // This page might become a general landing/info page if VIEW_SETTINGS is still a permission.
-  // Or, if VIEW_SETTINGS is removed or repurposed, access can be more restricted.
-  // For now, let's assume VIEW_SETTINGS grants access to this informational page.
   if (!hasPermission(currentUser, PERMISSIONS.VIEW_SETTINGS) && 
-      !hasPermission(currentUser, PERMISSIONS.VIEW_USER) && // Check if user can see anything related to old settings
+      !hasPermission(currentUser, PERMISSIONS.VIEW_USER) && 
       !hasPermission(currentUser, PERMISSIONS.VIEW_ROLE) &&
       !hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG) &&
       !hasPermission(currentUser, PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT) &&
-      !hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_OPERATOR) &&
-      !hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE) &&
-      !hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE)
+      !hasPermission(currentUser, PERMISSIONS.VIEW_DEVICE_DICTIONARY) && // Renamed permission
+      !hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE) &&
+      !hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE) &&
+      !hasPermission(currentUser, PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY) // Renamed permission
     ) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
@@ -70,7 +68,7 @@ export default function SettingsPage() {
         description={texts.pageDescription}
         icon={<Settings className="h-6 w-6 text-primary" />}
       />
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1"> {/* Adjusted grid for single card */}
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1"> 
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -86,5 +84,3 @@ export default function SettingsPage() {
     </>
   );
 }
-
-    

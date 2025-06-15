@@ -29,16 +29,10 @@ export const PERMISSIONS = {
   VIEW_QUERY_PAGE: 'querypage.view',
   VIEW_SETTINGS: 'settings.view',
 
-  // OperatorDictionary permissions are removed
-  // VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
-  // CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
-  // EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
-  // DELETE_DICTIONARY_OPERATOR: 'dictionary.operator.delete',
-
-  VIEW_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.view',
-  CREATE_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.create',
-  EDIT_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.edit',
-  DELETE_DICTIONARY_LOCAL_DEVICE: 'dictionary.local_device.delete',
+  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view', // Renamed from LOCAL_DEVICE
+  CREATE_DEVICE_DICTIONARY: 'dictionary.device.create',
+  EDIT_DEVICE_DICTIONARY: 'dictionary.device.edit',
+  DELETE_DEVICE_DICTIONARY: 'dictionary.device.delete',
 
   VIEW_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.view',
   CREATE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.create',
@@ -50,10 +44,10 @@ export const PERMISSIONS = {
   EDIT_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.edit',
   DELETE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.delete',
 
-  VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.view',
-  CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.create',
-  EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.edit',
-  DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE: 'dictionary.network_interface_type.delete',
+  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view', // Renamed from NETWORK_INTERFACE_TYPE
+  CREATE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.create',
+  EDIT_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.edit',
+  DELETE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.delete',
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -102,14 +96,14 @@ export interface IPAddress {
   description?: string;
   lastSeen?: string;
 
-  // New generic peer fields
-  peerUnitName?: string;          // Manual input for peer/customer/partner name
-  peerDeviceName?: string;         // Name of the device on the peer side (from LocalDeviceDictionary)
-  peerPortName?: string;           // Port on the peer device (derived from selected LocalDeviceDictionary entry's port)
+  peerUnitName?: string;      // New: Manual input for peer/customer/partner name
+  peerDeviceName?: string;    // New: Name of the device on the peer side (from DeviceDictionary)
+  peerPortName?: string;      // New: Port on the peer device (derived from selected DeviceDictionary entry's port)
 
+  selectedLocalDeviceName?: string; // Existing: Name of local device (from DeviceDictionary)
+  selectedDevicePort?: string;      // Existing: Port on local device (derived)
+  
   selectedAccessType?: string;
-  selectedLocalDeviceName?: string;
-  selectedDevicePort?: string;
   selectedPaymentSource?: string;
 }
 
@@ -141,19 +135,11 @@ export interface AuditLog {
   details?: string;
 }
 
-// OperatorDictionary type is removed
-// export interface OperatorDictionary {
-//   id: string;
-//   operatorName: string;
-//   operatorDevice?: string;
-//   createdAt?: string;
-//   updatedAt?: string;
-// }
-
-export interface LocalDeviceDictionary { // Name remains LocalDeviceDictionary for now, can be refactored later if needed
+// Renamed from LocalDeviceDictionary
+export interface DeviceDictionary {
   id: string;
   deviceName: string;
-  port?: string;
+  port?: string; // e.g., "GigabitEthernet1/0/1", "Port-channel10"
   createdAt?: string;
   updatedAt?: string;
 }
@@ -167,14 +153,15 @@ export interface PaymentSourceDictionary {
 
 export interface AccessTypeDictionary {
   id: string;
-  name: string; // e.g., "汇聚", "专线", "拨号"
+  name: string; 
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface NetworkInterfaceTypeDictionary {
+// Renamed from NetworkInterfaceTypeDictionary
+export interface InterfaceTypeDictionary {
   id: string;
-  name: string; // e.g., "GigabitEthernet", "TenGigabitEthernet"
+  name: string; 
   description?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -234,7 +221,7 @@ export interface SubnetFreeIpDetails {
   calculatedAvailableIpRanges: string[];
 }
 
-export enum DeviceType {
+export enum DeviceType { // This enum might not be directly used if DeviceDictionary is generic
   ROUTER = "ROUTER",
   SWITCH = "SWITCH",
   FIREWALL = "FIREWALL",
@@ -277,7 +264,7 @@ export interface DashboardData {
   totalVlanCount: number;
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
-  // ipUsageByOperator: TopNItemCount[]; // This will be removed or re-evaluated
+  // ipUsageByOperator removed as per discussion
   busiestVlans: VLANResourceInfo[];
   subnetsNeedingAttention: SubnetUtilizationInfo[];
   recentAuditLogs?: AppAuditLog[];

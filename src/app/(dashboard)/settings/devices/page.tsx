@@ -1,7 +1,5 @@
 
 "use client";
-// This file is effectively replaced by /dictionaries/local-device/page.tsx
-// For this refactor, we assume its navigation entry is removed and functionality moved.
 
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
@@ -15,22 +13,22 @@ function DeprecatedDevicePage() {
     <>
       <PageHeader
         title="设备管理 (已移动)"
-        description="此功能已移至“字典管理”下的“本地设备字典”。"
+        description="此功能已移至“字典管理”下的“设备字典”。" // Updated
         icon={<HardDrive className="h-6 w-6 text-primary" />}
       />
       <Card>
         <CardHeader>
           <CardTitle>功能已迁移</CardTitle>
           <CardDescription>
-            设备管理现已作为“本地设备字典”的一部分。
+            设备管理现已作为“设备字典”的一部分。 {/* Updated */}
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center py-10">
           <p className="text-muted-foreground mb-4">
-            请访问新的本地设备字典页面管理此数据。
+            请访问新的设备字典页面管理此数据。 {/* Updated */}
           </p>
           <Button asChild>
-            <Link href="/dictionaries/local-device">前往本地设备字典</Link>
+            <Link href="/dictionaries/device">前往设备字典</Link> {/* Updated link */}
           </Button>
         </CardContent>
       </Card>
@@ -56,5 +54,3 @@ export default function DeviceManagementPage() {
   
   return <DeprecatedDevicePage />;
 }
-
-    

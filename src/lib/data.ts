@@ -1,6 +1,5 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, LocalDeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, NetworkInterfaceTypeDictionary } from '../types/index';
-// Removed OperatorDictionary from import
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index';
 import { PERMISSIONS, DeviceType } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
 import { encrypt } from '../app/api/auth/[...nextauth]/route';
@@ -38,28 +37,25 @@ export const mockPermissions: Permission[] = [
   { id: PERMISSIONS.VIEW_QUERY_PAGE, name: '查看信息查询页面', group: '查询工具', description: '访问综合查询工具。' },
   { id: PERMISSIONS.VIEW_SETTINGS, name: '查看设置', group: '系统设置', description: '可以查看应用范围的设置（如果存在全局设置页面）。' },
 
-  // OperatorDictionary permissions removed
-  // { id: PERMISSIONS.VIEW_DICTIONARY_OPERATOR, name: '查看运营商字典', group: '字典管理', description: '可以查看运营商字典条目。' },
-  // { id: PERMISSIONS.CREATE_DICTIONARY_OPERATOR, name: '创建运营商字典条目', group: '字典管理', description: '可以添加新的运营商字典条目。' },
-  // { id: PERMISSIONS.EDIT_DICTIONARY_OPERATOR, name: '编辑运营商字典条目', group: '字典管理', description: '可以修改现有的运营商字典条目。' },
-  // { id: PERMISSIONS.DELETE_DICTIONARY_OPERATOR, name: '删除运营商字典条目', group: '字典管理', description: '可以删除运营商字典条目。' },
+  { id: PERMISSIONS.VIEW_DEVICE_DICTIONARY, name: '查看设备字典', group: '字典管理', description: '可以查看设备字典条目。' },
+  { id: PERMISSIONS.CREATE_DEVICE_DICTIONARY, name: '创建设备字典条目', group: '字典管理', description: '可以添加新的设备字典条目。' },
+  { id: PERMISSIONS.EDIT_DEVICE_DICTIONARY, name: '编辑设备字典条目', group: '字典管理', description: '可以修改现有的设备字典条目。' },
+  { id: PERMISSIONS.DELETE_DEVICE_DICTIONARY, name: '删除设备字典条目', group: '字典管理', description: '可以删除设备字典条目。' },
 
-  { id: PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, name: '查看本地设备字典', group: '字典管理', description: '可以查看本地设备字典条目。' },
-  { id: PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, name: '创建本地设备字典条目', group: '字典管理', description: '可以添加新的本地设备字典条目。' },
-  { id: PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, name: '编辑本地设备字典条目', group: '字典管理', description: '可以修改现有的本地设备字典条目。' },
-  { id: PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE, name: '删除本地设备字典条目', group: '字典管理', description: '可以删除本地设备字典条目。' },
   { id: PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, name: '查看付费来源字典', group: '字典管理', description: '可以查看付费来源字典条目。' },
   { id: PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, name: '创建付费来源字典条目', group: '字典管理', description: '可以添加新的付费来源字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, name: '编辑付费来源字典条目', group: '字典管理', description: '可以修改现有的付费来源字典条目。' },
   { id: PERMISSIONS.DELETE_DICTIONARY_PAYMENT_SOURCE, name: '删除付费来源字典条目', group: '字典管理', description: '可以删除付费来源字典条目。' },
+
   { id: PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, name: '查看接入方式字典', group: '字典管理', description: '可以查看接入方式字典条目。' },
   { id: PERMISSIONS.CREATE_DICTIONARY_ACCESS_TYPE, name: '创建接入方式字典条目', group: '字典管理', description: '可以添加新的接入方式字典条目。' },
   { id: PERMISSIONS.EDIT_DICTIONARY_ACCESS_TYPE, name: '编辑接入方式字典条目', group: '字典管理', description: '可以修改现有的接入方式字典条目。' },
   { id: PERMISSIONS.DELETE_DICTIONARY_ACCESS_TYPE, name: '删除接入方式字典条目', group: '字典管理', description: '可以删除接入方式字典条目。' },
-  { id: PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '查看网络接口类型字典', group: '字典管理', description: '可以查看网络接口类型字典条目。' },
-  { id: PERMISSIONS.CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '创建网络接口类型字典条目', group: '字典管理', description: '可以添加新的网络接口类型字典条目。' },
-  { id: PERMISSIONS.EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '编辑网络接口类型字典条目', group: '字典管理', description: '可以修改现有的网络接口类型字典条目。' },
-  { id: PERMISSIONS.DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE, name: '删除网络接口类型字典条目', group: '字典管理', description: '可以删除网络接口类型字典条目。' },
+
+  { id: PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY, name: '查看接口类型字典', group: '字典管理', description: '可以查看网络接口类型字典条目。' },
+  { id: PERMISSIONS.CREATE_INTERFACE_TYPE_DICTIONARY, name: '创建接口类型字典条目', group: '字典管理', description: '可以添加新的网络接口类型字典条目。' },
+  { id: PERMISSIONS.EDIT_INTERFACE_TYPE_DICTIONARY, name: '编辑接口类型字典条目', group: '字典管理', description: '可以修改现有的网络接口类型字典条目。' },
+  { id: PERMISSIONS.DELETE_INTERFACE_TYPE_DICTIONARY, name: '删除接口类型字典条目', group: '字典管理', description: '可以删除网络接口类型字典条目。' },
 ];
 
 function createInitialSubnetSeedData(
@@ -154,7 +150,7 @@ export const mockRoles: Role[] = [
     id: ADMIN_ROLE_ID,
     name: 'Administrator' as RoleName,
     description: 'Full system access. Can manage all resources, users, roles, and system settings.',
-    permissions: Object.values(PERMISSIONS).filter(p => !p.startsWith('dictionary.operator.')) as PermissionId[] // Filter out operator dictionary permissions
+    permissions: Object.values(PERMISSIONS) as PermissionId[]
   },
   {
     id: OPERATOR_ROLE_ID,
@@ -168,11 +164,11 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
       PERMISSIONS.VIEW_TOOLS_IMPORT_EXPORT, PERMISSIONS.PERFORM_TOOLS_EXPORT,
-      PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE, PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE,
+      PERMISSIONS.VIEW_DEVICE_DICTIONARY, PERMISSIONS.CREATE_DEVICE_DICTIONARY, PERMISSIONS.EDIT_DEVICE_DICTIONARY, PERMISSIONS.DELETE_DEVICE_DICTIONARY,
       PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.CREATE_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.EDIT_DICTIONARY_PAYMENT_SOURCE, PERMISSIONS.DELETE_DICTIONARY_PAYMENT_SOURCE,
       PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE, PERMISSIONS.CREATE_DICTIONARY_ACCESS_TYPE, PERMISSIONS.EDIT_DICTIONARY_ACCESS_TYPE, PERMISSIONS.DELETE_DICTIONARY_ACCESS_TYPE,
-      PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.CREATE_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.EDIT_DICTIONARY_NETWORK_INTERFACE_TYPE, PERMISSIONS.DELETE_DICTIONARY_NETWORK_INTERFACE_TYPE,
-    ].filter(p => !p.startsWith('dictionary.operator.')) as PermissionId[] // Ensure operator perms are also filtered
+      PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY, PERMISSIONS.CREATE_INTERFACE_TYPE_DICTIONARY, PERMISSIONS.EDIT_INTERFACE_TYPE_DICTIONARY, PERMISSIONS.DELETE_INTERFACE_TYPE_DICTIONARY,
+    ] as PermissionId[]
   },
   {
     id: VIEWER_ROLE_ID,
@@ -185,11 +181,11 @@ export const mockRoles: Role[] = [
       PERMISSIONS.VIEW_IPADDRESS,
       PERMISSIONS.VIEW_AUDIT_LOG,
       PERMISSIONS.VIEW_QUERY_PAGE,
-      PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE,
+      PERMISSIONS.VIEW_DEVICE_DICTIONARY,
       PERMISSIONS.VIEW_DICTIONARY_PAYMENT_SOURCE,
       PERMISSIONS.VIEW_DICTIONARY_ACCESS_TYPE,
-      PERMISSIONS.VIEW_DICTIONARY_NETWORK_INTERFACE_TYPE,
-    ].filter(p => !p.startsWith('dictionary.operator.')) as PermissionId[] // Ensure viewer perms are also filtered
+      PERMISSIONS.VIEW_INTERFACE_TYPE_DICTIONARY,
+    ] as PermissionId[]
   },
 ];
 
@@ -215,20 +211,17 @@ export let mockAuditLogs: AuditLog[] = [
   { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
-// mockOperatorDictionaries is removed
-export const mockOperatorDictionaries: any[] = []; // Kept for seed script compatibility, but empty
-
-export const mockLocalDeviceDictionaries: Omit<LocalDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { deviceName: '核心交换机-A栋', port: 'Ten-GigabitEthernet1/0/1' },
   { deviceName: '接入交换机-B栋-F3', port: 'GigabitEthernet0/24' },
   { deviceName: '防火墙-总部出口', port: 'eth1/1' },
   { deviceName: '服务器-WEB集群-节点1', port: 'eth0' },
   { deviceName: '无线控制器-主楼', port: 'Port-channel1' },
-  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' }, // Added for peer example
-  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' }, // Added for peer example
-  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'}, // Added for peer example
-  { deviceName: 'F5 Load Balancer', port: '1.1' }, // Added for peer example
-  { deviceName: 'SAN Switch Brocade', port: 'port 5' }, // Added for peer example
+  { deviceName: 'ISP Router X1', port: 'GigabitEthernet0/0' },
+  { deviceName: 'Printer HP LJ M500', port: 'Ethernet' },
+  { deviceName: 'Datacenter Core Switch 1', port: 'TenGigabitEthernet2/1'},
+  { deviceName: 'F5 Load Balancer', port: '1.1' },
+  { deviceName: 'SAN Switch Brocade', port: 'port 5' },
 ];
 
 export const mockPaymentSourceDictionaries: Omit<PaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
@@ -247,7 +240,7 @@ export const mockAccessTypeDictionaries: Omit<AccessTypeDictionary, 'id' | 'crea
   { name: '其他' },
 ];
 
-export const mockNetworkInterfaceTypeDictionaries: Omit<NetworkInterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const mockInterfaceTypeDictionaries: Omit<InterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { name: 'GigabitEthernet', description: '千兆以太网接口' },
   { name: 'TenGigabitEthernet', description: '万兆以太网接口' },
   { name: 'FastEthernet', description: '百兆以太网接口' },

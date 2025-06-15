@@ -1,5 +1,4 @@
 
-// Existing imports
 import dotenv from 'dotenv';
 import { PrismaClient, Prisma } from '@prisma/client';
 import {
@@ -12,14 +11,13 @@ import {
   ADMIN_ROLE_ID as SEED_ADMIN_ROLE_ID,
   OPERATOR_ROLE_ID as SEED_OPERATOR_ROLE_ID,
   VIEWER_ROLE_ID as SEED_VIEWER_ROLE_ID,
-  // mockOperatorDictionaries is removed from import, will use the empty array from data.ts
-  mockLocalDeviceDictionaries,
+  mockDeviceDictionaries, // Renamed from mockLocalDeviceDictionaries
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
-  mockNetworkInterfaceTypeDictionaries,
+  mockInterfaceTypeDictionaries, // Renamed from mockNetworkInterfaceTypeDictionaries
 } from '../src/lib/data';
 import type { User as AppUser } from '../src/types';
-import { encrypt } from '../src/app/api/auth/[...nextauth]/route'; // Path might need update if crypto utils are moved
+import { encrypt } from '../src/app/api/auth/[...nextauth]/route';
 
 console.log("--- PRISMA SEED SCRIPT STARTED (TOP LEVEL) ---");
 
@@ -45,7 +43,6 @@ const prisma = new PrismaClient();
     process.exit(1); 
   } finally {
     console.log("--- PRISMA SEED SCRIPT: TOP-LEVEL WRAPPER FINALLY BLOCK ---");
-    // Disconnect is handled in main's finally
   }
 })();
 
@@ -105,7 +102,6 @@ async function main() {
         console.log(`Assigning all ${allDbPermissions.length} DB permissions to Administrator role.`);
         permissionsToSet = allDbPermissions.map(p => ({ id: p.id }));
       } else {
-        // Filter out any permissions that might have been removed (e.g., operator dictionary ones)
         const validRolePermissions = roleData.permissions.filter(appPermId => 
           allDbPermissions.some(dbPerm => dbPerm.id === (appPermId as string))
         );
@@ -216,12 +212,12 @@ async function main() {
     }
     console.log('Subnets seeded.');
 
-    console.log('Seeding IP Addresses (with new peer fields)...');
+    console.log('Seeding IP Addresses (with peer fields)...');
     for (const ipData of seedIPsData) {
       const phone = ipData.phone || null;
 
       await prisma.iPAddress.upsert({
-        where: { id: ipData.id }, // Assuming ipAddress is unique for upsert, or use a proper unique id
+        where: { id: ipData.id },
         update: {
           ipAddress: ipData.ipAddress,
           status: ipData.status as string,
@@ -233,7 +229,7 @@ async function main() {
           description: ipData.description,
           subnetId: ipData.subnetId,
           directVlanId: ipData.directVlanId,
-          // New peer fields
+          
           peerUnitName: ipData.peerUnitName || null,
           peerDeviceName: ipData.peerDeviceName || null,
           peerPortName: ipData.peerPortName || null,
@@ -255,7 +251,7 @@ async function main() {
           description: ipData.description,
           subnetId: ipData.subnetId,
           directVlanId: ipData.directVlanId,
-           // New peer fields
+
           peerUnitName: ipData.peerUnitName || null,
           peerDeviceName: ipData.peerDeviceName || null,
           peerPortName: ipData.peerPortName || null,
@@ -269,20 +265,17 @@ async function main() {
     }
     console.log('IP Addresses seeded.');
 
-    // Operator Dictionaries seeding is removed
-    // console.log('Seeding Operator Dictionaries...');
-    // for (const opData of mockOperatorDictionaries) { ... }
-    // console.log('Operator Dictionaries seeded.');
+    // OperatorDictionary seeding removed
 
-    console.log('Seeding Local Device Dictionaries...');
-    for (const ldData of mockLocalDeviceDictionaries) {
-      await prisma.localDeviceDictionary.upsert({
-        where: { deviceName: ldData.deviceName },
-        update: { deviceName: ldData.deviceName, port: ldData.port || null },
-        create: { deviceName: ldData.deviceName, port: ldData.port || null },
+    console.log('Seeding Device Dictionaries...'); // Renamed from LocalDeviceDictionary
+    for (const ddData of mockDeviceDictionaries) { // Renamed from mockLocalDeviceDictionaries
+      await prisma.deviceDictionary.upsert({ // Renamed from localDeviceDictionary
+        where: { deviceName: ddData.deviceName },
+        update: { deviceName: ddData.deviceName, port: ddData.port || null },
+        create: { deviceName: ddData.deviceName, port: ddData.port || null },
       });
     }
-    console.log('Local Device Dictionaries seeded.');
+    console.log('Device Dictionaries seeded.');
 
     console.log('Seeding Payment Source Dictionaries...');
     for (const psData of mockPaymentSourceDictionaries) {
@@ -304,22 +297,22 @@ async function main() {
     }
     console.log('Access Type Dictionaries seeded.');
 
-    console.log('Seeding Network Interface Type Dictionaries...');
-    for (const nitData of mockNetworkInterfaceTypeDictionaries) {
-      await prisma.networkInterfaceTypeDictionary.upsert({
-        where: { name: nitData.name },
-        update: { name: nitData.name, description: nitData.description || null },
-        create: { name: nitData.name, description: nitData.description || null },
+    console.log('Seeding Interface Type Dictionaries...'); // Renamed from NetworkInterfaceTypeDictionary
+    for (const itData of mockInterfaceTypeDictionaries) { // Renamed from mockNetworkInterfaceTypeDictionaries
+      await prisma.interfaceTypeDictionary.upsert({ // Renamed from networkInterfaceTypeDictionary
+        where: { name: itData.name },
+        update: { name: itData.name, description: itData.description || null },
+        create: { name: itData.name, description: itData.description || null },
       });
     }
-    console.log('Network Interface Type Dictionaries seeded.');
+    console.log('Interface Type Dictionaries seeded.');
 
     console.log('Seeding Audit Logs...');
     const usersForLogLinking = await prisma.user.findMany({select: {id: true, username: true}});
     for (const logData of seedAuditLogsData) {
       const userToLink = usersForLogLinking.find(u => u.username === logData.username);
       const validUserId = userToLink ? userToLink.id : undefined;
-      const validUsername = userToLink ? userToLink.username : logData.username; // Use username from log if user not found
+      const validUsername = userToLink ? userToLink.username : logData.username;
       const existingLog = await prisma.auditLog.findUnique({ where: { id: logData.id } });
       if (!existingLog) {
         await prisma.auditLog.create({

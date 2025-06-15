@@ -1,160 +1,168 @@
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
 
 generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id          String     @id @default(cuid())
-  username    String     @unique
-  email       String     @unique
-  password    String
-  phone       String?
-  roleId      String
-  avatar      String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  lastLogin   DateTime?
-  role        Role       @relation(fields: [roleId], references: [id])
-  auditLogs   AuditLog[]
-}
-
-model Role {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  description String?
-  permissions Permission[] @relation("RolePermissions")
-  users       User[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-}
-
-model Permission {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  group       String
-  description String?
-  roles       Role[]   @relation("RolePermissions")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model Subnet {
   id             String      @id @default(cuid())
-  cidr           String      @unique
-  networkAddress String
-  subnetMask     String
-  ipRange        String?
+  cidr           String      @unique // e.g., 192.168.1.0/24
+  networkAddress String      // e.g., 192.168.1.0
+  subnetMask     String      // e.g., 255.255.255.0
+  ipRange        String?     // e.g., "192.168.1.1 - 192.168.1.254"
   name           String?
   description    String?
   dhcpEnabled    Boolean?    @default(false)
   vlanId         String?
-  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: Restrict)
+  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: Restrict) // Prevent VLAN deletion if subnets are attached
   ipAddresses    IPAddress[]
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model VLAN {
   id          String    @id @default(cuid())
-  vlanNumber  Int       @unique
+  vlanNumber  Int       @unique // 1-4094
   name        String?
   description String?
   subnets     Subnet[]
-  ipAddresses IPAddress[] @relation("DirectVLANIPs")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  ipAddresses IPAddress[] @relation("DirectVLANOnIP") // IPs directly assigned to this VLAN
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model IPAddress {
-  id                      String    @id @default(cuid())
-  ipAddress               String
-  subnetId                String?
-  directVlanId            String?
-  status                  String // "allocated", "free", "reserved"
-  isGateway               Boolean?  @default(false)
-  allocatedTo             String?
-  usageUnit               String?
-  contactPerson           String?
-  phone                   String?
-  description             String?
-  lastSeen                DateTime? @default(now())
-  subnet                  Subnet?   @relation(fields: [subnetId], references: [id], onDelete: SetNull)
-  directVlan              VLAN?     @relation("DirectVLANIPs", fields: [directVlanId], references: [id], onDelete: SetNull)
+  id            String  @id @default(cuid())
+  ipAddress     String  // e.g., 192.168.1.100
+  subnetId      String?
+  subnet        Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull) // If subnet is deleted, set this to null
 
-  // Removed operator specific fields
-  // selectedOperatorName    String?
-  // selectedOperatorDevice  String?
+  directVlanId String?
+  directVlan   VLAN?   @relation("DirectVLANOnIP", fields: [directVlanId], references: [id], onDelete: SetNull)
 
-  // New generic peer fields
-  peerUnitName            String?    // Manual input for peer/customer/partner name
-  peerDeviceName          String?    // Name of the device on the peer side (from LocalDeviceDictionary)
-  peerPortName            String?    // Port on the peer device (derived from selected LocalDeviceDictionary entry's port)
+  status        String     // allocated, free, reserved
+  isGateway     Boolean?   @default(false)
+  allocatedTo   String?    // e.g., Server-01, User-PC
+  usageUnit     String?    // e.g., R&D Department
+  contactPerson String?
+  phone         String?
+  description   String?
+  lastSeen      DateTime?  @default(now()) @updatedAt
 
-  selectedAccessType      String?
+  // Generic Peer Information
+  peerUnitName   String? // Manually entered peer/customer/partner name
+  peerDeviceName String? // Name of the device on the peer side (sourced from DeviceDictionary)
+  peerPortName   String? // Port on the peer device (sourced from DeviceDictionary based on peerDeviceName)
+
+  // Local Device Information (sourced from DeviceDictionary)
   selectedLocalDeviceName String?
-  selectedDevicePort      String?
-  selectedPaymentSource   String?
+  selectedDevicePort      String? // Port on the local device (sourced from DeviceDictionary based on selectedLocalDeviceName)
+  
+  // Other attributes
+  selectedAccessType    String? // e.g., Fiber, Copper, Wireless (from AccessTypeDictionary)
+  selectedPaymentSource String? // e.g., Internal, CustomerA (from PaymentSourceDictionary)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([ipAddress, subnetId]) // IP must be unique within its subnet, or globally if subnetId is null
-  @@index([subnetId])
-  @@index([directVlanId])
+  @@unique([ipAddress, subnetId], name: "unique_ip_in_subnet")
   @@index([status])
   @@index([allocatedTo])
   @@index([usageUnit])
   @@index([peerUnitName])
-  @@index([peerDeviceName])
   @@index([selectedLocalDeviceName])
 }
 
-// OperatorDictionary is removed
+model User {
+  id          String    @id @default(cuid())
+  username    String    @unique
+  email       String    @unique
+  password    String
+  phone       String?
+  avatar      String?
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id])
+  lastLogin   DateTime?
+  auditLogs   AuditLog[] // User who performed the action
 
-model LocalDeviceDictionary {
-  id         String   @id @default(cuid())
-  deviceName String   @unique // e.g., "CoreSwitch-A", "Firewall-Main"
-  port       String?  // e.g., "GigabitEthernet1/0/1", "eth0" - can be constructed using NetworkInterfaceTypeDictionary
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model PaymentSourceDictionary {
-  id         String   @id @default(cuid())
-  sourceName String   @unique // e.g., "Self-funded", "GovProject-A"
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model AccessTypeDictionary {
-  id        String   @id @default(cuid())
-  name      String   @unique // e.g., "Dedicated Fiber", "Broadband PPPoE", "Wireless PtP"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model NetworkInterfaceTypeDictionary {
-  id          String   @id @default(cuid())
-  name        String   @unique // e.g., "GigabitEthernet", "TenGigabitEthernet", "ge-", "xe-"
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique // e.g., Administrator, Operator, Viewer
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  users       User[]
+  permissions Permission[] @relation("RolePermissions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id          String @id @default(cuid()) // e.g., subnet.create, vlan.view
+  name        String @unique // User-friendly name, e.g., "Create Subnet"
+  group       String // e.g., "Subnet Management", "User Management"
+  description String?
+  roles       Role[] @relation("RolePermissions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String?
-  username  String?  // Denormalized for easier display, even if user is deleted
-  action    String
-  details   String?
-  timestamp DateTime @default(now())
+  userId    String?  // Nullable if action is by system
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String?  // Store username denormalized for cases where user might be deleted
+  action    String   // e.g., create_subnet, login_failed
+  details   String?  // Additional details, like IDs or names of affected resources
+  timestamp DateTime @default(now())
+}
 
-  @@index([userId])
-  @@index([action])
-  @@index([timestamp])
+// Renamed from LocalDeviceDictionary
+model DeviceDictionary {
+  id         String   @id @default(cuid())
+  deviceName String   @unique // e.g., CoreSwitch-A, Firewall-Main
+  port       String?  // Optional port information, e.g., "GigabitEthernet1/0/1", "Port-channel10"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("device_dictionaries") // Keep table name if migrating, or use default `DeviceDictionary`
+}
+
+model PaymentSourceDictionary {
+  id         String   @id @default(cuid())
+  sourceName String   @unique // e.g., Internal, CustomerProjectX
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("payment_source_dictionaries")
+}
+
+model AccessTypeDictionary {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g., "Fiber Optic", "DSL", "Wireless PTP"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("access_type_dictionaries")
+}
+
+// Renamed from NetworkInterfaceTypeDictionary
+model InterfaceTypeDictionary {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "GigabitEthernet", "TenGigabitEthernet", "ge-", "Po"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("interface_type_dictionaries") // Keep table name if migrating
 }

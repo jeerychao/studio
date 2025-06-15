@@ -16,8 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { NetworkInterfaceTypeDictionary } from "@/types";
-import { createNetworkInterfaceTypeDictionaryAction, updateNetworkInterfaceTypeDictionaryAction, type ActionResponse } from "@/lib/actions";
+import type { InterfaceTypeDictionary } from "@/types"; // Renamed type
+import { createInterfaceTypeDictionaryAction, updateInterfaceTypeDictionaryAction, type ActionResponse } from "@/lib/actions"; // Renamed actions
 
 const formSchema = z.object({
   name: z.string().min(1, "接口类型名称/前缀不能为空。").max(50, "接口类型名称/前缀过长。"),
@@ -26,14 +26,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface NetworkInterfaceTypeDictionaryFormSheetProps {
-  dictionaryEntry?: NetworkInterfaceTypeDictionary;
+interface InterfaceTypeDictionaryFormSheetProps { // Renamed interface
+  dictionaryEntry?: InterfaceTypeDictionary; // Renamed type
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
   onDataChange?: () => void;
 }
 
-export function NetworkInterfaceTypeDictionaryFormSheet({ dictionaryEntry, children, buttonProps, onDataChange }: NetworkInterfaceTypeDictionaryFormSheetProps) {
+export function InterfaceTypeDictionaryFormSheet({ dictionaryEntry, children, buttonProps, onDataChange }: InterfaceTypeDictionaryFormSheetProps) { // Renamed component
   const [isOpen, setIsOpen] = React.useState(false);
   const { toast } = useToast();
   const isEditing = !!dictionaryEntry;
@@ -55,22 +55,22 @@ export function NetworkInterfaceTypeDictionaryFormSheet({ dictionaryEntry, child
 
   async function onSubmit(data: FormValues) {
     form.clearErrors();
-    let response: ActionResponse<NetworkInterfaceTypeDictionary>;
+    let response: ActionResponse<InterfaceTypeDictionary>; // Renamed type
     try {
       const payload = { 
         name: data.name,
         description: data.description || undefined 
       };
       if (isEditing && dictionaryEntry) {
-        response = await updateNetworkInterfaceTypeDictionaryAction(dictionaryEntry.id, payload);
+        response = await updateInterfaceTypeDictionaryAction(dictionaryEntry.id, payload); // Renamed action
       } else {
-        response = await createNetworkInterfaceTypeDictionaryAction(payload);
+        response = await createInterfaceTypeDictionaryAction(payload); // Renamed action
       }
 
       if (response.success && response.data) {
         toast({
           title: isEditing ? "条目已更新" : "条目已创建",
-          description: `网络接口类型 "${response.data.name}" 已成功${isEditing ? '更新' : '创建'}。`,
+          description: `接口类型 "${response.data.name}" 已成功${isEditing ? '更新' : '创建'}。`,
         });
         setIsOpen(false);
         if (onDataChange) onDataChange();
@@ -88,7 +88,7 @@ export function NetworkInterfaceTypeDictionaryFormSheet({ dictionaryEntry, child
   const trigger = children ? React.cloneElement(children as React.ReactElement, { onClick: () => setIsOpen(true) })
     : <Button variant={isEditing ? "ghost" : "default"} size={isEditing ? "icon" : "default"} onClick={() => setIsOpen(true)} {...buttonProps}>
         {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加条目</>}
-        {isEditing && <span className="sr-only">编辑网络接口类型</span>}
+        {isEditing && <span className="sr-only">编辑接口类型</span>}
       </Button>;
 
   return (
@@ -96,8 +96,8 @@ export function NetworkInterfaceTypeDictionaryFormSheet({ dictionaryEntry, child
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{isEditing ? "编辑网络接口类型" : "添加新网络接口类型"}</SheetTitle>
-          <SheetDescription>{isEditing ? "更新现有网络接口类型的名称或描述。" : "填写新网络接口类型的名称和可选描述。"}</SheetDescription>
+          <SheetTitle>{isEditing ? "编辑接口类型" : "添加新接口类型"}</SheetTitle>
+          <SheetDescription>{isEditing ? "更新现有接口类型的名称或描述。" : "填写新接口类型的名称和可选描述。"}</SheetDescription>
         </SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-6">

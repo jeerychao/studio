@@ -120,7 +120,7 @@ export default function DashboardPage() {
 
   const {
     totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
-    ipUsageByUnit, // ipUsageByOperator removed for now
+    ipUsageByUnit, // ipUsageByOperator removed
     busiestVlans,
     subnetsNeedingAttention,
     recentAuditLogs
@@ -159,7 +159,7 @@ export default function DashboardPage() {
         <DashboardStatCard title="总子网数" value={totalSubnetCount} icon={NetworkIcon} linkTo="/subnets"/>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 mb-6"> {/* Adjusted to 2 columns due to removal of one chart */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 mb-6">
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle className="text-base">IP 地址状态分布</CardTitle></CardHeader>
           <CardContent className="h-[250px]"><IPStatusPieChart data={ipStatusChartData} /></CardContent>
@@ -168,12 +168,6 @@ export default function DashboardPage() {
           <CardHeader><CardTitle className="text-base">按使用单位的 IP 分配 (Top N)</CardTitle></CardHeader>
           <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByUnit} dataKey="value" layout="vertical" yAxisWidth={120} /></CardContent>
         </Card>
-        {/* Removed Operator Usage Chart
-        <Card className="lg:col-span-1">
-          <CardHeader><CardTitle className="text-base">按运营商的 IP 分配 (Top N)</CardTitle></CardHeader>
-          <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByOperator} dataKey="value" layout="vertical" yAxisWidth={120}/></CardContent>
-        </Card> 
-        */}
       </div>
 
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 mb-6">

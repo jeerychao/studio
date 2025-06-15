@@ -9,12 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { HardDrive, Loader2, PlusCircle, Edit, Trash2, ShieldAlert } from "lucide-react"; // Using HardDrive as placeholder
+import { HardDrive, Loader2, PlusCircle, Edit, Trash2, ShieldAlert } from "lucide-react";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { PERMISSIONS, type LocalDeviceDictionary, type NetworkInterfaceTypeDictionary, type PaginatedResponse } from "@/types";
-import { getLocalDeviceDictionariesAction, deleteLocalDeviceDictionaryAction, batchDeleteLocalDeviceDictionariesAction, getNetworkInterfaceTypeDictionariesAction } from "@/lib/actions";
+import { PERMISSIONS, type DeviceDictionary, type InterfaceTypeDictionary, type PaginatedResponse } from "@/types"; // Renamed LocalDeviceDictionary to DeviceDictionary, NetworkInterfaceTypeDictionary to InterfaceTypeDictionary
+import { getDeviceDictionariesAction, deleteDeviceDictionaryAction, batchDeleteDeviceDictionariesAction, getInterfaceTypeDictionariesAction } from "@/lib/actions"; // Renamed actions
 import { useToast } from "@/hooks/use-toast";
-import { LocalDeviceDictionaryFormSheet } from "./local-device-dictionary-form-sheet";
+import { DeviceDictionaryFormSheet } from "./device-dictionary-form-sheet"; // Renamed component
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -25,14 +25,14 @@ function LoadingPage() {
   return (
     <div className="flex items-center justify-center h-full">
       <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      <p className="ml-3 text-lg">加载本地设备字典...</p>
+      <p className="ml-3 text-lg">加载设备字典...</p>
     </div>
   );
 }
 
-function LocalDeviceDictionaryView() {
-  const [dictData, setDictData] = React.useState<PaginatedResponse<LocalDeviceDictionary> | null>(null);
-  const [networkInterfaceTypes, setNetworkInterfaceTypes] = React.useState<NetworkInterfaceTypeDictionary[]>([]);
+function DeviceDictionaryView() { // Renamed component
+  const [dictData, setDictData] = React.useState<PaginatedResponse<DeviceDictionary> | null>(null); // Renamed type
+  const [interfaceTypes, setInterfaceTypes] = React.useState<InterfaceTypeDictionary[]>([]); // Renamed type
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const { currentUser, isAuthLoading } = useCurrentUser();
@@ -47,10 +47,10 @@ function LocalDeviceDictionaryView() {
     if (isAuthLoading || !currentUser) return;
     setIsLoading(true);
     try {
-      if (hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE)) {
+      if (hasPermission(currentUser, PERMISSIONS.VIEW_DEVICE_DICTIONARY)) { // Renamed permission
         const [fetchedResult, fetchedInterfaceTypesResult] = await Promise.all([
-            getLocalDeviceDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-            getNetworkInterfaceTypeDictionariesAction() // Fetch all interface types
+            getDeviceDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }), // Renamed action
+            getInterfaceTypeDictionariesAction() // Renamed action
         ]);
         
          if (fetchedResult.success && fetchedResult.data) {
@@ -60,28 +60,28 @@ function LocalDeviceDictionaryView() {
             const params = new URLSearchParams(searchParams.toString());
             params.set("page", String(newTargetPage));
             router.push(`${pathname}?${params.toString()}`);
-            return; // Avoid double loading by returning early
+            return;
           }
         } else {
-          toast({ title: "获取本地设备数据错误", description: fetchedResult.error?.userMessage || "未能加载本地设备字典数据。", variant: "destructive" });
+          toast({ title: "获取设备数据错误", description: fetchedResult.error?.userMessage || "未能加载设备字典数据。", variant: "destructive" });
           setDictData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
         }
 
         if (fetchedInterfaceTypesResult.success && fetchedInterfaceTypesResult.data) {
-            setNetworkInterfaceTypes(fetchedInterfaceTypesResult.data.data || []);
+            setInterfaceTypes(fetchedInterfaceTypesResult.data.data || []); // Renamed state variable
         } else {
             toast({ title: "获取接口类型错误", description: fetchedInterfaceTypesResult.error?.userMessage || "未能加载网络接口类型数据。", variant: "destructive" });
-            setNetworkInterfaceTypes([]);
+            setInterfaceTypes([]); // Renamed state variable
         }
 
       } else {
         setDictData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
-        setNetworkInterfaceTypes([]);
+        setInterfaceTypes([]); // Renamed state variable
       }
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
       setDictData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
-      setNetworkInterfaceTypes([]);
+      setInterfaceTypes([]); // Renamed state variable
     } finally {
       setIsLoading(false);
       setSelectedIds(new Set());
@@ -94,7 +94,7 @@ function LocalDeviceDictionaryView() {
 
   const handleChangeSuccess = React.useCallback(async () => {
     const queryParams = { page: 1, pageSize: 1 };
-    const paginationInfo = await getLocalDeviceDictionariesAction(queryParams);
+    const paginationInfo = await getDeviceDictionariesAction(queryParams); // Renamed action
      if (paginationInfo.success && paginationInfo.data) {
         const newTotalPages = paginationInfo.data.totalPages;
         const targetPage = newTotalPages > 0 ? newTotalPages : 1;
@@ -124,22 +124,22 @@ function LocalDeviceDictionaryView() {
   };
 
   if (isAuthLoading || (isLoading && !dictData)) return <LoadingPage />;
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_DICTIONARY_LOCAL_DEVICE)) {
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_DEVICE_DICTIONARY)) { // Renamed permission
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
-        <ShieldAlert className="h-16 w-16 text-destructive mb-4" /><h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2><p className="text-muted-foreground">您没有权限查看本地设备字典。</p>
+        <ShieldAlert className="h-16 w-16 text-destructive mb-4" /><h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2><p className="text-muted-foreground">您没有权限查看设备字典。</p>
       </div>
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_DICTIONARY_LOCAL_DEVICE);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_DICTIONARY_LOCAL_DEVICE);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_DICTIONARY_LOCAL_DEVICE);
+  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_DEVICE_DICTIONARY); // Renamed permission
+  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_DEVICE_DICTIONARY);     // Renamed permission
+  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_DEVICE_DICTIONARY); // Renamed permission
 
   const pageActionButtons = (
     <div className="flex flex-col sm:flex-row gap-2">
-      {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="本地设备字典条目" batchDeleteAction={batchDeleteLocalDeviceDictionariesAction} onBatchDeleted={fetchData} />}
-      {canCreate && <LocalDeviceDictionaryFormSheet networkInterfaceTypes={networkInterfaceTypes} onDataChange={handleChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}}/>}
+      {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="设备字典条目" batchDeleteAction={batchDeleteDeviceDictionariesAction} onBatchDeleted={fetchData} />} {/* Renamed action */}
+      {canCreate && <DeviceDictionaryFormSheet interfaceTypes={interfaceTypes} onDataChange={handleChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}}/>} {/* Renamed component and prop */}
     </div>
   );
   
@@ -153,9 +153,9 @@ function LocalDeviceDictionaryView() {
 
   return (
     <>
-      <PageHeader title="本地设备字典管理" description="管理本地设备名称及其关联端口信息。" icon={<HardDrive className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} />
+      <PageHeader title="设备字典管理" description="管理设备名称及其关联端口信息。" icon={<HardDrive className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} />
       <Card>
-        <CardHeader><CardTitle>本地设备列表</CardTitle><CardDescription>显示 {itemsToDisplay.length} 条，共 {finalTotalCount} 条本地设备字典条目。</CardDescription></CardHeader>
+        <CardHeader><CardTitle>设备列表</CardTitle><CardDescription>显示 {itemsToDisplay.length} 条，共 {finalTotalCount} 条设备字典条目。</CardDescription></CardHeader>
         <CardContent>
           {dataIsAvailable ? (
             <>
@@ -173,8 +173,8 @@ function LocalDeviceDictionaryView() {
                       <TableCell>{item.port || "N/A"}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
-                          {canEdit && <LocalDeviceDictionaryFormSheet dictionaryEntry={item} networkInterfaceTypes={networkInterfaceTypes} onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></LocalDeviceDictionaryFormSheet>}
-                          {canDelete && <DeleteConfirmationDialog itemId={item.id} itemName={item.deviceName} deleteAction={deleteLocalDeviceDictionaryAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除条目"><Trash2 className="h-4 w-4" /></Button>} />}
+                          {canEdit && <DeviceDictionaryFormSheet dictionaryEntry={item} interfaceTypes={interfaceTypes} onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></DeviceDictionaryFormSheet>} {/* Renamed component and prop */}
+                          {canDelete && <DeleteConfirmationDialog itemId={item.id} itemName={item.deviceName} deleteAction={deleteDeviceDictionaryAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除条目"><Trash2 className="h-4 w-4" /></Button>} />} {/* Renamed action */}
                         </TableCell>
                       )}
                     </TableRow>
@@ -185,8 +185,8 @@ function LocalDeviceDictionaryView() {
             </>
           ) : (
              <div className="text-center py-10">
-              <p className="text-muted-foreground">未找到本地设备字典数据。</p>
-              {canCreate && <LocalDeviceDictionaryFormSheet networkInterfaceTypes={networkInterfaceTypes} onDataChange={handleChangeSuccess} buttonProps={{className: "mt-4"}}/>}
+              <p className="text-muted-foreground">未找到设备字典数据。</p>
+              {canCreate && <DeviceDictionaryFormSheet interfaceTypes={interfaceTypes} onDataChange={handleChangeSuccess} buttonProps={{className: "mt-4"}}/>} {/* Renamed component and prop */}
             </div>
           )}
         </CardContent>
@@ -195,4 +195,4 @@ function LocalDeviceDictionaryView() {
   );
 }
 
-export default function LocalDeviceDictionaryPage() { return <Suspense fallback={<LoadingPage />}><LocalDeviceDictionaryView /></Suspense>; }
+export default function DeviceDictionaryPage() { return <Suspense fallback={<LoadingPage />}><DeviceDictionaryView /></Suspense>; } // Renamed component

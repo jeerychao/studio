@@ -240,7 +240,6 @@ function QueryPageContent() {
       { label: "使用单位:", value: ip.usageUnit || "N/A" },
       { label: "联系人:", value: ip.contactPerson || "N/A" },
       { label: "电话:", value: ip.phone || "N/A" },
-      { label: "描述:", value: ip.description || "无", fullWidth: true },
       { label: "对端单位名称:", value: ip.peerUnitName || "N/A" },
       { label: "对端设备:", value: ip.peerDeviceName || "N/A" },
       { label: "对端端口:", value: ip.peerPortName || "N/A" },
@@ -248,6 +247,7 @@ function QueryPageContent() {
       { label: "本端设备:", value: ip.selectedLocalDeviceName || "N/A" },
       { label: "本端端口:", value: ip.selectedDevicePort || "N/A" },
       { label: "费用来源:", value: ip.selectedPaymentSource || "N/A" },
+      { label: "描述:", value: ip.description || "无", fullWidth: true },
       { label: "最后更新:", value: ip.lastSeen ? new Date(ip.lastSeen).toLocaleString() : '未知' },
     ];
   };
@@ -345,11 +345,11 @@ function QueryPageContent() {
           <Card>
             <CardHeader>
               <CardTitle>查询IP地址</CardTitle>
-              <CardDescription>按IP、分配对象、使用单位、联系人、电话、描述或新的对端字段模糊查询。可按状态筛选。</CardDescription>
+              <CardDescription>按IP、分配对象、使用单位、联系人、电话、描述或对端字段模糊查询。可按状态筛选。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                <Input className="flex-grow" placeholder="例如 Server01, 10.0.1.*, 市场部, 对端公司" value={ipQuery} onChange={handleIpQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleIpQuerySubmitButton()} />
+                <Input className="flex-grow" placeholder="例如 Server01, 10.0.1.*, 市场部, 客户A" value={ipQuery} onChange={handleIpQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleIpQuerySubmitButton()} />
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Label htmlFor="ip-status-filter" className="text-sm shrink-0">状态:</Label>
                   <Select value={ipQueryStatus} onValueChange={handleIpStatusChange}>
