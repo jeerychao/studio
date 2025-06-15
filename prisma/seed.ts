@@ -1,29 +1,23 @@
-// --- ABSOLUTE MINIMAL DIAGNOSTIC SEED SCRIPT V2 ---
-console.log('--- PRISMA SEED SCRIPT (ABSOLUTE MINIMAL V2): Script execution started ---');
 
-// Intentionally do nothing else for this diagnostic test.
-// We are only checking if ts-node can even execute this console.log
-// when called by `prisma db seed`.
+// --- ABSOLUTE MINIMAL DIAGNOSTIC SEED SCRIPT V3 ---
+// Goal: See if *any* console output from ts-node appears when run via `prisma db seed`.
 
-// Forcing a successful exit so Prisma CLI doesn't hang or report failure due to no async completion.
-// Prisma expects the seed script to exit.
-// This needs to be robust to different environments where process might be undefined (though unlikely for Node.js)
-try {
-  if (typeof process !== 'undefined' && typeof process.exit === 'function') {
-    console.log('--- PRISMA SEED SCRIPT (ABSOLUTE MINIMAL V2): Attempting process.exit(0) ---');
+console.log('--- LOG FROM seed.ts (V3) ---');
+console.info('--- INFO FROM seed.ts (V3) ---');
+console.warn('--- WARN FROM seed.ts (V3) ---');
+console.error('--- ERROR FROM seed.ts (V3) ---');
+
+// Prisma CLI expects the seed script to exit.
+// Forcing a successful exit.
+// In Node.js, if the event loop is empty (no more async operations pending),
+// the process will exit naturally. A simple script like this will do so.
+// We can add an explicit process.exit(0) to be absolutely sure.
+
+// If the script reaches here, it means console logging should have occurred.
+// If process.exit is available, use it. Otherwise, the script will end.
+if (typeof process !== 'undefined' && typeof process.exit === 'function') {
+    console.log('--- SEED.TS (V3): Attempting process.exit(0) ---');
     process.exit(0);
-  } else {
-    console.error('--- PRISMA SEED SCRIPT (ABSOLUTE MINIMAL V2): process.exit is not available. Throwing error to signal completion. ---');
-    // If process.exit is not available, throwing an error might be the only way
-    // to signal to Prisma CLI that the script has 'finished' in some manner,
-    // though it might interpret it as a failed seed. This is a last resort.
-    throw new Error("Seed script completed but process.exit was not available.");
-  }
-} catch (e: any) {
-  console.error('--- PRISMA SEED SCRIPT (ABSOLUTE MINIMAL V2): Error during process.exit or fallback ---', e.message);
-  // If even process.exit fails or is unavailable and throws, we log it.
-  // Exiting with a non-zero code if possible, or just letting it end.
-  if (typeof process !== 'undefined' && typeof process.exit === 'function') {
-    process.exit(1);
-  }
+} else {
+    console.error('--- SEED.TS (V3): process.exit is not available. Script will end naturally. ---');
 }
