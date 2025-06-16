@@ -29,7 +29,7 @@ import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
 import { encrypt, decrypt } from './crypto-utils';
-import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT } from "./constants";
+import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE } from "./constants"; // Added constants
 import { z } from 'zod';
 
 
@@ -49,8 +49,8 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
   return { userId: undefined, username: '系统' };
 }
 
-const DEFAULT_PAGE_SIZE = 10;
-const DEFAULT_QUERY_PAGE_SIZE = 10;
+// const DEFAULT_PAGE_SIZE = 10; // Moved to constants.ts
+// const DEFAULT_QUERY_PAGE_SIZE = 10; // Moved to constants.ts
 
 
 interface FetchParams { page?: number; pageSize?: number; subnetId?: string; status?: AppIPAddressStatusType | 'all'; }
@@ -506,7 +506,7 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
                 where: { id: ip.id },
                 data: {
                     subnet: { disconnect: true },
-                    directVlan: { disconnect: true }, 
+                    directVlan: { disconnect: true },
                     description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
                 }
             })
@@ -832,7 +832,7 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-const VlanQuerySchema = z.string().trim().optional(); // Allow empty string for clearing results
+const VlanQuerySchema = z.string().trim().optional();
 
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
@@ -841,8 +841,9 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
     
-    const validationResult = VlanQuerySchema.safeParse(params.queryString);
-    // Use the validated query string, or an empty string if validation fails or original is empty
+    const queryString = params.queryString;
+    const validationResult = VlanQuerySchema.safeParse(queryString);
+    
     const validatedQuery = validationResult.success ? (validationResult.data || "") : "";
 
     if (!validatedQuery) {
@@ -853,7 +854,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const containsQuery = `%${validatedQuery}%`;   
 
     const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM "vLAN"
+      SELECT COUNT(*) as count FROM "vlan" -- Changed to lowercase
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
@@ -863,7 +864,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string }>>`
-      SELECT "id", "vlanNumber", "name", "description", "createdAt", "updatedAt" FROM "vLAN"
+      SELECT "id", "vlanNumber", "name", "description", "createdAt", "updatedAt" FROM "vlan" -- Changed to lowercase
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
@@ -871,7 +872,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
       ORDER BY "vlanNumber" ASC
       LIMIT ${pageSize} OFFSET ${skip};
     `;
-    
+        
     const results: VlanQueryResult[] = await Promise.all(
       vlansFromDb.map(async (v) => {
         const [subnetCount, directIpCount, associatedSubnetsDb, associatedDirectIPsDb] = await Promise.all([
@@ -1237,6 +1238,7 @@ export async function deleteInterfaceTypeDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.interfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`接口类型字典 ID: ${id}`, `接口类型字典 ID ${id} 未找到。`);
+    // No direct FK usage check for InterfaceTypeDictionary in IPAddress model, so direct delete is fine.
     await prisma.interfaceTypeDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_interface_type_dictionary', details: `删除了接口类型字典条目: ${itemToDelete.name}` } });
     revalidatePath("/dictionaries/interface-type");
@@ -1250,6 +1252,7 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.interfaceTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
+      // No direct FK usage check for InterfaceTypeDictionary in IPAddress model
       await prisma.interfaceTypeDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.interfaceTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -1327,3 +1330,5 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
+

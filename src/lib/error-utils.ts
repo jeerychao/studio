@@ -73,20 +73,20 @@ export function createActionErrorResponse(
   error: unknown,
   actionContext?: string
 ): ActionErrorResponse {
-  logger.error(actionContext || 'Action Error', error as Error, { context: actionContext });
+  logger.error(actionContext || 'Action Error', error as Error, { context: actionContext, errorObject: error });
 
   if (error instanceof AppError) {
     return {
       userMessage: error.userMessage,
       code: error.code,
       field: error.field,
-      details: process.env.NODE_ENV === 'development' ? `${error.name}: ${error.message}` : undefined,
+      details: process.env.NODE_ENV === 'development' ? `${error.name} (${error.code}): ${error.message} ${error.stack ? `\nStack: ${error.stack.substring(0,300)}...` : ''}` : undefined,
     };
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    let userMessage = "数据库操作时发生错误，请检查您的输入或稍后重试。";
-    const devDetails = `${error.name} (Code: ${error.code}): ${error.message}`;
+    let userMessage = `数据库操作时发生错误 (代码: ${error.code})。请检查您的输入或稍后重试。`;
+    const devDetails = `${error.name} (Code: ${error.code}): ${error.message}${error.meta ? ` Meta: ${JSON.stringify(error.meta)}` : ''}`;
     switch (error.code) {
       case 'P2002': {
         const target = error.meta?.target as string[] | string | undefined;
@@ -134,24 +134,35 @@ export function createActionErrorResponse(
     };
   }
 
+  let finalUserMessage = `处理您的请求时发生了一个意外错误。`;
   let finalDevDetails: string | undefined;
-  if (process.env.NODE_ENV === 'development') {
-    if (error instanceof Error) {
+
+  if (error instanceof Error) {
+    finalUserMessage += ` ${process.env.NODE_ENV === 'development' ? error.message : '请稍后重试或联系支持。'}`;
+    if (process.env.NODE_ENV === 'development') {
       finalDevDetails = `${error.name}: ${error.message} (Stack: ${error.stack ? error.stack.substring(0, 300) + "..." : "N/A"})`;
-    } else if (typeof error === 'string') {
-      finalDevDetails = error;
-    } else {
-      try {
-        finalDevDetails = JSON.stringify(error);
-      } catch {
-        finalDevDetails = "无法序列化错误对象。";
-      }
+    }
+  } else {
+    finalUserMessage += ' 请稍后重试或联系支持。';
+    if (process.env.NODE_ENV === 'development') {
+        try {
+            finalDevDetails = JSON.stringify(error);
+        } catch {
+            finalDevDetails = "无法序列化错误对象。";
+        }
     }
   }
+  
+  if (actionContext) {
+    finalUserMessage = `在操作 "${actionContext}" 时发生错误: ${finalUserMessage}`;
+  }
+
 
   return {
-    userMessage: `处理您的请求时发生了一个意外错误。${actionContext ? ` 操作: ${actionContext}.` : ''}${process.env.NODE_ENV === 'development' && finalDevDetails ? ` 开发详情: ${finalDevDetails}` : ' 请稍后重试或联系支持。'}`,
+    userMessage: finalUserMessage,
     code: 'UNEXPECTED_ACTION_ERROR',
     details: finalDevDetails,
   };
 }
+
+
