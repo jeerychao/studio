@@ -29,7 +29,7 @@ import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
 import { encrypt, decrypt } from './crypto-utils';
-import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE } from "./constants"; // Added constants
+import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE } from "./constants";
 import { z } from 'zod';
 
 
@@ -48,10 +48,6 @@ async function getAuditUserInfo(performingUserId?: string): Promise<{ userId?: s
   if (adminUser) return { userId: adminUser.id, username: adminUser.username };
   return { userId: undefined, username: '系统' };
 }
-
-// const DEFAULT_PAGE_SIZE = 10; // Moved to constants.ts
-// const DEFAULT_QUERY_PAGE_SIZE = 10; // Moved to constants.ts
-
 
 interface FetchParams { page?: number; pageSize?: number; subnetId?: string; status?: AppIPAddressStatusType | 'all'; }
 export interface FetchedUserDetails { id: string; username: string; email: string; roleId: string; roleName: AppRoleNameType; avatar?: string; permissions: AppPermissionIdType[]; lastLogin?: string | undefined; }
@@ -124,8 +120,10 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
 
     const encryptedPassword = encrypt(data.password);
 
-    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone || null, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' },
-                                                include: { role: { include: { permissions: true } } } });
+    const newUser = await prisma.user.create({
+      data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone || null, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' },
+      include: { role: { include: { permissions: true } } }
+    });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` } });
     revalidatePath("/users");
     const fetchedUser: FetchedUserDetails = { id: newUser.id, username: newUser.username, email: newUser.email, roleId: newUser.roleId, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: newUser.lastLogin?.toISOString() || undefined };
@@ -832,7 +830,7 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-const VlanQuerySchema = z.string().trim().optional();
+const VlanQueryReqSchema = z.string().trim().optional(); // Allow empty string to clear results
 
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
@@ -842,11 +840,11 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const skip = (page - 1) * pageSize;
     
     const queryString = params.queryString;
-    const validationResult = VlanQuerySchema.safeParse(queryString);
-    
+    const validationResult = VlanQueryReqSchema.safeParse(queryString); // Use the updated schema
+
     const validatedQuery = validationResult.success ? (validationResult.data || "") : "";
 
-    if (!validatedQuery) {
+    if (!validatedQuery) { // If query is empty after trim, return empty results
         return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
 
@@ -854,28 +852,38 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const containsQuery = `%${validatedQuery}%`;   
 
     const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM "vlan" -- Changed to lowercase
+      SELECT COUNT(*) as count FROM "vlans" -- Corrected table name
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
-        OR (CAST("vlanNumber" AS TEXT) LIKE ${startsWithQuery});
+        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}); -- Assuming column name is vlan_number
     `;
     const totalCount = Number(countResult[0]?.count || 0);
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
-    const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string }>>`
-      SELECT "id", "vlanNumber", "name", "description", "createdAt", "updatedAt" FROM "vlan" -- Changed to lowercase
+    const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string; created_at: Date; updated_at: Date; vlan_number: number }>>`
+      SELECT "id", "vlan_number", "name", "description", "created_at", "updated_at" FROM "vlans" -- Corrected table name and columns
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
-        OR (CAST("vlanNumber" AS TEXT) LIKE ${startsWithQuery})
-      ORDER BY "vlanNumber" ASC
+        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}) -- Assuming column name is vlan_number
+      ORDER BY "vlan_number" ASC
       LIMIT ${pageSize} OFFSET ${skip};
     `;
         
     const results: VlanQueryResult[] = await Promise.all(
-      vlansFromDb.map(async (v) => {
-        const [subnetCount, directIpCount, associatedSubnetsDb, associatedDirectIPsDb] = await Promise.all([
+      vlansFromDb.map(async (v_raw) => {
+        // Map raw column names to AppVLAN properties
+        const v: AppVLAN = {
+          id: v_raw.id,
+          vlanNumber: v_raw.vlan_number, // map from vlan_number
+          name: v_raw.name || undefined,
+          description: v_raw.description || undefined,
+          // subnetCount will be calculated below
+          // createdAt and updatedAt are not part of VlanQueryResult, so not mapped here
+        };
+
+        const [subnetCount, directIpCount, associatedSubnets, associatedDirectIPs] = await Promise.all([
           prisma.subnet.count({ where: { vlanId: v.id } }),
           prisma.iPAddress.count({ where: { directVlanId: v.id } }),
           prisma.subnet.findMany({ where: { vlanId: v.id }, select: {id: true, cidr: true, name: true, description: true } }),
@@ -884,10 +892,10 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
         return {
           id: v.id,
           vlanNumber: v.vlanNumber,
-          name: v.name || undefined,
-          description: v.description || undefined,
-          associatedSubnets: associatedSubnetsDb.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})),
-          associatedDirectIPs: associatedDirectIPsDb.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})),
+          name: v.name,
+          description: v.description,
+          associatedSubnets: associatedSubnets.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})),
+          associatedDirectIPs: associatedDirectIPs.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})),
           resourceCount: subnetCount + directIpCount,
         };
       })
@@ -896,13 +904,15 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
 
   } catch (error: unknown) {
-    logger.error(actionName, error as Error, { queryString: params.queryString }, 'queryVlansAction');
+    logger.error(actionName, error, { queryString: params.queryString }, 'queryVlansAction');
+    
     if (error instanceof z.ZodError) { 
       return { success: false, error: createActionErrorResponse({ message: error.flatten().formErrors.join(', '), code: 'VALIDATION_ERROR', field: 'queryString' }, actionName) };
     }
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 
 const IpQuerySearchTermSchema = z.string().trim().optional();
 export async function queryIpAddressesAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<AppIPAddressWithRelations>>> {
@@ -1238,7 +1248,6 @@ export async function deleteInterfaceTypeDictionaryAction(id: string, performing
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToDelete = await prisma.interfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`接口类型字典 ID: ${id}`, `接口类型字典 ID ${id} 未找到。`);
-    // No direct FK usage check for InterfaceTypeDictionary in IPAddress model, so direct delete is fine.
     await prisma.interfaceTypeDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_interface_type_dictionary', details: `删除了接口类型字典条目: ${itemToDelete.name}` } });
     revalidatePath("/dictionaries/interface-type");
@@ -1252,7 +1261,6 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   for (const id of ids) {
     try {
       const item = await prisma.interfaceTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
-      // No direct FK usage check for InterfaceTypeDictionary in IPAddress model
       await prisma.interfaceTypeDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.interfaceTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
   }
@@ -1330,5 +1338,3 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-
-

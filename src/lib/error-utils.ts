@@ -80,12 +80,12 @@ export function createActionErrorResponse(
       userMessage: error.userMessage,
       code: error.code,
       field: error.field,
-      details: process.env.NODE_ENV === 'development' ? `${error.name} (${error.code}): ${error.message} ${error.stack ? `\nStack: ${error.stack.substring(0,300)}...` : ''}` : undefined,
+      details: process.env.NODE_ENV === 'development' ? `${error.name} (${error.code || 'N/A'}): ${error.message}${error.stack ? `\nStack: ${error.stack.substring(0,500)}...` : ''}` : undefined,
     };
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    let userMessage = `数据库操作时发生错误 (代码: ${error.code})。请检查您的输入或稍后重试。`;
+    let userMessage = `数据库操作时发生错误 (代码: ${error.code})。`;
     const devDetails = `${error.name} (Code: ${error.code}): ${error.message}${error.meta ? ` Meta: ${JSON.stringify(error.meta)}` : ''}`;
     switch (error.code) {
       case 'P2002': {
@@ -116,31 +116,32 @@ export function createActionErrorResponse(
       case 'P2025':
         userMessage = "操作失败，因为请求的记录未找到。它可能已被删除。";
         return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
-      case 'P2010': // Raw query failed
-        userMessage = `数据库原生查询失败。代码: ${error.code}。${process.env.NODE_ENV === 'development' ? ` 详情: ${error.message}` : ' 请联系管理员获取更多信息。'}`;
+      case 'P2010': // Raw query failed (used by queryVlansAction)
+        userMessage = `数据库原生查询失败。${process.env.NODE_ENV === 'development' ? `代码: ${error.code}。详情: ${error.message}` : '请联系管理员获取更多信息。'}`;
         return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
-      default: // Other Prisma known errors
-        userMessage = `数据库操作发生已知错误。代码: ${error.code}。${process.env.NODE_ENV === 'development' ? ` 详情: ${error.message}` : ' 请检查输入或联系管理员。'}`;
+      default:
+        userMessage = `数据库操作发生已知错误。${process.env.NODE_ENV === 'development' ? `代码: ${error.code}。详情: ${error.message}` : '请检查输入或联系管理员。'}`;
         return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
     }
   }
 
   if (error instanceof Prisma.PrismaClientValidationError) {
-    const detailedUserMessage = `数据验证失败。Prisma 客户端验证错误。${process.env.NODE_ENV === 'development' ? ` 详情: ${error.message}` : ' 请检查所有字段是否符合要求。'}`;
+    const detailedUserMessage = `数据验证失败。${process.env.NODE_ENV === 'development' ? `详情: ${error.message}` : '请检查所有字段是否符合要求。'}`;
     return {
         userMessage: detailedUserMessage,
         code: 'PRISMA_VALIDATION_ERROR',
-        details: process.env.NODE_ENV === 'development' ? error.message : "Prisma Client Validation Error.",
+        details: process.env.NODE_ENV === 'development' ? `${error.name}: ${error.message}${error.stack ? `\nStack: ${error.stack.substring(0,500)}...` : ''}` : "Prisma Client Validation Error.",
     };
   }
 
   let finalUserMessage = `处理您的请求时发生了一个意外错误。`;
+  let finalCode = 'UNEXPECTED_ACTION_ERROR';
   let finalDevDetails: string | undefined;
 
   if (error instanceof Error) {
     finalUserMessage += ` ${process.env.NODE_ENV === 'development' ? error.message : '请稍后重试或联系支持。'}`;
     if (process.env.NODE_ENV === 'development') {
-      finalDevDetails = `${error.name}: ${error.message} (Stack: ${error.stack ? error.stack.substring(0, 300) + "..." : "N/A"})`;
+      finalDevDetails = `${error.name} (Code: ${finalCode}): ${error.message}${error.stack ? `\nStack: ${error.stack.substring(0,500)}...` : ''}`;
     }
   } else {
     finalUserMessage += ' 请稍后重试或联系支持。';
@@ -153,16 +154,11 @@ export function createActionErrorResponse(
     }
   }
   
-  if (actionContext) {
-    finalUserMessage = `在操作 "${actionContext}" 时发生错误: ${finalUserMessage}`;
-  }
-
-
+  const contextMessage = actionContext ? `在操作 "${actionContext}" 时发生错误` : `发生错误`;
+  
   return {
-    userMessage: finalUserMessage,
-    code: 'UNEXPECTED_ACTION_ERROR',
+    userMessage: `${contextMessage}: ${finalUserMessage.replace(contextMessage + ": ", "")}`, // Avoid duplicating context
+    code: finalCode,
     details: finalDevDetails,
   };
 }
-
-
