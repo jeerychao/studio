@@ -66,8 +66,13 @@ export function PasswordChangeForm() {
         toast({ title: "密码已更新", description: "您的密码已成功更新。" });
         form.reset();
       } else if (result.error) {
+        const toastTitle = 
+          result.error.code === 'VALIDATION_ERROR' || 
+          result.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "更新失败";
         toast({ 
-            title: "更新失败", 
+            title: toastTitle, 
             description: result.error.userMessage || "无法更新密码。", 
             variant: "destructive" 
         });
@@ -143,3 +148,4 @@ export function PasswordChangeForm() {
     </Form>
   );
 }
+

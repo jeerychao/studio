@@ -131,8 +131,16 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
         if (onSubnetChange) onSubnetChange();
         form.reset();
       } else if (response.error) {
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_EXISTS')) || 
+          response.error.code === 'SUBNET_OVERLAP_ERROR' ||
+          response.error.code === 'NOT_FOUND' || // e.g. VLAN not found
+          response.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "操作失败";
         toast({
-          title: "操作失败",
+          title: toastTitle,
           description: response.error.userMessage,
           variant: "destructive",
         });

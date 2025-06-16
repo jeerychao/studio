@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { DeviceDictionary } from "@/types"; // InterfaceTypeDictionary no longer needed
+import type { DeviceDictionary } from "@/types"; 
 import { createDeviceDictionaryAction, updateDeviceDictionaryAction, type ActionResponse } from "@/lib/actions";
 
 const formSchema = z.object({
@@ -26,7 +26,6 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface DeviceDictionaryFormSheetProps {
   dictionaryEntry?: DeviceDictionary;
-  // interfaceTypes: InterfaceTypeDictionary[]; // Removed as port is removed
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
   onDataChange?: () => void;
@@ -75,7 +74,13 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, children, buttonPro
         setIsOpen(false);
         if (onDataChange) onDataChange();
       } else if (response.error) {
-        toast({ title: "操作失败", description: response.error.userMessage, variant: "destructive" });
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_EXISTS')) ||
+          response.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "操作失败";
+        toast({ title: toastTitle, description: response.error.userMessage, variant: "destructive" });
         if (response.error.field) {
           form.setError(response.error.field as FieldPath<FormValues>, { type: "server", message: response.error.userMessage });
         }
@@ -122,7 +127,6 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, children, buttonPro
                 <FormMessage />
               </FormItem>
             )} />
-            {/* Port input fields removed */}
             <SheetFooter className="mt-8"><SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose><Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? "保存中..." : (isEditing ? "保存更改" : "创建条目")}</Button></SheetFooter>
           </form>
         </Form>
@@ -130,3 +134,4 @@ export function DeviceDictionaryFormSheet({ dictionaryEntry, children, buttonPro
     </Sheet>
   );
 }
+

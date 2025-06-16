@@ -43,7 +43,6 @@ const ipAddressFormSchema = z.object({
   
   peerUnitName: z.string().max(100, "对端单位名称过长").optional(),
   peerDeviceName: z.string().optional(), 
-  // peerPortName is now constructed from peerPortPrefix and peerPortSuffix
   peerPortPrefix: z.string().optional(),
   peerPortSuffix: z.string().max(100, "对端端口后缀过长").optional(),
 
@@ -62,7 +61,7 @@ interface IPAddressFormSheetProps {
   deviceDictionaries: DeviceDictionary[]; 
   paymentSourceDictionaries: PaymentSourceDictionary[];
   accessTypeDictionaries: AccessTypeDictionary[];
-  interfaceTypes: InterfaceTypeDictionary[]; // Added for peerPortPrefix
+  interfaceTypes: InterfaceTypeDictionary[]; 
   currentSubnetId?: string;
   children?: React.ReactNode;
   buttonProps?: ButtonProps;
@@ -95,12 +94,11 @@ export function IPAddressFormSheet({
 
   React.useEffect(() => {
     if (isOpen) {
-        // Parse existing peerPortName into prefix and suffix for editing
         let initialPeerPortPrefix = NO_SELECTION_SENTINEL;
         let initialPeerPortSuffix = "";
         if (isEditing && ipAddress?.peerPortName) {
             const existingPeerPort = ipAddress.peerPortName;
-            const foundPrefixEntry = sortedInterfaceTypes.find(it => existingPeerPort.startsWith(it.name + " ")); // Check for space
+            const foundPrefixEntry = sortedInterfaceTypes.find(it => existingPeerPort.startsWith(it.name + " ")); 
             if (foundPrefixEntry) {
                 initialPeerPortPrefix = foundPrefixEntry.name;
                 initialPeerPortSuffix = existingPeerPort.substring(foundPrefixEntry.name.length + 1).trim();
@@ -110,7 +108,7 @@ export function IPAddressFormSheet({
                      initialPeerPortPrefix = foundExactPrefixEntry.name;
                      initialPeerPortSuffix = "";
                 } else {
-                    initialPeerPortSuffix = existingPeerPort; // Assume no prefix or prefix not in list
+                    initialPeerPortSuffix = existingPeerPort; 
                 }
             }
         }
@@ -134,7 +132,7 @@ export function IPAddressFormSheet({
 
             selectedAccessType: ipAddress?.selectedAccessType || NO_SELECTION_SENTINEL,
             selectedLocalDeviceName: ipAddress?.selectedLocalDeviceName || NO_SELECTION_SENTINEL,
-            selectedDevicePort: ipAddress?.selectedDevicePort || "", // Now manual input
+            selectedDevicePort: ipAddress?.selectedDevicePort || "", 
             selectedPaymentSource: ipAddress?.selectedPaymentSource || NO_SELECTION_SENTINEL,
         });
         form.clearErrors();
@@ -145,16 +143,11 @@ export function IPAddressFormSheet({
   const handleLocalDeviceChange = (value: string) => {
     const deviceNameToSet = value === NO_SELECTION_SENTINEL ? "" : value;
     form.setValue("selectedLocalDeviceName", deviceNameToSet);
-    // DeviceDictionary.port is removed, so selectedDevicePort is now fully manual
-    // form.setValue("selectedDevicePort", ""); // Optionally clear it, or let user manage
   };
 
   const handlePeerDeviceChange = (value: string) => {
     const deviceNameToSet = value === NO_SELECTION_SENTINEL ? "" : value;
     form.setValue("peerDeviceName", deviceNameToSet);
-    // DeviceDictionary.port is removed, peerPortName is constructed from prefix/suffix
-    // form.setValue("peerPortPrefix", NO_SELECTION_SENTINEL); // Optionally clear
-    // form.setValue("peerPortSuffix", ""); // Optionally clear
   };
 
 
@@ -215,7 +208,14 @@ export function IPAddressFormSheet({
         setIsOpen(false);
         if (onIpAddressChange) onIpAddressChange();
       } else if (response.error) {
-        toast({ title: "操作失败", description: response.error.userMessage, variant: "destructive" });
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_EXISTS')) || 
+          response.error.code === 'NOT_FOUND' || 
+          response.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "操作失败";
+        toast({ title: toastTitle, description: response.error.userMessage, variant: "destructive" });
         if (response.error.field) form.setError(response.error.field as FieldPath<IPAddressFormValues>, { type: "server", message: response.error.userMessage });
       }
     } catch (error) {
@@ -382,3 +382,4 @@ export function IPAddressFormSheet({
     </Sheet>
   );
 }
+

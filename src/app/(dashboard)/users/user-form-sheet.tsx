@@ -160,8 +160,15 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
         setIsOpen(false);
         if (onUserChange) onUserChange();
       } else if (response.error) {
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_EXISTS')) ||
+          response.error.code === 'AUTH_ERROR' ||
+          response.error.code === 'NOT_FOUND' // e.g. Role not found
+          ? "输入或操作无效" 
+          : "操作失败";
         toast({
-          title: "操作失败",
+          title: toastTitle,
           description: response.error.userMessage,
           variant: "destructive",
         });

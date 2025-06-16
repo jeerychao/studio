@@ -139,15 +139,17 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
           onRoleChange();
         }
       } else if (response.error) {
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_PROTECTED')) || // e.g. ADMIN_ROLE_PERMISSIONS_PROTECTED
+          response.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "更新角色失败";
         toast({
-          title: "更新角色失败",
+          title: toastTitle,
           description: response.error.userMessage,
           variant: "destructive",
         });
-        // Role form errors from server are less likely to be field-specific in the same way,
-        // unless it's a permissions integrity issue not caught by Zod (which is unlikely if server logic is sound).
-        // For now, we'll just show the main error message in the toast.
-        // If server-side validation can pinpoint a field (e.g., 'permissions'), it can be added here.
         if (response.error.field) {
             form.setError(response.error.field as FieldPath<RoleFormValues>, {
                 type: "server",
@@ -155,7 +157,7 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
             });
         }
       }
-    } catch (error) { // Catch unexpected errors
+    } catch (error) { 
       console.error("[RoleFormSheet onSubmit] Error updating role:", error); 
       toast({
         title: "客户端错误",
@@ -296,3 +298,4 @@ export function RoleFormSheet({ role, children, buttonProps, onRoleChange }: Rol
     </Sheet>
   );
 }
+

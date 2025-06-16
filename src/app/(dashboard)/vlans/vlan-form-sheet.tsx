@@ -98,8 +98,14 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
         if (onVlanChange) onVlanChange();
         form.reset({ vlanNumber: undefined, name: "", description: "" });
       } else if (response.error) {
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_EXISTS')) ||
+          response.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "操作失败";
         toast({
-          title: "操作失败",
+          title: toastTitle,
           description: response.error.userMessage,
           variant: "destructive",
         });

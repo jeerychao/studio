@@ -67,7 +67,13 @@ export function PaymentSourceDictionaryFormSheet({ dictionaryEntry, children, bu
         setIsOpen(false);
         if (onDataChange) onDataChange();
       } else if (response.error) {
-        toast({ title: "操作失败", description: response.error.userMessage, variant: "destructive" });
+        const toastTitle = 
+          response.error.code === 'VALIDATION_ERROR' || 
+          (response.error.code && response.error.code.includes('_EXISTS')) ||
+          response.error.code === 'AUTH_ERROR'
+          ? "输入或操作无效" 
+          : "操作失败";
+        toast({ title: toastTitle, description: response.error.userMessage, variant: "destructive" });
         if (response.error.field) {
           form.setError(response.error.field as FieldPath<FormValues>, { type: "server", message: response.error.userMessage });
         }
@@ -123,3 +129,4 @@ export function PaymentSourceDictionaryFormSheet({ dictionaryEntry, children, bu
     </Sheet>
   );
 }
+
