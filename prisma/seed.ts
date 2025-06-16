@@ -84,17 +84,14 @@ async function main() {
     try {
       const { password, ...restOfUserData } = userData;
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
-        ...restOfUserData,
-        password: password || encrypt("FallbackDefaultPassword1!"),
+        ...restOfUserData, // Includes id
+        password: password ? password : encrypt("FallbackDefaultPassword1!"),
       };
-      // Users are typically upserted based on a unique business key like email.
-      // If 'id' is also predefined in mockUsers and is the primary key,
-      // you might want to use 'where: { id: userData.id }' if email can change.
-      // For now, assuming email is the stable unique key for upsert lookup.
+
       await prisma.user.upsert({
-        where: { email: userData.email },
+        where: { id: userData.id }, 
         update: dataToUpsert,
-        create: dataToUpsert, // This includes the 'id' from mockUsers if it exists
+        create: dataToUpsert,
       });
     } catch (e: any) {
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -107,10 +104,9 @@ async function main() {
   for (const vlanData of mockVLANs) {
     try {
       await prisma.vLAN.upsert({
-        // Assuming vlanNumber is unique for VLANs
-        where: { vlanNumber: vlanData.vlanNumber },
-        update: { name: vlanData.name, description: vlanData.description },
-        create: vlanData, // This includes the 'id' from mockVLANs
+        where: { id: vlanData.id },
+        update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
+        create: vlanData,
       });
     } catch (e: any) {
       logger.error(`Error seeding VLAN ${vlanData.vlanNumber}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -123,22 +119,29 @@ async function main() {
   for (const subnetData of mockSubnets) {
     try {
       const { vlanId, ...restOfSubnetData } = subnetData;
-      const createOrUpdatePayload: Prisma.SubnetCreateInput & Prisma.SubnetUpdateInput = { ...restOfSubnetData };
+      // Base data for both create and update, EXCLUDING the relational 'vlan' field initially
+      const baseDataForSubnet = { ...restOfSubnetData, id: subnetData.id };
+
+      // Prepare the 'update' payload
+      const subnetUpdateInput: Prisma.SubnetUpdateInput = { ...baseDataForSubnet };
       if (vlanId) {
-        createOrUpdatePayload.vlan = { connect: { id: vlanId } };
+        subnetUpdateInput.vlan = { connect: { id: vlanId } };
       } else {
-        // Explicitly set vlan to disconnect if vlanId is not provided,
-        // useful for updates where a vlan might be removed.
-        createOrUpdatePayload.vlan = { disconnect: true };
+        // Ensure existing VLAN connection is removed if vlanId is now null/undefined
+        subnetUpdateInput.vlan = { disconnect: true };
       }
-      
+
+      // Prepare the 'create' payload
+      const subnetCreateInput: Prisma.SubnetCreateInput = { ...baseDataForSubnet };
+      if (vlanId) {
+        subnetCreateInput.vlan = { connect: { id: vlanId } };
+      }
+      // If vlanId is not present, 'vlan' field is omitted from subnetCreateInput, meaning no relation.
+
       await prisma.subnet.upsert({
-        where: { id: subnetData.id }, // Use the predefined ID for lookup
-        update: createOrUpdatePayload,
-        create: {
-          ...createOrUpdatePayload,
-          id: subnetData.id, // Ensure ID is part of create payload
-        },
+        where: { id: subnetData.id },
+        update: subnetUpdateInput,
+        create: subnetCreateInput,
       });
     } catch (e: any) {
       logger.error(`Error seeding subnet ${subnetData.cidr} (ID: ${subnetData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, cidr: subnetData.cidr, id: subnetData.id });
@@ -150,22 +153,23 @@ async function main() {
   logger.info('Start seeding IP Addresses...');
   for (const ipData of seedIPsData) {
     try {
-      const { 
-        subnetId: ipSubnetId, 
-        directVlanId, 
-        peerUnitName, 
-        peerDeviceName, 
+      const {
+        subnetId: ipSubnetId,
+        directVlanId,
+        peerUnitName,
+        peerDeviceName,
         peerPortName,
-        selectedAccessType, 
-        selectedLocalDeviceName, 
-        selectedDevicePort, 
+        selectedAccessType,
+        selectedLocalDeviceName,
+        selectedDevicePort,
         selectedPaymentSource,
-        ...restOfIpData 
+        ...restOfIpData
       } = ipData;
 
-      const createOrUpdatePayload: Prisma.IPAddressCreateInput & Prisma.IPAddressUpdateInput = {
+      const baseDataForIp = {
         ...restOfIpData,
-        status: ipData.status as string,
+        id: ipData.id,
+        status: ipData.status as string, // Ensure status is string as DB expects
         peerUnitName: peerUnitName || null,
         peerDeviceName: peerDeviceName || null,
         peerPortName: peerPortName || null,
@@ -175,24 +179,30 @@ async function main() {
         selectedPaymentSource: selectedPaymentSource || null,
       };
 
+      const ipAddressUpdateInput: Prisma.IPAddressUpdateInput = { ...baseDataForIp };
       if (ipSubnetId) {
-        createOrUpdatePayload.subnet = { connect: { id: ipSubnetId } };
+        ipAddressUpdateInput.subnet = { connect: { id: ipSubnetId } };
       } else {
-        createOrUpdatePayload.subnet = { disconnect: true };
+        ipAddressUpdateInput.subnet = { disconnect: true };
       }
       if (directVlanId) {
-        createOrUpdatePayload.directVlan = { connect: { id: directVlanId } };
+        ipAddressUpdateInput.directVlan = { connect: { id: directVlanId } };
       } else {
-        createOrUpdatePayload.directVlan = { disconnect: true };
+        ipAddressUpdateInput.directVlan = { disconnect: true };
       }
-      
+
+      const ipAddressCreateInput: Prisma.IPAddressCreateInput = { ...baseDataForIp };
+      if (ipSubnetId) {
+        ipAddressCreateInput.subnet = { connect: { id: ipSubnetId } };
+      }
+      if (directVlanId) {
+        ipAddressCreateInput.directVlan = { connect: { id: directVlanId } };
+      }
+
       await prisma.iPAddress.upsert({
-        where: { id: ipData.id }, // Use the predefined ID for lookup
-        update: createOrUpdatePayload,
-        create: {
-            ...createOrUpdatePayload,
-            id: ipData.id // Ensure ID is part of create payload
-        },
+        where: { id: ipData.id },
+        update: ipAddressUpdateInput,
+        create: ipAddressCreateInput,
       });
     } catch (e: any) {
       logger.error(`Error seeding IP Address ${ipData.ipAddress} (ID: ${ipData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, ipDataAttempted: ipData });
@@ -205,7 +215,7 @@ async function main() {
   for (const deviceData of mockDeviceDictionaries) {
     try {
       await prisma.deviceDictionary.upsert({
-        where: { deviceName: deviceData.deviceName }, // deviceName is unique
+        where: { deviceName: deviceData.deviceName },
         update: { port: deviceData.port },
         create: deviceData,
       });
@@ -220,8 +230,8 @@ async function main() {
   for (const paymentData of mockPaymentSourceDictionaries) {
     try {
       await prisma.paymentSourceDictionary.upsert({
-        where: { sourceName: paymentData.sourceName }, // sourceName is unique
-        update: {}, 
+        where: { sourceName: paymentData.sourceName },
+        update: {},
         create: paymentData,
       });
     } catch (e: any) {
@@ -235,8 +245,8 @@ async function main() {
   for (const accessTypeData of mockAccessTypeDictionaries) {
     try {
       await prisma.accessTypeDictionary.upsert({
-        where: { name: accessTypeData.name }, // name is unique
-        update: {}, 
+        where: { name: accessTypeData.name },
+        update: {},
         create: accessTypeData,
       });
     } catch (e: any) {
@@ -250,7 +260,7 @@ async function main() {
   for (const interfaceTypeData of mockInterfaceTypeDictionaries) {
     try {
       await prisma.interfaceTypeDictionary.upsert({
-        where: { name: interfaceTypeData.name }, // name is unique
+        where: { name: interfaceTypeData.name },
         update: { description: interfaceTypeData.description },
         create: interfaceTypeData,
       });
@@ -282,4 +292,3 @@ main()
 
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
 
-    
