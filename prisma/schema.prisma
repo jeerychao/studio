@@ -1,168 +1,179 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-model Subnet {
-  id             String      @id @default(cuid())
-  cidr           String      @unique // e.g., 192.168.1.0/24
-  networkAddress String      // e.g., 192.168.1.0
-  subnetMask     String      // e.g., 255.255.255.0
-  ipRange        String?     // e.g., "192.168.1.1 - 192.168.1.254"
-  name           String?
-  description    String?
-  dhcpEnabled    Boolean?    @default(false)
-  vlanId         String?     @map("vlan_id")
-  vlan           VLAN?       @relation(fields: [vlanId], references: [id], onDelete: SetNull) // If VLAN is deleted, set vlanId to null
-  ipAddresses    IPAddress[]
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
-
-  @@map("subnets")
-}
-
-model VLAN {
-  id          String    @id @default(cuid())
-  vlanNumber  Int       @unique @map("vlan_number") // VLAN ID (1-4094)
-  name        String?
-  description String?
-  subnets     Subnet[]
-  directIPs   IPAddress[] @relation("DirectVLANToIP") // IPs directly assigned to this VLAN
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  @@map("vlans")
-}
-
-model IPAddress {
-  id                        String    @id @default(cuid())
-  ipAddress                 String    @map("ip_address")
-  subnetId                  String?   @map("subnet_id")
-  subnet                    Subnet?   @relation(fields: [subnetId], references: [id], onDelete: Cascade) // If Subnet is deleted, cascade delete IPs in it
-  directVlanId              String?   @map("direct_vlan_id")
-  directVlan                VLAN?     @relation("DirectVLANToIP", fields: [directVlanId], references: [id], onDelete: SetNull)
-  status                    String    // e.g., "allocated", "free", "reserved"
-  isGateway                 Boolean?  @default(false) @map("is_gateway")
-  allocatedTo               String?   @map("allocated_to")
-  usageUnit                 String?   @map("usage_unit")
-  contactPerson             String?   @map("contact_person")
-  phone                     String?
-  description               String?
-  lastSeen                  DateTime? @map("last_seen")
-
-  // Fields for peer connection details
-  peerUnitName              String?    @map("peer_unit_name")
-  peerDeviceName            String?    @map("peer_device_name")
-  peerPortName              String?    @map("peer_port_name")
-
-  // Fields for local connection details
-  selectedLocalDeviceName   String?    @map("selected_local_device_name")
-  selectedDevicePort        String?    @map("selected_device_port")
-  
-  selectedAccessType        String?    @map("selected_access_type")    // From AccessTypeDictionary.name
-  selectedPaymentSource     String?    @map("selected_payment_source") // From PaymentSourceDictionary.name
-
-  createdAt                 DateTime  @default(now()) @map("created_at")
-  updatedAt                 DateTime  @updatedAt @map("updated_at")
-
-  @@unique([ipAddress, subnetId], name: "unique_ip_in_subnet") // Ensures IP is unique within a subnet, allows same IP in different subnets. IPs not in a subnet (subnetId=NULL) are globally unique for their IP.
-  @@map("ip_addresses")
-}
-
-model User {
-  id          String    @id @default(cuid())
-  username    String    @unique
-  email       String    @unique
-  password    String    // Store hashed password
-  phone       String?
-  roleId      String    @map("role_id")
-  role        Role      @relation(fields: [roleId], references: [id])
-  avatar      String?   // URL or path to avatar image
-  lastLogin   DateTime? @map("last_login")
-  auditLogs   AuditLog[]
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  @@map("users")
-}
-
-model Role {
-  id          String       @id @default(cuid())
-  name        String       @unique // e.g., Administrator, Operator, Viewer
-  description String?
-  users       User[]
-  permissions Permission[] @relation("RoleToPermission")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-
-  @@map("roles")
-}
-
 model Permission {
-  id          String   @id // e.g., 'subnet.create', 'user.delete'
-  name        String   // User-friendly name, e.g., "Create Subnet"
-  group       String   // e.g., "Subnet Management", "User Access"
+  id          String   @id @unique
+  name        String   @unique
+  group       String
   description String?
-  roles       Role[]   @relation("RoleToPermission")
+  roles       Role[]   @relation("RolePermissions")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("permissions")
 }
 
-model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?  @map("user_id") // Optional: some actions might be system-initiated
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  username    String?  // Store username at time of action for history, even if user is deleted/renamed
-  action      String   // e.g., "create_subnet", "login_failed"
-  timestamp   DateTime @default(now())
-  details     String?  // JSON string or simple text for more details
-  
-  @@map("audit_logs")
+model Role {
+  id          String       @id @unique
+  name        String       @unique // e.g., Administrator, Operator, Viewer
+  description String?
+  users       User[]
+  permissions Permission[] @relation("RolePermissions")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("roles")
 }
 
-// Dictionaries
+model User {
+  id          String    @id @unique
+  username    String    @unique
+  email       String    @unique
+  password    String
+  phone       String?
+  avatar      String?
+  roleId      String    @map("role_id")
+  role        Role      @relation(fields: [roleId], references: [id])
+  lastLogin   DateTime? @map("last_login")
+  auditLogs   AuditLog[] @relation("UserAuditLogs") 
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Subnet {
+  id              String      @id @unique
+  cidr            String      @unique // e.g., 192.168.1.0/24
+  networkAddress  String      @map("network_address") // e.g., 192.168.1.0
+  subnetMask      String      @map("subnet_mask")     // e.g., 255.255.255.0
+  ipRange         String?     @map("ip_range")        // e.g., "192.168.1.1 - 192.168.1.254"
+  name            String?
+  description     String?
+  dhcpEnabled     Boolean?    @default(false) @map("dhcp_enabled")
+  vlanId          String?     @map("vlan_id")
+  vlan            VLAN?       @relation(fields: [vlanId], references: [id], onDelete:Restrict, onUpdate:Cascade)
+  ipAddresses     IPAddress[] @relation("SubnetIPAddresses")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  
+  @@index([networkAddress])
+  @@map("subnets")
+}
+
+model VLAN {
+  id            String      @id @unique
+  vlanNumber    Int         @unique @map("vlan_number") // 1-4094
+  name          String?
+  description   String?
+  subnets       Subnet[]
+  directIPs     IPAddress[] @relation("VLANToDirectIPAddresses") // IPs directly assigned to this VLAN (e.g. management IP on a switch for this VLAN SVI)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@map("vlans")
+}
+
+model IPAddress {
+  id           String  @id @unique
+  ipAddress    String  @map("ip_address")
+  subnetId     String? @map("subnet_id")
+  subnet       Subnet? @relation("SubnetIPAddresses", fields: [subnetId], references: [id], onDelete:Restrict, onUpdate:Cascade)
+  directVlanId String? @map("direct_vlan_id") // For IPs not part of a subnet but directly on a VLAN (e.g., SVI's own IP)
+  directVlan   VLAN?   @relation("VLANToDirectIPAddresses", fields: [directVlanId], references: [id], onDelete:SetNull, onUpdate:Cascade)
+
+
+  status       String // "allocated", "free", "reserved"
+  isGateway    Boolean? @default(false) @map("is_gateway")
+  
+  allocatedTo  String? @map("allocated_to")
+  usageUnit    String? @map("usage_unit")
+  contactPerson String? @map("contact_person")
+  phone        String?
+
+  description  String?
+  lastSeen     DateTime? @updatedAt @map("last_seen") // Automatically updates when the record is changed
+
+  // New fields for peer and local device/port information
+  peerUnitName            String? @map("peer_unit_name")            // 对端单位名称
+  peerDeviceName          String? @map("peer_device_name")          // 对端设备名称 (from DeviceDictionary)
+  peerPortName            String? @map("peer_port_name")            // 对端端口名称 (e.g., "GigabitEthernet0/1")
+
+  selectedLocalDeviceName String? @map("selected_local_device_name") // 本端设备名称 (from DeviceDictionary)
+  selectedDevicePort      String? @map("selected_device_port")      // 本端设备端口 (e.g., "ge-0/0/1")
+  
+  selectedAccessType      String? @map("selected_access_type")      // 接入方式 (from AccessTypeDictionary)
+  selectedPaymentSource   String? @map("selected_payment_source")   // 付费来源 (from PaymentSourceDictionary)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([ipAddress, subnetId]) // For efficiently finding an IP, potentially within a subnet
+  @@index([allocatedTo])
+  @@index([usageUnit])
+  @@index([status])
+  @@map("ip_addresses")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  user      User?    @relation("UserAuditLogs", fields: [userId], references: [id], onDelete:SetNull, onUpdate:Cascade) // If user is deleted, keep log but nullify userId
+  username  String?  // Denormalized for easier display even if user is deleted
+  action    String   // e.g., "create_subnet", "user_login"
+  timestamp DateTime @default(now())
+  details   String?  // JSON string or simple text description of the action
+  
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
 
 model DeviceDictionary {
   id          String   @id @default(cuid())
   deviceName  String   @unique @map("device_name")
-  // port        String? // Removed as per user request
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  // port field removed
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("device_dictionaries")
+  @@map("device_dictionary")
 }
 
 model PaymentSourceDictionary {
   id          String   @id @default(cuid())
   sourceName  String   @unique @map("source_name")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("payment_source_dictionaries")
+  @@map("payment_source_dictionary")
 }
 
 model AccessTypeDictionary {
   id          String   @id @default(cuid())
-  name        String   @unique
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("access_type_dictionaries")
+  name        String   @unique // e.g., 专线, 汇聚, 拨号
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("access_type_dictionary")
 }
 
 model InterfaceTypeDictionary {
-  id            String   @id @default(cuid())
-  name          String   @unique // e.g., "GigabitEthernet", "ge-", "Port-channel"
-  description   String?
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., GigabitEthernet, ge-, Port-channel
+  description String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("interface_type_dictionaries")
+  @@map("interface_type_dictionary")
 }
+```
