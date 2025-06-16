@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HardDrive, Loader2, PlusCircle, Edit, Trash2, ShieldAlert } from "lucide-react";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { PERMISSIONS, type DeviceDictionary, type InterfaceTypeDictionary, type PaginatedResponse } from "@/types";
-import { getDeviceDictionariesAction, deleteDeviceDictionaryAction, batchDeleteDeviceDictionariesAction, getInterfaceTypeDictionariesAction } from "@/lib/actions";
+import { PERMISSIONS, type DeviceDictionary, type PaginatedResponse } from "@/types"; // InterfaceTypeDictionary no longer needed
+import { getDeviceDictionariesAction, deleteDeviceDictionaryAction, batchDeleteDeviceDictionariesAction } from "@/lib/actions"; // getInterfaceTypeDictionariesAction no longer needed
 import { useToast } from "@/hooks/use-toast";
 import { DeviceDictionaryFormSheet } from "./device-dictionary-form-sheet";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
@@ -32,7 +32,7 @@ function LoadingPage() {
 
 function DeviceDictionaryView() {
   const [dictData, setDictData] = React.useState<PaginatedResponse<DeviceDictionary> | null>(null);
-  const [interfaceTypes, setInterfaceTypes] = React.useState<InterfaceTypeDictionary[]>([]);
+  // const [interfaceTypes, setInterfaceTypes] = React.useState<InterfaceTypeDictionary[]>([]); // Removed
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const { currentUser, isAuthLoading } = useCurrentUser();
@@ -48,10 +48,8 @@ function DeviceDictionaryView() {
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_DEVICE_DICTIONARY)) {
-        const [fetchedResult, fetchedInterfaceTypesResult] = await Promise.all([
-            getDeviceDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
-            getInterfaceTypeDictionariesAction({ pageSize: 1000 }) 
-        ]);
+        // Removed fetching of interface types
+        const fetchedResult = await getDeviceDictionariesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
         
          if (fetchedResult.success && fetchedResult.data) {
           setDictData(fetchedResult.data);
@@ -67,21 +65,14 @@ function DeviceDictionaryView() {
           setDictData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
         }
 
-        if (fetchedInterfaceTypesResult.success && fetchedInterfaceTypesResult.data) {
-            setInterfaceTypes(fetchedInterfaceTypesResult.data.data || []);
-        } else {
-            toast({ title: "获取接口类型错误", description: fetchedInterfaceTypesResult.error?.userMessage || "未能加载网络接口类型数据。", variant: "destructive" });
-            setInterfaceTypes([]);
-        }
-
       } else {
         setDictData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
-        setInterfaceTypes([]);
+        // setInterfaceTypes([]); // Removed
       }
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
       setDictData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
-      setInterfaceTypes([]);
+      // setInterfaceTypes([]); // Removed
     } finally {
       setIsLoading(false);
       setSelectedIds(new Set());
@@ -142,7 +133,7 @@ function DeviceDictionaryView() {
   const pageActionButtons = (
     <div className="flex flex-col sm:flex-row gap-2">
       {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="设备字典条目" batchDeleteAction={batchDeleteDeviceDictionariesAction} onBatchDeleted={fetchData} />}
-      {canCreate && <DeviceDictionaryFormSheet interfaceTypes={interfaceTypes} onDataChange={handleChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}}/>}
+      {canCreate && <DeviceDictionaryFormSheet /* interfaceTypes={interfaceTypes} // Removed prop */ onDataChange={handleChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}}/>}
     </div>
   );
   
@@ -156,7 +147,7 @@ function DeviceDictionaryView() {
 
   return (
     <>
-      <PageHeader title="设备字典管理" description="管理设备名称及其关联端口信息。" icon={<HardDrive className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} />
+      <PageHeader title="设备字典管理" description="管理设备名称信息。" icon={<HardDrive className="h-6 w-6 text-primary" />} actionElement={pageActionButtons} />
       <Card>
         <CardHeader><CardTitle>设备列表</CardTitle><CardDescription>显示 {itemsToDisplay.length} 条，共 {finalTotalCount} 条设备字典条目。</CardDescription></CardHeader>
         <CardContent>
@@ -165,7 +156,8 @@ function DeviceDictionaryView() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead className="w-[50px]">{canDelete && <Checkbox checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)} onCheckedChange={handleSelectAll} aria-label="全选当前页"/>}</TableHead>
-                  <TableHead>设备名称</TableHead><TableHead>端口号</TableHead>
+                  <TableHead>设备名称</TableHead>
+                  {/* <TableHead>端口号</TableHead> // Removed port column */}
                   {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
                 </TableRow></TableHeader>
                 <TableBody>
@@ -173,10 +165,10 @@ function DeviceDictionaryView() {
                     <TableRow key={item.id} data-state={selectedIds.has(item.id) ? "selected" : ""}>
                       <TableCell>{canDelete && <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={(checked) => handleSelectItem(item.id, checked)} aria-label={`选择条目 ${item.deviceName}`}/>}</TableCell>
                       <TableCell className="font-medium">{item.deviceName}</TableCell>
-                      <TableCell>{item.port || "N/A"}</TableCell>
+                      {/* <TableCell>{item.port || "N/A"}</TableCell> // Removed port cell */}
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
-                          {canEdit && <DeviceDictionaryFormSheet dictionaryEntry={item} interfaceTypes={interfaceTypes} onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></DeviceDictionaryFormSheet>}
+                          {canEdit && <DeviceDictionaryFormSheet dictionaryEntry={item} /* interfaceTypes={interfaceTypes} // Removed prop */ onDataChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑条目"><Edit className="h-4 w-4" /></Button></DeviceDictionaryFormSheet>}
                           {canDelete && <DeleteConfirmationDialog itemId={item.id} itemName={item.deviceName} deleteAction={deleteDeviceDictionaryAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除条目"><Trash2 className="h-4 w-4" /></Button>} />}
                         </TableCell>
                       )}
@@ -189,7 +181,7 @@ function DeviceDictionaryView() {
           ) : (
              <div className="text-center py-10">
               <p className="text-muted-foreground">未找到设备字典数据。</p>
-              {canCreate && <DeviceDictionaryFormSheet interfaceTypes={interfaceTypes} onDataChange={handleChangeSuccess} buttonProps={{className: "mt-4"}}/>}
+              {canCreate && <DeviceDictionaryFormSheet /* interfaceTypes={interfaceTypes} // Removed prop */ onDataChange={handleChangeSuccess} buttonProps={{className: "mt-4"}}/>}
             </div>
           )}
         </CardContent>

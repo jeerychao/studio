@@ -29,10 +29,10 @@ export const PERMISSIONS = {
   VIEW_QUERY_PAGE: 'querypage.view',
   VIEW_SETTINGS: 'settings.view',
 
-  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view', // Renamed from local_device
-  CREATE_DEVICE_DICTIONARY: 'dictionary.device.create', // Renamed
-  EDIT_DEVICE_DICTIONARY: 'dictionary.device.edit', // Renamed
-  DELETE_DEVICE_DICTIONARY: 'dictionary.device.delete', // Renamed
+  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view', 
+  CREATE_DEVICE_DICTIONARY: 'dictionary.device.create', 
+  EDIT_DEVICE_DICTIONARY: 'dictionary.device.edit', 
+  DELETE_DEVICE_DICTIONARY: 'dictionary.device.delete', 
 
   VIEW_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.view',
   CREATE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.create',
@@ -44,16 +44,10 @@ export const PERMISSIONS = {
   EDIT_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.edit',
   DELETE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.delete',
 
-  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view', // Renamed from network_interface_type
-  CREATE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.create', // Renamed
-  EDIT_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.edit', // Renamed
-  DELETE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.delete', // Renamed
-
-  // OperatorDictionary related permissions are removed
-  // VIEW_DICTIONARY_OPERATOR: 'dictionary.operator.view',
-  // CREATE_DICTIONARY_OPERATOR: 'dictionary.operator.create',
-  // EDIT_DICTIONARY_OPERATOR: 'dictionary.operator.edit',
-  // DELETE_DICTIONARY_OPERATOR: 'dictionary.operator.delete',
+  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view', 
+  CREATE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.create', 
+  EDIT_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.edit', 
+  DELETE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.delete', 
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -83,7 +77,7 @@ export interface VLAN {
   vlanNumber: number;
   name?: string;
   description?: string;
-  subnetCount?: number; // Represents count of associated subnets and direct IPs
+  subnetCount?: number; 
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -92,7 +86,7 @@ export interface IPAddress {
   id: string;
   ipAddress: string;
   subnetId?: string;
-  directVlanId?: string; // For IPs directly assigned to a VLAN, not through subnet
+  directVlanId?: string; 
   status: IPAddressStatus;
   isGateway?: boolean;
   allocatedTo?: string;
@@ -100,19 +94,17 @@ export interface IPAddress {
   contactPerson?: string;
   phone?: string;
   description?: string;
-  lastSeen?: string; // ISO string
+  lastSeen?: string; 
 
-  // Fields replacing operator-specific ones
-  peerUnitName?: string; // Formerly selectedOperatorName, now free text
-  peerDeviceName?: string; // Formerly selectedOperatorDevice, now sourced from DeviceDictionary
-  peerPortName?: string; // Auto-filled based on peerDeviceName from DeviceDictionary
+  peerUnitName?: string; 
+  peerDeviceName?: string; 
+  peerPortName?: string; 
 
-  // Fields for local connection details
-  selectedLocalDeviceName?: string; // Sourced from DeviceDictionary
-  selectedDevicePort?: string; // Auto-filled based on selectedLocalDeviceName from DeviceDictionary
+  selectedLocalDeviceName?: string; 
+  selectedDevicePort?: string; 
   
-  selectedAccessType?: string; // Sourced from AccessTypeDictionary
-  selectedPaymentSource?: string; // Sourced from PaymentSourceDictionary
+  selectedAccessType?: string; 
+  selectedPaymentSource?: string; 
 }
 
 
@@ -121,17 +113,17 @@ export interface User {
   username: string;
   email: string;
   roleId: string;
-  roleName?: RoleName; // Added for convenience, not directly in DB User model
+  roleName?: RoleName; 
   avatar?: string;
-  lastLogin?: string; // ISO string
-  permissions?: PermissionId[]; // Added for convenience
+  lastLogin?: string; 
+  permissions?: PermissionId[]; 
 }
 
 export interface Role {
   id: string;
   name: RoleName;
   description?: string;
-  userCount?: number; // Calculated, not in DB
+  userCount?: number; 
   permissions: PermissionId[];
 }
 
@@ -140,43 +132,40 @@ export interface AuditLog {
   userId?: string;
   username?: string;
   action: string;
-  timestamp: string; // ISO string
+  timestamp: string; 
   details?: string;
 }
 
-// Renamed from LocalDeviceDictionary
 export interface DeviceDictionary {
   id: string;
-  deviceName: string; // Unique
-  port?: string; // Optional port information, potentially structured or free-text
-  createdAt?: string; // ISO string
-  updatedAt?: string; // ISO string
+  deviceName: string; 
+  // port?: string; // Removed as per user request
+  createdAt?: string; 
+  updatedAt?: string; 
 }
 
 export interface PaymentSourceDictionary {
   id: string;
-  sourceName: string; // Unique
-  createdAt?: string; // ISO string
-  updatedAt?: string; // ISO string
+  sourceName: string; 
+  createdAt?: string; 
+  updatedAt?: string; 
 }
 
 export interface AccessTypeDictionary {
   id: string;
-  name: string; // Unique
-  createdAt?: string; // ISO string
-  updatedAt?: string; // ISO string
+  name: string; 
+  createdAt?: string; 
+  updatedAt?: string; 
 }
 
-// Renamed from NetworkInterfaceTypeDictionary
 export interface InterfaceTypeDictionary {
   id: string;
-  name: string; // Unique (e.g., "GigabitEthernet", "ge-", "Port-channel")
+  name: string; 
   description?: string;
-  createdAt?: string; // ISO string
-  updatedAt?: string; // ISO string
+  createdAt?: string; 
+  updatedAt?: string; 
 }
 
-// OperatorDictionary type is removed
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -187,8 +176,8 @@ export interface PaginatedResponse<T> {
 }
 
 export interface BatchOperationFailure<TIdentifier = string> {
-  id?: TIdentifier; // ID might not always be available if failure is pre-DB
-  itemIdentifier: string; // A user-friendly identifier for the item
+  id?: TIdentifier; 
+  itemIdentifier: string; 
   error: string;
 }
 
@@ -208,7 +197,7 @@ export interface SubnetQueryResult {
   vlanName?: string;
   totalUsableIPs: number;
   allocatedIPsCount: number;
-  dbFreeIPsCount: number; // IPs marked as 'free' in DB for this subnet
+  dbFreeIPsCount: number; 
   reservedIPsCount: number;
 }
 
@@ -228,24 +217,9 @@ export interface SubnetFreeIpDetails {
   totalUsableIPs: number;
   dbAllocatedIPsCount: number;
   dbReservedIPsCount: number;
-  calculatedAvailableIPsCount: number; // Based on totalUsable - (dbAllocated + dbReserved) - potentially more complex if actual free IPs are tracked. Simpler: totalUsable - used in DB.
-  calculatedAvailableIpRanges: string[]; // List of free IP ranges.
+  calculatedAvailableIPsCount: number; 
+  calculatedAvailableIpRanges: string[]; 
 }
-
-
-// This enum is not currently used directly for DeviceDictionary types.
-// It was for a more structured 'Device' model which is not part of DeviceDictionary.
-// export enum DeviceType {
-//   ROUTER = "ROUTER",
-//   SWITCH = "SWITCH",
-//   FIREWALL = "FIREWALL",
-//   SERVER = "SERVER",
-//   ACCESS_POINT = "ACCESS_POINT",
-//   OLT = "OLT",
-//   DDN_DEVICE = "DDN_DEVICE",
-//   OTHER = "OTHER",
-// }
-
 
 export interface IPStatusCounts {
   allocated: number;
@@ -254,9 +228,9 @@ export interface IPStatusCounts {
 }
 
 export interface TopNItemCount {
-  item: string; // e.g., usageUnit, operatorName
+  item: string; 
   count: number;
-  fill?: string; // for charts
+  fill?: string; 
 }
 
 export interface VLANResourceInfo {
@@ -279,8 +253,7 @@ export interface DashboardData {
   totalVlanCount: number;
   totalSubnetCount: number;
   ipUsageByUnit: TopNItemCount[];
-  // ipUsageByOperator removed as OperatorDictionary is removed
   busiestVlans: VLANResourceInfo[];
   subnetsNeedingAttention: SubnetUtilizationInfo[];
-  recentAuditLogs?: AuditLog[]; // Corrected from AppAuditLog
+  recentAuditLogs?: AuditLog[]; 
 }

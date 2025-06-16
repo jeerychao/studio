@@ -16,12 +16,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// Alert components are no longer needed here for inline error display
-import { PlusCircle, X, Loader2 } from "lucide-react";
+import { PlusCircle, X, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Subnet, VLAN, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary } from "@/types";
+import type { Subnet, VLAN, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
 const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
@@ -42,7 +43,8 @@ const ipBatchFormSchema = z.object({
   
   peerUnitName: z.string().max(100, "对端单位名称过长").optional(),
   peerDeviceName: z.string().optional(), 
-  peerPortName: z.string().optional(), 
+  peerPortPrefix: z.string().optional(),
+  peerPortSuffix: z.string().max(100, "对端端口后缀过长").optional(),
 
   selectedAccessType: z.string().optional(), 
   selectedLocalDeviceName: z.string().optional(), 
@@ -60,16 +62,16 @@ interface IPBatchFormSheetProps {
   deviceDictionaries: DeviceDictionary[]; 
   paymentSourceDictionaries: PaymentSourceDictionary[];
   accessTypeDictionaries: AccessTypeDictionary[];
+  interfaceTypes: InterfaceTypeDictionary[]; // Added
   children?: React.ReactNode;
   onIpAddressChange?: () => void;
 }
 
 export function IPBatchFormSheet({
-    subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries,
+    subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, interfaceTypes, // Added interfaceTypes
     children, onIpAddressChange
 }: IPBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
-  // submissionResult is no longer used for inline display
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -79,7 +81,8 @@ export function IPBatchFormSheet({
       startIp: "", endIp: "", subnetId: subnets.length > 0 ? subnets[0].id : "",
       directVlanId: NO_DIRECT_VLAN_SENTINEL, status: "free", description: "",
       isGateway: false, usageUnit: "", contactPerson: "", phone: "",
-      peerUnitName: "", peerDeviceName: NO_SELECTION_SENTINEL, peerPortName: "",
+      peerUnitName: "", peerDeviceName: NO_SELECTION_SENTINEL, 
+      peerPortPrefix: NO_SELECTION_SENTINEL, peerPortSuffix: "",
       selectedAccessType: NO_SELECTION_SENTINEL,
       selectedLocalDeviceName: NO_SELECTION_SENTINEL, selectedDevicePort: "", selectedPaymentSource: NO_SELECTION_SENTINEL,
     },
@@ -91,11 +94,11 @@ export function IPBatchFormSheet({
             startIp: "", endIp: "", subnetId: subnets.length > 0 ? subnets[0].id : "",
             directVlanId: NO_DIRECT_VLAN_SENTINEL, status: "free", description: "",
             isGateway: false, usageUnit: "", contactPerson: "", phone: "",
-            peerUnitName: "", peerDeviceName: NO_SELECTION_SENTINEL, peerPortName: "",
+            peerUnitName: "", peerDeviceName: NO_SELECTION_SENTINEL, 
+            peerPortPrefix: NO_SELECTION_SENTINEL, peerPortSuffix: "",
             selectedAccessType: NO_SELECTION_SENTINEL,
             selectedLocalDeviceName: NO_SELECTION_SENTINEL, selectedDevicePort: "", selectedPaymentSource: NO_SELECTION_SENTINEL,
         });
-        // No need to clear submissionResult state
         form.clearErrors();
     }
   }, [isOpen, subnets, form]);
@@ -103,20 +106,25 @@ export function IPBatchFormSheet({
 
   const handleLocalDeviceChange = (value: string) => {
     form.setValue("selectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    const selectedDev = deviceDictionaries.find(dev => dev.deviceName === value);
-    form.setValue("selectedDevicePort", selectedDev?.port || ""); 
+    // form.setValue("selectedDevicePort", ""); // Now manual
   };
 
   const handlePeerDeviceChange = (value: string) => {
     form.setValue("peerDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    const selectedDev = deviceDictionaries.find(dev => dev.deviceName === value);
-    form.setValue("peerPortName", selectedDev?.port || ""); 
+    // form.setValue("peerPortPrefix", NO_SELECTION_SENTINEL); // Now manual prefix/suffix
+    // form.setValue("peerPortSuffix", "");
   };
 
   async function onSubmit(data: IpBatchFormValues) {
     form.clearErrors(); 
     setIsSubmitting(true);
     const directVlanIdToSubmit = data.directVlanId === NO_DIRECT_VLAN_SENTINEL ? undefined : data.directVlanId;
+
+    const peerPrefix = data.peerPortPrefix === NO_SELECTION_SENTINEL || !data.peerPortPrefix ? "" : data.peerPortPrefix;
+    const peerSuffix = data.peerPortSuffix || "";
+    const finalPeerPortName = (peerPrefix && peerSuffix) ? `${peerPrefix} ${peerSuffix}` : (peerPrefix || peerSuffix || undefined);
+
+
     const payload = {
         startIp: data.startIp, endIp: data.endIp, subnetId: data.subnetId,
         directVlanId: directVlanIdToSubmit, 
@@ -128,7 +136,7 @@ export function IPBatchFormSheet({
         
         peerUnitName: data.peerUnitName || undefined, 
         peerDeviceName: data.peerDeviceName === NO_SELECTION_SENTINEL ? undefined : data.peerDeviceName, 
-        peerPortName: data.peerPortName || undefined, 
+        peerPortName: finalPeerPortName, 
 
         selectedAccessType: data.selectedAccessType === NO_SELECTION_SENTINEL ? undefined : data.selectedAccessType, 
         selectedLocalDeviceName: data.selectedLocalDeviceName === NO_SELECTION_SENTINEL ? undefined : data.selectedLocalDeviceName,
@@ -174,50 +182,51 @@ export function IPBatchFormSheet({
       const result = await batchCreateIPAddressesAction(payload);
       
       if (result.successCount > 0 && result.failureDetails.length === 0) {
-        toast({ title: "批量创建成功", description: `${result.successCount} 个IP地址已成功创建。` });
+        toast({ title: "批量创建成功", description: `${result.successCount} 个IP地址已成功创建。`, duration: 5000 });
         if (onIpAddressChange) onIpAddressChange();
         setIsOpen(false); 
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
             title: "批量处理部分成功",
-            description: `成功创建: ${result.successCount} 个IP。失败: ${result.failureDetails.length} 个。首个错误: ${result.failureDetails[0].ipAttempted}: ${result.failureDetails[0].error}`,
+            description: (
+              <div>
+                <p>成功创建: {result.successCount} 个IP。失败: {result.failureDetails.length} 个。</p>
+                <p className="mt-1 text-xs">首个错误: {result.failureDetails[0].ipAttempted}: {result.failureDetails[0].error}</p>
+              </div>
+            ),
             variant: "destructive", duration: 15000,
         });
         if (onIpAddressChange) onIpAddressChange();
-        // Keep sheet open
       } else if (result.successCount === 0 && result.failureDetails.length > 0) { 
         toast({
             title: "批量创建失败",
-            description: `所有 ${numToCreate} 个IP地址均创建失败。首个错误: ${result.failureDetails[0].ipAttempted}: ${result.failureDetails[0].error}`,
+            description: (
+              <div>
+                <p>所有 {numToCreate} 个IP地址均创建失败。</p>
+                <p className="mt-1 text-xs">首个错误: {result.failureDetails[0].ipAttempted}: {result.failureDetails[0].error}</p>
+              </div>
+            ),
             variant: "destructive", duration: 15000,
         });
-        // Keep sheet open
       } else { 
-        toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" });
+        toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default", duration: 5000 });
         setIsOpen(false); 
       }
     } catch (error) {
       const actionError = (error as ActionResponse<any>)?.error;
-      let errorToDisplay: string;
       if (actionError) {
         toast({ title: "批量创建预处理错误", description: actionError.userMessage, variant: "destructive", duration: 10000 });
         if (actionError.field) form.setError(actionError.field as FieldPath<IpBatchFormValues>, { type: "server", message: actionError.userMessage });
-        errorToDisplay = actionError.userMessage;
       } else {
         toast({ title: "客户端错误", description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。", variant: "destructive", duration: 10000 });
-        errorToDisplay = error instanceof Error ? error.message : "批量创建过程中发生意外错误。";
       }
-      // Keep sheet open for client-side errors or pre-action server errors
     } finally {
         setIsSubmitting(false);
     }
   }
 
-  const handleOpenChange = (open: boolean) => { setIsOpen(open); }; // Removed submissionResult reset
+  const handleOpenChange = (open: boolean) => { setIsOpen(open); }; 
   const triggerContent = children || <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4" /> 批量添加IP</Button>;
-
-  const selectedDevicePortValue = form.watch("selectedDevicePort"); 
-  const peerPortNameValue = form.watch("peerPortName");
 
   const clearButton = (fieldName: keyof IpBatchFormValues, label: string) => (
     <Button
@@ -255,7 +264,41 @@ export function IPBatchFormSheet({
 
                 <FormField control={form.control} name="peerUnitName" render={({ field }) => (<FormItem><FormLabel>对端单位名称 (可选)</FormLabel><div className="relative"><FormControl><Input placeholder="例如 客户A" {...field} className="pr-8"/></FormControl>{field.value && clearButton("peerUnitName", "对端单位名称")}</div><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="peerDeviceName" render={({ field }) => (<FormItem><FormLabel>对端设备 (可选)</FormLabel><Select onValueChange={handlePeerDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择对端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{deviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="peerPortName" render={({ field }) => (<FormItem><FormLabel>对端端口 (自动)</FormLabel><FormControl><Input placeholder="根据对端设备自动填充" {...field} value={peerPortNameValue || ""} readOnly disabled /></FormControl></FormItem>)} />
+                
+                <FormItem>
+                  <FormLabel>对端端口 (可选)</FormLabel>
+                  <div className="flex flex-col sm:flex-row gap-2 items-start">
+                    <FormField
+                      control={form.control}
+                      name="peerPortPrefix"
+                      render={({ field }) => (
+                        <FormItem className="w-full sm:w-2/5">
+                          <Select onValueChange={field.onChange} value={field.value || NO_SELECTION_SENTINEL}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="选择前缀" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value={NO_SELECTION_SENTINEL}>-- 无前缀 --</SelectItem>
+                              {interfaceTypes.map(it => (<SelectItem key={it.id} value={it.name}>{it.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="peerPortSuffix"
+                      render={({ field }) => (
+                        <FormItem className="flex-grow">
+                          <div className="relative">
+                            <FormControl><Input placeholder="例如 1/0/1 或 23" {...field} className="pr-8"/></FormControl>
+                            {field.value && clearButton("peerPortSuffix", "对端端口后缀")}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </FormItem>
                 
                 <FormField 
                     control={form.control} 
@@ -278,11 +321,19 @@ export function IPBatchFormSheet({
                 />
 
                 <FormField control={form.control} name="selectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{deviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="selectedDevicePort" render={({ field }) => (<FormItem><FormLabel>本端设备端口 (自动)</FormLabel><FormControl><Input placeholder="根据本端设备自动填充" {...field} value={selectedDevicePortValue || ""} readOnly disabled /></FormControl><FormMessage/></FormItem>)} />
+                <FormField control={form.control} name="selectedDevicePort" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>本端设备端口 (可选)</FormLabel>
+                    <div className="relative">
+                        <FormControl><Input placeholder="例如 1/0/2, Eth0/0/1" {...field} className="pr-8"/></FormControl>
+                        {field.value && clearButton("selectedDevicePort", "本端设备端口")}
+                    </div>
+                    <FormMessage/>
+                  </FormItem>
+                )} />
 
                 <FormField control={form.control} name="selectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><div className="relative"><FormControl><Input placeholder="例如 批量创建的设备" {...field} className="pr-8"/></FormControl>{field.value && clearButton("description", "描述")}</div><FormMessage /></FormItem>)} />
-                {/* Removed inline submissionResult display */}
             </div></ScrollArea>
             <SheetFooter className="p-6 pt-4 border-t"><SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose><Button type="submit" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />处理中...</> : "创建IP地址"}</Button></SheetFooter>
         </form></Form>

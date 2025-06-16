@@ -665,10 +665,10 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(),
       peerUnitName: data.peerUnitName || null,
       peerDeviceName: data.peerDeviceName || null,
-      peerPortName: data.peerPortName || null,
+      peerPortName: data.peerPortName || null, // Now this is the combined string
       selectedAccessType: data.selectedAccessType || null,
       selectedLocalDeviceName: data.selectedLocalDeviceName || null,
-      selectedDevicePort: data.selectedDevicePort || null,
+      selectedDevicePort: data.selectedDevicePort || null, // Now manual
       selectedPaymentSource: data.selectedPaymentSource || null,
     };
 
@@ -706,8 +706,9 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
             phone: phone || null,
             description: description || null,
             lastSeen: new Date(),
-            peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null,
-            selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null, selectedDevicePort: selectedDevicePort || null, selectedPaymentSource: selectedPaymentSource || null,
+            peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null, // peerPortName is the combined string
+            selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null, selectedDevicePort: selectedDevicePort || null, // selectedDevicePort is manual
+            selectedPaymentSource: selectedPaymentSource || null,
         };
         if (subnetId) createPayload.subnet = { connect: { id: subnetId } };
         if (directVlanId && directVlanId.trim() !== "") createPayload.directVlan = { connect: { id: directVlanId } };
@@ -739,10 +740,10 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null || vlanIdToSet === "" || vlanIdToSet === undefined) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `VLAN ID ${vlanIdToSet} 未找到。`, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('peerUnitName')) updateData.peerUnitName = data.peerUnitName || null;
     if (data.hasOwnProperty('peerDeviceName')) updateData.peerDeviceName = data.peerDeviceName || null;
-    if (data.hasOwnProperty('peerPortName')) updateData.peerPortName = data.peerPortName || null;
+    if (data.hasOwnProperty('peerPortName')) updateData.peerPortName = data.peerPortName || null; // peerPortName is the combined string
     if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null;
     if (data.hasOwnProperty('selectedLocalDeviceName')) updateData.selectedLocalDeviceName = data.selectedLocalDeviceName || null;
-    if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null;
+    if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null; // selectedDevicePort is manual
     if (data.hasOwnProperty('selectedPaymentSource')) updateData.selectedPaymentSource = data.selectedPaymentSource || null;
 
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || undefined) : ipToUpdate.subnetId;
@@ -830,7 +831,7 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-const VlanQueryReqSchema = z.string().trim().optional(); // Allow empty string to clear results
+const VlanQueryReqSchema = z.string().trim().optional(); 
 
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
@@ -840,11 +841,11 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const skip = (page - 1) * pageSize;
     
     const queryString = params.queryString;
-    const validationResult = VlanQueryReqSchema.safeParse(queryString); // Use the updated schema
+    const validationResult = VlanQueryReqSchema.safeParse(queryString); 
 
     const validatedQuery = validationResult.success ? (validationResult.data || "") : "";
 
-    if (!validatedQuery) { // If query is empty after trim, return empty results
+    if (!validatedQuery) { 
         return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
 
@@ -852,35 +853,32 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const containsQuery = `%${validatedQuery}%`;   
 
     const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM "vlans" -- Corrected table name
+      SELECT COUNT(*) as count FROM "vlans" 
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
-        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}); -- Assuming column name is vlan_number
+        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}); 
     `;
     const totalCount = Number(countResult[0]?.count || 0);
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string; created_at: Date; updated_at: Date; vlan_number: number }>>`
-      SELECT "id", "vlan_number", "name", "description", "created_at", "updated_at" FROM "vlans" -- Corrected table name and columns
+      SELECT "id", "vlan_number", "name", "description", "created_at", "updated_at" FROM "vlans" 
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
-        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}) -- Assuming column name is vlan_number
+        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}) 
       ORDER BY "vlan_number" ASC
       LIMIT ${pageSize} OFFSET ${skip};
     `;
         
     const results: VlanQueryResult[] = await Promise.all(
       vlansFromDb.map(async (v_raw) => {
-        // Map raw column names to AppVLAN properties
         const v: AppVLAN = {
           id: v_raw.id,
-          vlanNumber: v_raw.vlan_number, // map from vlan_number
+          vlanNumber: v_raw.vlan_number, 
           name: v_raw.name || undefined,
           description: v_raw.description || undefined,
-          // subnetCount will be calculated below
-          // createdAt and updatedAt are not part of VlanQueryResult, so not mapped here
         };
 
         const [subnetCount, directIpCount, associatedSubnets, associatedDirectIPs] = await Promise.all([
@@ -982,40 +980,40 @@ export async function getDeviceDictionariesAction(params?: FetchParams): Promise
     const itemsFromDb = params?.page && params?.pageSize
         ? await prisma.deviceDictionary.findMany({ orderBy: { deviceName: 'asc' }, skip, take: pageSize })
         : await prisma.deviceDictionary.findMany({ orderBy: { deviceName: 'asc' } });
-    const appItems: AppDeviceDictionary[] = itemsFromDb.map(item => ({ ...item, port: item.port || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString()}));
+    const appItems: AppDeviceDictionary[] = itemsFromDb.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString()}));
     return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function createDeviceDictionaryAction(data: Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
+export async function createDeviceDictionaryAction(data: Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt' | 'port'>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
   const actionName = 'createDeviceDictionaryAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (!data.deviceName || data.deviceName.trim() === "") throw new ValidationError("设备名称是必需的。", "deviceName", undefined, "设备名称是必需的。");
     if (await prisma.deviceDictionary.findUnique({ where: { deviceName: data.deviceName } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。`, 'DEVICE_DICT_NAME_EXISTS', `设备名称 "${data.deviceName}" 已存在。`, 'deviceName');
-    const newItem = await prisma.deviceDictionary.create({ data: { deviceName: data.deviceName, port: data.port || null } });
+    const newItem = await prisma.deviceDictionary.create({ data: { deviceName: data.deviceName } }); // Port removed
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_device_dictionary', details: `创建了设备字典条目: ${newItem.deviceName}` } });
     revalidatePath("/dictionaries/device");
     revalidatePath("/ip-addresses");
-    const appItem: AppDeviceDictionary = {...newItem, port: newItem.port || undefined, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString()};
+    const appItem: AppDeviceDictionary = {...newItem, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString()};
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function updateDeviceDictionaryAction(id: string, data: Partial<Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
+export async function updateDeviceDictionaryAction(id: string, data: Partial<Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt' | 'port'>>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
   const actionName = 'updateDeviceDictionaryAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToUpdate = await prisma.deviceDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`设备字典 ID: ${id}`, `设备字典 ID ${id} 未找到。`);
     const updatePayload: Prisma.DeviceDictionaryUpdateInput = {};
     if (data.deviceName && data.deviceName !== itemToUpdate.deviceName) { if (await prisma.deviceDictionary.findFirst({ where: { deviceName: data.deviceName, NOT: { id } } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。`, 'DEVICE_DICT_NAME_EXISTS', `设备名称 "${data.deviceName}" 已存在。`, 'deviceName'); updatePayload.deviceName = data.deviceName; }
-    if (data.hasOwnProperty('port')) updatePayload.port = data.port || null;
-    if (Object.keys(updatePayload).length === 0) { const currentItem: AppDeviceDictionary = {...itemToUpdate, port: itemToUpdate.port || undefined, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
+    // Port logic removed
+    if (Object.keys(updatePayload).length === 0) { const currentItem: AppDeviceDictionary = {...itemToUpdate, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
     const updatedItem = await prisma.deviceDictionary.update({ where: { id }, data: updatePayload });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_device_dictionary', details: `更新了设备字典条目: ${updatedItem.deviceName}` } });
     revalidatePath("/dictionaries/device");
     revalidatePath("/ip-addresses");
-    const appItem: AppDeviceDictionary = {...updatedItem, port: updatedItem.port || undefined, createdAt: updatedItem.createdAt.toISOString(), updatedAt: updatedItem.updatedAt.toISOString()};
+    const appItem: AppDeviceDictionary = {...updatedItem, createdAt: updatedItem.createdAt.toISOString(), updatedAt: updatedItem.updatedAt.toISOString()};
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
