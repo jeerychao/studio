@@ -137,15 +137,15 @@ export function IPBatchFormSheet({
 
     try {
       const result = await batchCreateIPAddressesAction(payload);
-      
-      if (result.successCount > 0 && result.failureDetails.length === 0) { 
-        toast({ title: "批量创建成功", description: `${result.successCount} 个IP地址已成功创建。` }); 
-        if (onIpAddressChange) onIpAddressChange(); 
+      setSubmissionResult(result); // Set the result first to display details
+
+      if (result.successCount > 0 && result.failureDetails.length === 0) {
+        toast({ title: "批量创建成功", description: `${result.successCount} 个IP地址已成功创建。` });
+        if (onIpAddressChange) onIpAddressChange();
         setIsOpen(false); // Close sheet on full success
-      } else if (result.successCount > 0 && result.failureDetails.length > 0) { 
-        setSubmissionResult(result); // Keep sheet open to show partial results
-        toast({ 
-            title: "批量处理部分成功", 
+      } else if (result.successCount > 0 && result.failureDetails.length > 0) {
+        toast({
+            title: "批量处理部分成功",
             description: (
                 <div>
                   <p>{result.successCount} 个IP创建成功，{result.failureDetails.length} 个失败。</p>
@@ -160,12 +160,12 @@ export function IPBatchFormSheet({
             ),
             variant: "default",
             duration: 10000,
-        }); 
-        if (onIpAddressChange) onIpAddressChange(); 
-      } else if (result.failureDetails.length > 0) { 
-        setSubmissionResult(result); // Keep sheet open to show failure details
-        toast({ 
-            title: "批量创建失败", 
+        });
+        if (onIpAddressChange) onIpAddressChange();
+        // Sheet remains open due to failures
+      } else if (result.failureDetails.length > 0) { // Only failures
+        toast({
+            title: "批量创建失败",
             description: (
                  <div>
                   <p>所有 {numToCreate} 个IP地址均创建失败。</p>
@@ -177,23 +177,28 @@ export function IPBatchFormSheet({
                     </ul>
                   </ScrollArea>
                 </div>
-            ), 
+            ),
             variant: "destructive",
             duration: 10000,
-        }); 
-      } else { 
-        toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" }); 
-        setIsOpen(false); // Close if no operation happened (e.g. empty range valid)
+        });
+        // Sheet remains open due to failures
+      } else { // successCount === 0 && failureDetails.length === 0 (no operation)
+        toast({ title: "无操作", description: "没有IP地址被创建或失败。", variant: "default" });
+        setIsOpen(false); // Close if no operation happened
       }
     } catch (error) {
       const actionError = (error as ActionResponse<any>)?.error;
-      if (actionError) { 
-        toast({ title: "批量创建预处理错误", description: actionError.userMessage, variant: "destructive" }); 
-        if (actionError.field) form.setError(actionError.field as FieldPath<IpBatchFormValues>, { type: "server", message: actionError.userMessage }); 
-      } else { 
-        toast({ title: "客户端错误", description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。", variant: "destructive" }); 
+      let errorToDisplay: string;
+      if (actionError) {
+        toast({ title: "批量创建预处理错误", description: actionError.userMessage, variant: "destructive" });
+        if (actionError.field) form.setError(actionError.field as FieldPath<IpBatchFormValues>, { type: "server", message: actionError.userMessage });
+        errorToDisplay = actionError.userMessage;
+      } else {
+        toast({ title: "客户端错误", description: error instanceof Error ? error.message : "批量创建过程中发生意外错误。", variant: "destructive" });
+        errorToDisplay = error instanceof Error ? error.message : "批量创建过程中发生意外错误。";
       }
-      setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp + (data.startIp !== data.endIp ? ('-' + data.endIp) : ''), error: (error as Error).message || "未知错误" }] });
+      setSubmissionResult({ successCount: 0, failureDetails: [{ ipAttempted: data.startIp + (data.startIp !== data.endIp ? ('-' + data.endIp) : ''), error: errorToDisplay }] });
+      // Sheet remains open due to client-side error
     }
   }
 
