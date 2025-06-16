@@ -218,8 +218,8 @@ async function main() {
     try {
       await prisma.deviceDictionary.upsert({
         where: { deviceName: deviceData.deviceName },
-        update: { port: deviceData.port },
-        create: deviceData,
+        update: {}, // Removed port update
+        create: deviceData, // deviceData is now { deviceName: string }
       });
     } catch (e: any) {
       logger.error(`Error seeding device dictionary ${deviceData.deviceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -293,3 +293,4 @@ main()
   });
 
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
+
