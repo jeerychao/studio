@@ -11,12 +11,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
-import { 
+import {
   getIPAddressesAction, getSubnetsAction, getVLANsAction, deleteIPAddressAction, batchDeleteIPAddressesAction,
   getDeviceDictionariesAction, getPaymentSourceDictionariesAction,
   getAccessTypeDictionariesAction, getInterfaceTypeDictionariesAction
 } from "@/lib/actions";
-import type { AppIPAddressWithRelations } from "@/lib/actions"; 
+import type { AppIPAddressWithRelations } from "@/lib/actions";
 import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
@@ -79,15 +79,15 @@ function IPAddressesView() {
         return;
       }
       const [
-        fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult, 
+        fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult,
         fetchedDeviceDictResult, fetchedPaymentDictResult,
         fetchedAccessTypeDictResult, fetchedInterfaceTypesResult
       ] = await Promise.all([
         getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
         getSubnetsAction(),
         getVLANsAction(),
-        getDeviceDictionariesAction(), 
-        getPaymentSourceDictionariesAction(), 
+        getDeviceDictionariesAction(),
+        getPaymentSourceDictionariesAction(),
         getAccessTypeDictionariesAction(),
         getInterfaceTypeDictionariesAction({ pageSize: 1000 }),
       ]);
@@ -99,7 +99,7 @@ function IPAddressesView() {
       if (fetchedPaymentDictResult.success) setPaymentSourceDictionaries(fetchedPaymentDictResult.data?.data || []); else setPaymentSourceDictionaries([]);
       if (fetchedAccessTypeDictResult.success) setAccessTypeDictionaries(fetchedAccessTypeDictResult.data?.data || []); else setAccessTypeDictionaries([]);
       if (fetchedInterfaceTypesResult.success) setInterfaceTypes(fetchedInterfaceTypesResult.data?.data || []); else setInterfaceTypes([]);
-      
+
       if (fetchedIpsResult.data.length === 0 && fetchedIpsResult.currentPage > 1) {
         const newTargetPage = fetchedIpsResult.totalPages > 0 ? fetchedIpsResult.totalPages : 1;
         const currentUrlPage = Number(searchParams.get('page')) || 1;
@@ -151,7 +151,7 @@ function IPAddressesView() {
   }, [fetchData, router, pathname, searchParams, toast, selectedSubnetId, selectedStatus, ipAddressesData]);
 
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked === true) setSelectedIds(new Set(ipAddressesData?.data.map(ip => ip.id) || []);
+    if (checked === true) setSelectedIds(new Set(ipAddressesData?.data.map(ip => ip.id) || []));
     else setSelectedIds(new Set());
   };
 
@@ -192,16 +192,16 @@ function IPAddressesView() {
       {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="IP 地址" batchDeleteAction={batchDeleteIPAddressesAction} onBatchDeleted={fetchData}/>}
       {canCreate && (
         <>
-        <IPBatchFormSheet 
-            subnets={subnets} vlans={vlans} 
+        <IPBatchFormSheet
+            subnets={subnets} vlans={vlans}
             deviceDictionaries={deviceDictionaries}
             paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries}
             interfaceTypes={interfaceTypes}
             onIpAddressChange={handleIpAddressChangeSuccess}>
           <Button variant="outline" className="w-full sm:w-auto"><PlusCircle className="mr-2 h-4 w-4" />批量添加IP</Button>
         </IPBatchFormSheet>
-        <IPAddressFormSheet 
-            subnets={subnets} vlans={vlans} 
+        <IPAddressFormSheet
+            subnets={subnets} vlans={vlans}
             deviceDictionaries={deviceDictionaries}
             paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries}
             interfaceTypes={interfaceTypes}
@@ -256,7 +256,7 @@ function IPAddressesView() {
                       <TableCell className="max-w-[100px] truncate">{ip.usageUnit || "无"}</TableCell>
                       <TableCell className="max-w-[80px] truncate">{ip.contactPerson || "无"}</TableCell>
                       <TableCell className="max-w-[100px] truncate">{ip.phone || "无"}</TableCell>
-                      
+
                       <TableCell className="max-w-[100px] truncate">{ip.peerUnitName || "无"}</TableCell>
                       <TableCell className="max-w-[100px] truncate">{ip.peerDeviceName || "无"}</TableCell>
                       <TableCell className="max-w-[100px] truncate">{ip.peerPortName || "无"}</TableCell>
@@ -308,4 +308,3 @@ function IPAddressesView() {
 
 export default function IPAddressesPage() { return <Suspense fallback={<LoadingIPAddressesPageContent />}><IPAddressesView /></Suspense>; }
 
-```

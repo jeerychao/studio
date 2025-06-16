@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -118,7 +119,7 @@ export function IPBatchFormSheet({
 
     const peerPrefix = data.peerPortPrefix === NO_SELECTION_SENTINEL || !data.peerPortPrefix ? "" : data.peerPortPrefix;
     const peerSuffix = data.peerPortSuffix || "";
-    const finalPeerPortName = (peerPrefix && peerSuffix) ? `${peerPrefix} ${peerSuffix}` : (peerPrefix || peerSuffix || undefined);
+    const finalPeerPortName = (peerPrefix && peerSuffix) ? `${"" + peerPrefix} ${"" + peerSuffix}` : (peerPrefix || peerSuffix || undefined);
 
 
     const payload = {
@@ -337,5 +338,3 @@ export function IPBatchFormSheet({
     </Sheet>
   );
 }
-
-```

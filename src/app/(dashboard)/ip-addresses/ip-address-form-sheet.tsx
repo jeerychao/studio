@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PlusCircle, Edit, X } from "lucide-react";
+import { PlusCircle, Edit, X, Loader2 } from "lucide-react"; // Added Loader2
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
 import { createIPAddressAction, updateIPAddressAction, type ActionResponse, type UpdateIPAddressData } from "@/lib/actions";
@@ -179,10 +179,10 @@ export function IPAddressFormSheet({
       };
 
       if (isEditing && ipAddress) {
-        const payloadForUpdate: UpdateIPAddressData = commonPayload; // Removed updatedAt
+        const payloadForUpdate: UpdateIPAddressData = commonPayload;
         response = await updateIPAddressAction(ipAddress.id, payloadForUpdate);
       } else {
-        const payloadForCreate: Omit<IPAddress, "id" | "createdAt" | "updatedAt"> = { // Removed createdAt, updatedAt
+        const payloadForCreate: Omit<IPAddress, "id" | "createdAt" | "updatedAt"> = {
             ...commonPayload,
             directVlanId: commonPayload.directVlanId === null ? undefined : commonPayload.directVlanId,
             allocatedTo: commonPayload.allocatedTo === null ? undefined : commonPayload.allocatedTo,
@@ -228,6 +228,22 @@ export function IPAddressFormSheet({
         {isEditing ? <Edit className="h-4 w-4" /> : <><PlusCircle className="mr-2 h-4 w-4" /> 添加IP地址</>}
         {isEditing && <span className="sr-only">编辑IP地址</span>}
       </Button>;
+  
+  const clearButton = (fieldName: keyof IPAddressFormValues, label: string) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+      onClick={() => {
+        form.setValue(fieldName, "" as any); 
+        form.trigger(fieldName);
+      }}
+      aria-label={`清除${label}`}
+    >
+      <X className="h-4 w-4" />
+    </Button>
+  );
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -375,11 +391,15 @@ export function IPAddressFormSheet({
                 <FormField control={form.control} name="selectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><div className="relative"><FormControl><Input placeholder="例如 批量创建的设备" {...field} className="pr-8"/></FormControl>{field.value && clearButton("description", "描述")}</div><FormMessage /></FormItem>)} />
             </div></ScrollArea>
-            <SheetFooter className="p-6 pt-4 border-t"><SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose><Button type="submit" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />处理中...</> : "创建IP地址"}</Button></SheetFooter>
-          </form></Form>
+            <SheetFooter className="p-6 pt-4 border-t">
+              <SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />处理中...</> : (isEditing ? "保存更改" : "创建IP地址")}
+              </Button>
+            </SheetFooter>
+          </form>
+        </Form>
       </SheetContent>
     </Sheet>
   );
 }
-
-```
