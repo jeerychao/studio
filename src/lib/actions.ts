@@ -392,7 +392,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
               subnet: { disconnect: true },
               status: 'free' as AppIPAddressStatusType,
               allocatedTo: null, usageUnit: null, contactPerson: null, phone: null, isGateway: false,
-              directVlan: { disconnect: true }, // Also disconnect directVlan if IP is moved out of subnet
+              directVlan: { disconnect: true },
               peerUnitName: null, peerDeviceName: null, peerPortName: null,
               selectedAccessType: null, selectedLocalDeviceName: null, selectedDevicePort: null, selectedPaymentSource: null,
               description: `(原属于子网 ${originalCidrForLog}) ${ip.description || ''}`.trim(),
@@ -506,7 +506,7 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
                 where: { id: ip.id },
                 data: {
                     subnet: { disconnect: true },
-                    directVlan: { disconnect: true }, // Corrected from directVlanId: null
+                    directVlan: { disconnect: true }, 
                     description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
                 }
             })
@@ -818,10 +818,10 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
     if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
 
     const orConditions: Prisma.SubnetWhereInput[] = [
-      { cidr: { contains: queryString } }, // Removed mode: "insensitive"
-      { name: { contains: queryString } }, // Removed mode: "insensitive"
-      { description: { contains: queryString } }, // Removed mode: "insensitive"
-      { networkAddress: { contains: queryString } }, // Removed mode: "insensitive"
+      { cidr: { contains: queryString } },
+      { name: { contains: queryString } },
+      { description: { contains: queryString } },
+      { networkAddress: { contains: queryString } },
     ];
 
     let whereClause: Prisma.SubnetWhereInput = { OR: orConditions };
@@ -832,30 +832,25 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-const VlanQuerySchema = z.string().trim().min(1, { message: "查询字符串不能为空" });
+const VlanQuerySchema = z.string().trim().optional(); // Allow empty string for clearing results
+
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
   try {
     const page = params.page || 1;
-    const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; 
+    const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
     
-    const queryString = params.queryString; 
+    const validationResult = VlanQuerySchema.safeParse(params.queryString);
+    // Use the validated query string, or an empty string if validation fails or original is empty
+    const validatedQuery = validationResult.success ? (validationResult.data || "") : "";
 
-    const validationResult = VlanQuerySchema.safeParse(queryString);
-     if (!validationResult.success) {
-        if (!queryString || queryString.trim() === "") {
-         return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
-       }
-     }
-    
-    const validatedQuery = queryString ? queryString.trim() : ""; 
     if (!validatedQuery) {
         return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
 
     const startsWithQuery = `${validatedQuery}%`; 
-    const containsQuery = `%${validatedQuery}%`;  
+    const containsQuery = `%${validatedQuery}%`;   
 
     const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM "vLAN"
@@ -868,7 +863,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string }>>`
-      SELECT * FROM "vLAN"
+      SELECT "id", "vlanNumber", "name", "description", "createdAt", "updatedAt" FROM "vLAN"
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
@@ -878,8 +873,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     `;
     
     const results: VlanQueryResult[] = await Promise.all(
-      vlansFromDb.map(async (v_raw) => {
-        const v = v_raw as AppVLAN & { id: string }; 
+      vlansFromDb.map(async (v) => {
         const [subnetCount, directIpCount, associatedSubnetsDb, associatedDirectIPsDb] = await Promise.all([
           prisma.subnet.count({ where: { vlanId: v.id } }),
           prisma.iPAddress.count({ where: { directVlanId: v.id } }),
@@ -898,7 +892,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
       })
     );
     
-    return { success: true, data: { data: results, totalCount, currentPage: page, totalPages: totalPages, pageSize } };
+    return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
 
   } catch (error: unknown) {
     logger.error(actionName, error as Error, { queryString: params.queryString }, 'queryVlansAction');

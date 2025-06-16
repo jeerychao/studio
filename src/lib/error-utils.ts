@@ -1,18 +1,14 @@
 
 // src/lib/error-utils.ts
 
-import { AppError, ValidationError, ResourceError, NetworkError } from './errors';
+import { AppError, ValidationError, ResourceError, NetworkError, AuthError, NotFoundError, type ActionErrorResponse } from './errors';
 import { Prisma } from '@prisma/client';
 import { logger } from './logger';
-import type { ActionErrorResponse } from './errors';
 
-// This function is NOT for actions to re-throw.
-// Actions should catch errors and return a structured response.
-// This might be useful for other server-side contexts if needed.
 export function handleGenericServerError(error: unknown, context?: string): never {
   logger.error(context || 'Generic server error occurred', error as Error);
   if (error instanceof AppError) {
-    throw error; // Re-throw AppError if it's already one
+    throw error;
   }
   if (error instanceof Error) {
     throw new AppError(error.message, 500, 'UNHANDLED_ERROR', '服务器发生意外错误。');
@@ -20,8 +16,6 @@ export function handleGenericServerError(error: unknown, context?: string): neve
   throw new AppError('An unexpected error occurred on the server.', 500, 'UNKNOWN_SERVER_ERROR', '服务器发生未知错误。');
 }
 
-
-// Validation function for CIDR, throws ValidationError on failure
 export function validateCIDR(cidr: string, fieldName = 'cidr'): void {
   const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/(\d{1,2})$/;
   if (!cidrRegex.test(cidr)) {
@@ -39,7 +33,7 @@ export function validateCIDR(cidr: string, fieldName = 'cidr'): void {
   if (prefixNum < 0 || prefixNum > 32) {
     throw new ValidationError(
       `网络前缀 /${prefixNum} 无效，必须在 0-32 之间。`,
-      fieldName, // or specifically 'prefix' if you have separate fields
+      fieldName,
       cidr,
       `网络前缀必须在 0 到 32 之间。`
     );
@@ -49,13 +43,12 @@ export function validateCIDR(cidr: string, fieldName = 'cidr'): void {
   if (ipParts.some(part => isNaN(part) || part < 0 || part > 255)) {
     throw new ValidationError(
       `IP 地址 "${ip}" 的一部分无效。`,
-      fieldName, // or specifically 'ip'
+      fieldName,
       cidr,
       `IP 地址部分无效，每个数字必须在 0 到 255 之间。`
     );
   }
-
-  // Validate if the IP part is the network address for the given prefix
+  
   const ipNum = ipParts.reduce((acc, octet) => (acc << 8) + octet, 0) >>> 0;
   const maskNum = prefixNum === 0 ? 0 : (0xFFFFFFFF << (32 - prefixNum)) >>> 0;
   const calculatedNetworkAddrNum = (ipNum & maskNum) >>> 0;
@@ -76,12 +69,9 @@ export function validateCIDR(cidr: string, fieldName = 'cidr'): void {
   }
 }
 
-
-// Converts various error types into a standard ActionErrorResponse object
-// This is intended to be used in the CATCH block of Server Actions.
 export function createActionErrorResponse(
   error: unknown,
-  actionContext?: string // e.g., 'createSubnetAction'
+  actionContext?: string
 ): ActionErrorResponse {
   logger.error(actionContext || 'Action Error', error as Error, { context: actionContext });
 
@@ -90,88 +80,78 @@ export function createActionErrorResponse(
       userMessage: error.userMessage,
       code: error.code,
       field: error.field,
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: process.env.NODE_ENV === 'development' ? `${error.name}: ${error.message}` : undefined,
     };
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    // Handle known Prisma errors gracefully
+    let userMessage = "数据库操作时发生错误，请检查您的输入或稍后重试。";
+    const devDetails = `${error.name} (Code: ${error.code}): ${error.message}`;
     switch (error.code) {
-      case 'P2002': { // Unique constraint failed
+      case 'P2002': {
         const target = error.meta?.target as string[] | string | undefined;
-        let fieldMessage = "一个具有这些值的记录已存在。";
         let fieldName: string | undefined = undefined;
         if (target && Array.isArray(target) && target.length > 0) {
           fieldName = target.join(', ');
-          fieldMessage = `字段 '${fieldName}' 的值必须是唯一的，提供的值已存在。`;
+          userMessage = `字段 '${fieldName}' 的值必须是唯一的，提供的值已存在。`;
         } else if (target && typeof target === 'string') {
           fieldName = target;
-          fieldMessage = `字段 '${fieldName}' 的值必须是唯一的，提供的值已存在。`;
+          userMessage = `字段 '${fieldName}' 的值必须是唯一的，提供的值已存在。`;
+        } else {
+          userMessage = "一个具有这些值的记录已存在。";
         }
-        return {
-          userMessage: fieldMessage,
-          code: error.code,
-          field: fieldName, // This might need mapping to form field names
-          details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        };
+        return { userMessage, code: error.code, field: fieldName, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
       }
-      case 'P2003': { // Foreign key constraint failed
+      case 'P2003': {
          const fieldName = error.meta?.field_name as string | undefined;
-         return {
-            userMessage: `操作失败，因为它违反了与字段 '${fieldName || '关联记录'}' 相关的约束。请确保引用的记录存在。`,
-            code: error.code,
-            field: fieldName,
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-         };
+         userMessage = `操作失败，因为它违反了与字段 '${fieldName || '关联记录'}' 相关的约束。请确保引用的记录存在。`;
+         return { userMessage, code: error.code, field: fieldName, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
       }
-      case 'P2014': { // Required relation violation
+      case 'P2014': {
         const relationName = error.meta?.relation_name as string | undefined;
         const modelName = error.meta?.model_name as string | undefined;
-        return {
-            userMessage: `无法创建或更新 ${modelName || '记录'}，因为必需的关联 '${relationName || '记录'}' 不存在或未提供。`,
-            code: error.code,
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        };
+        userMessage = `无法创建或更新 ${modelName || '记录'}，因为必需的关联 '${relationName || '记录'}' 不存在或未提供。`;
+        return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
       }
-      case 'P2025': // Record to update/delete not found
-        return {
-          userMessage: "操作失败，因为请求的记录未找到。它可能已被删除。",
-          code: error.code,
-          details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        };
-      default:
-        return {
-          userMessage: "数据库操作时发生错误，请检查您的输入或稍后重试。",
-          code: error.code,
-          details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        };
+      case 'P2025':
+        userMessage = "操作失败，因为请求的记录未找到。它可能已被删除。";
+        return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
+      case 'P2010': // Raw query failed
+        userMessage = `数据库原生查询失败。代码: ${error.code}。${process.env.NODE_ENV === 'development' ? ` 详情: ${error.message}` : ' 请联系管理员获取更多信息。'}`;
+        return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
+      default: // Other Prisma known errors
+        userMessage = `数据库操作发生已知错误。代码: ${error.code}。${process.env.NODE_ENV === 'development' ? ` 详情: ${error.message}` : ' 请检查输入或联系管理员。'}`;
+        return { userMessage, code: error.code, details: process.env.NODE_ENV === 'development' ? devDetails : undefined };
     }
   }
 
   if (error instanceof Prisma.PrismaClientValidationError) {
-    // Make userMessage more verbose for PrismaClientValidationError
-    const detailedUserMessage = `数据验证失败。Prisma 客户端验证错误：${error.message}. 请检查所有字段是否符合要求。`;
+    const detailedUserMessage = `数据验证失败。Prisma 客户端验证错误。${process.env.NODE_ENV === 'development' ? ` 详情: ${error.message}` : ' 请检查所有字段是否符合要求。'}`;
     return {
         userMessage: detailedUserMessage,
         code: 'PRISMA_VALIDATION_ERROR',
-        details: process.env.NODE_ENV === 'development' ? error.message : "Prisma Client Validation Error. Enable development mode for more details.",
+        details: process.env.NODE_ENV === 'development' ? error.message : "Prisma Client Validation Error.",
     };
   }
 
-  // Fallback for other unexpected errors
-  let devDetails: string | undefined;
+  let finalDevDetails: string | undefined;
   if (process.env.NODE_ENV === 'development') {
     if (error instanceof Error) {
-      devDetails = error.message;
+      finalDevDetails = `${error.name}: ${error.message} (Stack: ${error.stack ? error.stack.substring(0, 300) + "..." : "N/A"})`;
     } else if (typeof error === 'string') {
-      devDetails = error;
+      finalDevDetails = error;
+    } else {
+      try {
+        finalDevDetails = JSON.stringify(error);
+      } catch {
+        finalDevDetails = "无法序列化错误对象。";
+      }
     }
   }
 
   return {
-    userMessage: "处理您的请求时发生意外错误，请稍后重试。",
+    userMessage: `处理您的请求时发生了一个意外错误。${actionContext ? ` 操作: ${actionContext}.` : ''}${process.env.NODE_ENV === 'development' && finalDevDetails ? ` 开发详情: ${finalDevDetails}` : ' 请稍后重试或联系支持。'}`,
     code: 'UNEXPECTED_ACTION_ERROR',
-    details: devDetails,
+    details: finalDevDetails,
   };
 }
-
