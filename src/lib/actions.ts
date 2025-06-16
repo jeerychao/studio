@@ -845,7 +845,7 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     if (isNumericQuery) {
       const vlanNumberQuery = parseInt(queryString, 10);
       if (vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
-        orConditions.push({ vlanNumber: vlanNumberQuery });
+        orConditions.push({ vlanNumber: vlanNumberQuery }); // Exact match for the number
       }
     }
 
@@ -1300,3 +1300,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   }
 }
     
+
