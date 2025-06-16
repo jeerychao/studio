@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -62,13 +61,13 @@ interface IPBatchFormSheetProps {
   deviceDictionaries: DeviceDictionary[]; 
   paymentSourceDictionaries: PaymentSourceDictionary[];
   accessTypeDictionaries: AccessTypeDictionary[];
-  interfaceTypes: InterfaceTypeDictionary[]; // Added
+  interfaceTypes: InterfaceTypeDictionary[]; 
   children?: React.ReactNode;
   onIpAddressChange?: () => void;
 }
 
 export function IPBatchFormSheet({
-    subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, interfaceTypes, // Added interfaceTypes
+    subnets, vlans, deviceDictionaries, paymentSourceDictionaries, accessTypeDictionaries, interfaceTypes,
     children, onIpAddressChange
 }: IPBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -106,13 +105,10 @@ export function IPBatchFormSheet({
 
   const handleLocalDeviceChange = (value: string) => {
     form.setValue("selectedLocalDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    // form.setValue("selectedDevicePort", ""); // Now manual
   };
 
   const handlePeerDeviceChange = (value: string) => {
     form.setValue("peerDeviceName", value === NO_SELECTION_SENTINEL ? "" : value);
-    // form.setValue("peerPortPrefix", NO_SELECTION_SENTINEL); // Now manual prefix/suffix
-    // form.setValue("peerPortSuffix", "");
   };
 
   async function onSubmit(data: IpBatchFormValues) {
@@ -341,3 +337,5 @@ export function IPBatchFormSheet({
     </Sheet>
   );
 }
+
+```

@@ -248,7 +248,8 @@ function QueryPageContent() {
       { label: "本端端口:", value: ip.selectedDevicePort || "N/A" },
       { label: "费用来源:", value: ip.selectedPaymentSource || "N/A" },
       { label: "描述:", value: ip.description || "无", fullWidth: true },
-      { label: "最后更新:", value: ip.lastSeen ? new Date(ip.lastSeen).toLocaleString() : '未知' },
+      { label: "记录创建时间:", value: ip.createdAt ? new Date(ip.createdAt).toLocaleString() : '未知' },
+      { label: "记录最后更新:", value: ip.updatedAt ? new Date(ip.updatedAt).toLocaleString() : '未知' },
     ];
   };
 
@@ -496,3 +497,5 @@ export default function QueryPage() {
     </Suspense>
   );
 }
+
+```

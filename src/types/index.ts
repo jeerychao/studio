@@ -29,10 +29,10 @@ export const PERMISSIONS = {
   VIEW_QUERY_PAGE: 'querypage.view',
   VIEW_SETTINGS: 'settings.view',
 
-  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view', 
-  CREATE_DEVICE_DICTIONARY: 'dictionary.device.create', 
-  EDIT_DEVICE_DICTIONARY: 'dictionary.device.edit', 
-  DELETE_DEVICE_DICTIONARY: 'dictionary.device.delete', 
+  VIEW_DEVICE_DICTIONARY: 'dictionary.device.view',
+  CREATE_DEVICE_DICTIONARY: 'dictionary.device.create',
+  EDIT_DEVICE_DICTIONARY: 'dictionary.device.edit',
+  DELETE_DEVICE_DICTIONARY: 'dictionary.device.delete',
 
   VIEW_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.view',
   CREATE_DICTIONARY_PAYMENT_SOURCE: 'dictionary.payment_source.create',
@@ -44,10 +44,10 @@ export const PERMISSIONS = {
   EDIT_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.edit',
   DELETE_DICTIONARY_ACCESS_TYPE: 'dictionary.access_type.delete',
 
-  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view', 
-  CREATE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.create', 
-  EDIT_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.edit', 
-  DELETE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.delete', 
+  VIEW_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.view',
+  CREATE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.create',
+  EDIT_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.edit',
+  DELETE_INTERFACE_TYPE_DICTIONARY: 'dictionary.interface_type.delete',
 } as const;
 
 export type PermissionId = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -77,7 +77,7 @@ export interface VLAN {
   vlanNumber: number;
   name?: string;
   description?: string;
-  subnetCount?: number; 
+  subnetCount?: number;
 }
 
 export type IPAddressStatus = 'allocated' | 'free' | 'reserved';
@@ -86,7 +86,7 @@ export interface IPAddress {
   id: string;
   ipAddress: string;
   subnetId?: string;
-  directVlanId?: string; 
+  directVlanId?: string;
   status: IPAddressStatus;
   isGateway?: boolean;
   allocatedTo?: string;
@@ -94,17 +94,18 @@ export interface IPAddress {
   contactPerson?: string;
   phone?: string;
   description?: string;
-  lastSeen?: string; 
+  createdAt?: string;
+  updatedAt?: string;
 
-  peerUnitName?: string; 
-  peerDeviceName?: string; 
-  peerPortName?: string; 
+  peerUnitName?: string;
+  peerDeviceName?: string;
+  peerPortName?: string;
 
-  selectedLocalDeviceName?: string; 
-  selectedDevicePort?: string; 
-  
-  selectedAccessType?: string; 
-  selectedPaymentSource?: string; 
+  selectedLocalDeviceName?: string;
+  selectedDevicePort?: string;
+
+  selectedAccessType?: string;
+  selectedPaymentSource?: string;
 }
 
 
@@ -113,17 +114,17 @@ export interface User {
   username: string;
   email: string;
   roleId: string;
-  roleName?: RoleName; 
+  roleName?: RoleName;
   avatar?: string;
-  lastLogin?: string; 
-  permissions?: PermissionId[]; 
+  lastLogin?: string;
+  permissions?: PermissionId[];
 }
 
 export interface Role {
   id: string;
   name: RoleName;
   description?: string;
-  userCount?: number; 
+  userCount?: number;
   permissions: PermissionId[];
 }
 
@@ -132,38 +133,37 @@ export interface AuditLog {
   userId?: string;
   username?: string;
   action: string;
-  timestamp: string; 
+  timestamp: string;
   details?: string;
 }
 
 export interface DeviceDictionary {
   id: string;
-  deviceName: string; 
-  // port?: string; // Removed as per user request
-  createdAt?: string; 
-  updatedAt?: string; 
+  deviceName: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PaymentSourceDictionary {
   id: string;
-  sourceName: string; 
-  createdAt?: string; 
-  updatedAt?: string; 
+  sourceName: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AccessTypeDictionary {
   id: string;
-  name: string; 
-  createdAt?: string; 
-  updatedAt?: string; 
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface InterfaceTypeDictionary {
   id: string;
-  name: string; 
+  name: string;
   description?: string;
-  createdAt?: string; 
-  updatedAt?: string; 
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 
@@ -176,8 +176,8 @@ export interface PaginatedResponse<T> {
 }
 
 export interface BatchOperationFailure<TIdentifier = string> {
-  id?: TIdentifier; 
-  itemIdentifier: string; 
+  id?: TIdentifier;
+  itemIdentifier: string;
   error: string;
 }
 
@@ -197,7 +197,7 @@ export interface SubnetQueryResult {
   vlanName?: string;
   totalUsableIPs: number;
   allocatedIPsCount: number;
-  dbFreeIPsCount: number; 
+  dbFreeIPsCount: number;
   reservedIPsCount: number;
 }
 
@@ -217,8 +217,8 @@ export interface SubnetFreeIpDetails {
   totalUsableIPs: number;
   dbAllocatedIPsCount: number;
   dbReservedIPsCount: number;
-  calculatedAvailableIPsCount: number; 
-  calculatedAvailableIpRanges: string[]; 
+  calculatedAvailableIPsCount: number;
+  calculatedAvailableIpRanges: string[];
 }
 
 export interface IPStatusCounts {
@@ -228,9 +228,9 @@ export interface IPStatusCounts {
 }
 
 export interface TopNItemCount {
-  item: string; 
+  item: string;
   count: number;
-  fill?: string; 
+  fill?: string;
 }
 
 export interface VLANResourceInfo {
@@ -255,5 +255,5 @@ export interface DashboardData {
   ipUsageByUnit: TopNItemCount[];
   busiestVlans: VLANResourceInfo[];
   subnetsNeedingAttention: SubnetUtilizationInfo[];
-  recentAuditLogs?: AuditLog[]; 
+  recentAuditLogs?: AuditLog[];
 }

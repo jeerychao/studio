@@ -97,7 +97,7 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
   { id: 'seed_vlan_004', vlanNumber: 40, name: 'Legacy Devices', description: 'Legacy Devices VLAN' },
 ];
 
-export const seedIPsData: IPAddress[] = [
+export const seedIPsData: Omit<IPAddress, "createdAt" | "updatedAt">[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
@@ -213,7 +213,7 @@ export const mockRoles: Role[] = [
   },
 ];
 
-export const mockUsers: Array<Omit<User, 'roleName' | 'permissions'> & { password?: string, phone?: string }> = [
+export const mockUsers: Array<Omit<User, 'roleName' | 'permissions' | 'lastLogin'> & { password?: string, phone?: string, lastLogin?: string }> = [
   { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID,
     password: encrypt('admin'),
     phone: '11111111111',

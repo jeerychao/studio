@@ -630,7 +630,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   const appIps: AppIPAddressWithRelations[] = paginatedDbItems.map(ip => ({
     id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false,
     allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined,
-    description: ip.description || undefined, lastSeen: ip.lastSeen?.toISOString() || undefined,
+    description: ip.description || undefined, createdAt: ip.createdAt.toISOString(), updatedAt: ip.updatedAt.toISOString(),
     subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined,
     subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null,
     directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null,
@@ -643,15 +643,15 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   return { data: appIps, totalCount: finalTotalCount, currentPage: page, totalPages: totalPages, pageSize: pageSize };
 }
 
-export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, performingUserId?: string): Promise<ActionResponse<AppIPAddress>> {
+export async function createIPAddressAction(data: Omit<AppIPAddress, "id" | "createdAt" | "updatedAt">, performingUserId?: string): Promise<ActionResponse<AppIPAddress>> {
   const actionName = 'createIPAddressAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式: ${data.ipAddress}`, 'ipAddress', data.ipAddress, `无效的 IP 地址格式: ${data.ipAddress}`);
     
-    // Global IP uniqueness check
-    if (await prisma.iPAddress.findUnique({ where: { ipAddress: data.ipAddress } })) {
-      throw new ResourceError(`IP 地址 ${data.ipAddress} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS', `IP 地址 ${data.ipAddress} 已在系统中存在。`, 'ipAddress');
+    const existingGlobalIP = await prisma.iPAddress.findUnique({ where: { ipAddress: data.ipAddress } });
+    if (existingGlobalIP) {
+        throw new ResourceError(`IP 地址 ${data.ipAddress} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS', `IP 地址 ${data.ipAddress} 已在系统中存在，不能重复添加。`, 'ipAddress');
     }
 
     if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) {
@@ -666,9 +666,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       if (!isIpInCidrRange(data.ipAddress, parsedCidr)) {
         throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress', data.ipAddress, `IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
       }
-      // Note: The global uniqueness check above already covers if this IP exists in this subnet or any other context.
     }
-    // For IPs not in a subnet (global pool), the global uniqueness check is sufficient.
 
     const createPayload: Prisma.IPAddressCreateInput = {
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
@@ -676,7 +674,6 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       contactPerson: data.contactPerson || null,
       phone: data.phone || null,
       description: data.description || null,
-      lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(),
       peerUnitName: data.peerUnitName || null,
       peerDeviceName: data.peerDeviceName || null,
       peerPortName: data.peerPortName || null,
@@ -695,7 +692,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
     const vlanInfoLog = data.directVlanId ? ` 使用 VLAN ${(await prisma.vLAN.findUnique({where: {id:data.directVlanId}}))?.vlanNumber}`: '';
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_ip_address', details: `创建了 IP ${newIP.ipAddress}${subnetInfo}${vlanInfoLog}，状态为 ${data.status}。` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
-    const appIp: AppIPAddress = { ...newIP, isGateway: newIP.isGateway ?? false, subnetId: newIP.subnetId || undefined, directVlanId: newIP.directVlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, usageUnit: newIP.usageUnit || undefined, contactPerson: newIP.contactPerson || undefined, phone: newIP.phone || undefined, description: newIP.description || undefined, lastSeen: newIP.lastSeen?.toISOString(), status: newIP.status as AppIPAddressStatusType, peerUnitName: newIP.peerUnitName || undefined, peerDeviceName: newIP.peerDeviceName || undefined, peerPortName: newIP.peerPortName || undefined, selectedAccessType: newIP.selectedAccessType || undefined, selectedLocalDeviceName: newIP.selectedLocalDeviceName || undefined, selectedDevicePort: newIP.selectedDevicePort || undefined, selectedPaymentSource: newIP.selectedPaymentSource || undefined };
+    const appIp: AppIPAddress = { ...newIP, isGateway: newIP.isGateway ?? false, subnetId: newIP.subnetId || undefined, directVlanId: newIP.directVlanId || undefined, allocatedTo: newIP.allocatedTo || undefined, usageUnit: newIP.usageUnit || undefined, contactPerson: newIP.contactPerson || undefined, phone: newIP.phone || undefined, description: newIP.description || undefined, createdAt: newIP.createdAt.toISOString(), updatedAt: newIP.updatedAt.toISOString(), status: newIP.status as AppIPAddressStatusType, peerUnitName: newIP.peerUnitName || undefined, peerDeviceName: newIP.peerDeviceName || undefined, peerPortName: newIP.peerPortName || undefined, selectedAccessType: newIP.selectedAccessType || undefined, selectedLocalDeviceName: newIP.selectedLocalDeviceName || undefined, selectedDevicePort: newIP.selectedDevicePort || undefined, selectedPaymentSource: newIP.selectedPaymentSource || undefined };
     return { success: true, data: appIp };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -714,7 +711,6 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
       try {
         if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) throw new ValidationError(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'startIp/endIp', currentIpStr, `IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`);
         
-        // Global IP uniqueness check for batch creation
         if (await prisma.iPAddress.findUnique({ where: { ipAddress: currentIpStr } })) {
           throw new ResourceError(`IP 地址 ${currentIpStr} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS_BATCH', `IP 地址 ${currentIpStr} 已在系统中存在。`, 'startIp/endIp');
         }
@@ -724,7 +720,6 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
             usageUnit: usageUnit||null, contactPerson: contactPerson||null,
             phone: phone || null,
             description: description || null,
-            lastSeen: new Date(),
             peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null,
             selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null, selectedDevicePort: selectedDevicePort || null,
             selectedPaymentSource: selectedPaymentSource || null,
@@ -740,21 +735,21 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
   return { successCount, failureDetails };
 }
 
-export interface UpdateIPAddressData { ipAddress?: string; subnetId?: string | undefined; directVlanId?: string | null | undefined; status?: AppIPAddressStatusType; isGateway?: boolean | null | undefined; allocatedTo?: string | null | undefined; usageUnit?: string | null | undefined; contactPerson?: string | null | undefined; phone?: string | null | undefined; description?: string | null | undefined; lastSeen?: string | null | undefined; peerUnitName?: string | null | undefined; peerDeviceName?: string | null | undefined; peerPortName?: string | null | undefined; selectedAccessType?: string | null | undefined; selectedLocalDeviceName?: string | null | undefined; selectedDevicePort?: string | null | undefined; selectedPaymentSource?: string | null | undefined; }
+export interface UpdateIPAddressData { ipAddress?: string; subnetId?: string | undefined; directVlanId?: string | null | undefined; status?: AppIPAddressStatusType; isGateway?: boolean | null | undefined; allocatedTo?: string | null | undefined; usageUnit?: string | null | undefined; contactPerson?: string | null | undefined; phone?: string | null | undefined; description?: string | null | undefined; peerUnitName?: string | null | undefined; peerDeviceName?: string | null | undefined; peerPortName?: string | null | undefined; selectedAccessType?: string | null | undefined; selectedLocalDeviceName?: string | null | undefined; selectedDevicePort?: string | null | undefined; selectedPaymentSource?: string | null | undefined; }
 export async function updateIPAddressAction(id: string, data: UpdateIPAddressData, performingUserId?: string): Promise<ActionResponse<AppIPAddress>> {
   const actionName = 'updateIPAddressAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const ipToUpdate = await prisma.iPAddress.findUnique({ where: { id } }); if (!ipToUpdate) throw new NotFoundError(`IP 地址 ID: ${id}`, `IP 地址 ID ${id} 未找到。`);
-    const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() };
+    const updateData: Prisma.IPAddressUpdateInput = { };
     let finalIpAddress = ipToUpdate.ipAddress;
 
     if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) {
       if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress, `无效的 IP 地址格式更新: ${data.ipAddress}`);
       
-      // Global IP uniqueness check for update
-      if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, NOT: { id } } })) {
-        throw new ResourceError(`IP 地址 ${data.ipAddress} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS_UPDATE', `IP 地址 ${data.ipAddress} 已在系统中存在。`, 'ipAddress');
+      const existingGlobalIP = await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, NOT: { id } } });
+      if (existingGlobalIP) {
+          throw new ResourceError(`IP 地址 ${data.ipAddress} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS_UPDATE', `IP 地址 ${data.ipAddress} 已在系统中存在，不能分配给此记录。`, 'ipAddress');
       }
       updateData.ipAddress = data.ipAddress;
       finalIpAddress = data.ipAddress;
@@ -779,8 +774,8 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || undefined) : ipToUpdate.subnetId;
     const finalStatus = data.status ? data.status as string : ipToUpdate.status;
 
-    if (data.hasOwnProperty('subnetId')) { // If subnetId is being changed (or set for the first time)
-      if (newSubnetId) { // If associating with a new subnet
+    if (data.hasOwnProperty('subnetId')) { 
+      if (newSubnetId) { 
         const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
         if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。", 'subnetId');
         const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr);
@@ -788,17 +783,14 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
         if (!isIpInCidrRange(finalIpAddress, parsedCidr)) {
           throw new ValidationError(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress/subnetId', finalIpAddress, `IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
         }
-        // Global uniqueness of IP is already checked. No need for specific subnet IP check if IP itself is unique.
         updateData.subnet = { connect: { id: newSubnetId } };
-      } else { // If disassociating from any subnet (subnetId becomes null)
+      } else { 
         if (finalStatus === 'allocated' || finalStatus === 'reserved') {
           throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus, "对于“已分配”或“预留”状态的 IP，必须选择一个子网。");
         }
-        // Global uniqueness of IP is already checked.
         updateData.subnet = { disconnect: true };
       }
     } else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) { 
-      // SubnetId is not changing, but IP address string itself is. Need to ensure new IP is valid for current subnet.
       const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
       if (!currentSubnet) throw new NotFoundError(`当前子网 ID: ${newSubnetId}`, "IP 的当前子网未找到。", 'subnetId');
       const parsedCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr);
@@ -806,13 +798,12 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
       if (!isIpInCidrRange(finalIpAddress, parsedCidr)) {
         throw new ValidationError(`新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`, 'ipAddress', finalIpAddress, `新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`);
       }
-      // Global uniqueness check for the new IP string already done.
     }
 
     const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_ip_address', details: `更新了 IP ${updatedIP.ipAddress}` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
-    const appIp: AppIPAddress = { ...updatedIP, isGateway: updatedIP.isGateway ?? false, subnetId: updatedIP.subnetId || undefined, directVlanId: updatedIP.directVlanId || undefined, allocatedTo: updatedIP.allocatedTo || undefined, usageUnit: updatedIP.usageUnit || undefined, contactPerson: updatedIP.contactPerson || undefined, phone: updatedIP.phone || undefined, description: updatedIP.description || undefined, lastSeen: updatedIP.lastSeen?.toISOString(), status: updatedIP.status as AppIPAddressStatusType, peerUnitName: updatedIP.peerUnitName || undefined, peerDeviceName: updatedIP.peerDeviceName || undefined, peerPortName: updatedIP.peerPortName || undefined, selectedAccessType: updatedIP.selectedAccessType || undefined, selectedLocalDeviceName: updatedIP.selectedLocalDeviceName || undefined, selectedDevicePort: updatedIP.selectedDevicePort || undefined, selectedPaymentSource: updatedIP.selectedPaymentSource || undefined };
+    const appIp: AppIPAddress = { ...updatedIP, isGateway: updatedIP.isGateway ?? false, subnetId: updatedIP.subnetId || undefined, directVlanId: updatedIP.directVlanId || undefined, allocatedTo: updatedIP.allocatedTo || undefined, usageUnit: updatedIP.usageUnit || undefined, contactPerson: updatedIP.contactPerson || undefined, phone: updatedIP.phone || undefined, description: updatedIP.description || undefined, createdAt: updatedIP.createdAt.toISOString(), updatedAt: updatedIP.updatedAt.toISOString(), status: updatedIP.status as AppIPAddressStatusType, peerUnitName: updatedIP.peerUnitName || undefined, peerDeviceName: updatedIP.peerDeviceName || undefined, peerPortName: updatedIP.peerPortName || undefined, selectedAccessType: updatedIP.selectedAccessType || undefined, selectedLocalDeviceName: updatedIP.selectedLocalDeviceName || undefined, selectedDevicePort: updatedIP.selectedDevicePort || undefined, selectedPaymentSource: updatedIP.selectedPaymentSource || undefined };
     return { success: true, data: appIp };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -992,7 +983,7 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
     const totalCount = await prisma.iPAddress.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const includeClauseForQuery = { subnet: { include: { vlan: { select: { vlanNumber: true, name: true } } } }, directVlan: { select: {vlanNumber: true, name: true} } };
     const ipsFromDb = await prisma.iPAddress.findMany({ where: whereClause, include: includeClauseForQuery, orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], skip, take: pageSize }) as PrismaIPAddressWithRelations[];
-    const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false, allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined, description: ip.description || undefined, lastSeen: ip.lastSeen?.toISOString() || undefined, subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined, subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null, directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null, peerUnitName: ip.peerUnitName || undefined, peerDeviceName: ip.peerDeviceName || undefined, peerPortName: ip.peerPortName || undefined, selectedAccessType: ip.selectedAccessType || undefined, selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined }));
+    const results: AppIPAddressWithRelations[] = ipsFromDb.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false, allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined, description: ip.description || undefined, createdAt: ip.createdAt.toISOString(), updatedAt: ip.updatedAt.toISOString(), subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined, subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null, directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null, peerUnitName: ip.peerUnitName || undefined, peerDeviceName: ip.peerDeviceName || undefined, peerPortName: ip.peerPortName || undefined, selectedAccessType: ip.selectedAccessType || undefined, selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined }));
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -1387,3 +1378,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   }
 }
 
+    
