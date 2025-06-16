@@ -30,6 +30,7 @@ import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
 import { encrypt, decrypt } from './crypto-utils';
 import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT } from "./constants";
+import { z } from 'zod';
 
 
 export interface ActionResponse<TData = unknown> {
@@ -123,7 +124,8 @@ export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | 
 
     const encryptedPassword = encrypt(data.password);
 
-    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone || null, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' }, include: { role: { include: { permissions: true } } } });
+    const newUser = await prisma.user.create({ data: { username: data.username, email: data.email, password: encryptedPassword, phone: data.phone || null, roleId: data.roleId, avatar: data.avatar || '/images/avatars/default_avatar.png' },
+                                                include: { role: { include: { permissions: true } } } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_user', details: `创建了用户 ${newUser.username}` } });
     revalidatePath("/users");
     const fetchedUser: FetchedUserDetails = { id: newUser.id, username: newUser.username, email: newUser.email, roleId: newUser.roleId, roleName: newUser.role.name as AppRoleNameType, avatar: newUser.avatar || undefined, permissions: newUser.role.permissions.map(p => p.id as AppPermissionIdType), lastLogin: newUser.lastLogin?.toISOString() || undefined };
@@ -305,9 +307,9 @@ export async function createSubnetAction(data: CreateSubnetData, performingUserI
     }
     if (overlappingSubnets.length > 0) {
       throw new ResourceError(
-        `子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
+        `新的子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
         'SUBNET_OVERLAP_ERROR',
-        `子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
+        `新的子网 ${data.cidr} 与以下现有子网重叠: ${overlappingSubnets.join(', ')}。`,
         'cidr'
       );
     }
@@ -354,7 +356,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
       newCanonicalCidrForLog = newSubnetProperties.networkAddress + "/" + newSubnetProperties.prefix;
 
       if (await prisma.subnet.findFirst({ where: { cidr: newCanonicalCidrForLog, NOT: { id } } })) {
-        throw new ResourceError(`子网 ${newCanonicalCidrForLog} 已存在。`, 'SUBNET_ALREADY_EXISTS', `子网 ${newCanonicalCidrForLog} 已存在。`, 'cidr');
+        throw new ResourceError(`子网 ${newCanonicalCidrForLog} 已存在。`, 'SUBNET_ALREADY_EXISTS', `子网 ${newCanonicalCidrToStore} 已存在。`, 'cidr');
       }
       const otherExistingSubnets = await prisma.subnet.findMany({ where: { NOT: { id } } });
       const overlappingSubnets: string[] = [];
@@ -390,7 +392,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
               subnet: { disconnect: true },
               status: 'free' as AppIPAddressStatusType,
               allocatedTo: null, usageUnit: null, contactPerson: null, phone: null, isGateway: false,
-              directVlan: { disconnect: true },
+              directVlan: { disconnect: true }, // Also disconnect directVlan if IP is moved out of subnet
               peerUnitName: null, peerDeviceName: null, peerPortName: null,
               selectedAccessType: null, selectedLocalDeviceName: null, selectedDevicePort: null, selectedPaymentSource: null,
               description: `(原属于子网 ${originalCidrForLog}) ${ip.description || ''}`.trim(),
@@ -803,11 +805,17 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
 }
 
 interface QueryToolParams { page?: number; pageSize?: number; queryString?: string; searchTerm?: string; status?: AppIPAddressStatusType | 'all'; }
+
+const SubnetQuerySchema = z.string().trim().optional();
 export async function querySubnetsAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<SubnetQueryResult>>> {
   const actionName = 'querySubnetsAction';
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const queryString = params.queryString?.trim(); if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
+    const validationResult = SubnetQuerySchema.safeParse(params.queryString);
+    const queryString = validationResult.success ? (validationResult.data || "") : "";
+
+
+    if (!queryString) return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
 
     const orConditions: Prisma.SubnetWhereInput[] = [
       { cidr: { contains: queryString } },
@@ -824,85 +832,110 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
+
+const VlanQuerySchema = z.string().trim().min(1, { message: "查询字符串不能为空" });
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
   try {
     const page = params.page || 1;
     const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
-    const queryString = params.queryString?.trim();
+    
+    const queryString = params.queryString; 
 
-    if (!queryString) {
+    // If query is empty, return empty results (client might send empty string to clear)
+    if (!queryString || queryString.trim() === "") {
       return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
+    
+    const validatedQuery = queryString.trim();
 
-    const orConditions: Prisma.VLANWhereInput[] = [
-      { name: { contains: queryString } },
-      { description: { contains: queryString } },
-    ];
+    const startsWithQuery = `${validatedQuery}%`; // For vlanNumber LIKE '123%'
+    const containsQuery = `%${validatedQuery}%`;   // For name/description LIKE '%abc%'
 
-    const isNumericQuery = /^\d+$/.test(queryString);
-    if (isNumericQuery) {
-      const vlanNumberQuery = parseInt(queryString, 10);
-      if (vlanNumberQuery >= 1 && vlanNumberQuery <= 4094) {
-        orConditions.push({ vlanNumber: vlanNumberQuery }); // Exact match for the number
-      }
-    }
-
-    const whereClause: Prisma.VLANWhereInput = { OR: orConditions };
-
-    const totalCount = await prisma.vLAN.count({ where: whereClause });
+    // Count query using Prisma $queryRaw
+    const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
+      SELECT COUNT(*) as count FROM "VLAN"
+      WHERE
+        ("name" LIKE ${containsQuery})
+        OR ("description" LIKE ${containsQuery})
+        OR (CAST("vlanNumber" AS TEXT) LIKE ${startsWithQuery});
+    `;
+    const totalCount = Number(countResult[0]?.count || 0);
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const vlansFromDb = await prisma.vLAN.findMany({
-      where: whereClause,
-      include: {
-        subnets: { select: { id: true, cidr: true, name: true, description: true } },
-        ipAddresses: { select: { id: true, ipAddress: true, description: true } },
-      },
-      orderBy: { vlanNumber: 'asc' },
-      skip,
-      take: pageSize,
-    });
 
-    const results: VlanQueryResult[] = vlansFromDb.map(v => ({
-      id: v.id,
-      vlanNumber: v.vlanNumber,
-      name: v.name || undefined,
-      description: v.description || undefined,
-      associatedSubnets: v.subnets.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined })),
-      associatedDirectIPs: v.ipAddresses.map(ip => ({ id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined })),
-      resourceCount: v.subnets.length + v.ipAddresses.length
-    }));
+    // Data query using Prisma $queryRaw
+    const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string }>>`
+      SELECT * FROM "VLAN"
+      WHERE
+        ("name" LIKE ${containsQuery})
+        OR ("description" LIKE ${containsQuery})
+        OR (CAST("vlanNumber" AS TEXT) LIKE ${startsWithQuery})
+      ORDER BY "vlanNumber" ASC
+      LIMIT ${pageSize} OFFSET ${skip};
+    `;
+    
+    const results: VlanQueryResult[] = await Promise.all(
+      vlansFromDb.map(async (v_raw) => {
+        const v = v_raw as AppVLAN & { id: string }; 
+        const [subnetCount, directIpCount, associatedSubnetsDb, associatedDirectIPsDb] = await Promise.all([
+          prisma.subnet.count({ where: { vlanId: v.id } }),
+          prisma.iPAddress.count({ where: { directVlanId: v.id } }),
+          prisma.subnet.findMany({ where: { vlanId: v.id }, select: {id: true, cidr: true, name: true, description: true } }),
+          prisma.iPAddress.findMany({ where: { directVlanId: v.id }, select: { id: true, ipAddress: true, description: true } })
+        ]);
+        return {
+          id: v.id,
+          vlanNumber: v.vlanNumber,
+          name: v.name || undefined,
+          description: v.description || undefined,
+          associatedSubnets: associatedSubnetsDb.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})),
+          associatedDirectIPs: associatedDirectIPsDb.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})),
+          resourceCount: subnetCount + directIpCount,
+        };
+      })
+    );
+    
+    return { success: true, data: { data: results, totalCount, currentPage: page, totalPages: totalPages, pageSize } };
 
-    return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
   } catch (error: unknown) {
+    logger.error(actionName, error as Error, { queryString: params.queryString }, 'queryVlansAction');
+    if (error instanceof z.ZodError) { 
+      return { success: false, error: createActionErrorResponse({ message: error.flatten().formErrors.join(', '), code: 'VALIDATION_ERROR', field: 'queryString' }, actionName) };
+    }
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
 
 
+const IpQuerySearchTermSchema = z.string().trim().optional();
 export async function queryIpAddressesAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<AppIPAddressWithRelations>>> {
   const actionName = 'queryIpAddressesAction';
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const trimmedSearchTerm = params.searchTerm?.trim(); const statusFilter = params.status;
+    
+    const validationResult = IpQuerySearchTermSchema.safeParse(params.searchTerm);
+    const trimmedSearchTerm = validationResult.success ? (validationResult.data || "") : "";
+    
+    const statusFilter = params.status;
     const andConditions: Prisma.IPAddressWhereInput[] = []; const orConditionsForSearchTerm: Prisma.IPAddressWhereInput[] = [];
     if (trimmedSearchTerm) {
       const ipWildcardPatterns = [ { regex: /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (m: RegExpMatchArray) => `${m[1]}.` }, { regex: /^(\d{1,3}\.\d{1,3})\.\*$/, prefixBuilder: (m: RegExpMatchArray) => `${m[1]}.` }, { regex: /^(\d{1,3})\.\*$/, prefixBuilder: (m: RegExpMatchArray) => `${m[1]}.` } ];
       let matchedIpPattern = false; for (const p of ipWildcardPatterns) { const m = trimmedSearchTerm.match(p.regex); if (m) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: p.prefixBuilder(m) } }); matchedIpPattern = true; break; } }
       const isPotentiallyIpSegment = !matchedIpPattern && trimmedSearchTerm.length > 0 && trimmedSearchTerm.length <= 15 && /[\d]/.test(trimmedSearchTerm) && /^[0-9.*]+$/.test(trimmedSearchTerm) && !/^\.+$/.test(trimmedSearchTerm) && !/^\*+$/.test(trimmedSearchTerm);
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } });
+      
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } });   
       orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } });       
+      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } }); 
       orConditionsForSearchTerm.push({ peerDeviceName: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm } });  
+      orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } }); 
       orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } }); 
       orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm } });
     }
     if (orConditionsForSearchTerm.length > 0) andConditions.push({ OR: orConditionsForSearchTerm }); else if (trimmedSearchTerm) andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
@@ -1299,5 +1332,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-    
 
