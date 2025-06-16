@@ -19,9 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
 
-// Placeholder for a CAPTCHA component or integration
-// import CaptchaComponent from "@/components/captcha-component"; 
-
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -31,8 +28,6 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { currentUser, isAuthLoading } = useCurrentUser();
   const [pageAuthStatus, setPageAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
-  // State to hold the CAPTCHA verification result
-  // const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (isAuthLoading) {
@@ -49,11 +44,6 @@ export default function LoginPage() {
       setPageAuthStatus('unauthenticated');
     }
   }, [currentUser, isAuthLoading, router, pathname]);
-
-  // Function to handle CAPTCHA verification success
-  // const handleCaptchaSuccess = (token: string) => {
-  //   setCaptchaToken(token);
-  // };
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();    
@@ -140,17 +130,12 @@ export default function LoginPage() {
                   autoComplete="current-password"
                 />
               </div>
-              {/* CAPTCHA component integration */}
-              {/* <div className="space-y-2">
-                <Label htmlFor="captcha">验证码</Label>
-                <CaptchaComponent onVerify={handleCaptchaSuccess} />
-              </div> */}
             </CardContent>
             <CardFooter className="flex flex-col">
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isSubmitting /* || !captchaToken */ } // Disable button if submitting or CAPTCHA not verified
+                disabled={isSubmitting}
               >
                 {isSubmitting ? "登录中..." : <><LogIn className="mr-2 h-4 w-4" /> 登录</>}
               </Button>
