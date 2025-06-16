@@ -1313,8 +1313,16 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     }
     ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
 
-    const allVlansFromDb = await prisma.vLAN.findMany({ include: { _count: { select: { subnets: true, ipAddresses: true } } }, orderBy: { vlanNumber: 'asc' } });
-    const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({ id: vlan.id, vlanNumber: vlan.vlanNumber, name: vlan.name || undefined, resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.ipAddresses || 0), }));
+    const allVlansFromDb = await prisma.vLAN.findMany({
+      include: { _count: { select: { subnets: true, IPAddress: true } } }, // Changed ipAddresses to IPAddress
+      orderBy: { vlanNumber: 'asc' }
+    });
+    const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({
+      id: vlan.id,
+      vlanNumber: vlan.vlanNumber,
+      name: vlan.name || undefined,
+      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.IPAddress || 0), // Changed ipAddresses to IPAddress
+    }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
     const allSubnets = await prisma.subnet.findMany();
