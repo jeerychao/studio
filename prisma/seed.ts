@@ -2,9 +2,6 @@
 // --- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2) ---
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Execution Started ---");
 
-// Explicit dotenv.config() call is removed.
-// Prisma CLI should load the .env from the project root and make it available to this script.
-
 import { PrismaClient, Prisma } from '@prisma/client';
 import { encrypt } from '../src/lib/crypto-utils';
 import {
@@ -16,22 +13,18 @@ import {
   mockUsers,
   mockVLANs,
   mockSubnets,
-  seedIPsData, // Corrected import name
+  seedIPsData,
   mockDeviceDictionaries,
   mockPaymentSourceDictionaries,
   mockAccessTypeDictionaries,
   mockInterfaceTypeDictionaries,
-} from '../src/lib/data'; // Ensure path is correct if lib/data is moved
+} from '../src/lib/data';
 import { logger } from '../src/lib/logger';
 
-// Log the ENCRYPTION_KEY visible to this script for debugging
-// This log helps confirm if the Prisma CLI successfully passed the .env variable.
 const keyVisible = process.env.ENCRYPTION_KEY;
 if (keyVisible) {
   console.log(`ENCRYPTION_KEY starts with: ${keyVisible.substring(0, 4)}... and ends with: ...${keyVisible.substring(keyVisible.length - 4)} (Length: ${keyVisible.length})`);
 } else {
-  // This path should ideally not be taken if Prisma CLI loads .env correctly.
-  // crypto-utils.ts has its own fallback for development if NODE_ENV is not production.
   console.warn("ENCRYPTION_KEY is NOT SET in the environment for seed.ts. Passwords will be encrypted with the default dev key if crypto-utils falls back.");
 }
 
@@ -67,7 +60,7 @@ async function main() {
           name: roleData.name,
           description: roleData.description,
           permissions: {
-            set: permissionsToConnect, // Use set to replace all existing permissions
+            set: permissionsToConnect,
           },
         },
         create: {
@@ -89,17 +82,19 @@ async function main() {
   logger.info('Start seeding Users...');
   for (const userData of mockUsers) {
     try {
-      // The mockUsers data directly provides encrypted passwords.
-      // The encrypt function here is mainly for reference or if a default is needed.
       const { password, ...restOfUserData } = userData;
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        password: password || encrypt("FallbackDefaultPassword1!"), // Fallback if password somehow missing
+        password: password || encrypt("FallbackDefaultPassword1!"),
       };
+      // Users are typically upserted based on a unique business key like email.
+      // If 'id' is also predefined in mockUsers and is the primary key,
+      // you might want to use 'where: { id: userData.id }' if email can change.
+      // For now, assuming email is the stable unique key for upsert lookup.
       await prisma.user.upsert({
         where: { email: userData.email },
         update: dataToUpsert,
-        create: dataToUpsert,
+        create: dataToUpsert, // This includes the 'id' from mockUsers if it exists
       });
     } catch (e: any) {
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -112,9 +107,10 @@ async function main() {
   for (const vlanData of mockVLANs) {
     try {
       await prisma.vLAN.upsert({
+        // Assuming vlanNumber is unique for VLANs
         where: { vlanNumber: vlanData.vlanNumber },
         update: { name: vlanData.name, description: vlanData.description },
-        create: vlanData,
+        create: vlanData, // This includes the 'id' from mockVLANs
       });
     } catch (e: any) {
       logger.error(`Error seeding VLAN ${vlanData.vlanNumber}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -126,18 +122,26 @@ async function main() {
   logger.info('Start seeding Subnets...');
   for (const subnetData of mockSubnets) {
     try {
-      const { vlanId, ...restOfSubnetData } = subnetData; // Destructure vlanId
-      const createPayload: Prisma.SubnetCreateInput = { ...restOfSubnetData };
+      const { vlanId, ...restOfSubnetData } = subnetData;
+      const createOrUpdatePayload: Prisma.SubnetCreateInput & Prisma.SubnetUpdateInput = { ...restOfSubnetData };
       if (vlanId) {
-        createPayload.vlan = { connect: { id: vlanId } };
+        createOrUpdatePayload.vlan = { connect: { id: vlanId } };
+      } else {
+        // Explicitly set vlan to disconnect if vlanId is not provided,
+        // useful for updates where a vlan might be removed.
+        createOrUpdatePayload.vlan = { disconnect: true };
       }
+      
       await prisma.subnet.upsert({
-        where: { cidr: subnetData.cidr },
-        update: createPayload, // Use same payload for update and create logic
-        create: createPayload,
+        where: { id: subnetData.id }, // Use the predefined ID for lookup
+        update: createOrUpdatePayload,
+        create: {
+          ...createOrUpdatePayload,
+          id: subnetData.id, // Ensure ID is part of create payload
+        },
       });
     } catch (e: any) {
-      logger.error(`Error seeding subnet ${subnetData.cidr}:`, e, { name: e.name, message: e.message, stack: e.stack });
+      logger.error(`Error seeding subnet ${subnetData.cidr} (ID: ${subnetData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, cidr: subnetData.cidr, id: subnetData.id });
     }
   }
   logger.info(`${mockSubnets.length} Subnets seeded.`);
@@ -146,7 +150,6 @@ async function main() {
   logger.info('Start seeding IP Addresses...');
   for (const ipData of seedIPsData) {
     try {
-      // Destructure all relevant fields from ipData
       const { 
         subnetId: ipSubnetId, 
         directVlanId, 
@@ -160,9 +163,9 @@ async function main() {
         ...restOfIpData 
       } = ipData;
 
-      const createPayload: Prisma.IPAddressCreateInput = {
-        ...restOfIpData, // Includes id, ipAddress, status, isGateway, allocatedTo, usageUnit, contactPerson, phone, description
-        status: ipData.status as string, // Ensure status is correctly typed if needed by Prisma
+      const createOrUpdatePayload: Prisma.IPAddressCreateInput & Prisma.IPAddressUpdateInput = {
+        ...restOfIpData,
+        status: ipData.status as string,
         peerUnitName: peerUnitName || null,
         peerDeviceName: peerDeviceName || null,
         peerPortName: peerPortName || null,
@@ -173,33 +176,26 @@ async function main() {
       };
 
       if (ipSubnetId) {
-        createPayload.subnet = { connect: { id: ipSubnetId } };
+        createOrUpdatePayload.subnet = { connect: { id: ipSubnetId } };
+      } else {
+        createOrUpdatePayload.subnet = { disconnect: true };
       }
       if (directVlanId) {
-        createPayload.directVlan = { connect: { id: directVlanId } };
+        createOrUpdatePayload.directVlan = { connect: { id: directVlanId } };
+      } else {
+        createOrUpdatePayload.directVlan = { disconnect: true };
       }
       
-      // The unique constraint is @@unique([ipAddress, subnetId])
-      // If subnetId is null, it's a global IP, otherwise it's subnet-specific.
-      // The where clause needs to reflect this for the upsert to work correctly.
-      // For Prisma's composite unique key, `null` is a valid value.
-      // The `as any` cast here was to bypass a previous TypeScript error; it should be okay now.
-      // The `subnetId` in `ipAddress_subnetId` must match the type in the unique constraint (String?)
-      // so `null` is a valid value.
-      const currentSubnetIdForWhere: string | null = ipData.subnetId ? ipData.subnetId : null;
-
       await prisma.iPAddress.upsert({
-        where: { 
-          ipAddress_subnetId: { 
-            ipAddress: ipData.ipAddress, 
-            subnetId: currentSubnetIdForWhere as any // Prisma expects string | null here
-          } 
+        where: { id: ipData.id }, // Use the predefined ID for lookup
+        update: createOrUpdatePayload,
+        create: {
+            ...createOrUpdatePayload,
+            id: ipData.id // Ensure ID is part of create payload
         },
-        update: createPayload,
-        create: createPayload,
       });
     } catch (e: any) {
-      logger.error(`Error seeding IP Address ${ipData.ipAddress}:`, e, { name: e.name, message: e.message, stack: e.stack, ipDataAttempted: ipData });
+      logger.error(`Error seeding IP Address ${ipData.ipAddress} (ID: ${ipData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, ipDataAttempted: ipData });
     }
   }
   logger.info(`${seedIPsData.length} IP Addresses seeded.`);
@@ -209,8 +205,8 @@ async function main() {
   for (const deviceData of mockDeviceDictionaries) {
     try {
       await prisma.deviceDictionary.upsert({
-        where: { deviceName: deviceData.deviceName },
-        update: { port: deviceData.port }, // Only 'port' is updatable besides deviceName for where
+        where: { deviceName: deviceData.deviceName }, // deviceName is unique
+        update: { port: deviceData.port },
         create: deviceData,
       });
     } catch (e: any) {
@@ -224,8 +220,8 @@ async function main() {
   for (const paymentData of mockPaymentSourceDictionaries) {
     try {
       await prisma.paymentSourceDictionary.upsert({
-        where: { sourceName: paymentData.sourceName },
-        update: {}, // No other fields to update besides sourceName for where
+        where: { sourceName: paymentData.sourceName }, // sourceName is unique
+        update: {}, 
         create: paymentData,
       });
     } catch (e: any) {
@@ -239,8 +235,8 @@ async function main() {
   for (const accessTypeData of mockAccessTypeDictionaries) {
     try {
       await prisma.accessTypeDictionary.upsert({
-        where: { name: accessTypeData.name },
-        update: {}, // No other fields to update
+        where: { name: accessTypeData.name }, // name is unique
+        update: {}, 
         create: accessTypeData,
       });
     } catch (e: any) {
@@ -254,7 +250,7 @@ async function main() {
   for (const interfaceTypeData of mockInterfaceTypeDictionaries) {
     try {
       await prisma.interfaceTypeDictionary.upsert({
-        where: { name: interfaceTypeData.name },
+        where: { name: interfaceTypeData.name }, // name is unique
         update: { description: interfaceTypeData.description },
         create: interfaceTypeData,
       });
@@ -275,19 +271,15 @@ main()
     console.error("Error Stack:", e.stack);
     if(e.code) console.error("Prisma Error Code:", e.code);
     if(e.meta) console.error("Prisma Error Meta:", e.meta);
-    // Use the logger for structured logging as well
     logger.error('FATAL ERROR during seeding process:', e, { name: e.name, message: e.message, stack: e.stack });
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
     logger.info('Prisma client disconnected.');
-    // Final console log to indicate script completion path.
     console.log("--- PRISMA SEED SCRIPT: main() finished, client disconnected. ---");
   });
 
-// This log indicates the script file itself has finished executing its top-level code,
-// not necessarily that the async main() function has completed.
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
 
     
