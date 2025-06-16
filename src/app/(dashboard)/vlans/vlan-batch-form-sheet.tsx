@@ -26,8 +26,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, PlusCircle, Loader2 } from "lucide-react";
+// Alert components are no longer needed here for inline error display
+import { PlusCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { batchCreateVLANsAction, type BatchVlanCreationResult } from "@/lib/actions";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -52,7 +52,7 @@ interface VlanBatchFormSheetProps {
 
 export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [submissionResult, setSubmissionResult] = React.useState<BatchVlanCreationResult | null>(null);
+  // submissionResult is no longer used for inline display
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { toast } = useToast();
   const { currentUser } = useCurrentUser();
@@ -77,14 +77,13 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         commonName: "",
         commonDescription: "",
       });
-      setSubmissionResult(null);
+      // No need to clear submissionResult state as it's removed from display
       form.clearErrors();
     }
   }, [isOpen, form]);
 
   async function onSubmit(data: VlanBatchFormValues) {
     form.clearErrors();
-    setSubmissionResult(null);
     setIsSubmitting(true);
 
     const vlansToCreate = [];
@@ -99,54 +98,58 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     }
 
     if (vlansToCreate.length === 0) {
-      const noOpError = "指定的范围和步长未产生任何VLAN号码。";
-      setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: noOpError }] });
+      toast({
+        title: "输入错误",
+        description: "指定的范围和步长未产生任何VLAN号码。",
+        variant: "destructive",
+        duration: 10000,
+      });
       setIsSubmitting(false);
+      // Keep sheet open
       return;
     }
     if (vlansToCreate.length > 200) {
-      const rangeTooLargeError = `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`;
-      setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: rangeTooLargeError }] });
+      toast({
+        title: "输入错误",
+        description: `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`,
+        variant: "destructive",
+        duration: 10000,
+      });
       setIsSubmitting(false);
+      // Keep sheet open
       return;
     }
 
     try {
       const result = await batchCreateVLANsAction(vlansToCreate, currentUser?.id);
-      setSubmissionResult(result);
-
+      
       if (result.successCount > 0 && result.failureDetails.length === 0) {
         toast({
           title: "批量创建成功",
           description: `${result.successCount} 个VLAN已成功创建。`,
         });
         if (onVlanChange) onVlanChange();
-        setIsOpen(false);
+        setIsOpen(false); // Close sheet on full success
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
             title: "批量处理部分成功",
-            description: (
-                <div>
-                  <p>{result.successCount} 个VLAN创建成功，{result.failureDetails.length} 个失败。</p>
-                  <p className="text-xs mt-1">详情请查看表单内提示。</p>
-                </div>
-            ),
+            description: `成功创建: ${result.successCount} 个VLAN。失败: ${result.failureDetails.length} 个。首个错误: ${result.failureDetails[0].vlanNumberAttempted}: ${result.failureDetails[0].error}`,
             variant: "destructive",
-            duration: 10000,
+            duration: 15000,
         });
         if (onVlanChange) onVlanChange();
-        // Sheet remains open
-      } else if (result.failureDetails.length > 0) { 
+        // Keep sheet open
+      } else if (result.successCount === 0 && result.failureDetails.length > 0) { 
         toast({
             title: "批量创建失败", 
-            description: `所有 ${vlansToCreate.length} 个VLAN均创建失败。详情请查看表单内提示。`,
+            description: `所有 ${vlansToCreate.length} 个VLAN均创建失败。首个错误: ${result.failureDetails[0].vlanNumberAttempted}: ${result.failureDetails[0].error}`,
             variant: "destructive",
-            duration: 10000,
+            duration: 15000,
         });
-        // Sheet remains open
+        // Keep sheet open
       } else { 
         toast({ title: "无操作", description: "没有VLAN被创建或失败。" });
-        setIsOpen(false);
+        setIsOpen(false); // Close if no operation and no errors
       }
     } catch (clientError) {
         const errorMessage = clientError instanceof Error ? clientError.message : "尝试批量创建VLAN时发生意外错误。";
@@ -154,14 +157,9 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             title: "客户端提交错误",
             description: errorMessage,
             variant: "destructive",
+            duration: 10000,
         });
-        setSubmissionResult({
-            successCount: 0,
-            failureDetails: [{
-                vlanNumberAttempted: data.startVlanNumber,
-                error: errorMessage
-            }]
-        });
+        // Keep sheet open
     } finally {
       setIsSubmitting(false);
     }
@@ -258,64 +256,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                     </FormItem>
                   )}
                 />
-                {/* Display processing results/errors - Adapted from IP Batch Form */}
-                {submissionResult && (submissionResult.failureDetails.length > 0 || (submissionResult.successCount === 0 && submissionResult.failureDetails.length > 0 && submissionResult.failureDetails[0]?.error)) && (
-                  <div className="mt-6 space-y-3">
-                    <Alert variant={ (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 && submissionResult.failureDetails[0]?.error && (submissionResult.failureDetails[0].error.includes("未产生任何VLAN号码") || submissionResult.failureDetails[0].error.includes("范围过大"))) ? "default" : "destructive" }>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>
-                        {(() => {
-                          if (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0) {
-                             const clientErrorMsg = submissionResult.failureDetails[0]?.error;
-                             if (clientErrorMsg && (clientErrorMsg.includes("未产生任何VLAN号码") || clientErrorMsg.includes("范围过大") || clientErrorMsg.includes("起始VLAN号码必须小于或等于结束VLAN号码"))) {
-                               return "输入错误";
-                             }
-                            return "批量创建失败";
-                          }
-                          if (submissionResult.failureDetails.length > 0 && submissionResult.successCount > 0) {
-                            return "批量处理部分成功";
-                          }
-                          return "处理结果"; 
-                        })()}
-                      </AlertTitle>
-                      <AlertDescription>
-                        {(() => {
-                           const totalAttempted = (submissionResult.successCount || 0) + (submissionResult.failureDetails?.length || 0);
-                           if (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0) {
-                             const clientErrorMsg = submissionResult.failureDetails[0]?.error;
-                             if (clientErrorMsg && (clientErrorMsg.includes("未产生任何VLAN号码") || clientErrorMsg.includes("范围过大")|| clientErrorMsg.includes("起始VLAN号码必须小于或等于结束VLAN号码"))) {
-                               return clientErrorMsg;
-                             }
-                            return `所有 ${totalAttempted} 个VLAN均创建失败。`;
-                          }
-                          if (submissionResult.failureDetails.length > 0 && submissionResult.successCount > 0) {
-                            return `成功创建: ${submissionResult.successCount} 个VLAN。失败: ${submissionResult.failureDetails.length} 个。`;
-                          }
-                          return `成功创建: ${submissionResult.successCount} 个VLAN。`;
-                        })()}
-                      </AlertDescription>
-                    </Alert>
-                    
-                    {submissionResult.failureDetails.length > 0 &&
-                     !(submissionResult.successCount === 0 && submissionResult.failureDetails[0]?.error && (submissionResult.failureDetails[0].error.includes("未产生任何VLAN号码") || submissionResult.failureDetails[0].error.includes("范围过大") || submissionResult.failureDetails[0].error.includes("起始VLAN号码必须小于或等于结束VLAN号码"))) &&
-                     (
-                      <div className="border border-dashed border-destructive p-3 mt-3 rounded-md">
-                        <h4 className="font-medium text-destructive mb-2">
-                          失败详情 (共 {submissionResult.failureDetails.length} 条):
-                        </h4>
-                        <ScrollArea className="h-[120px] mt-1 rounded-md border bg-destructive/5 p-2">
-                          <ul className="space-y-1 text-sm">
-                            {submissionResult.failureDetails.map((failure, index) => (
-                              <li key={index} className="text-destructive font-medium">
-                                VLAN {failure.vlanNumberAttempted}: {failure.error || "错误信息未提供"}
-                              </li>
-                            ))}
-                          </ul>
-                        </ScrollArea>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Removed inline submissionResult display */}
               </div>
             </ScrollArea>
             <SheetFooter className="p-6 pt-4 border-t">
@@ -334,4 +275,3 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
-
