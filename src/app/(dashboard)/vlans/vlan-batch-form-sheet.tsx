@@ -26,9 +26,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, PlusCircle, CheckCircle2 } from "lucide-react"; // Alert related imports no longer needed here
+import { PlusCircle } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
-import { batchCreateVLANsAction, type ActionResponse, type BatchVlanCreationResult } from "@/lib/actions";
+import { batchCreateVLANsAction, type BatchVlanCreationResult } from "@/lib/actions";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const vlanBatchFormSchema = z.object({
@@ -76,7 +76,6 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       });
       form.clearErrors();
     } else {
-      // Also reset when closed by any means to ensure clean state next time
       form.reset({
         startVlanNumber: undefined,
         endVlanNumber: undefined,
@@ -110,64 +109,54 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     }
      if (vlansToCreate.length > 200) { 
       toast({ title: "范围过大", description: `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`, variant: "destructive" });
-      return; // Keep sheet open for user to correct
+      return; 
     }
 
     try {
       const result = await batchCreateVLANsAction(vlansToCreate, currentUser?.id);
 
-      if (result.successCount > 0 && result.failureDetails.length === 0) {
+      if (result.failureDetails.length > 0) { // If there are ANY failures
+        const title = result.successCount > 0 ? "批量处理部分成功" : "批量创建失败";
+        const descContent = (
+          <div>
+            <p>{result.successCount > 0 ? `${result.successCount} 个VLAN创建成功，` : `所有 ${vlansToCreate.length} 个VLAN均创建失败。`}{result.failureDetails.length} 个失败。</p>
+            <p className="mt-2 text-xs">失败详情:</p>
+            <ScrollArea className="h-[100px] mt-1 rounded-md border p-2 bg-destructive/10">
+              <ul className="list-disc list-inside text-xs">
+                {result.failureDetails.map((f, i) => <li key={i}><strong>VLAN {f.vlanNumberAttempted}:</strong> {f.error}</li>)}
+              </ul>
+            </ScrollArea>
+          </div>
+        );
+        toast({
+          title: title,
+          description: descContent,
+          variant: "destructive", 
+          duration: 15000,
+        });
+        // Keep sheet open if there were failures
+        if (onVlanChange && result.successCount > 0) { 
+            onVlanChange();
+        }
+      } else if (result.successCount > 0) { // All successful (failureDetails.length === 0 implied)
         toast({
           title: "批量创建成功",
           description: `${result.successCount} 个VLAN已成功创建。`,
+          variant: "default" 
         });
         if (onVlanChange) onVlanChange();
-      } else if (result.successCount > 0 && result.failureDetails.length > 0) {
-        toast({
-          title: "批量处理部分成功",
-          description: (
-            <div>
-              <p>{result.successCount} 个VLAN创建成功，{result.failureDetails.length} 个失败。</p>
-              <p className="mt-2 text-xs">失败详情:</p>
-              <ScrollArea className="h-[100px] mt-1 rounded-md border p-2 bg-destructive/10">
-                <ul className="list-disc list-inside text-xs">
-                  {result.failureDetails.map((f, i) => <li key={i}><strong>VLAN {f.vlanNumberAttempted}:</strong> {f.error}</li>)}
-                </ul>
-              </ScrollArea>
-            </div>
-          ),
-          variant: "default",
-          duration: 15000,
-        });
-        if (onVlanChange) onVlanChange();
-      } else if (result.failureDetails.length > 0) {
-         toast({
-          title: "批量创建失败",
-          description: (
-             <div>
-              <p>所有 {vlansToCreate.length} 个VLAN均创建失败。</p>
-              <p className="mt-2 text-xs">失败详情:</p>
-              <ScrollArea className="h-[100px] mt-1 rounded-md border p-2 bg-destructive/10">
-                <ul className="list-disc list-inside text-xs">
-                  {result.failureDetails.map((f, i) => <li key={i}><strong>VLAN {f.vlanNumberAttempted}:</strong> {f.error}</li>)}
-                </ul>
-              </ScrollArea>
-            </div>
-          ),
-          variant: "destructive",
-          duration: 15000,
-        });
-      } else {
+        setIsOpen(false); // Close sheet on full success
+      } else { // No successes, no failures (e.g., empty range validation passed but resulted in no items)
         toast({ title: "无操作", description: "没有VLAN被创建或失败。", variant: "default" });
+        setIsOpen(false); // Close sheet if no operation
       }
-      setIsOpen(false); // Close sheet after any submission attempt
     } catch (clientError) {
         toast({
             title: "客户端提交错误",
             description: clientError instanceof Error ? clientError.message : "尝试批量创建VLAN时发生意外错误。",
             variant: "destructive",
         });
-        setIsOpen(false); // Close sheet on client error
+        // Keep sheet open on client error
     }
   }
 
