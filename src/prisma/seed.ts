@@ -85,16 +85,15 @@ async function main() {
       const { password, ...restOfUserData } = userData;
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        // Ensure password is encrypted; handle cases where mock password might be missing
-        password: password ? password : encrypt("FallbackDefaultPassword1!"), // Use existing (already encrypted) or encrypt a fallback
+        password: password ? password : encrypt("FallbackDefaultPassword1!"),
       };
 
       await prisma.user.upsert({
-        where: { id: userData.id }, // Use predefined ID for lookup
+        where: { id: userData.id }, 
         update: dataToUpsert,
         create: {
             ...dataToUpsert,
-            id: userData.id, // Ensure ID is part of create payload
+            id: userData.id, 
         }
       });
     } catch (e: any) {
@@ -108,7 +107,7 @@ async function main() {
   for (const vlanData of mockVLANs) {
     try {
       await prisma.vLAN.upsert({
-        where: { id: vlanData.id }, // Use predefined ID for lookup
+        where: { id: vlanData.id },
         update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
         create: vlanData,
       });
@@ -124,26 +123,27 @@ async function main() {
     try {
       const { vlanId, ...restOfSubnetData } = subnetData;
       
-      const updatePayload: Prisma.SubnetUpdateInput = { ...restOfSubnetData };
+      const baseData = { ...restOfSubnetData, id: subnetData.id };
+
+      const updatePayload: Prisma.SubnetUpdateInput = { ...baseData };
       if (vlanId) {
         updatePayload.vlan = { connect: { id: vlanId } };
       } else {
         updatePayload.vlan = { disconnect: true };
       }
 
-      const createPayload: Prisma.SubnetCreateInput = { ...restOfSubnetData, id: subnetData.id }; // Ensure ID is in create
+      const createPayload: Prisma.SubnetCreateInput = { ...baseData };
       if (vlanId) {
         createPayload.vlan = { connect: { id: vlanId } };
       }
-      // If vlanId is not present for create, 'vlan' field is simply omitted from createPayload, meaning no relation.
+      // If vlanId is null/undefined, 'vlan' is omitted from createPayload.
 
       await prisma.subnet.upsert({
         where: { id: subnetData.id },
         update: updatePayload,
         create: createPayload,
       });
-    } catch (e: any)
-{
+    } catch (e: any) {
       logger.error(`Error seeding subnet ${subnetData.cidr} (ID: ${subnetData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, cidr: subnetData.cidr, id: subnetData.id });
     }
   }
@@ -168,7 +168,8 @@ async function main() {
 
       const baseIpDataPayload = {
         ...restOfIpData,
-        status: ipData.status as string, // Assuming status is always valid
+        id: ipData.id, // Ensure id is part of base for create
+        status: ipData.status as string,
         peerUnitName: peerUnitName || null,
         peerDeviceName: peerDeviceName || null,
         peerPortName: peerPortName || null,
@@ -190,14 +191,15 @@ async function main() {
         updatePayload.directVlan = { disconnect: true };
       }
       
-      const createPayload: Prisma.IPAddressCreateInput = { ...baseIpDataPayload, id: ipData.id }; // Ensure ID is in create
+      const createPayload: Prisma.IPAddressCreateInput = { ...baseIpDataPayload };
       if (ipSubnetId) {
         createPayload.subnet = { connect: { id: ipSubnetId } };
       }
+      // If ipSubnetId is null/undefined, 'subnet' is omitted from createPayload.
       if (directVlanId) {
         createPayload.directVlan = { connect: { id: directVlanId } };
       }
-      // If ipSubnetId or directVlanId are not present for create, their respective fields are omitted from createPayload.
+      // If directVlanId is null/undefined, 'directVlan' is omitted from createPayload.
 
       await prisma.iPAddress.upsert({
         where: { id: ipData.id },
@@ -291,7 +293,3 @@ main()
   });
 
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
-
-    
-
-    
