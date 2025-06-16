@@ -648,13 +648,27 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式: ${data.ipAddress}`, 'ipAddress', data.ipAddress, `无效的 IP 地址格式: ${data.ipAddress}`);
-    if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) throw new ValidationError("对于'已分配'或'预留'状态的 IP，必须选择一个子网。", 'subnetId', undefined, "对于“已分配”或“预留”状态的 IP，必须选择一个子网。");
+    
+    // Global IP uniqueness check
+    if (await prisma.iPAddress.findUnique({ where: { ipAddress: data.ipAddress } })) {
+      throw new ResourceError(`IP 地址 ${data.ipAddress} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS', `IP 地址 ${data.ipAddress} 已在系统中存在。`, 'ipAddress');
+    }
+
+    if (!data.subnetId && (data.status === 'allocated' || data.status === 'reserved')) {
+      throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', undefined, "对于“已分配”或“预留”状态的 IP，必须选择一个子网。");
+    }
+
     if (data.subnetId) {
-      const targetSubnet = await prisma.subnet.findUnique({ where: { id: data.subnetId } }); if (!targetSubnet) throw new NotFoundError(`子网 ID: ${data.subnetId}`, `子网 ID ${data.subnetId} 未找到。`, 'subnetId');
-      const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK', `目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
-      if (!isIpInCidrRange(data.ipAddress, parsedCidr)) throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress', data.ipAddress, `IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
-      if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: data.subnetId } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于子网 ${targetSubnet.cidr} 中。`, 'IP_EXISTS_IN_SUBNET', `IP ${data.ipAddress} 已存在于子网 ${targetSubnet.cidr} 中。`, 'ipAddress');
-    } else { if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, subnetId: null } })) throw new ResourceError(`IP ${data.ipAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', `IP ${data.ipAddress} 已存在于全局池中。`, 'ipAddress'); }
+      const targetSubnet = await prisma.subnet.findUnique({ where: { id: data.subnetId } });
+      if (!targetSubnet) throw new NotFoundError(`子网 ID: ${data.subnetId}`, `子网 ID ${data.subnetId} 未找到。`, 'subnetId');
+      const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr);
+      if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK', `目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
+      if (!isIpInCidrRange(data.ipAddress, parsedCidr)) {
+        throw new ValidationError(`IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress', data.ipAddress, `IP ${data.ipAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
+      }
+      // Note: The global uniqueness check above already covers if this IP exists in this subnet or any other context.
+    }
+    // For IPs not in a subnet (global pool), the global uniqueness check is sufficient.
 
     const createPayload: Prisma.IPAddressCreateInput = {
       ipAddress: data.ipAddress, status: data.status as string, isGateway: data.isGateway ?? false,
@@ -699,7 +713,12 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
       const currentIpStr = numberToIp(currentIpNum);
       try {
         if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) throw new ValidationError(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'startIp/endIp', currentIpStr, `IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`);
-        if (await prisma.iPAddress.findFirst({ where: { ipAddress: currentIpStr, subnetId: subnetId } })) throw new ResourceError(`IP ${currentIpStr} 已存在于子网 ${targetSubnet.cidr} 中。`, 'IP_EXISTS_IN_SUBNET', `IP ${currentIpStr} 已存在于子网 ${targetSubnet.cidr} 中。`, 'startIp/endIp');
+        
+        // Global IP uniqueness check for batch creation
+        if (await prisma.iPAddress.findUnique({ where: { ipAddress: currentIpStr } })) {
+          throw new ResourceError(`IP 地址 ${currentIpStr} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS_BATCH', `IP 地址 ${currentIpStr} 已在系统中存在。`, 'startIp/endIp');
+        }
+        
         const createPayload: Prisma.IPAddressCreateInput = {
             ipAddress: currentIpStr, status: status, isGateway: isGateway ?? false, allocatedTo: status === 'allocated' ? (description || '批量分配') : null,
             usageUnit: usageUnit||null, contactPerson: contactPerson||null,
@@ -729,7 +748,18 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     const ipToUpdate = await prisma.iPAddress.findUnique({ where: { id } }); if (!ipToUpdate) throw new NotFoundError(`IP 地址 ID: ${id}`, `IP 地址 ID ${id} 未找到。`);
     const updateData: Prisma.IPAddressUpdateInput = { lastSeen: new Date() };
     let finalIpAddress = ipToUpdate.ipAddress;
-    if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) { if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress, `无效的 IP 地址格式更新: ${data.ipAddress}`); updateData.ipAddress = data.ipAddress; finalIpAddress = data.ipAddress; }
+
+    if (data.hasOwnProperty('ipAddress') && data.ipAddress !== undefined && data.ipAddress !== ipToUpdate.ipAddress) {
+      if (data.ipAddress.split('.').map(Number).some(p => isNaN(p) || p < 0 || p > 255) || data.ipAddress.split('.').length !== 4) throw new ValidationError(`无效的 IP 地址格式更新: ${data.ipAddress}`, 'ipAddress', data.ipAddress, `无效的 IP 地址格式更新: ${data.ipAddress}`);
+      
+      // Global IP uniqueness check for update
+      if (await prisma.iPAddress.findFirst({ where: { ipAddress: data.ipAddress, NOT: { id } } })) {
+        throw new ResourceError(`IP 地址 ${data.ipAddress} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS_UPDATE', `IP 地址 ${data.ipAddress} 已在系统中存在。`, 'ipAddress');
+      }
+      updateData.ipAddress = data.ipAddress;
+      finalIpAddress = data.ipAddress;
+    }
+
     if (data.hasOwnProperty('status') && data.status !== undefined) updateData.status = data.status as string;
     if (data.hasOwnProperty('isGateway')) updateData.isGateway = data.isGateway ?? false;
     if (data.hasOwnProperty('allocatedTo')) updateData.allocatedTo = (data.allocatedTo === undefined || data.allocatedTo === "") ? null : data.allocatedTo;
@@ -748,24 +778,37 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
 
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || undefined) : ipToUpdate.subnetId;
     const finalStatus = data.status ? data.status as string : ipToUpdate.status;
-    if (data.hasOwnProperty('subnetId')) {
-      if (newSubnetId) {
-        const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } }); if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。", 'subnetId');
-        const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr); if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK', `目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
-        if (!isIpInCidrRange(finalIpAddress, parsedCidr)) throw new ValidationError(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress/subnetId', finalIpAddress, `IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
-        if (finalIpAddress !== ipToUpdate.ipAddress || newSubnetId !== ipToUpdate.subnetId) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于子网 ${targetSubnet.cidr} 中。`, 'IP_EXISTS_IN_SUBNET', `IP ${finalIpAddress} 已存在于子网 ${targetSubnet.cidr} 中。`, 'ipAddress'); }
+
+    if (data.hasOwnProperty('subnetId')) { // If subnetId is being changed (or set for the first time)
+      if (newSubnetId) { // If associating with a new subnet
+        const targetSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
+        if (!targetSubnet) throw new NotFoundError(`子网 ID: ${newSubnetId}`, "目标子网不存在。", 'subnetId');
+        const parsedCidr = getSubnetPropertiesFromCidr(targetSubnet.cidr);
+        if (!parsedCidr) throw new AppError(`目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK', `目标子网 ${targetSubnet.cidr} 的 CIDR 无效。`);
+        if (!isIpInCidrRange(finalIpAddress, parsedCidr)) {
+          throw new ValidationError(`IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'ipAddress/subnetId', finalIpAddress, `IP ${finalIpAddress} 不在子网 ${targetSubnet.cidr} 的范围内。`);
+        }
+        // Global uniqueness of IP is already checked. No need for specific subnet IP check if IP itself is unique.
         updateData.subnet = { connect: { id: newSubnetId } };
-      } else {
-        if (finalStatus === 'allocated' || finalStatus === 'reserved') throw new ValidationError("对于'已分配'或'预留'状态的 IP，必须选择一个子网。", 'subnetId', finalStatus, "对于“已分配”或“预留”状态的 IP，必须选择一个子网。");
-        if (finalIpAddress !== ipToUpdate.ipAddress || ipToUpdate.subnetId !== null) { if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: null, NOT: { id } } })) throw new ResourceError(`IP ${finalIpAddress} 已存在于全局池中。`, 'IP_EXISTS_GLOBALLY', `IP ${finalIpAddress} 已存在于全局池中。`, 'ipAddress'); }
+      } else { // If disassociating from any subnet (subnetId becomes null)
+        if (finalStatus === 'allocated' || finalStatus === 'reserved') {
+          throw new ValidationError("对于“已分配”或“预留”状态的 IP，必须选择一个子网。", 'subnetId', finalStatus, "对于“已分配”或“预留”状态的 IP，必须选择一个子网。");
+        }
+        // Global uniqueness of IP is already checked.
         updateData.subnet = { disconnect: true };
       }
-    } else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) {
-      const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } }); if (!currentSubnet) throw new NotFoundError(`当前子网 ID: ${newSubnetId}`, "IP 的当前子网未找到。", 'subnetId');
-      const parsedCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr); if (!parsedCidr) throw new AppError(`当前子网 ${currentSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK', `当前子网 ${currentSubnet.cidr} 的 CIDR 无效。`);
-      if (!isIpInCidrRange(finalIpAddress, parsedCidr)) throw new ValidationError(`新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`, 'ipAddress', finalIpAddress, `新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`);
-      if (await prisma.iPAddress.findFirst({ where: { ipAddress: finalIpAddress, subnetId: newSubnetId, NOT: { id } } })) throw new ResourceError(`新 IP ${finalIpAddress} 已存在于子网 ${currentSubnet.cidr} 中。`, 'IP_EXISTS_IN_SUBNET', `新 IP ${finalIpAddress} 已存在于子网 ${currentSubnet.cidr} 中。`, 'ipAddress');
+    } else if (newSubnetId && (finalIpAddress !== ipToUpdate.ipAddress)) { 
+      // SubnetId is not changing, but IP address string itself is. Need to ensure new IP is valid for current subnet.
+      const currentSubnet = await prisma.subnet.findUnique({ where: { id: newSubnetId } });
+      if (!currentSubnet) throw new NotFoundError(`当前子网 ID: ${newSubnetId}`, "IP 的当前子网未找到。", 'subnetId');
+      const parsedCidr = getSubnetPropertiesFromCidr(currentSubnet.cidr);
+      if (!parsedCidr) throw new AppError(`当前子网 ${currentSubnet.cidr} 的 CIDR 无效。`, 500, 'SUBNET_CIDR_INVALID_FOR_IP_CHECK', `当前子网 ${currentSubnet.cidr} 的 CIDR 无效。`);
+      if (!isIpInCidrRange(finalIpAddress, parsedCidr)) {
+        throw new ValidationError(`新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`, 'ipAddress', finalIpAddress, `新 IP ${finalIpAddress} 不在当前子网 ${currentSubnet.cidr} 的范围内。`);
+      }
+      // Global uniqueness check for the new IP string already done.
     }
+
     const updatedIP = await prisma.iPAddress.update({ where: { id }, data: updateData });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_ip_address', details: `更新了 IP ${updatedIP.ipAddress}` } });
     revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
@@ -1343,3 +1386,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
