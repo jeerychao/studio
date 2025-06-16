@@ -522,7 +522,7 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
   const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize; const whereClause = {};
   const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize);
   const vlansFromDb = params?.page && params?.pageSize ? await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize }) : await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' } });
-  const appVlans: AppVLAN[] = await Promise.all(vlansFromDb.map(async (vlan) => ({ ...vlan, name: vlan.name || undefined, description: vlan.description || undefined, subnetCount: (await prisma.subnet.count({ where: { vlanId: vlan.id } })) + (await prisma.iPAddress.count({ where: { directVlanId: vlan.id } })) })));
+  const appVlans: AppVLAN[] = await Promise.all(vlansFromDb.map(async (vlan) => ({ ...vlan, name: vlan.name || undefined, description: vlan.description || undefined, subnetCount: (await prisma.subnet.count({ where: { vlanId: vlan.id } })) + (await prisma.iPAddress.count({where: {directVlanId: vlan.id}})) })));
   return { data: appVlans, totalCount: params?.page && params?.pageSize ? totalCount : appVlans.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
 }
 
@@ -665,10 +665,10 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id">, perf
       lastSeen: data.lastSeen ? new Date(data.lastSeen) : new Date(),
       peerUnitName: data.peerUnitName || null,
       peerDeviceName: data.peerDeviceName || null,
-      peerPortName: data.peerPortName || null, // Now this is the combined string
+      peerPortName: data.peerPortName || null,
       selectedAccessType: data.selectedAccessType || null,
       selectedLocalDeviceName: data.selectedLocalDeviceName || null,
-      selectedDevicePort: data.selectedDevicePort || null, // Now manual
+      selectedDevicePort: data.selectedDevicePort || null,
       selectedPaymentSource: data.selectedPaymentSource || null,
     };
 
@@ -706,8 +706,8 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
             phone: phone || null,
             description: description || null,
             lastSeen: new Date(),
-            peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null, // peerPortName is the combined string
-            selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null, selectedDevicePort: selectedDevicePort || null, // selectedDevicePort is manual
+            peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null,
+            selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null, selectedDevicePort: selectedDevicePort || null,
             selectedPaymentSource: selectedPaymentSource || null,
         };
         if (subnetId) createPayload.subnet = { connect: { id: subnetId } };
@@ -740,10 +740,10 @@ export async function updateIPAddressAction(id: string, data: UpdateIPAddressDat
     if (data.hasOwnProperty('directVlanId')) { const vlanIdToSet = data.directVlanId; if (vlanIdToSet === null || vlanIdToSet === "" || vlanIdToSet === undefined) updateData.directVlan = { disconnect: true }; else if (vlanIdToSet) { if (!(await prisma.vLAN.findUnique({where: {id: vlanIdToSet}}))) throw new NotFoundError(`VLAN ID: ${vlanIdToSet}`, `VLAN ID ${vlanIdToSet} 未找到。`, 'directVlanId'); updateData.directVlan = { connect: { id: vlanIdToSet } }; } }
     if (data.hasOwnProperty('peerUnitName')) updateData.peerUnitName = data.peerUnitName || null;
     if (data.hasOwnProperty('peerDeviceName')) updateData.peerDeviceName = data.peerDeviceName || null;
-    if (data.hasOwnProperty('peerPortName')) updateData.peerPortName = data.peerPortName || null; // peerPortName is the combined string
+    if (data.hasOwnProperty('peerPortName')) updateData.peerPortName = data.peerPortName || null;
     if (data.hasOwnProperty('selectedAccessType')) updateData.selectedAccessType = data.selectedAccessType || null;
     if (data.hasOwnProperty('selectedLocalDeviceName')) updateData.selectedLocalDeviceName = data.selectedLocalDeviceName || null;
-    if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null; // selectedDevicePort is manual
+    if (data.hasOwnProperty('selectedDevicePort')) updateData.selectedDevicePort = data.selectedDevicePort || null;
     if (data.hasOwnProperty('selectedPaymentSource')) updateData.selectedPaymentSource = data.selectedPaymentSource || null;
 
     const newSubnetId = data.hasOwnProperty('subnetId') ? (data.subnetId || undefined) : ipToUpdate.subnetId;
@@ -985,13 +985,13 @@ export async function getDeviceDictionariesAction(params?: FetchParams): Promise
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function createDeviceDictionaryAction(data: Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt' | 'port'>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
+export async function createDeviceDictionaryAction(data: Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
   const actionName = 'createDeviceDictionaryAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     if (!data.deviceName || data.deviceName.trim() === "") throw new ValidationError("设备名称是必需的。", "deviceName", undefined, "设备名称是必需的。");
     if (await prisma.deviceDictionary.findUnique({ where: { deviceName: data.deviceName } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。`, 'DEVICE_DICT_NAME_EXISTS', `设备名称 "${data.deviceName}" 已存在。`, 'deviceName');
-    const newItem = await prisma.deviceDictionary.create({ data: { deviceName: data.deviceName } }); // Port removed
+    const newItem = await prisma.deviceDictionary.create({ data: { deviceName: data.deviceName } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_device_dictionary', details: `创建了设备字典条目: ${newItem.deviceName}` } });
     revalidatePath("/dictionaries/device");
     revalidatePath("/ip-addresses");
@@ -1000,14 +1000,13 @@ export async function createDeviceDictionaryAction(data: Omit<AppDeviceDictionar
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function updateDeviceDictionaryAction(id: string, data: Partial<Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt' | 'port'>>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
+export async function updateDeviceDictionaryAction(id: string, data: Partial<Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
   const actionName = 'updateDeviceDictionaryAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
     const itemToUpdate = await prisma.deviceDictionary.findUnique({ where: { id } }); if (!itemToUpdate) throw new NotFoundError(`设备字典 ID: ${id}`, `设备字典 ID ${id} 未找到。`);
     const updatePayload: Prisma.DeviceDictionaryUpdateInput = {};
     if (data.deviceName && data.deviceName !== itemToUpdate.deviceName) { if (await prisma.deviceDictionary.findFirst({ where: { deviceName: data.deviceName, NOT: { id } } })) throw new ResourceError(`设备名称 "${data.deviceName}" 已存在。`, 'DEVICE_DICT_NAME_EXISTS', `设备名称 "${data.deviceName}" 已存在。`, 'deviceName'); updatePayload.deviceName = data.deviceName; }
-    // Port logic removed
     if (Object.keys(updatePayload).length === 0) { const currentItem: AppDeviceDictionary = {...itemToUpdate, createdAt: itemToUpdate.createdAt.toISOString(), updatedAt: itemToUpdate.updatedAt.toISOString()}; return { success: true, data: currentItem }; }
     const updatedItem = await prisma.deviceDictionary.update({ where: { id }, data: updatePayload });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_device_dictionary', details: `更新了设备字典条目: ${updatedItem.deviceName}` } });
@@ -1314,14 +1313,14 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
 
     const allVlansFromDb = await prisma.vLAN.findMany({
-      include: { _count: { select: { subnets: true, IPAddress: true } } }, // Changed ipAddresses to IPAddress
+      include: { _count: { select: { subnets: true, directIPs: true } } },
       orderBy: { vlanNumber: 'asc' }
     });
     const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({
       id: vlan.id,
       vlanNumber: vlan.vlanNumber,
       name: vlan.name || undefined,
-      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.IPAddress || 0), // Changed ipAddresses to IPAddress
+      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.directIPs || 0),
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
