@@ -136,15 +136,15 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         });
         if (onVlanChange) onVlanChange();
         // Sheet remains open
-      } else if (result.failureDetails.length > 0) { // Only failures
+      } else if (result.failureDetails.length > 0) { 
         toast({
-            title: "批量创建失败", // General toast title
+            title: "批量创建失败", 
             description: `所有 ${vlansToCreate.length} 个VLAN均创建失败。详情请查看表单内提示。`,
             variant: "destructive",
             duration: 10000,
         });
         // Sheet remains open
-      } else { // successCount === 0 && failureDetails.length === 0 (e.g. server no-op)
+      } else { 
         toast({ title: "无操作", description: "没有VLAN被创建或失败。" });
         setIsOpen(false);
       }
@@ -258,49 +258,46 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
                     </FormItem>
                   )}
                 />
-                {/* Display processing results/errors */}
-                {submissionResult && (submissionResult.failureDetails.length > 0 || (submissionResult.successCount === 0 && submissionResult.failureDetails.length === 0 && submissionResult.failureDetails[0]?.error)) && (
+                {/* Display processing results/errors - Adapted from IP Batch Form */}
+                {submissionResult && (submissionResult.failureDetails.length > 0 || (submissionResult.successCount === 0 && submissionResult.failureDetails.length > 0 && submissionResult.failureDetails[0]?.error)) && (
                   <div className="mt-6 space-y-3">
-                    <Alert variant={submissionResult.failureDetails.length > 0 ? "destructive" : "default"}>
+                    <Alert variant={ (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0 && submissionResult.failureDetails[0]?.error && (submissionResult.failureDetails[0].error.includes("未产生任何VLAN号码") || submissionResult.failureDetails[0].error.includes("范围过大"))) ? "default" : "destructive" }>
                       <AlertCircle className="h-4 w-4" />
-                       <AlertTitle>
+                      <AlertTitle>
                         {(() => {
                           if (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0) {
-                            return "批量创建失败"; // Matches image title
+                             const clientErrorMsg = submissionResult.failureDetails[0]?.error;
+                             if (clientErrorMsg && (clientErrorMsg.includes("未产生任何VLAN号码") || clientErrorMsg.includes("范围过大") || clientErrorMsg.includes("起始VLAN号码必须小于或等于结束VLAN号码"))) {
+                               return "输入错误";
+                             }
+                            return "批量创建失败";
                           }
                           if (submissionResult.failureDetails.length > 0 && submissionResult.successCount > 0) {
                             return "批量处理部分成功";
                           }
-                           const firstClientError = submissionResult.failureDetails[0]?.error;
-                           if (submissionResult.successCount === 0 && submissionResult.failureDetails.length > 0 && firstClientError && (firstClientError.includes("未产生任何VLAN号码") || firstClientError.includes("范围过大"))) {
-                             return "输入错误";
-                           }
-                          return "处理结果"; // Fallback
+                          return "处理结果"; 
                         })()}
                       </AlertTitle>
                       <AlertDescription>
                         {(() => {
-                          if (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0) {
-                             // Check if it's a client-side validation message
-                            const clientErrorMsg = submissionResult.failureDetails[0]?.error;
-                            if (clientErrorMsg && (clientErrorMsg.includes("未产生任何VLAN号码") || clientErrorMsg.includes("范围过大"))) {
-                                return clientErrorMsg;
-                            }
-                            return `所有 ${submissionResult.failureDetails.length} 个VLAN均创建失败。`; // Matches image structure for server failures
+                           const totalAttempted = (submissionResult.successCount || 0) + (submissionResult.failureDetails?.length || 0);
+                           if (submissionResult.failureDetails.length > 0 && submissionResult.successCount === 0) {
+                             const clientErrorMsg = submissionResult.failureDetails[0]?.error;
+                             if (clientErrorMsg && (clientErrorMsg.includes("未产生任何VLAN号码") || clientErrorMsg.includes("范围过大")|| clientErrorMsg.includes("起始VLAN号码必须小于或等于结束VLAN号码"))) {
+                               return clientErrorMsg;
+                             }
+                            return `所有 ${totalAttempted} 个VLAN均创建失败。`;
                           }
                           if (submissionResult.failureDetails.length > 0 && submissionResult.successCount > 0) {
                             return `成功创建: ${submissionResult.successCount} 个VLAN。失败: ${submissionResult.failureDetails.length} 个。`;
                           }
-                          // This case should ideally not show the alert if there are no failures and some successes.
-                          // But if it's a client-side error message (e.g. no VLANs produced), it's handled above.
                           return `成功创建: ${submissionResult.successCount} 个VLAN。`;
                         })()}
                       </AlertDescription>
                     </Alert>
                     
-                    {/* Show detailed list only if there are server-side failures, not for client-side range errors */}
                     {submissionResult.failureDetails.length > 0 &&
-                     !(submissionResult.successCount === 0 && submissionResult.failureDetails[0]?.error && (submissionResult.failureDetails[0].error.includes("未产生任何VLAN号码") || submissionResult.failureDetails[0].error.includes("范围过大"))) &&
+                     !(submissionResult.successCount === 0 && submissionResult.failureDetails[0]?.error && (submissionResult.failureDetails[0].error.includes("未产生任何VLAN号码") || submissionResult.failureDetails[0].error.includes("范围过大") || submissionResult.failureDetails[0].error.includes("起始VLAN号码必须小于或等于结束VLAN号码"))) &&
                      (
                       <div className="border border-dashed border-destructive p-3 mt-3 rounded-md">
                         <h4 className="font-medium text-destructive mb-2">
@@ -337,3 +334,4 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
+
