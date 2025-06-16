@@ -84,14 +84,17 @@ async function main() {
     try {
       const { password, ...restOfUserData } = userData;
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
-        ...restOfUserData, // Includes id
+        ...restOfUserData,
         password: password ? password : encrypt("FallbackDefaultPassword1!"),
       };
 
       await prisma.user.upsert({
         where: { id: userData.id }, 
         update: dataToUpsert,
-        create: dataToUpsert,
+        create: {
+            ...dataToUpsert,
+            id: userData.id, 
+        }
       });
     } catch (e: any) {
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -119,29 +122,26 @@ async function main() {
   for (const subnetData of mockSubnets) {
     try {
       const { vlanId, ...restOfSubnetData } = subnetData;
-      // Base data for both create and update, EXCLUDING the relational 'vlan' field initially
-      const baseDataForSubnet = { ...restOfSubnetData, id: subnetData.id };
+      
+      const baseData = { ...restOfSubnetData, id: subnetData.id };
 
-      // Prepare the 'update' payload
-      const subnetUpdateInput: Prisma.SubnetUpdateInput = { ...baseDataForSubnet };
+      const updatePayload: Prisma.SubnetUpdateInput = { ...baseData };
       if (vlanId) {
-        subnetUpdateInput.vlan = { connect: { id: vlanId } };
+        updatePayload.vlan = { connect: { id: vlanId } };
       } else {
-        // Ensure existing VLAN connection is removed if vlanId is now null/undefined
-        subnetUpdateInput.vlan = { disconnect: true };
+        updatePayload.vlan = { disconnect: true };
       }
 
-      // Prepare the 'create' payload
-      const subnetCreateInput: Prisma.SubnetCreateInput = { ...baseDataForSubnet };
+      const createPayload: Prisma.SubnetCreateInput = { ...baseData };
       if (vlanId) {
-        subnetCreateInput.vlan = { connect: { id: vlanId } };
+        createPayload.vlan = { connect: { id: vlanId } };
       }
-      // If vlanId is not present, 'vlan' field is omitted from subnetCreateInput, meaning no relation.
+      // If vlanId is null/undefined, 'vlan' is omitted from createPayload.
 
       await prisma.subnet.upsert({
         where: { id: subnetData.id },
-        update: subnetUpdateInput,
-        create: subnetCreateInput,
+        update: updatePayload,
+        create: createPayload,
       });
     } catch (e: any) {
       logger.error(`Error seeding subnet ${subnetData.cidr} (ID: ${subnetData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, cidr: subnetData.cidr, id: subnetData.id });
@@ -153,23 +153,23 @@ async function main() {
   logger.info('Start seeding IP Addresses...');
   for (const ipData of seedIPsData) {
     try {
-      const {
-        subnetId: ipSubnetId,
-        directVlanId,
-        peerUnitName,
-        peerDeviceName,
+      const { 
+        subnetId: ipSubnetId, 
+        directVlanId, 
+        peerUnitName, 
+        peerDeviceName, 
         peerPortName,
-        selectedAccessType,
-        selectedLocalDeviceName,
-        selectedDevicePort,
+        selectedAccessType, 
+        selectedLocalDeviceName, 
+        selectedDevicePort, 
         selectedPaymentSource,
-        ...restOfIpData
+        ...restOfIpData 
       } = ipData;
 
-      const baseDataForIp = {
+      const baseIpDataPayload = {
         ...restOfIpData,
-        id: ipData.id,
-        status: ipData.status as string, // Ensure status is string as DB expects
+        id: ipData.id, // Ensure id is part of base for create
+        status: ipData.status as string,
         peerUnitName: peerUnitName || null,
         peerDeviceName: peerDeviceName || null,
         peerPortName: peerPortName || null,
@@ -178,31 +178,33 @@ async function main() {
         selectedDevicePort: selectedDevicePort || null,
         selectedPaymentSource: selectedPaymentSource || null,
       };
-
-      const ipAddressUpdateInput: Prisma.IPAddressUpdateInput = { ...baseDataForIp };
+      
+      const updatePayload: Prisma.IPAddressUpdateInput = { ...baseIpDataPayload };
       if (ipSubnetId) {
-        ipAddressUpdateInput.subnet = { connect: { id: ipSubnetId } };
+        updatePayload.subnet = { connect: { id: ipSubnetId } };
       } else {
-        ipAddressUpdateInput.subnet = { disconnect: true };
+        updatePayload.subnet = { disconnect: true };
       }
       if (directVlanId) {
-        ipAddressUpdateInput.directVlan = { connect: { id: directVlanId } };
+        updatePayload.directVlan = { connect: { id: directVlanId } };
       } else {
-        ipAddressUpdateInput.directVlan = { disconnect: true };
+        updatePayload.directVlan = { disconnect: true };
       }
-
-      const ipAddressCreateInput: Prisma.IPAddressCreateInput = { ...baseDataForIp };
+      
+      const createPayload: Prisma.IPAddressCreateInput = { ...baseIpDataPayload };
       if (ipSubnetId) {
-        ipAddressCreateInput.subnet = { connect: { id: ipSubnetId } };
+        createPayload.subnet = { connect: { id: ipSubnetId } };
       }
+      // If ipSubnetId is null/undefined, 'subnet' is omitted from createPayload.
       if (directVlanId) {
-        ipAddressCreateInput.directVlan = { connect: { id: directVlanId } };
+        createPayload.directVlan = { connect: { id: directVlanId } };
       }
+      // If directVlanId is null/undefined, 'directVlan' is omitted from createPayload.
 
       await prisma.iPAddress.upsert({
         where: { id: ipData.id },
-        update: ipAddressUpdateInput,
-        create: ipAddressCreateInput,
+        update: updatePayload,
+        create: createPayload,
       });
     } catch (e: any) {
       logger.error(`Error seeding IP Address ${ipData.ipAddress} (ID: ${ipData.id}):`, e, { name: e.name, message: e.message, stack: e.stack, ipDataAttempted: ipData });
@@ -216,8 +218,8 @@ async function main() {
     try {
       await prisma.deviceDictionary.upsert({
         where: { deviceName: deviceData.deviceName },
-        update: { port: deviceData.port },
-        create: deviceData,
+        update: {}, // Corrected: No port to update, deviceName is the match
+        create: deviceData, // deviceData is { deviceName: string }
       });
     } catch (e: any) {
       logger.error(`Error seeding device dictionary ${deviceData.deviceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -231,7 +233,7 @@ async function main() {
     try {
       await prisma.paymentSourceDictionary.upsert({
         where: { sourceName: paymentData.sourceName },
-        update: {},
+        update: {}, 
         create: paymentData,
       });
     } catch (e: any) {
@@ -246,7 +248,7 @@ async function main() {
     try {
       await prisma.accessTypeDictionary.upsert({
         where: { name: accessTypeData.name },
-        update: {},
+        update: {}, 
         create: accessTypeData,
       });
     } catch (e: any) {
