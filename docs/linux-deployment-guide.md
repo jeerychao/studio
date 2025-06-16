@@ -257,4 +257,9 @@ pm2 start npm --name "ipam-app" -- run start -- --port ${PORT:-3000}
 *   **文件权限**: 确保运行 Node.js 进程（和 PM2）的用户对项目文件具有读权限，对 SQLite 数据库文件及其目录以及任何日志目录具有写权限。
 *   **环境变量**: 仔细检查所有必需的环境变量是否在您的 `.env.production.local` 文件或服务器环境中正确设置。
 
+初始用户名和密码
+admin@example.com  admin
+operator@example.com  operator
+viewer@example.com viewer
+
 本指南提供了全面的概述。请根据您的 Linux 发行版和具体设置调整文件路径和命令。

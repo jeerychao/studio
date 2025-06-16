@@ -177,3 +177,8 @@ services:
     *   如果镜像已更改或 `docker-compose.yml` 中的容器配置已更改，则重新创建并重启容器。
 
 此过程可确保您的部署使用最新的代码和 `Dockerfile` 中定义的依赖项进行更新。
+
+初始用户名和密码
+admin@example.com  admin
+operator@example.com  operator
+viewer@example.com viewer
