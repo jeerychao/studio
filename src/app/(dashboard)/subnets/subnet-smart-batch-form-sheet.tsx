@@ -99,8 +99,8 @@ export function SubnetSmartBatchFormSheet({
             以下是错误信息显示的模拟界面。
           </SheetDescription>
         </SheetHeader>
-        <ScrollArea className="flex-1 px-6 pt-4 pb-2">
-          <div className="py-6 space-y-4">
+        <ScrollArea className="flex-1 px-6 pt-4">
+          <div className="py-6 space-y-4 pb-4">
             <p className="text-sm text-muted-foreground text-center">
               智能批量子网创建表单将在此处实现。
             </p>
@@ -156,6 +156,3 @@ export function SubnetSmartBatchFormSheet({
     </Sheet>
   );
 }
-
-
-    

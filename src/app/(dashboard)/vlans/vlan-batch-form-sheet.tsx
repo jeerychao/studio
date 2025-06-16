@@ -101,15 +101,16 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
       const noOpError = "指定的范围和步长未产生任何VLAN号码。";
       setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: noOpError }] });
       toast({ title: "无VLAN可创建", description: noOpError, variant: "destructive" });
-      return; // Keep sheet open
+      return; 
     }
     if (vlansToCreate.length > 200) {
       const rangeTooLargeError = `尝试创建 ${vlansToCreate.length} 个VLAN。请分批创建 (例如，每次最多200个)。`;
       setSubmissionResult({ successCount: 0, failureDetails: [{ vlanNumberAttempted: data.startVlanNumber, error: rangeTooLargeError }] });
       toast({ title: "范围过大", description: rangeTooLargeError, variant: "destructive" });
-      return; // Keep sheet open
+      return; 
     }
 
+    form.formState.isSubmitting = true; // Manually set submitting state for button
     try {
       const result = await batchCreateVLANsAction(vlansToCreate, currentUser?.id);
       setSubmissionResult(result);
@@ -120,7 +121,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
           description: `${result.successCount} 个VLAN已成功创建。`,
         });
         if (onVlanChange) onVlanChange();
-        setIsOpen(false); // Close sheet only on full success
+        setIsOpen(false); 
       } else if (result.successCount > 0 && result.failureDetails.length > 0) {
         toast({
             title: "批量处理部分成功",
@@ -143,9 +144,9 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             duration: 10000,
         });
         // Sheet remains open due to failures
-      } else {
+      } else { // successCount === 0 && failureDetails.length === 0 (this case might be covered by vlansToCreate.length === 0)
         toast({ title: "无操作", description: "没有VLAN被创建或失败。" });
-        setIsOpen(false); // Close if no operation happened and no errors
+        setIsOpen(false); 
       }
     } catch (clientError) {
         const errorMessage = clientError instanceof Error ? clientError.message : "尝试批量创建VLAN时发生意外错误。";
@@ -162,14 +163,14 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
             }]
         });
         // Sheet remains open due to client-side error
+    } finally {
+      form.formState.isSubmitting = false; // Manually reset submitting state
     }
   }
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (!open) {
-      // submissionResult is cleared by useEffect when isOpen becomes true next time
-    }
+    // submissionResult is cleared by useEffect when isOpen becomes true next time
   };
 
   const triggerContent = children || (
@@ -193,7 +194,7 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
         </SheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-            <ScrollArea className="flex-1 px-6 pt-4 pb-2">
+            <ScrollArea className="flex-1 px-6 pt-4">
               <div className="space-y-4 pb-4">
                 <FormField
                   control={form.control}
@@ -311,5 +312,3 @@ export function VlanBatchFormSheet({ children, onVlanChange }: VlanBatchFormShee
     </Sheet>
   );
 }
-
-    
