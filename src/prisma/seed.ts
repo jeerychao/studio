@@ -218,7 +218,7 @@ async function main() {
     try {
       await prisma.deviceDictionary.upsert({
         where: { deviceName: deviceData.deviceName },
-        update: {}, // Removed port update
+        update: {}, // Corrected: No port to update
         create: deviceData, // deviceData is now { deviceName: string }
       });
     } catch (e: any) {
