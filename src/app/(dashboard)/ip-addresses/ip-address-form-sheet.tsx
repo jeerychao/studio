@@ -17,17 +17,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PlusCircle, Edit, X, Loader2 } from "lucide-react"; // Added Loader2
+import { PlusCircle, Edit, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
-import { createIPAddressAction, updateIPAddressAction, type ActionResponse } from "@/lib/actions"; // Removed UpdateIPAddressData as it's now inline
+import { createIPAddressAction, updateIPAddressAction, type ActionResponse } from "@/lib/actions";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = { allocated: "已分配", free: "空闲", reserved: "预留" };
 
 const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
 const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
-const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__"; // For general selects like device, access type
+const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
 
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
@@ -48,13 +48,13 @@ const ipAddressFormSchema = z.object({
 
   selectedAccessType: z.string().optional(),
   selectedLocalDeviceName: z.string().optional(),
-  selectedDevicePort: z.string().max(100, "本端设备端口过长").optional(),
+  selectedDevicePortPrefix: z.string().optional(), // New
+  selectedDevicePortSuffix: z.string().max(100, "本端端口后缀过长").optional(), // New
   selectedPaymentSource: z.string().optional(),
 });
 
 type IPAddressFormValues = z.infer<typeof ipAddressFormSchema>;
 
-// Define UpdateIPAddressData inline or import if used elsewhere extensively
 export interface UpdateIPAddressData {
   ipAddress?: string;
   subnetId?: string | undefined;
@@ -66,6 +66,8 @@ export interface UpdateIPAddressData {
   contactPerson?: string | null | undefined;
   phone?: string | null | undefined;
   description?: string | null | undefined;
+  updatedAt?: string; // Added from previous change
+  createdAt?: string; // Added from previous change
   peerUnitName?: string | null | undefined;
   peerDeviceName?: string | null | undefined;
   peerPortName?: string | null | undefined;
@@ -110,7 +112,9 @@ export function IPAddressFormSheet({
       peerUnitName: "", peerDeviceName: NO_SELECTION_SENTINEL,
       peerPortPrefix: NO_SELECTION_SENTINEL, peerPortSuffix: "",
       selectedAccessType: NO_SELECTION_SENTINEL,
-      selectedLocalDeviceName: NO_SELECTION_SENTINEL, selectedDevicePort: "", selectedPaymentSource: NO_SELECTION_SENTINEL,
+      selectedLocalDeviceName: NO_SELECTION_SENTINEL,
+      selectedDevicePortPrefix: NO_SELECTION_SENTINEL, selectedDevicePortSuffix: "", // New
+      selectedPaymentSource: NO_SELECTION_SENTINEL,
     },
   });
 
@@ -135,6 +139,25 @@ export function IPAddressFormSheet({
             }
         }
 
+        let initialSelectedDevicePortPrefix = NO_SELECTION_SENTINEL;
+        let initialSelectedDevicePortSuffix = "";
+        if (isEditing && ipAddress?.selectedDevicePort) {
+            const existingSelectedDevicePort = ipAddress.selectedDevicePort;
+            const foundPrefixEntry = sortedInterfaceTypes.find(it => existingSelectedDevicePort.startsWith(it.name + " "));
+            if (foundPrefixEntry) {
+                initialSelectedDevicePortPrefix = foundPrefixEntry.name;
+                initialSelectedDevicePortSuffix = existingSelectedDevicePort.substring(foundPrefixEntry.name.length + 1).trim();
+            } else {
+                 const foundExactPrefixEntry = sortedInterfaceTypes.find(it => existingSelectedDevicePort === it.name);
+                if (foundExactPrefixEntry) {
+                     initialSelectedDevicePortPrefix = foundExactPrefixEntry.name;
+                     initialSelectedDevicePortSuffix = "";
+                } else {
+                    initialSelectedDevicePortSuffix = existingSelectedDevicePort;
+                }
+            }
+        }
+
         form.reset({
             ipAddress: ipAddress?.ipAddress || "",
             subnetId: ipAddress?.subnetId || currentSubnetId || (subnets.length > 0 && !currentSubnetId ? subnets[0].id : NO_SUBNET_SELECTED_SENTINEL),
@@ -154,7 +177,8 @@ export function IPAddressFormSheet({
 
             selectedAccessType: ipAddress?.selectedAccessType || NO_SELECTION_SENTINEL,
             selectedLocalDeviceName: ipAddress?.selectedLocalDeviceName || NO_SELECTION_SENTINEL,
-            selectedDevicePort: ipAddress?.selectedDevicePort || "",
+            selectedDevicePortPrefix: initialSelectedDevicePortPrefix, // New
+            selectedDevicePortSuffix: initialSelectedDevicePortSuffix, // New
             selectedPaymentSource: ipAddress?.selectedPaymentSource || NO_SELECTION_SENTINEL,
         });
         form.clearErrors();
@@ -184,6 +208,11 @@ export function IPAddressFormSheet({
       const peerSuffix = data.peerPortSuffix || "";
       const finalPeerPortName = (peerPrefix && peerSuffix) ? `${peerPrefix} ${peerSuffix}` : (peerPrefix || peerSuffix || null);
 
+      const selectedDevicePortPrefix = data.selectedDevicePortPrefix === NO_SELECTION_SENTINEL || !data.selectedDevicePortPrefix ? "" : data.selectedDevicePortPrefix;
+      const selectedDevicePortSuffix = data.selectedDevicePortSuffix || "";
+      const finalSelectedDevicePort = (selectedDevicePortPrefix && selectedDevicePortSuffix) ? `${selectedDevicePortPrefix} ${selectedDevicePortSuffix}` : (selectedDevicePortPrefix || selectedDevicePortSuffix || null);
+
+
       const commonPayload = {
         ipAddress: data.ipAddress, subnetId: effectiveSubnetId, directVlanId: directVlanIdToSave,
         status: data.status, isGateway: data.isGateway,
@@ -196,7 +225,7 @@ export function IPAddressFormSheet({
 
         selectedAccessType: data.selectedAccessType === NO_SELECTION_SENTINEL || !data.selectedAccessType ? null : data.selectedAccessType,
         selectedLocalDeviceName: data.selectedLocalDeviceName === NO_SELECTION_SENTINEL || !data.selectedLocalDeviceName ? null : data.selectedLocalDeviceName,
-        selectedDevicePort: data.selectedDevicePort || null,
+        selectedDevicePort: finalSelectedDevicePort, // Updated
         selectedPaymentSource: data.selectedPaymentSource === NO_SELECTION_SENTINEL || !data.selectedPaymentSource ? null : data.selectedPaymentSource,
       };
 
@@ -204,25 +233,22 @@ export function IPAddressFormSheet({
         const payloadForUpdate: UpdateIPAddressData = commonPayload;
         response = await updateIPAddressAction(ipAddress.id, payloadForUpdate);
       } else {
-        // For create, ensure all optional fields are explicitly undefined if null/empty for stricter type matching in action
         const payloadForCreate: Omit<IPAddress, "id" | "createdAt" | "updatedAt"> = {
-            ...commonPayload, // ipAddress, status are required in IPAddress, hence in commonPayload
-            subnetId: commonPayload.subnetId, // optional
+            ...commonPayload,
+            subnetId: commonPayload.subnetId,
             directVlanId: commonPayload.directVlanId === null ? undefined : commonPayload.directVlanId,
-            isGateway: commonPayload.isGateway ?? false, // Ensure boolean
+            isGateway: commonPayload.isGateway ?? false,
             allocatedTo: commonPayload.allocatedTo === null ? undefined : commonPayload.allocatedTo,
             usageUnit: commonPayload.usageUnit === null ? undefined : commonPayload.usageUnit,
             contactPerson: commonPayload.contactPerson === null ? undefined : commonPayload.contactPerson,
             phone: commonPayload.phone === null ? undefined : commonPayload.phone,
             description: commonPayload.description === null ? undefined : commonPayload.description,
-
             peerUnitName: commonPayload.peerUnitName === null ? undefined : commonPayload.peerUnitName,
             peerDeviceName: commonPayload.peerDeviceName === null ? undefined : commonPayload.peerDeviceName,
             peerPortName: commonPayload.peerPortName === null ? undefined : commonPayload.peerPortName,
-
             selectedAccessType: commonPayload.selectedAccessType === null ? undefined : commonPayload.selectedAccessType,
             selectedLocalDeviceName: commonPayload.selectedLocalDeviceName === null ? undefined : commonPayload.selectedLocalDeviceName,
-            selectedDevicePort: commonPayload.selectedDevicePort === null ? undefined : commonPayload.selectedDevicePort,
+            selectedDevicePort: commonPayload.selectedDevicePort === null ? undefined : commonPayload.selectedDevicePort, // Updated
             selectedPaymentSource: commonPayload.selectedPaymentSource === null ? undefined : commonPayload.selectedPaymentSource,
         };
         response = await createIPAddressAction(payloadForCreate);
@@ -254,7 +280,7 @@ export function IPAddressFormSheet({
         {isEditing && <span className="sr-only">编辑IP地址</span>}
       </Button>;
 
-  const clearButton = (fieldName: keyof IPAddressFormValues, label: string) => (
+  const clearButton = (fieldName: FieldPath<IPAddressFormValues>, label: string) => (
     <Button
       type="button"
       variant="ghost"
@@ -372,7 +398,7 @@ export function IPAddressFormSheet({
                         <FormItem className="flex-grow">
                           <div className="relative">
                             <FormControl><Input placeholder="例如 1/0/1 或 23" {...field} className="pr-8"/></FormControl>
-                            {field.value && (<Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current" onClick={() => {form.setValue(field.name, ""); form.trigger(field.name);}} aria-label="清除对端端口后缀"><X className="h-4 w-4" /></Button>)}
+                            {field.value && clearButton("peerPortSuffix" as FieldPath<IPAddressFormValues>, "对端端口后缀")}
                           </div>
                           <FormMessage />
                         </FormItem>
@@ -402,19 +428,44 @@ export function IPAddressFormSheet({
                 />
 
                 <FormField control={form.control} name="selectedLocalDeviceName" render={({ field }) => (<FormItem><FormLabel>本端设备名称 (可选)</FormLabel><Select onValueChange={handleLocalDeviceChange} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择本端设备" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{deviceDictionaries.map(dev => (<SelectItem key={dev.id} value={dev.deviceName}>{dev.deviceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="selectedDevicePort" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>本端设备端口 (可选)</FormLabel>
-                    <div className="relative">
-                        <FormControl><Input placeholder="例如 1/0/2, Eth0/0/1" {...field} className="pr-8"/></FormControl>
-                        {field.value && clearButton("selectedDevicePort", "本端设备端口")}
-                    </div>
-                    <FormMessage/>
-                  </FormItem>
-                )} />
+                
+                <FormItem>
+                  <FormLabel>本端设备端口 (可选)</FormLabel>
+                  <div className="flex flex-col sm:flex-row gap-2 items-start">
+                    <FormField
+                      control={form.control}
+                      name="selectedDevicePortPrefix"
+                      render={({ field }) => (
+                        <FormItem className="w-full sm:w-2/5">
+                          <Select onValueChange={field.onChange} value={field.value || NO_SELECTION_SENTINEL}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="选择前缀" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value={NO_SELECTION_SENTINEL}>-- 无前缀 --</SelectItem>
+                              {interfaceTypes.map(it => (<SelectItem key={it.id} value={it.name}>{it.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="selectedDevicePortSuffix"
+                      render={({ field }) => (
+                        <FormItem className="flex-grow">
+                          <div className="relative">
+                            <FormControl><Input placeholder="例如 1/0/2, Eth0/0/1" {...field} className="pr-8"/></FormControl>
+                            {field.value && clearButton("selectedDevicePortSuffix" as FieldPath<IPAddressFormValues>, "本端端口后缀")}
+                          </div>
+                          <FormMessage/>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </FormItem>
 
                 <FormField control={form.control} name="selectedPaymentSource" render={({ field }) => (<FormItem><FormLabel>费用来源 (可选)</FormLabel><Select onValueChange={(value) => field.onChange(value === NO_SELECTION_SENTINEL ? "" : value)} value={field.value || NO_SELECTION_SENTINEL}><FormControl><SelectTrigger><SelectValue placeholder="选择费用来源" /></SelectTrigger></FormControl><SelectContent><SelectItem value={NO_SELECTION_SENTINEL}>-- 无 --</SelectItem>{paymentSourceDictionaries.map(ps => (<SelectItem key={ps.id} value={ps.sourceName}>{ps.sourceName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><div className="relative"><FormControl><Input placeholder="例如 批量创建的设备" {...field} className="pr-8"/></FormControl>{field.value && clearButton("description", "描述")}</div><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>描述 (可选)</FormLabel><div className="relative"><FormControl><Input placeholder="例如 批量创建的设备" {...field} className="pr-8"/></FormControl>{field.value && clearButton("description" as FieldPath<IPAddressFormValues>, "描述")}</div><FormMessage /></FormItem>)} />
             </div></ScrollArea>
             <SheetFooter className="p-6 pt-4 border-t">
               <SheetClose asChild><Button type="button" variant="outline">取消</Button></SheetClose>
