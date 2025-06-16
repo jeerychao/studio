@@ -630,7 +630,8 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   const appIps: AppIPAddressWithRelations[] = paginatedDbItems.map(ip => ({
     id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false,
     allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined,
-    description: ip.description || undefined, createdAt: ip.createdAt.toISOString(), updatedAt: ip.updatedAt.toISOString(),
+    description: ip.description || undefined, 
+    createdAt: ip.createdAt.toISOString(), updatedAt: ip.updatedAt.toISOString(),
     subnetId: ip.subnetId || undefined, directVlanId: ip.directVlanId || undefined,
     subnet: ip.subnet ? { id: ip.subnet.id, cidr: ip.subnet.cidr, name: ip.subnet.name || undefined, networkAddress: ip.subnet.networkAddress, vlan: ip.subnet.vlan ? { vlanNumber: ip.subnet.vlan.vlanNumber, name: ip.subnet.vlan.name || undefined } : null } : null,
     directVlan: ip.directVlan ? { vlanNumber: ip.directVlan.vlanNumber, name: ip.directVlan.name || undefined } : null,
@@ -711,7 +712,7 @@ export async function batchCreateIPAddressesAction(payload: { startIp: string; e
       try {
         if (!isIpInCidrRange(currentIpStr, parsedTargetSubnetCidr)) throw new ValidationError(`IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`, 'startIp/endIp', currentIpStr, `IP ${currentIpStr} 不在子网 ${targetSubnet.cidr} 的范围内。`);
         
-        if (await prisma.iPAddress.findUnique({ where: { ipAddress: currentIpStr } })) {
+        if (await prisma.iPAddress.findUnique({ where: { ipAddress: currentIpStr } })) { // Global check
           throw new ResourceError(`IP 地址 ${currentIpStr} 已在系统中存在。`, 'IP_ADDRESS_GLOBALLY_EXISTS_BATCH', `IP 地址 ${currentIpStr} 已在系统中存在。`, 'startIp/endIp');
         }
         
@@ -865,7 +866,7 @@ export async function querySubnetsAction(params: QueryToolParams): Promise<Actio
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-const VlanQueryReqSchema = z.string().trim().optional(); 
+const VlanQueryReqSchema = z.string().trim().optional();
 
 export async function queryVlansAction(params: QueryToolParams): Promise<ActionResponse<PaginatedResponse<VlanQueryResult>>> {
   const actionName = 'queryVlansAction';
@@ -873,44 +874,44 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
     const page = params.page || 1;
     const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
-    
+
     const queryString = params.queryString;
-    const validationResult = VlanQueryReqSchema.safeParse(queryString); 
+    const validationResult = VlanQueryReqSchema.safeParse(queryString);
 
     const validatedQuery = validationResult.success ? (validationResult.data || "") : "";
 
-    if (!validatedQuery) { 
+    if (!validatedQuery) {
         return { success: true, data: { data: [], totalCount: 0, currentPage: page, totalPages: 0, pageSize } };
     }
 
-    const startsWithQuery = `${validatedQuery}%`; 
-    const containsQuery = `%${validatedQuery}%`;   
+    const startsWithQuery = `${validatedQuery}%`;
+    const containsQuery = `%${validatedQuery}%`;
 
     const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM "vlans" 
+      SELECT COUNT(*) as count FROM "vlans"
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
-        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}); 
+        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery});
     `;
     const totalCount = Number(countResult[0]?.count || 0);
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
     const vlansFromDb = await prisma.$queryRaw<Array<AppVLAN & { id: string; created_at: Date; updated_at: Date; vlan_number: number }>>`
-      SELECT "id", "vlan_number", "name", "description", "created_at", "updated_at" FROM "vlans" 
+      SELECT "id", "vlan_number", "name", "description", "created_at", "updated_at" FROM "vlans"
       WHERE
         ("name" LIKE ${containsQuery})
         OR ("description" LIKE ${containsQuery})
-        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery}) 
+        OR (CAST("vlan_number" AS TEXT) LIKE ${startsWithQuery})
       ORDER BY "vlan_number" ASC
       LIMIT ${pageSize} OFFSET ${skip};
     `;
-        
+
     const results: VlanQueryResult[] = await Promise.all(
       vlansFromDb.map(async (v_raw) => {
         const v: AppVLAN = {
           id: v_raw.id,
-          vlanNumber: v_raw.vlan_number, 
+          vlanNumber: v_raw.vlan_number,
           name: v_raw.name || undefined,
           description: v_raw.description || undefined,
         };
@@ -932,13 +933,13 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
         };
       })
     );
-    
+
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
 
   } catch (error: unknown) {
     logger.error(actionName, error, { queryString: params.queryString }, 'queryVlansAction');
-    
-    if (error instanceof z.ZodError) { 
+
+    if (error instanceof z.ZodError) {
       return { success: false, error: createActionErrorResponse({ message: error.flatten().formErrors.join(', '), code: 'VALIDATION_ERROR', field: 'queryString' }, actionName) };
     }
     return { success: false, error: createActionErrorResponse(error, actionName) };
@@ -951,10 +952,10 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
   const actionName = 'queryIpAddressesAction';
   try {
     const page = params.page || 1; const pageSize = params.pageSize || DEFAULT_QUERY_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    
+
     const validationResult = IpQuerySearchTermSchema.safeParse(params.searchTerm);
     const trimmedSearchTerm = validationResult.success ? (validationResult.data || "") : "";
-    
+
     const statusFilter = params.status;
     const andConditions: Prisma.IPAddressWhereInput[] = []; const orConditionsForSearchTerm: Prisma.IPAddressWhereInput[] = [];
     if (trimmedSearchTerm) {
@@ -962,18 +963,18 @@ export async function queryIpAddressesAction(params: QueryToolParams): Promise<A
       let matchedIpPattern = false; for (const p of ipWildcardPatterns) { const m = trimmedSearchTerm.match(p.regex); if (m) { orConditionsForSearchTerm.push({ ipAddress: { startsWith: p.prefixBuilder(m) } }); matchedIpPattern = true; break; } }
       const isPotentiallyIpSegment = !matchedIpPattern && trimmedSearchTerm.length > 0 && trimmedSearchTerm.length <= 15 && /[\d]/.test(trimmedSearchTerm) && /^[0-9.*]+$/.test(trimmedSearchTerm) && !/^\.+$/.test(trimmedSearchTerm) && !/^\*+$/.test(trimmedSearchTerm);
       if (isPotentiallyIpSegment && !matchedIpPattern) orConditionsForSearchTerm.push({ ipAddress: { startsWith: trimmedSearchTerm } });
-      
-      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } }); 
-      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } });   
+
+      orConditionsForSearchTerm.push({ allocatedTo: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ description: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ usageUnit: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ contactPerson: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } });       
-      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ phone: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ peerUnitName: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ peerDeviceName: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm } });  
-      orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ peerPortName: { contains: trimmedSearchTerm } });
+      orConditionsForSearchTerm.push({ selectedAccessType: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ selectedLocalDeviceName: { contains: trimmedSearchTerm } });
-      orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } }); 
+      orConditionsForSearchTerm.push({ selectedDevicePort: { contains: trimmedSearchTerm } });
       orConditionsForSearchTerm.push({ selectedPaymentSource: { contains: trimmedSearchTerm } });
     }
     if (orConditionsForSearchTerm.length > 0) andConditions.push({ OR: orConditionsForSearchTerm }); else if (trimmedSearchTerm) andConditions.push({ id: "IMPOSSIBLE_ID_TO_MATCH_ANYTHING_IP_SEARCH" });
@@ -1377,5 +1378,3 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-
-    

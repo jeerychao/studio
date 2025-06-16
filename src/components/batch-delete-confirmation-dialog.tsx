@@ -57,36 +57,16 @@ export function BatchDeleteConfirmationDialog({
       } else if (result.successCount > 0 && result.failureCount > 0) {
         toast({
           title: "批量删除部分成功",
-          description: (
-            <div>
-              <p>{result.successCount} 个{itemTypeDisplayName}已删除，{result.failureCount} 个失败。</p>
-              <p className="mt-2 text-xs">失败详情:</p>
-              <ScrollArea className="h-[100px] mt-1 rounded-md border p-2 bg-destructive/10">
-                <ul className="list-disc list-inside text-xs">
-                  {result.failureDetails.map((f, i) => <li key={i}>{f.itemIdentifier}: {f.error}</li>)}
-                </ul>
-              </ScrollArea>
-            </div>
-          ),
-          variant: "default",
-          duration: 15000,
+          description: `${result.successCount} 个${itemTypeDisplayName}已删除，${result.failureCount} 个失败。详情请查看对话框。`,
+          variant: "default", // Keep as default, details are in dialog
+          duration: 7000, // Slightly longer for user to notice
         });
       } else if (result.failureCount > 0) {
          toast({
           title: "批量删除失败",
-          description: (
-            <div>
-              <p>所有选中的 {result.failureCount} 个${itemTypeDisplayName}均删除失败。</p>
-              <p className="mt-2 text-xs">失败详情:</p>
-              <ScrollArea className="h-[100px] mt-1 rounded-md border p-2 bg-destructive/10">
-                <ul className="list-disc list-inside text-xs">
-                  {result.failureDetails.map((f, i) => <li key={i}>{f.itemIdentifier}: {f.error}</li>)}
-                </ul>
-              </ScrollArea>
-            </div>
-          ),
+          description: `所有选中的 ${result.failureCount} 个${itemTypeDisplayName}均删除失败。详情请查看对话框。`,
           variant: "destructive",
-          duration: 15000,
+          duration: 7000,
         });
       } else {
          toast({ title: "无操作", description: `没有${itemTypeDisplayName}被删除。`, variant: "default" });
@@ -95,11 +75,11 @@ export function BatchDeleteConfirmationDialog({
       if (result.successCount > 0) {
         onBatchDeleted(); // Refresh data and clear selections
       }
-      // Keep dialog open if there are failures so user can see details via deleteResult state
-      // Or close if all successful
-      if (result.failureCount === 0) {
+
+      if (result.failureCount === 0 && result.successCount > 0) { // Only close if all successful
         setIsOpen(false);
       }
+      // If there are failures, the dialog remains open for the user to see details.
 
     } catch (error) {
       toast({
@@ -115,7 +95,6 @@ export function BatchDeleteConfirmationDialog({
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
-        // Reset deleteResult when dialog is closed, so it doesn't show old results next time
         setDeleteResult(null);
     }
   };
@@ -175,15 +154,19 @@ export function BatchDeleteConfirmationDialog({
           <AlertDialogCancel onClick={() => setIsOpen(false)} disabled={isDeleting}>
             取消
           </AlertDialogCancel>
-          {!deleteResult || deleteResult.failureCount > 0 ? ( // Show delete button if no result yet, or if there were failures
+          {/* Show "Confirm Delete" or "Retry Failed" only if there's no result OR there were failures */}
+          {(!deleteResult || deleteResult.failureCount > 0) && (
             <AlertDialogAction
                 onClick={handleConfirmDelete}
                 disabled={isDeleting || selectedIds.size === 0}
                 className={!deleteResult ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : ""}
             >
-            {isDeleting ? "删除中..." : (deleteResult ? "重试失败项" : "确认删除")}
+            {isDeleting ? "删除中..." : (deleteResult ? `重试失败的 (${deleteResult.failureCount})` : "确认删除")}
             </AlertDialogAction>
-          ) : ( // All successful, only show close button in footer
+          )}
+          {/* If all successful, the primary action above won't show. User can close with "Cancel" or implicitly. */}
+          {/* Or add an explicit "Close" button if all were successful */}
+          {deleteResult && deleteResult.failureCount === 0 && deleteResult.successCount > 0 && (
              <Button onClick={() => setIsOpen(false)}>关闭</Button>
           )}
         </AlertDialogFooter>

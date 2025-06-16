@@ -17,7 +17,7 @@ import { Search, AlertCircle, Loader2, Info, CheckCircle, XCircle } from "lucide
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { PERMISSIONS, type PaginatedResponse, type SubnetFreeIpDetails, type IPAddressStatus as AppIPAddressStatusType } from "@/types";
-import type { SubnetQueryResult, VlanQueryResult } from "@/types"; 
+import type { SubnetQueryResult, VlanQueryResult } from "@/types";
 import type { AppIPAddressWithRelations } from "@/lib/actions";
 import { querySubnetsAction, queryVlansAction, queryIpAddressesAction, getSubnetFreeIpDetailsAction } from "@/lib/actions";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -91,8 +91,8 @@ function QueryPageContent() {
   const [currentSubnetPage, setCurrentSubnetPage] = React.useState(activeTab === 'subnet' ? (Number(searchParams.get('page')) || 1) : 1);
 
   const [isSubnetDetailsSheetOpen, setIsSubnetDetailsSheetOpen] = React.useState(false);
-  const [selectedSubnetForSheet, setSelectedSubnetForSheet] = React.useState<SubnetQueryResult | null>(null); 
-  const [selectedSubnetFreeIpDetails, setSelectedSubnetFreeIpDetails] = React.useState<SubnetFreeIpDetails | null>(null); 
+  const [selectedSubnetForSheet, setSelectedSubnetForSheet] = React.useState<SubnetQueryResult | null>(null);
+  const [selectedSubnetFreeIpDetails, setSelectedSubnetFreeIpDetails] = React.useState<SubnetFreeIpDetails | null>(null);
   const [isSubnetDetailsLoading, setIsSubnetDetailsLoading] = React.useState(false);
   const [subnetDetailsError, setSubnetDetailsError] = React.useState<string | null>(null);
 
@@ -180,11 +180,11 @@ function QueryPageContent() {
   const handleIpQuerySubmitButton = () => { setDebouncedIpQuery(ipQuery); setDebouncedIpQueryStatus(ipQueryStatus); setCurrentIpPage(1); router.push(`${pathname}?tab=ip_address&q_ip=${encodeURIComponent(ipQuery)}&status=${ipQueryStatus}&page=1`);};
 
   const handleSubnetRowClick = async (subnetResult: SubnetQueryResult) => {
-    setSelectedSubnetForSheet(subnetResult); 
+    setSelectedSubnetForSheet(subnetResult);
     setSelectedVlanDetails(null);
     setIsSubnetDetailsLoading(true);
     setSubnetDetailsError(null);
-    setSelectedSubnetFreeIpDetails(null); 
+    setSelectedSubnetFreeIpDetails(null);
     try {
       const response = await getSubnetFreeIpDetailsAction(subnetResult.id);
       if (response.success && response.data) {
@@ -208,7 +208,7 @@ function QueryPageContent() {
     setSelectedVlanDetails(vlan);
     setSubnetDetailsError(null);
     setIsSubnetDetailsLoading(false);
-    setIsSubnetDetailsSheetOpen(true); 
+    setIsSubnetDetailsSheetOpen(true);
   };
 
   const handleIpRowClick = (ip: AppIPAddressWithRelations) => { setSelectedIpDetails(ip); setIsIpDetailsSheetOpen(true); };
@@ -398,7 +398,7 @@ function QueryPageContent() {
         <SheetContent className="sm:max-w-xl w-full flex flex-col">
           <SheetHeader>
              <SheetTitle>
-              {selectedSubnetForSheet ? `子网详情: ${selectedSubnetForSheet.name || selectedSubnetForSheet.cidr}` : 
+              {selectedSubnetForSheet ? `子网详情: ${selectedSubnetForSheet.name || selectedSubnetForSheet.cidr}` :
                (selectedVlanDetails ? `VLAN ${selectedVlanDetails.vlanNumber} (${selectedVlanDetails.name || '无名称'}) 关联资源` : '详情')}
             </SheetTitle>
             {selectedSubnetForSheet && (
@@ -411,7 +411,7 @@ function QueryPageContent() {
           <div className="flex-grow overflow-hidden py-4">
             {isSubnetDetailsLoading && selectedSubnetForSheet && <LoadingSpinner message="加载子网可用IP详情中..." />}
             {subnetDetailsError && selectedSubnetForSheet && <QueryErrorDisplay message={subnetDetailsError} />}
-            
+
             {selectedSubnetForSheet && selectedSubnetFreeIpDetails && (
               <div className="space-y-4 h-full flex flex-col">
                 <Card><CardHeader className="pb-2 pt-4"><CardTitle className="text-lg">统计信息</CardTitle></CardHeader>
@@ -441,7 +441,7 @@ function QueryPageContent() {
                             </ul>
                         </ScrollArea>
                     ) : <p className="text-sm text-muted-foreground">无关联子网。</p>}
-                    
+
                     <h4 className="font-semibold text-md mt-3">直接关联IP地址 ({selectedVlanDetails.associatedDirectIPs.length}):</h4>
                     {selectedVlanDetails.associatedDirectIPs.length > 0 ? (
                          <ScrollArea className="h-auto max-h-[150px] rounded-md border p-2">
@@ -462,7 +462,7 @@ function QueryPageContent() {
           <SheetFooter><SheetClose asChild><Button variant="outline">关闭</Button></SheetClose></SheetFooter>
         </SheetContent>
       </Sheet>
-      
+
       <Sheet open={isIpDetailsSheetOpen} onOpenChange={setIsIpDetailsSheetOpen}>
         <SheetContent className="sm:max-w-md w-full flex flex-col">
           <SheetHeader>
@@ -474,7 +474,7 @@ function QueryPageContent() {
               {getIpDetails(selectedIpDetails).map(detail => (
                 <div key={detail.label} className={`flex ${detail.fullWidth ? 'flex-col items-start' : 'justify-between items-center'}`}>
                   <span className="text-sm text-muted-foreground">{detail.label}</span>
-                  {detail.fullWidth ? 
+                  {detail.fullWidth ?
                     <div className="text-sm font-medium mt-1 break-words">{detail.value}</div> :
                     <div className="text-sm font-medium text-right truncate max-w-[60%]">{detail.value}</div>
                   }
@@ -497,5 +497,3 @@ export default function QueryPage() {
     </Suspense>
   );
 }
-
-```

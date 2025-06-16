@@ -1,12 +1,15 @@
-// This file is intentionally left minimal to avoid conflicts if NextAuth.js is not fully set up.
-// Original crypto utilities have been moved to src/lib/crypto-utils.ts
-// Unused mock user functions have been removed.
+// This NextAuth.js route handler is currently not in use by the application.
+// The application uses a custom mock authentication mechanism.
+// This file is kept as a placeholder for potential future integration with NextAuth.js.
+// To enable NextAuth.js, you would configure it here and update the authentication logic
+// in hooks like useCurrentUser and actions like loginAction.
 
-// If you were to integrate NextAuth.js, you would export NextAuth handlers here.
-// For example:
-// import NextAuth from "next-auth"
-// import { authOptions } from "./options" // Your NextAuth configuration
-// const handler = NextAuth(authOptions)
-// export { handler as GET, handler as POST }
-
-export {}; // Ensures the file is treated as a module.
+// Example minimal content to keep the file valid if not actively used:
+// export { GET, POST } from "@/auth" // Assuming auth.ts would be created for NextAuth config
+// Or, if no auth.ts exists:
+export async function GET() {
+  return new Response("NextAuth.js endpoint placeholder. Not configured.", { status: 404 });
+}
+export async function POST() {
+  return new Response("NextAuth.js endpoint placeholder. Not configured.", { status: 404 });
+}

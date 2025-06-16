@@ -1,8 +1,8 @@
 
-import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index'; 
+import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index';
 import { PERMISSIONS } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
-import { encrypt } from './crypto-utils'; 
+import { encrypt } from './crypto-utils';
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
 export const OPERATOR_ROLE_ID = 'role_operator_fixed_id';
@@ -97,17 +97,18 @@ export const mockVLANs: Omit<VLAN, 'subnetCount'>[] = [
   { id: 'seed_vlan_004', vlanNumber: 40, name: 'Legacy Devices', description: 'Legacy Devices VLAN' },
 ];
 
+// Omitting createdAt and updatedAt from seed data for IPAddress as Prisma handles them.
 export const seedIPsData: Omit<IPAddress, "createdAt" | "updatedAt">[] = [
   {
     id: 'seed_ip_001', ipAddress: '192.168.1.1', subnetId: 'seed_subnet_001', status: 'allocated' as IPAddressStatus,
     isGateway: true, allocatedTo: 'Office Router', usageUnit: 'IT Department', contactPerson: 'Admin', phone: '123-001', description: 'Default Gateway for Office Network',
     peerUnitName: '外部网络提供商 A',
-    peerDeviceName: 'ISP Router X1', 
-    peerPortName: 'GigabitEthernet0/0', 
+    peerDeviceName: 'ISP Router X1',
+    peerPortName: 'GigabitEthernet0/0',
 
     selectedAccessType: '专线',
-    selectedLocalDeviceName: '核心交换机-A栋', 
-    selectedDevicePort: 'Ten-GigabitEthernet1/0/1', 
+    selectedLocalDeviceName: '核心交换机-A栋',
+    selectedDevicePort: 'Ten-GigabitEthernet1/0/1',
     selectedPaymentSource: '自费'
   },
   {
