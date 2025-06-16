@@ -148,7 +148,7 @@ export function VlanFormSheet({ vlan, children, buttonProps, onVlanChange }: Vla
                 <FormItem>
                   <FormLabel>VLAN 号码</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="例如 10" {...field} />
+                    <Input type="number" placeholder="例如 10" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

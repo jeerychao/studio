@@ -136,16 +136,11 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
           description: response.error.userMessage,
           variant: "destructive",
         });
-        if (response.error.field && form.setError) {
-          const fieldName = response.error.field as FieldPath<SubnetFormValues>;
-          if (Object.keys(form.getValues()).includes(fieldName)) {
-            form.setError(fieldName, {
-              type: "server",
-              message: response.error.userMessage,
-            });
-          } else {
-            console.warn(`Server returned error for field '${response.error.field}' which is not in the form.`);
-          }
+        if (response.error.field) {
+          form.setError(response.error.field as FieldPath<SubnetFormValues>, {
+            type: "server",
+            message: response.error.userMessage,
+          });
         }
       } else {
         toast({
@@ -325,3 +320,4 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
+
