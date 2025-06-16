@@ -107,7 +107,7 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("text-sm opacity-90 truncate", className)} // Added truncate class
+    className={cn("text-sm opacity-90 overflow-y-auto max-h-24", className)} // Removed truncate, added overflow-y-auto and max-h-24
     {...props}
   />
 ))
