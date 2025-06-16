@@ -5,8 +5,8 @@
 * 操作系统: 推荐 Ubuntu 22.04 LTS 或其他兼容的 Linux 发行版。
 * 前端 (由 Next.js 提供服务):
 * Node.js: v18.x 或 v20.x (与 Next.js 14 兼容)
-npm (通常随 Node.js 安装) 或 yarn
-后端 (由 Next.js API Routes 和 Prisma 提供):
+* npm (通常随 Node.js 安装) 或 yarn
+* 后端 (由 Next.js API Routes 和 Prisma 提供):
 * Node.js: (同上)
 * Prisma Client: (作为项目依赖安装)
 * SQLite: 您的项目使用 SQLite，它通常作为 Node.js 进程的一部分运行，数据库文件需要相应的读写权限。
@@ -32,7 +32,7 @@ npm (通常随 Node.js 安装) 或 yarn
 ```bash
 npx prisma db push --skip-generate (创建数据库和表结构)
 npm run prisma:db:seed (或 npx prisma db seed，填充初始数据)
-
+```
 ## 2.6 构建应用: npm run build (构建 Next.js 生产版本)
 ## 2.7 使用 PM2 启动应用:
 * 安装 PM2: sudo npm install pm2 -g
@@ -80,6 +80,7 @@ health-check.sh: 用于容器健康检查。
 DATABASE_URL="file:/app/prisma/dev.db" (指向容器内部的 SQLite 文件路径，与 Dockerfile 和卷挂载一致)。
 ENCRYPTION_KEY="your_secure_64_character_hex_string_for_production" (使用您提供的或生成新的)。
 NEXT_PUBLIC_BASE_URL="http://your_server_ip_or_domain:8081" (或您实际的访问 URL)。
+```
 提示 ENCRYPTION_KEY 的重要性。
 使用 Docker Compose 构建和运行
 
@@ -110,6 +111,7 @@ docker-compose logs -f ipam-app
 
 拉取最新代码。
 重新构建镜像并重启服务: docker-compose up --build -d。
+```
 
 ## 前后端技术栈信息整合:
 * 前端: Next.js (v14+), React (v18+), ShadCN UI, Tailwind CSS, TypeScript
