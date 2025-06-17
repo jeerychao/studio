@@ -28,35 +28,33 @@ const ChartLegendContent = (props: any) => {
 };
 
 export function IPStatusPieChart({ data }: IPStatusPieChartProps) {
-  if (!data || data.length === 0) {
-    return <div className="text-center text-muted-foreground p-4 h-full flex items-center justify-center">无 IP 状态数据可显示。</div>;
-  }
-
   return (
-    <ChartContainer config={{}} className="w-full h-full min-h-[200px]"> {/* Added min-h for ResponsiveContainer */}
-      <PieChart>
-        <RechartsTooltip
-          cursor={false}
-          content={<ChartTooltipContent hideLabel />}
-        />
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          labelLine={false}
-          outerRadius={80} // Adjusted for better fit
-          innerRadius={50} // Adjusted for better fit
-          dataKey="value"
-          nameKey="name" // Ensure name is used for legend/tooltip context
-        >
-          {data.map((entry, index) => (
-            <RechartsCell key={`cell-${index}`} fill={entry.fill} name={entry.name} />
-          ))}
-        </Pie>
-        <RechartsLegend content={<ChartLegendContent />} />
-      </PieChart>
+    <ChartContainer config={{}} className="w-full h-full min-h-[200px]">
+      {!data || data.length === 0 ? (
+        <div className="text-center text-muted-foreground p-4 h-full flex items-center justify-center text-sm">无 IP 状态数据可显示。</div>
+      ) : (
+        <PieChart>
+          <RechartsTooltip
+            cursor={false}
+            content={<ChartTooltipContent hideLabel />}
+          />
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            outerRadius={80}
+            innerRadius={50}
+            dataKey="value"
+            nameKey="name"
+          >
+            {data.map((entry, index) => (
+              <RechartsCell key={`cell-${index}`} fill={entry.fill} name={entry.name} />
+            ))}
+          </Pie>
+          <RechartsLegend content={<ChartLegendContent />} />
+        </PieChart>
+      )}
     </ChartContainer>
   );
 }
-
-    
