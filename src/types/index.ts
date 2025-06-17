@@ -94,8 +94,8 @@ export interface IPAddress {
   contactPerson?: string;
   phone?: string;
   description?: string;
-  createdAt: string; // Changed from optional, Prisma @default(now())
-  updatedAt: string; // Changed from lastSeen, Prisma @updatedAt
+  createdAt: string; 
+  updatedAt: string; 
 
   peerUnitName?: string;
   peerDeviceName?: string;
@@ -116,6 +116,7 @@ export interface User {
   roleId: string;
   roleName?: RoleName;
   avatar?: string;
+  phone?: string; 
   lastLogin?: string;
   permissions?: PermissionId[];
 }
