@@ -55,13 +55,6 @@ async function main() {
   logger.info('Start seeding Roles...');
   for (const roleData of mockRoles) {
     try {
-      // <<< TEST CODE TO SIMULATE FAILURE - REMOVED >>>
-      // if (roleData.name === 'Operator' as RoleName) {
-      //     logger.warn(`[SEED_TEST_FAILURE] Intentionally throwing error for role: ${roleData.name}`);
-      //     throw new Error(`TEST_ERROR: Simulating role creation failure for ${roleData.name}`);
-      // }
-      // <<< END TEST CODE - REMOVED >>>
-
       const permissionsToConnect = roleData.permissions.map(pid => ({ id: pid }));
       await prisma.role.upsert({
         where: { id: roleData.id },
@@ -95,11 +88,11 @@ async function main() {
       const { password, ...restOfUserData } = userData;
       if (!password) {
         logger.error(`CRITICAL: Password not provided for seed user ${userData.email} (ID: ${userData.id}). All seed users must have a password defined in mockUsers. Exiting.`);
-        process.exit(1); // Enforce password presence
+        process.exit(1);
       }
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        password: encrypt(password), // Password is guaranteed to be present here
+        password: encrypt(password),
       };
 
       await prisma.user.upsert({
@@ -107,13 +100,12 @@ async function main() {
         update: dataToUpsert,
         create: {
             ...dataToUpsert,
-            id: userData.id, // Explicitly provide ID for create
+            id: userData.id,
         }
       });
     } catch (e: any) {
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
-      // Critical failure only for admin user, others log and continue (or exit based on policy)
-      if (userData.id === 'seed_user_admin') { // Assuming 'seed_user_admin' is a constant or well-known ID for the admin
+      if (userData.id === 'seed_user_admin') {
           logger.error(`CRITICAL: Failed to seed admin user ${userData.email}. Exiting.`);
           process.exit(1);
       }
@@ -132,8 +124,6 @@ async function main() {
       });
     } catch (e: any) {
       logger.error(`Error seeding VLAN ${vlanData.vlanNumber}:`, e, { name: e.name, message: e.message, stack: e.stack });
-      // For non-critical data like individual VLANs, we might log and continue.
-      // If every VLAN must succeed, then: process.exit(1);
     }
   }
   logger.info(`${mockVLANs.length} VLANs seeded.`);
@@ -143,7 +133,7 @@ async function main() {
   for (const subnetData of mockSubnets) {
     try {
       const { vlanId, ...restOfSubnetData } = subnetData;
-      const baseData = { ...restOfSubnetData, id: subnetData.id }; // Ensure ID is included
+      const baseData = { ...restOfSubnetData, id: subnetData.id };
       const updatePayload: Prisma.SubnetUpdateInput = { ...baseData };
       if (vlanId) { updatePayload.vlan = { connect: { id: vlanId } }; } else { updatePayload.vlan = { disconnect: true }; }
       const createPayload: Prisma.SubnetCreateInput = { ...baseData };
@@ -165,7 +155,7 @@ async function main() {
         ...restOfIpData
       } = ipData;
       const baseIpDataPayload = {
-        ...restOfIpData, id: ipData.id, status: ipData.status as string, // Ensure ID is included
+        ...restOfIpData, id: ipData.id, status: ipData.status as string,
         peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null,
         selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null,
         selectedDevicePort: selectedDevicePort || null, selectedPaymentSource: selectedPaymentSource || null,
@@ -189,6 +179,10 @@ async function main() {
     try {
       await prisma.deviceDictionary.upsert({ where: { deviceName: deviceData.deviceName }, update: {}, create: deviceData });
     } catch (e: any) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        logger.error(`CRITICAL: Table for DeviceDictionary does not exist. Schema out of sync? Message: ${e.message}. Exiting.`, e, { name: e.name, code: e.code });
+        process.exit(1);
+      }
       logger.error(`Error seeding device dictionary ${deviceData.deviceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
@@ -200,6 +194,10 @@ async function main() {
     try {
       await prisma.paymentSourceDictionary.upsert({ where: { sourceName: paymentData.sourceName }, update: {}, create: paymentData });
     } catch (e: any) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        logger.error(`CRITICAL: Table for PaymentSourceDictionary does not exist. Schema out of sync? Message: ${e.message}. Exiting.`, e, { name: e.name, code: e.code });
+        process.exit(1);
+      }
       logger.error(`Error seeding payment source dictionary ${paymentData.sourceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
@@ -211,6 +209,10 @@ async function main() {
     try {
       await prisma.accessTypeDictionary.upsert({ where: { name: accessTypeData.name }, update: {}, create: accessTypeData });
     } catch (e: any) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        logger.error(`CRITICAL: Table for AccessTypeDictionary does not exist. Schema out of sync? Message: ${e.message}. Exiting.`, e, { name: e.name, code: e.code });
+        process.exit(1);
+      }
       logger.error(`Error seeding access type dictionary ${accessTypeData.name}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
@@ -222,6 +224,10 @@ async function main() {
     try {
       await prisma.interfaceTypeDictionary.upsert({ where: { name: interfaceTypeData.name }, update: { description: interfaceTypeData.description }, create: interfaceTypeData });
     } catch (e: any) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2021') {
+        logger.error(`CRITICAL: Table for InterfaceTypeDictionary does not exist. Schema out of sync? Message: ${e.message}. Exiting.`, e, { name: e.name, code: e.code });
+        process.exit(1);
+      }
       logger.error(`Error seeding interface type dictionary ${interfaceTypeData.name}:`, e, { name: e.name, message: e.message, stack: e.stack });
     }
   }
