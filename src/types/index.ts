@@ -116,7 +116,7 @@ export interface User {
   roleId: string;
   roleName?: RoleName;
   avatar?: string;
-  phone?: string; 
+  phone?: string | null; // Changed from phone?: string;
   lastLogin?: string;
   permissions?: PermissionId[];
 }
