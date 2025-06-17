@@ -109,7 +109,7 @@ export async function getUsersAction(params?: FetchParams): Promise<PaginatedRes
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取用户数据时发生服务器错误。", 500, "GET_USERS_FAILED", "无法加载用户数据。"); }
 }
 
-export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string, phone?: string }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
+export async function createUserAction(data: Omit<AppUser, "id" | "lastLogin" | "roleName"> & { password: string, avatar?: string, phone?: string | null }, performingUserId?: string): Promise<ActionResponse<FetchedUserDetails>> {
   const actionName = 'createUserAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
@@ -1378,3 +1378,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
