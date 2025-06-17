@@ -55,12 +55,12 @@ async function main() {
   logger.info('Start seeding Roles...');
   for (const roleData of mockRoles) {
     try {
-      // <<< TEST CODE TO SIMULATE FAILURE >>>
-      if (roleData.name === 'Operator' as RoleName) {
-          logger.warn(`[SEED_TEST_FAILURE] Intentionally throwing error for role: ${roleData.name}`);
-          throw new Error(`TEST_ERROR: Simulating role creation failure for ${roleData.name}`);
-      }
-      // <<< END TEST CODE >>>
+      // <<< TEST CODE TO SIMULATE FAILURE - REMOVED >>>
+      // if (roleData.name === 'Operator' as RoleName) {
+      //     logger.warn(`[SEED_TEST_FAILURE] Intentionally throwing error for role: ${roleData.name}`);
+      //     throw new Error(`TEST_ERROR: Simulating role creation failure for ${roleData.name}`);
+      // }
+      // <<< END TEST CODE - REMOVED >>>
 
       const permissionsToConnect = roleData.permissions.map(pid => ({ id: pid }));
       await prisma.role.upsert({
@@ -83,7 +83,7 @@ async function main() {
       });
     } catch (e: any) {
       logger.error(`CRITICAL: Error seeding role ${roleData.name}. Exiting.`, e, { name: e.name, message: e.message, stack: e.stack });
-      process.exit(1); // This should be triggered by the test error
+      process.exit(1);
     }
   }
   logger.info(`${mockRoles.length} Roles seeded.`);
@@ -95,11 +95,11 @@ async function main() {
       const { password, ...restOfUserData } = userData;
       if (!password) {
         logger.error(`CRITICAL: Password not provided for seed user ${userData.email} (ID: ${userData.id}). All seed users must have a password defined in mockUsers. Exiting.`);
-        process.exit(1);
+        process.exit(1); // Enforce password presence
       }
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        password: encrypt(password),
+        password: encrypt(password), // Password is guaranteed to be present here
       };
 
       await prisma.user.upsert({
@@ -107,12 +107,13 @@ async function main() {
         update: dataToUpsert,
         create: {
             ...dataToUpsert,
-            id: userData.id,
+            id: userData.id, // Explicitly provide ID for create
         }
       });
     } catch (e: any) {
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
-      if (userData.id === 'seed_user_admin') {
+      // Critical failure only for admin user, others log and continue (or exit based on policy)
+      if (userData.id === 'seed_user_admin') { // Assuming 'seed_user_admin' is a constant or well-known ID for the admin
           logger.error(`CRITICAL: Failed to seed admin user ${userData.email}. Exiting.`);
           process.exit(1);
       }
@@ -142,7 +143,7 @@ async function main() {
   for (const subnetData of mockSubnets) {
     try {
       const { vlanId, ...restOfSubnetData } = subnetData;
-      const baseData = { ...restOfSubnetData, id: subnetData.id };
+      const baseData = { ...restOfSubnetData, id: subnetData.id }; // Ensure ID is included
       const updatePayload: Prisma.SubnetUpdateInput = { ...baseData };
       if (vlanId) { updatePayload.vlan = { connect: { id: vlanId } }; } else { updatePayload.vlan = { disconnect: true }; }
       const createPayload: Prisma.SubnetCreateInput = { ...baseData };
@@ -164,7 +165,7 @@ async function main() {
         ...restOfIpData
       } = ipData;
       const baseIpDataPayload = {
-        ...restOfIpData, id: ipData.id, status: ipData.status as string,
+        ...restOfIpData, id: ipData.id, status: ipData.status as string, // Ensure ID is included
         peerUnitName: peerUnitName || null, peerDeviceName: peerDeviceName || null, peerPortName: peerPortName || null,
         selectedAccessType: selectedAccessType || null, selectedLocalDeviceName: selectedLocalDeviceName || null,
         selectedDevicePort: selectedDevicePort || null, selectedPaymentSource: selectedPaymentSource || null,
