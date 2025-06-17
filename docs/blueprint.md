@@ -1,20 +1,20 @@
-# **App Name**: IPAM Lite
+# **App Name**: IP Address Manager
 
 ## Core Features:
 
-- Dashboard: Dashboard view displaying network overview and key metrics.
-- Subnet Management: Subnet management: create, read, update, and delete subnets.
-- VLAN Management: VLAN assignment management.
-- IP Address Management: IP address assignment and tracking within subnets, ensuring no duplicates. Also support marking IP as reserved.
-- User and Role Management: User role-based access control.
-- Excel Import/Export: Import and export data to/from Excel files. Data import supports file upload validation of all column data.
-- AI-Powered Subnet Suggestion: An AI tool which uses subnetting best practices, as well as data from any subnet utilization patterns, to automatically recommend subnet size and IP ranges for new network segments.
+- IP Address Form: Display an IP address management form with fields for IP address, subnet mask, gateway, DNS servers, description, source port and destination port.
+- IP Address List: Display the list of configured IP addresses with an indicator if source and destination port are set for an IP Address.
+- Single IP Address Deletion: Select one IP Address from the list to trigger the Single IP Address Deletion functionality.
+- Deletion Confirmation & Error Handling: Implement confirmation message when deleting to protect data from unexpected destruction. Show error if delete is prevented, like when the source and/or destination port have associated data.
+- Bulk IP Address Deletion: Select multiple IP Addresses from the list to trigger the Bulk IP Address Deletion functionality.
+- Bulk Deletion Confirmation & Error Handling: Implement confirmation message when deleting to protect data from unexpected destruction. Show error if delete is prevented, like when the source and/or destination port have associated data.
 
 ## Style Guidelines:
 
-- Primary color: Deep Indigo (#3F51B5) for a professional and reliable feel.
-- Background color: Light gray (#F5F5F5) for a clean, modern interface.
-- Accent color: Teal (#009688) for interactive elements and highlights, providing contrast and signaling activity.
-- Clean and readable sans-serif font.
-- Simple and consistent icons to represent different network entities and actions.
-- Well-organized and intuitive layout, using grid and card-based designs to display data clearly.
+- Primary color: Dark slate blue (#483D8B), reminiscent of server rooms, control panels and networking gear. Provides a professional feel.
+- Background color: Light gray (#E0E0E0), providing a neutral backdrop for the IP address information.
+- Accent color: Soft lavender (#C4A4D6), offering visual interest while remaining professional.
+- Font pairing: 'Inter' (sans-serif) for both headlines and body text.
+- Use simple, outlined icons for actions like 'add', 'delete', and 'edit'.
+- Maintain a clean and structured layout, using grid system, with a sidebar for navigation and a main content area for displaying IP address information.
+- Subtle transitions on form elements, buttons.
