@@ -24,7 +24,7 @@ import {
 } from "./ip-utils";
 import { validateCIDR as validateCidrInputFormat } from "./error-utils";
 import { logger } from './logger';
-import { AppError, ValidationError, ResourceError, NotFoundError, AuthError, type ActionErrorResponse } from './errors';
+import { AppError, ValidationError, ResourceError, NetworkError, AuthError, NotFoundError, type ActionErrorResponse } from './errors';
 import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
@@ -233,7 +233,7 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> { retu
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AuditLog>> {
   const actionName = 'getAuditLogsAction';
   try {
-    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_AUDIT_LOG_COUNT; const skip = (page - 1) * pageSize;
+    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.auditLog.count(); const totalPages = Math.ceil(totalCount / pageSize);
     const logsFromDb = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, skip, take: pageSize });
     const appLogs: AuditLog[] = logsFromDb.map(log => ({ id: log.id, userId: log.userId || undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
@@ -1380,3 +1380,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
 }
 
 
+
+
+    
