@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image"; // Import the Image component
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Network, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react"; // Network icon is no longer needed
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
@@ -73,7 +74,8 @@ export default function LoginPage() {
   if (isAuthLoading) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            <Network className="h-12 w-12 animate-spin text-primary" />
+            {/* Use Image component here if needed, or keep a spinner */}
+            <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
             <p className="ml-4 text-lg">初始化认证...</p>
         </div>
     );
@@ -82,7 +84,7 @@ export default function LoginPage() {
   if (pageAuthStatus === 'authenticated' && pathname === '/login') {
      return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            <Network className="h-12 w-12 animate-spin text-primary" />
+            <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
             <p className="ml-4 text-lg">正在重定向到仪表盘...</p>
         </div>
     );
@@ -94,7 +96,8 @@ export default function LoginPage() {
         <Card className="w-full max-w-sm shadow-xl">
           <CardHeader className="space-y-1 text-center">
             <div className="flex justify-center mb-4">
-              <Network className="h-12 w-12 text-primary" />
+              {/* Replace Network icon with Image component */}
+              <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
             </div>
             <CardTitle className="text-2xl">欢迎使用 IPAM Lite</CardTitle>
             <CardDescription>
@@ -148,7 +151,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Network className="h-12 w-12 animate-spin text-primary" />
+        <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
         <p className="ml-4 text-lg">加载中...</p>
     </div>
   );
