@@ -74,8 +74,7 @@ export default function LoginPage() {
   if (isAuthLoading) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            {/* Use Image component here if needed, or keep a spinner */}
-            <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
+            <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" />
             <p className="ml-4 text-lg">初始化认证...</p>
         </div>
     );
@@ -84,7 +83,7 @@ export default function LoginPage() {
   if (pageAuthStatus === 'authenticated' && pathname === '/login') {
      return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
+            <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" />
             <p className="ml-4 text-lg">正在重定向到仪表盘...</p>
         </div>
     );
@@ -96,8 +95,7 @@ export default function LoginPage() {
         <Card className="w-full max-w-sm shadow-xl">
           <CardHeader className="space-y-1 text-center">
             <div className="flex justify-center mb-4">
-              {/* Replace Network icon with Image component */}
-              <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
+              <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" />
             </div>
             <CardTitle className="text-2xl">欢迎使用 IPAM Lite</CardTitle>
             <CardDescription>
@@ -151,7 +149,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={120} height={40} priority data-ai-hint="company logo" />
+        <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" />
         <p className="ml-4 text-lg">加载中...</p>
     </div>
   );
