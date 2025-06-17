@@ -1253,6 +1253,8 @@ export async function createInterfaceTypeDictionaryAction(data: Omit<AppInterfac
     const newItem = await prisma.interfaceTypeDictionary.create({ data: { name: data.name, description: data.description || null } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'create_interface_type_dictionary', details: `创建了接口类型字典条目: ${newItem.name}` } });
     revalidatePath("/dictionaries/interface-type");
+    revalidatePath("/ip-addresses"); 
+    revalidatePath("/query");
     const appItem: AppInterfaceTypeDictionary = { ...newItem, description: newItem.description || undefined, createdAt: newItem.createdAt.toISOString(), updatedAt: newItem.updatedAt.toISOString() };
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
@@ -1270,6 +1272,8 @@ export async function updateInterfaceTypeDictionaryAction(id: string, data: Part
     const updatedItem = await prisma.interfaceTypeDictionary.update({ where: { id }, data: updatePayload });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_interface_type_dictionary', details: `更新了接口类型字典条目: ${updatedItem.name}` } });
     revalidatePath("/dictionaries/interface-type");
+    revalidatePath("/ip-addresses");
+    revalidatePath("/query");
     const appItem: AppInterfaceTypeDictionary = { ...updatedItem, description: updatedItem.description || undefined, createdAt: updatedItem.createdAt.toISOString(), updatedAt: updatedItem.updatedAt.toISOString() };
     return { success: true, data: appItem };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
@@ -1279,10 +1283,44 @@ export async function deleteInterfaceTypeDictionaryAction(id: string, performing
   const actionName = 'deleteInterfaceTypeDictionaryAction';
   try {
     const auditUser = await getAuditUserInfo(performingUserId);
-    const itemToDelete = await prisma.interfaceTypeDictionary.findUnique({ where: { id } }); if (!itemToDelete) throw new NotFoundError(`接口类型字典 ID: ${id}`, `接口类型字典 ID ${id} 未找到。`);
+    const itemToDelete = await prisma.interfaceTypeDictionary.findUnique({ where: { id } }); 
+    if (!itemToDelete) throw new NotFoundError(`接口类型字典 ID: ${id}`, `接口类型字典 ID ${id} 未找到。`);
+
+    // Check usage in IPAddress peerPortName (startsWith check)
+    const peerPortNameUsage = await prisma.iPAddress.count({
+      where: { peerPortName: { startsWith: itemToDelete.name + " " } } // Check for "Prefix "
+    });
+    if (peerPortNameUsage > 0) {
+      throw new ResourceError(`接口类型 "${itemToDelete.name}" 正在被 ${peerPortNameUsage} 个 IP 地址的“对端端口”字段作为前缀使用，无法删除。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_PREFIX', `接口类型 "${itemToDelete.name}" 正在被 ${peerPortNameUsage} 个 IP 地址的“对端端口”字段作为前缀使用，无法删除。`);
+    }
+    const peerPortNameExactUsage = await prisma.iPAddress.count({
+      where: { peerPortName: itemToDelete.name } // Check for exact match (prefix only)
+    });
+    if (peerPortNameExactUsage > 0) {
+      throw new ResourceError(`接口类型 "${itemToDelete.name}" 正在被 ${peerPortNameExactUsage} 个 IP 地址的“对端端口”字段精确匹配使用，无法删除。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_EXACT', `接口类型 "${itemToDelete.name}" 正在被 ${peerPortNameExactUsage} 个 IP 地址的“对端端口”字段精确匹配使用，无法删除。`);
+    }
+
+
+    // Check usage in IPAddress selectedDevicePort (startsWith check)
+    const selectedDevicePortUsage = await prisma.iPAddress.count({
+      where: { selectedDevicePort: { startsWith: itemToDelete.name + " " } }
+    });
+    if (selectedDevicePortUsage > 0) {
+      throw new ResourceError(`接口类型 "${itemToDelete.name}" 正在被 ${selectedDevicePortUsage} 个 IP 地址的“本端设备端口”字段作为前缀使用，无法删除。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_PREFIX', `接口类型 "${itemToDelete.name}" 正在被 ${selectedDevicePortUsage} 个 IP 地址的“本端设备端口”字段作为前缀使用，无法删除。`);
+    }
+    const selectedDevicePortExactUsage = await prisma.iPAddress.count({
+      where: { selectedDevicePort: itemToDelete.name }
+    });
+     if (selectedDevicePortExactUsage > 0) {
+      throw new ResourceError(`接口类型 "${itemToDelete.name}" 正在被 ${selectedDevicePortExactUsage} 个 IP 地址的“本端设备端口”字段精确匹配使用，无法删除。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT', `接口类型 "${itemToDelete.name}" 正在被 ${selectedDevicePortExactUsage} 个 IP 地址的“本端设备端口”字段精确匹配使用，无法删除。`);
+    }
+
+
     await prisma.interfaceTypeDictionary.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_interface_type_dictionary', details: `删除了接口类型字典条目: ${itemToDelete.name}` } });
     revalidatePath("/dictionaries/interface-type");
+    revalidatePath("/ip-addresses");
+    revalidatePath("/query");
     return { success: true };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -1292,11 +1330,32 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchOperationFailure[] = [];
   for (const id of ids) {
     try {
-      const item = await prisma.interfaceTypeDictionary.findUnique({where: {id}}); if (!item) { failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); continue; }
+      const item = await prisma.interfaceTypeDictionary.findUnique({where: {id}}); 
+      if (!item) { 
+        failureDetails.push({id, itemIdentifier: `ID ${id}`, error: '未找到条目。'}); 
+        continue; 
+      }
+      // Check usage in IPAddress peerPortName (startsWith and exact)
+      const peerPortNamePrefixUsage = await prisma.iPAddress.count({ where: { peerPortName: { startsWith: item.name + " " } } });
+      if (peerPortNamePrefixUsage > 0) throw new ResourceError(`接口类型 "${item.name}" 正在被 ${peerPortNamePrefixUsage} 个 IP 的“对端端口”作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_PREFIX_BATCH', `接口类型 "${item.name}" 正在被 ${peerPortNamePrefixUsage} 个 IP 的“对端端口”作为前缀使用。`);
+      const peerPortNameExactUsage = await prisma.iPAddress.count({ where: { peerPortName: item.name } });
+      if (peerPortNameExactUsage > 0) throw new ResourceError(`接口类型 "${item.name}" 正在被 ${peerPortNameExactUsage} 个 IP 的“对端端口”精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_EXACT_BATCH', `接口类型 "${item.name}" 正在被 ${peerPortNameExactUsage} 个 IP 的“对端端口”精确匹配使用。`);
+
+      // Check usage in IPAddress selectedDevicePort (startsWith and exact)
+      const selectedDevicePortPrefixUsage = await prisma.iPAddress.count({ where: { selectedDevicePort: { startsWith: item.name + " " } } });
+      if (selectedDevicePortPrefixUsage > 0) throw new ResourceError(`接口类型 "${item.name}" 正在被 ${selectedDevicePortPrefixUsage} 个 IP 的“本端设备端口”作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_PREFIX_BATCH', `接口类型 "${item.name}" 正在被 ${selectedDevicePortPrefixUsage} 个 IP 的“本端设备端口”作为前缀使用。`);
+      const selectedDevicePortExactUsage = await prisma.iPAddress.count({ where: { selectedDevicePort: item.name } });
+      if (selectedDevicePortExactUsage > 0) throw new ResourceError(`接口类型 "${item.name}" 正在被 ${selectedDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT_BATCH', `接口类型 "${item.name}" 正在被 ${selectedDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`);
+      
       await prisma.interfaceTypeDictionary.delete({ where: { id } }); successCount++;
     } catch (e: unknown) { const errRes = createActionErrorResponse(e, `${actionName}_single`); failureDetails.push({id, itemIdentifier: (await prisma.interfaceTypeDictionary.findUnique({where: {id}}))?.name || `ID ${id}`, error: errRes.userMessage}); }
   }
-  if (successCount > 0) { await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_interface_type_dictionary', details: `批量删除了 ${successCount} 个接口类型字典条目。`}}); revalidatePath("/dictionaries/interface-type"); }
+  if (successCount > 0) { 
+    await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_interface_type_dictionary', details: `批量删除了 ${successCount} 个接口类型字典条目。`}}); 
+    revalidatePath("/dictionaries/interface-type"); 
+    revalidatePath("/ip-addresses");
+    revalidatePath("/query");
+  }
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
@@ -1383,3 +1442,4 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
 
 
     
+
