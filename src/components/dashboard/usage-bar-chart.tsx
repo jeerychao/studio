@@ -46,7 +46,7 @@ export function UsageBarChart({
           </>
         ) : (
           <>
-            <XAxis dataKey="name" type="category" tick={{ fontSize: 10, angle: -45, textAnchor: 'end' }} height={60} interval={0} />
+            <XAxis dataKey="name" type="category" angle={-45} tick={{ fontSize: 10, textAnchor: 'end' }} height={60} interval={0} />
             <YAxis type="number" allowDecimals={false} />
           </>
         )}
