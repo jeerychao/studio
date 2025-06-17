@@ -2,7 +2,8 @@
 import type { Subnet, VLAN, IPAddress, User, Role, RoleName, Permission, PermissionId, AuditLog, IPAddressStatus, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from '../types/index';
 import { PERMISSIONS } from '../types/index';
 import { calculateIpRange, calculateNetworkAddress, getPrefixFromCidr, prefixToSubnetMask } from './ip-utils';
-import { encrypt } from './crypto-utils';
+// encrypt 函数不应在此文件中使用来预加密 mock 用户的密码
+// import { encrypt } from './crypto-utils';
 
 export const ADMIN_ROLE_ID = 'role_admin_fixed_id';
 export const OPERATOR_ROLE_ID = 'role_operator_fixed_id';
@@ -216,15 +217,15 @@ export const mockRoles: Role[] = [
 
 export const mockUsers: Array<Omit<User, 'roleName' | 'permissions' | 'lastLogin'> & { password?: string, phone?: string, lastLogin?: string }> = [
   { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID,
-    password: encrypt('admin'),
+    password: 'admin', // Plain text password
     phone: '11111111111',
     avatar: '/images/avatars/admin_avatar.png', lastLogin: new Date(Date.now() - 86400000).toISOString() },
   { id: 'seed_user_operator', username: 'operator', email: 'operator@example.com', roleId: OPERATOR_ROLE_ID,
-    password: encrypt('operator'),
+    password: 'operator', // Plain text password
     phone: '22222222222',
     avatar: '/images/avatars/operator_avatar.png', lastLogin: new Date(Date.now() - 3600000).toISOString() },
   { id: 'seed_user_viewer', username: 'viewer', email: 'viewer@example.com', roleId: VIEWER_ROLE_ID,
-    password: encrypt('viewer'),
+    password: 'viewer', // Plain text password
     phone: '33333333333',
     avatar: '/images/avatars/viewer_avatar.png', lastLogin: new Date().toISOString() },
 ];

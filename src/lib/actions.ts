@@ -29,7 +29,7 @@ import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
 import { encrypt, decrypt } from './crypto-utils';
-import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE, CHART_COLORS_REMAINDER } from "./constants";
+import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE, CHART_COLORS_REMAINDER } from "./constants"; // Import CHART_COLORS_REMAINDER
 import { z } from 'zod';
 
 
@@ -68,10 +68,6 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
       logger.error(`[${actionName}] Password decryption failed for user ${userFromDb.username}.`, decryptionError as Error, { userId: userFromDb.id }, actionName);
       return { success: false, message: "登录认证失败，请联系管理员。" };
     }
-
-    // ---- Temporary debug log ----
-    logger.debug(`[${actionName}] DEBUG: Comparing passwords for user "${userFromDb.username}". Stored (decrypted): "${decryptedStoredPassword}" (Length: ${decryptedStoredPassword.length}). Attempted: "${passwordAttempt}" (Length: ${passwordAttempt.length})`);
-    // ---- End temporary debug log ----
 
     if (decryptedStoredPassword !== passwordAttempt) {
       logger.warn(`[${actionName}] Login failed: Invalid password for user ${userFromDb.username}.`, new AuthError('Invalid password attempt.'), { userId: userFromDb.id }, actionName);
@@ -237,7 +233,7 @@ export async function getAllPermissionsAction(): Promise<AppPermission[]> { retu
 export async function getAuditLogsAction(params?: FetchParams): Promise<PaginatedResponse<AuditLog>> {
   const actionName = 'getAuditLogsAction';
   try {
-    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
+    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize; // Use DEFAULT_PAGE_SIZE
     const totalCount = await prisma.auditLog.count(); const totalPages = Math.ceil(totalCount / pageSize);
     const logsFromDb = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, skip, take: pageSize });
     const appLogs: AuditLog[] = logsFromDb.map(log => ({ id: log.id, userId: log.userId || undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
@@ -796,7 +792,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
   }
 
   let successCount = 0;
-  if (operations.length > 0) {
+  if (operations.length > 0 && validDeletesForTransaction.length > 0) {
       try {
           await prisma.$transaction(operations);
           successCount = validDeletesForTransaction.length;
@@ -1063,7 +1059,7 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   for (const id of ids) {
       const ipToDelete = ipMap.get(id);
       const itemIdentifier = ipToDelete?.ipAddress || `ID ${id}`; 
-
+      
       if (!ipToDelete) {
           failureDetails.push({ id, itemIdentifier, error: 'IP 地址未找到。' });
           continue;
@@ -1085,7 +1081,7 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   }
 
   let successCount = 0;
-  if (operations.length > 0) {
+  if (operations.length > 0 && validDeletesForTransaction.length > 0) {
       try {
           await prisma.$transaction(operations);
           successCount = validDeletesForTransaction.length;
@@ -1385,7 +1381,7 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
   }
   
   let successCount = 0;
-  if (operations.length > 0) {
+  if (operations.length > 0 && validDeletesForTransaction.length > 0) {
       try {
           await prisma.$transaction(operations);
           successCount = validDeletesForTransaction.length;
@@ -1503,7 +1499,7 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   }
 
   let successCount = 0;
-  if (operations.length > 0) {
+  if (operations.length > 0 && validDeletesForTransaction.length > 0) {
     try {
         await prisma.$transaction(operations);
         successCount = validDeletesForTransaction.length;
@@ -1618,7 +1614,7 @@ export async function batchDeleteAccessTypeDictionariesAction(ids: string[], per
   }
 
   let successCount = 0;
-  if (operations.length > 0) {
+  if (operations.length > 0 && validDeletesForTransaction.length > 0) {
     try {
         await prisma.$transaction(operations);
         successCount = validDeletesForTransaction.length;
@@ -1750,7 +1746,7 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   }
   
   let successCount = 0;
-  if (operations.length > 0) {
+  if (operations.length > 0 && validDeletesForTransaction.length > 0) {
     try {
         await prisma.$transaction(operations);
         successCount = validDeletesForTransaction.length;
@@ -1889,5 +1885,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 
 
