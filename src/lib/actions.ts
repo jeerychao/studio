@@ -258,47 +258,51 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
   const auditUser = await getAuditUserInfo(performingUserId);
   let successCount = 0;
   const failureDetails: BatchOperationFailure[] = [];
-  const operations: Prisma.PrismaPromise<any>[] = [];
+  const deletedLogIdsForAudit: string[] = [];
 
   const itemsToProcess = await prisma.auditLog.findMany({
     where: { id: { in: ids } },
     select: { id: true }
   });
   const foundIds = new Set(itemsToProcess.map(item => item.id));
+  const operations: Prisma.PrismaPromise<any>[] = [];
+  const validDeletesForTransaction: string[] = [];
+
 
   for (const id of ids) {
-    const itemIdentifier = `ID ${id}`; // Use ID as identifier since logs don't have a 'name'
+    const itemIdentifier = `日志 ID ${id}`; // Cache identifier
     if (foundIds.has(id)) {
-      operations.push(prisma.auditLog.delete({ where: { id } }));
+      validDeletesForTransaction.push(id);
     } else {
       failureDetails.push({ id, itemIdentifier, error: '审计日志条目未找到。' });
     }
   }
 
-  if (operations.length > 0) {
+  if (validDeletesForTransaction.length > 0) {
+    validDeletesForTransaction.forEach(id => operations.push(prisma.auditLog.delete({ where: { id } })));
     try {
-      const results = await prisma.$transaction(operations);
-      successCount = results.length;
+      await prisma.$transaction(operations);
+      successCount = validDeletesForTransaction.length;
+      deletedLogIdsForAudit.push(...validDeletesForTransaction);
     } catch (error: unknown) {
-      // If transaction fails, we assume all operations in it failed or were rolled back.
-      // For simplicity, we'll add a generic failure for all attempted operations in the transaction.
-      // A more granular approach might be needed if partial success within a transaction is possible and meaningful.
-      ids.forEach(id => {
-        if (foundIds.has(id) && !failureDetails.some(f => f.id === id)) { // Avoid duplicating errors for already known not-founds
-            const errRes = createActionErrorResponse(error, `${actionName}_transaction_error`);
-            failureDetails.push({ id, itemIdentifier: `ID ${id}`, error: errRes.userMessage });
+      const errRes = createActionErrorResponse(error, `${actionName}_transaction_error`);
+      validDeletesForTransaction.forEach(logId => {
+        if(!failureDetails.some(f => f.id === logId)) {
+            failureDetails.push({ id: logId, itemIdentifier: `日志 ID ${logId}`, error: errRes.userMessage });
         }
       });
+      successCount = 0;
+      deletedLogIdsForAudit.length = 0;
     }
   }
   
-  if (successCount > 0) {
+  if (deletedLogIdsForAudit.length > 0 && successCount > 0) {
     await prisma.auditLog.create({
       data: {
         userId: auditUser.userId,
         username: auditUser.username,
         action: 'batch_delete_audit_log',
-        details: `批量删除了 ${successCount} 条审计日志。失败 ${failureDetails.length} 条。`
+        details: `批量成功删除了 ${successCount} 条审计日志。 IDs: ${deletedLogIdsForAudit.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
       }
     });
     revalidatePath("/audit-logs");
@@ -312,7 +316,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     const page = params?.page || 1;
     const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
     const skip = (page - 1) * pageSize;
-    const whereClause = {}; // Add any filters if needed in the future
+    const whereClause = {};
 
     const totalCount = await prisma.subnet.count({ where: whereClause });
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
@@ -324,20 +328,17 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     let appSubnets: AppSubnet[] = [];
     if (subnetsFromDb.length > 0) {
       const subnetIds = subnetsFromDb.map(s => s.id);
-      const ipCountsBySubnet = await prisma.iPAddress.groupBy({
-        by: ['subnetId', 'status'],
+      
+      const allocatedIpCountsBySubnet = await prisma.iPAddress.groupBy({
+        by: ['subnetId'],
         _count: { id: true },
-        where: { subnetId: { in: subnetIds } },
+        where: { subnetId: { in: subnetIds }, status: 'allocated' },
       });
 
-      const ipCountMap = new Map<string, { allocated: number }>();
-      ipCountsBySubnet.forEach(group => {
+      const allocatedIpCountMap = new Map<string, number>();
+      allocatedIpCountsBySubnet.forEach(group => {
         if (group.subnetId) {
-          const counts = ipCountMap.get(group.subnetId) || { allocated: 0 };
-          if (group.status === 'allocated') {
-            counts.allocated = group._count.id;
-          }
-          ipCountMap.set(group.subnetId, counts);
+          allocatedIpCountMap.set(group.subnetId, group._count.id);
         }
       });
 
@@ -350,7 +351,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         let utilization = 0;
         if (subnetProperties) {
           const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-          const allocatedIpsCount = ipCountMap.get(subnet.id)?.allocated || 0;
+          const allocatedIpsCount = allocatedIpCountMap.get(subnet.id) || 0;
           if (totalUsableIps > 0) {
             const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
              utilization = (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) ? 1 : Math.round(rawPercentage);
@@ -519,7 +520,7 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-async function calculateSubnetUtilizationHelper(subnetId: string): Promise<number> { // Renamed to avoid conflict
+async function calculateSubnetUtilizationHelper(subnetId: string): Promise<number> {
   const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!subnet || !subnet.cidr) return 0;
   const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
   const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0;
@@ -550,22 +551,27 @@ export async function deleteSubnetAction(id: string, performingUserId?: string):
     }
 
     const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
+    const operations: Prisma.PrismaPromise<any>[] = [];
+
     if (freeIpsInSubnet.length > 0) {
-      const ipsToDisassociateUpdates = freeIpsInSubnet.map(ip =>
-        prisma.iPAddress.update({
+      freeIpsInSubnet.forEach(ip =>
+        operations.push(prisma.iPAddress.update({
           where: { id: ip.id },
           data: {
             subnet: { disconnect: true },
             directVlan: { disconnect: true },
             description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
           }
-        })
+        }))
       );
-      await prisma.$transaction(ipsToDisassociateUpdates);
+    }
+    operations.push(prisma.subnet.delete({ where: { id } }));
+    
+    await prisma.$transaction(operations);
+
+    if (freeIpsInSubnet.length > 0) {
       await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'auto_disassociate_free_ips_on_subnet_delete', details: `子网 ${subnetToDelete.cidr} 删除前，其 ${freeIpsInSubnet.length} 个空闲 IP 已解除关联。` } });
     }
-
-    await prisma.subnet.delete({ where: { id } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'delete_subnet', details: `删除了子网 ${subnetToDelete.cidr}` } });
     revalidatePath("/subnets"); revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/query");
     return { success: true };
@@ -578,19 +584,18 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
   let successCount = 0;
   const failureDetails: BatchOperationFailure[] = [];
   const deletedSubnetCidrsForLog: string[] = [];
-  const prismaOperations: Prisma.PrismaPromise<any>[] = [];
-
-  // Pre-fetch identifiers and perform checks
+  
   const subnetsToProcess = await prisma.subnet.findMany({
     where: { id: { in: ids } },
-    include: { vlan: true, _count: { select: { ips: true } } } // Count all IPs for now
+    include: { vlan: true }
   });
 
   const subnetsMap = new Map(subnetsToProcess.map(s => [s.id, s]));
+  const validSubnetDeletes: { id: string, cidr: string, freeIpUpdates: Prisma.PrismaPromise<any>[] }[] = [];
 
   for (const id of ids) {
     const subnetToDelete = subnetsMap.get(id);
-    const itemIdentifier = subnetToDelete?.cidr || `ID ${id}`;
+    const itemIdentifier = subnetToDelete?.cidr || `ID ${id}`; // Cache identifier
 
     try {
       if (!subnetToDelete) {
@@ -609,9 +614,10 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
       if (reservedIpCount > 0) throw new ResourceError(`子网 ${subnetToDelete.cidr} 中仍有预留的 IP。`, 'SUBNET_HAS_RESERVED_IPS_BATCH', `子网 ${subnetToDelete.cidr} 中仍有预留的 IP。`);
 
       const freeIpsInSubnet = await prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } });
+      const currentFreeIpUpdates: Prisma.PrismaPromise<any>[] = [];
       if (freeIpsInSubnet.length > 0) {
         freeIpsInSubnet.forEach(ip => {
-          prismaOperations.push(prisma.iPAddress.update({
+          currentFreeIpUpdates.push(prisma.iPAddress.update({
             where: { id: ip.id },
             data: {
               subnet: { disconnect: true },
@@ -621,99 +627,50 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
           }));
         });
       }
-      prismaOperations.push(prisma.subnet.delete({ where: { id } }));
-      // Don't increment successCount or add to deletedSubnetCidrsForLog here, do it after transaction
+      validSubnetDeletes.push({ id, cidr: subnetToDelete.cidr, freeIpUpdates: currentFreeIpUpdates });
     } catch (error: unknown) {
       const errRes = createActionErrorResponse(error, `${actionName}_single_check`);
       failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
     }
   }
-
-  // Filter out IDs that already failed pre-checks before attempting transaction
-  const validIdsForTransaction = ids.filter(id => !failureDetails.some(f => f.id === id));
-  const operationsForTransaction = validIdsForTransaction.flatMap(id => {
-      const ops: Prisma.PrismaPromise<any>[] = [];
-      const subnetToDelete = subnetsMap.get(id); // Should exist if it passed pre-checks
-      if (subnetToDelete) {
-          // Disassociation of free IPs will already be in prismaOperations if needed
-          // Add the delete operation for the subnet itself
-          ops.push(prisma.subnet.delete({ where: { id } }));
-      }
-      return ops;
-  });
   
-  // Add pre-calculated IP disassociation operations
-  // This part needs refinement to map specific IP disassociations to the correct subnet delete within the transaction
-  // For simplicity in this step, the IP disassociations are added to the main prismaOperations list earlier.
-  // A more robust transaction would group operations per subnet ID.
-  // For now, we'll try to run all valid operations.
-
-  const allOpsToAttempt = ids.flatMap(id => {
-    if (failureDetails.some(f => f.id === id)) return []; // Skip if already failed
-    const subnetToDelete = subnetsMap.get(id)!;
-    const ops: Prisma.PrismaPromise<any>[] = [];
-     const freeIpsInSubnet = prisma.iPAddress.findMany({ where: { subnetId: id, status: 'free' } })
-        .then(ips => {
-            ips.forEach(ip => {
-                ops.push(prisma.iPAddress.update({
-                    where: {id: ip.id},
-                    data: {
-                        subnet: {disconnect: true},
-                        directVlan: {disconnect: true},
-                        description: `(原属于已删除子网 ${subnetToDelete.cidr}) ${ip.description || ''}`.trim(),
-                    }
-                }))
-            })
-        });
-    ops.push(freeIpsInSubnet); // Add the promise for finding free IPs
-    ops.push(prisma.subnet.delete({where: {id}}));
-    return ops;
-  }).filter(op => op); // Remove any undefined entries
-
-  if (allOpsToAttempt.length > 0) {
+  if (validSubnetDeletes.length > 0) {
+      const transactionOperations: Prisma.PrismaPromise<any>[] = [];
+      validSubnetDeletes.forEach(item => {
+          transactionOperations.push(...item.freeIpUpdates);
+          transactionOperations.push(prisma.subnet.delete({ where: { id: item.id } }));
+      });
+      
       try {
-          await prisma.$transaction(allOpsToAttempt);
-          // If transaction succeeded, update success counts based on validIdsForTransaction
-          validIdsForTransaction.forEach(id => {
-              const subnet = subnetsMap.get(id);
-              if(subnet) {
-                  deletedSubnetCidrsForLog.push(subnet.cidr);
-                  successCount++;
-              }
-          });
-
+          await prisma.$transaction(transactionOperations);
+          successCount = validSubnetDeletes.length;
+          validSubnetDeletes.forEach(item => deletedSubnetCidrsForLog.push(item.cidr));
       } catch (transactionError: unknown) {
           const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          // Mark all valid IDs that were part of the transaction as failed
-          validIdsForTransaction.forEach(id => {
-              if (!failureDetails.some(f => f.id === id)) { // Don't overwrite specific pre-check errors
-                  const subnet = subnetsMap.get(id);
+          validSubnetDeletes.forEach(item => {
+              if (!failureDetails.some(f => f.id === item.id)) {
                   failureDetails.push({
-                      id,
-                      itemIdentifier: subnet?.cidr || `ID ${id}`,
+                      id: item.id,
+                      itemIdentifier: item.cidr, // Use cached identifier
                       error: `事务失败: ${errRes.userMessage}`
                   });
               }
           });
-          successCount = 0; // Reset success count as the transaction failed
+          successCount = 0; 
           deletedSubnetCidrsForLog.length = 0;
       }
   }
 
-
-  if (deletedSubnetCidrsForLog.length > 0) {
+  if (deletedSubnetCidrsForLog.length > 0 && successCount > 0) {
     await prisma.auditLog.create({
       data: {
         userId: auditUser.userId,
         username: auditUser.username,
         action: 'batch_delete_subnet',
-        details: `批量删除了 ${deletedSubnetCidrsForLog.length} 个子网: ${deletedSubnetCidrsForLog.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
+        details: `批量成功删除了 ${successCount} 个子网: ${deletedSubnetCidrsForLog.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
       }
     });
-    revalidatePath("/subnets");
-    revalidatePath("/ip-addresses");
-    revalidatePath("/dashboard");
-    revalidatePath("/query");
+    revalidatePath("/subnets"); revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/query");
   }
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
@@ -744,15 +701,40 @@ export async function createVLANAction(data: Omit<AppVLAN, "id" | "subnetCount">
 export interface BatchVlanCreationResult { successCount: number; failureDetails: Array<{ vlanNumberAttempted: number; error: string; }>; }
 export async function batchCreateVLANsAction(vlansToCreateInput: Array<{ vlanNumber: number; name?: string; description?: string; }>, performingUserId?: string): Promise<BatchVlanCreationResult> {
   const auditUser = await getAuditUserInfo(performingUserId); let successCount = 0; const failureDetails: BatchVlanCreationResult['failureDetails'] = []; const createdVlanSummaries: string[] = [];
+  const operations: Prisma.PrismaPromise<any>[] = [];
+  const validVlanInputsForTransaction: Array<{ vlanNumber: number; name?: string; description?: string; }> = [];
+
   for (const vlanInput of vlansToCreateInput) {
     try {
       if (isNaN(vlanInput.vlanNumber) || vlanInput.vlanNumber < 1 || vlanInput.vlanNumber > 4094) throw new ValidationError("VLAN 号码必须是 1 到 4094 之间的整数。", 'vlanNumber', vlanInput.vlanNumber, "VLAN 号码必须是 1 到 4094 之间的整数。");
-      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', `VLAN ${vlanInput.vlanNumber} 已存在。`, 'startVlanNumber');
-      const newVlan = await prisma.vLAN.create({ data: { vlanNumber: vlanInput.vlanNumber, name: vlanInput.name || null, description: vlanInput.description || null } });
-      createdVlanSummaries.push(`${newVlan.vlanNumber}${newVlan.name ? ` (${newVlan.name})` : ''}`); successCount++;
-    } catch (e: unknown) { const errRes = createActionErrorResponse(e, 'batchCreateVLANsAction_single'); failureDetails.push({ vlanNumberAttempted: vlanInput.vlanNumber, error: errRes.userMessage }); }
+      if (await prisma.vLAN.findUnique({ where: { vlanNumber: vlanInput.vlanNumber } })) throw new ResourceError(`VLAN ${vlanInput.vlanNumber} 已存在。`, 'VLAN_EXISTS', `VLAN ${vlanInput.vlanNumber} 已存在。`, 'startVlanNumber'); // Field name from original error
+      validVlanInputsForTransaction.push(vlanInput);
+    } catch (e: unknown) { const errRes = createActionErrorResponse(e, 'batchCreateVLANsAction_single_check'); failureDetails.push({ vlanNumberAttempted: vlanInput.vlanNumber, error: errRes.userMessage }); }
   }
-  if (createdVlanSummaries.length > 0) await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'batch_create_vlan', details: `批量创建了 ${createdVlanSummaries.length} 个 VLAN：${createdVlanSummaries.join(', ')}。失败：${failureDetails.length} 个。` } });
+
+  if (validVlanInputsForTransaction.length > 0) {
+    validVlanInputsForTransaction.forEach(vlanInput => {
+      operations.push(prisma.vLAN.create({ data: { vlanNumber: vlanInput.vlanNumber, name: vlanInput.name || null, description: vlanInput.description || null } }));
+    });
+    try {
+      const results = await prisma.$transaction(operations);
+      successCount = results.length;
+      results.forEach((createdVlan: AppVLAN) => { // Assuming transaction returns the created objects
+        createdVlanSummaries.push(`${createdVlan.vlanNumber}${createdVlan.name ? ` (${createdVlan.name})` : ''}`);
+      });
+    } catch (transactionError: unknown) {
+      const errRes = createActionErrorResponse(transactionError, `batchCreateVLANsAction_transaction_error`);
+      validVlanInputsForTransaction.forEach(vlanInput => {
+        if (!failureDetails.some(f => f.vlanNumberAttempted === vlanInput.vlanNumber)) {
+            failureDetails.push({ vlanNumberAttempted: vlanInput.vlanNumber, error: errRes.userMessage });
+        }
+      });
+      successCount = 0;
+      createdVlanSummaries.length = 0;
+    }
+  }
+
+  if (createdVlanSummaries.length > 0 && successCount > 0) await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'batch_create_vlan', details: `批量成功创建了 ${successCount} 个 VLAN：${createdVlanSummaries.join(', ')}。最初请求 ${vlansToCreateInput.length} 个，失败：${failureDetails.length} 个。` } });
   if (successCount > 0) { revalidatePath("/vlans"); revalidatePath("/query"); }
   return { successCount, failureDetails };
 }
@@ -797,6 +779,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
   const failureDetails: BatchOperationFailure[] = [];
   const deletedVlanSummaries: string[] = [];
   const operations: Prisma.PrismaPromise<any>[] = [];
+  const validDeletesForTransaction: { id: string; vlanNumber: number; name?: string | null }[] = [];
 
   const vlansToProcess = await prisma.vLAN.findMany({
       where: { id: { in: ids } },
@@ -806,7 +789,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
 
   for (const id of ids) {
       const vlanToDelete = vlanMap.get(id);
-      const itemIdentifier = vlanToDelete ? `VLAN ${vlanToDelete.vlanNumber} (${vlanToDelete.name || '无名称'})` : `ID ${id}`;
+      const itemIdentifier = vlanToDelete ? `VLAN ${vlanToDelete.vlanNumber} (${vlanToDelete.name || '无名称'})` : `ID ${id}`; // Cache identifier
       
       if (!vlanToDelete) {
           failureDetails.push({ id, itemIdentifier, error: 'VLAN 未找到。' });
@@ -819,32 +802,28 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
           if (await prisma.iPAddress.count({ where: { directVlanId: id } }) > 0) {
               throw new ResourceError(`VLAN ${vlanToDelete.vlanNumber} 已直接分配给 IP 地址。`, 'VLAN_IN_USE_IP_BATCH', `VLAN ${vlanToDelete.vlanNumber} 已直接分配给 IP 地址。`);
           }
-          operations.push(prisma.vLAN.delete({ where: { id } }));
-          deletedVlanSummaries.push(`${vlanToDelete.vlanNumber}${vlanToDelete.name ? ` (${vlanToDelete.name})` : ''}`);
+          validDeletesForTransaction.push({ id, vlanNumber: vlanToDelete.vlanNumber, name: vlanToDelete.name });
       } catch (error: unknown) {
           const errRes = createActionErrorResponse(error, `${actionName}_single_check`);
           failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
-          // Remove from deletedVlanSummaries if pre-check failed
-          const summaryIndex = deletedVlanSummaries.findIndex(s => s.startsWith(String(vlanToDelete.vlanNumber)));
-          if (summaryIndex > -1) deletedVlanSummaries.splice(summaryIndex, 1);
       }
   }
 
-  if (operations.length > 0) {
+  if (validDeletesForTransaction.length > 0) {
+      validDeletesForTransaction.forEach(v => operations.push(prisma.vLAN.delete({ where: { id: v.id } })));
       try {
           await prisma.$transaction(operations);
-          successCount = operations.length; // All operations in the transaction succeeded
+          successCount = validDeletesForTransaction.length;
+          validDeletesForTransaction.forEach(v => deletedVlanSummaries.push(`${v.vlanNumber}${v.name ? ` (${v.name})` : ''}`));
       } catch (transactionError: unknown) {
-          successCount = 0; // Reset success count as transaction failed
-          deletedVlanSummaries.length = 0; // Clear summaries
           const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          // Mark all items intended for this transaction as failed, if not already specifically failed
-          ids.forEach(id => {
-              if (vlanMap.has(id) && !failureDetails.some(f => f.id === id)) {
-                  const vlan = vlanMap.get(id)!;
-                  failureDetails.push({ id, itemIdentifier: `VLAN ${vlan.vlanNumber} (${vlan.name || '无名称'})`, error: `事务失败: ${errRes.userMessage}` });
+          validDeletesForTransaction.forEach(v => {
+              if (!failureDetails.some(f => f.id === v.id)) { // Avoid overwriting specific pre-check errors
+                  failureDetails.push({ id: v.id, itemIdentifier: `VLAN ${v.vlanNumber} (${v.name || '无名称'})`, error: `事务失败: ${errRes.userMessage}` });
               }
           });
+          successCount = 0;
+          deletedVlanSummaries.length = 0;
       }
   }
 
@@ -854,7 +833,7 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
               userId: auditUser.userId,
               username: auditUser.username,
               action: 'batch_delete_vlan',
-              details: `批量成功删除了 ${deletedVlanSummaries.length} 个 VLAN: ${deletedVlanSummaries.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
+              details: `批量成功删除了 ${successCount} 个 VLAN: ${deletedVlanSummaries.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
           }
       });
       revalidatePath("/vlans"); revalidatePath("/subnets"); revalidatePath("/ip-addresses"); revalidatePath("/query");
@@ -1088,6 +1067,7 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   const failureDetails: BatchOperationFailure[] = [];
   const deletedIpAddressesForLog: string[] = [];
   const operations: Prisma.PrismaPromise<any>[] = [];
+  const validDeletesForTransaction: { id: string; ipAddress: string; }[] = [];
 
   const ipsToProcess = await prisma.iPAddress.findMany({
       where: { id: { in: ids } },
@@ -1097,7 +1077,7 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
 
   for (const id of ids) {
       const ipToDelete = ipMap.get(id);
-      const itemIdentifier = ipToDelete?.ipAddress || `ID ${id}`;
+      const itemIdentifier = ipToDelete?.ipAddress || `ID ${id}`; // Cache identifier
 
       if (!ipToDelete) {
           failureDetails.push({ id, itemIdentifier, error: 'IP 地址未找到。' });
@@ -1111,32 +1091,28 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
               const directVlanNumber = ipToDelete.directVlan?.vlanNumber || ipToDelete.directVlanId;
               throw new ResourceError(`IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。`, 'IP_ADDRESS_HAS_DIRECT_VLAN_BATCH', `IP 地址 ${ipToDelete.ipAddress} 直接关联到 VLAN ${directVlanNumber}。`);
           }
-          operations.push(prisma.iPAddress.delete({ where: { id } }));
-          deletedIpAddressesForLog.push(ipToDelete.ipAddress); // Add to log list before transaction attempt
+          validDeletesForTransaction.push({ id: ipToDelete.id, ipAddress: ipToDelete.ipAddress });
       } catch (error: unknown) {
           const errRes = createActionErrorResponse(error, `${actionName}_single_check`);
           failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
-          // Remove from log list if pre-check failed
-          const logIndex = deletedIpAddressesForLog.indexOf(ipToDelete.ipAddress);
-          if (logIndex > -1) deletedIpAddressesForLog.splice(logIndex, 1);
       }
   }
 
-  if (operations.length > 0) {
+  if (validDeletesForTransaction.length > 0) {
+      validDeletesForTransaction.forEach(item => operations.push(prisma.iPAddress.delete({ where: { id: item.id } })));
       try {
           await prisma.$transaction(operations);
-          successCount = operations.length; // All operations in transaction succeeded
+          successCount = validDeletesForTransaction.length;
+          validDeletesForTransaction.forEach(item => deletedIpAddressesForLog.push(item.ipAddress));
       } catch (transactionError: unknown) {
-          successCount = 0; // Reset success count as transaction failed
-          deletedIpAddressesForLog.length = 0; // Clear log list
           const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          // Mark all items intended for this transaction as failed, if not already specifically failed
-          ids.forEach(id => {
-              if (ipMap.has(id) && !failureDetails.some(f => f.id === id)) {
-                  const ip = ipMap.get(id)!;
-                  failureDetails.push({ id, itemIdentifier: ip.ipAddress, error: `事务失败: ${errRes.userMessage}` });
-              }
+          validDeletesForTransaction.forEach(item => {
+             if (!failureDetails.some(f => f.id === item.id)) { // Avoid overwriting specific pre-check errors
+                failureDetails.push({ id: item.id, itemIdentifier: item.ipAddress, error: `事务失败: ${errRes.userMessage}` });
+             }
           });
+          successCount = 0;
+          deletedIpAddressesForLog.length = 0;
       }
   }
 
@@ -1146,7 +1122,7 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
               userId: auditUser.userId,
               username: auditUser.username,
               action: 'batch_delete_ip_address',
-              details: `批量成功删除了 ${deletedIpAddressesForLog.length} 个 IP 地址: ${deletedIpAddressesForLog.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
+              details: `批量成功删除了 ${successCount} 个 IP 地址: ${deletedIpAddressesForLog.join(', ')}。最初选中 ${ids.length} 个，其他失败或跳过。`
           }
       });
       revalidatePath("/ip-addresses"); revalidatePath("/dashboard"); revalidatePath("/subnets"); revalidatePath("/query");
@@ -1392,8 +1368,8 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
   const auditUser = await getAuditUserInfo(performingUserId);
   let successCount = 0;
   const failureDetails: BatchOperationFailure[] = [];
-  const operations: Prisma.PrismaPromise<any>[] = [];
   const deletedItemNamesForLog: string[] = [];
+  const validDeletesForTransaction: { id: string; deviceName: string; }[] = [];
 
   const itemsToProcess = await prisma.deviceDictionary.findMany({
       where: { id: { in: ids } },
@@ -1403,7 +1379,7 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
 
   for (const id of ids) {
       const item = itemMap.get(id);
-      const itemIdentifier = item?.deviceName || `ID ${id}`;
+      const itemIdentifier = item?.deviceName || `ID ${id}`; // Cache identifier
       if (!item) {
           failureDetails.push({ id, itemIdentifier, error: '未找到条目。' });
           continue;
@@ -1414,35 +1390,33 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
           const peerDeviceInUse = await prisma.iPAddress.count({ where: { peerDeviceName: item.deviceName }});
           if (peerDeviceInUse > 0) throw new ResourceError(`设备 "${item.deviceName}" 正在被 ${peerDeviceInUse} 个 IP 地址的“对端设备”字段使用。`, 'DEVICE_DICT_IN_USE_PEER_BATCH', `设备 "${item.deviceName}" 正在被 ${peerDeviceInUse} 个 IP 地址的“对端设备”字段使用。`);
           
-          operations.push(prisma.deviceDictionary.delete({ where: { id } }));
-          deletedItemNamesForLog.push(item.deviceName);
+          validDeletesForTransaction.push({ id: item.id, deviceName: item.deviceName });
       } catch (e: unknown) {
           const errRes = createActionErrorResponse(e, `${actionName}_single_check`);
           failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
-          const logIndex = deletedItemNamesForLog.indexOf(item.deviceName);
-          if (logIndex > -1) deletedItemNamesForLog.splice(logIndex, 1);
       }
   }
   
-  if (operations.length > 0) {
+  if (validDeletesForTransaction.length > 0) {
+      const operations = validDeletesForTransaction.map(item => prisma.deviceDictionary.delete({ where: { id: item.id }}));
       try {
           await prisma.$transaction(operations);
-          successCount = operations.length;
+          successCount = validDeletesForTransaction.length;
+          validDeletesForTransaction.forEach(item => deletedItemNamesForLog.push(item.deviceName));
       } catch (transactionError: unknown) {
-          successCount = 0;
-          deletedItemNamesForLog.length = 0;
           const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          ids.forEach(id => {
-              if (itemMap.has(id) && !failureDetails.some(f => f.id === id)) {
-                  const item = itemMap.get(id)!;
-                  failureDetails.push({ id, itemIdentifier: item.deviceName, error: `事务失败: ${errRes.userMessage}` });
+          validDeletesForTransaction.forEach(item => {
+              if (!failureDetails.some(f => f.id === item.id)) { // Avoid overwriting specific pre-check errors
+                  failureDetails.push({ id: item.id, itemIdentifier: item.deviceName, error: `事务失败: ${errRes.userMessage}` });
               }
           });
+          successCount = 0;
+          deletedItemNamesForLog.length = 0;
       }
   }
 
   if (deletedItemNamesForLog.length > 0 && successCount > 0) {
-      await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_device_dictionary', details: `批量成功删除了 ${deletedItemNamesForLog.length} 个设备字典条目。最初选中 ${ids.length} 个。`}});
+      await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_device_dictionary', details: `批量成功删除了 ${successCount} 个设备字典条目。最初选中 ${ids.length} 个。`}});
       revalidatePath("/dictionaries/device");
       revalidatePath("/ip-addresses");
   }
@@ -1513,8 +1487,8 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   const auditUser = await getAuditUserInfo(performingUserId);
   let successCount = 0;
   const failureDetails: BatchOperationFailure[] = [];
-  const operations: Prisma.PrismaPromise<any>[] = [];
   const deletedItemNamesForLog: string[] = [];
+  const validDeletesForTransaction: { id: string; sourceName: string; }[] = [];
 
   const itemsToProcess = await prisma.paymentSourceDictionary.findMany({
       where: { id: { in: ids } },
@@ -1524,7 +1498,7 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
 
   for (const id of ids) {
       const item = itemMap.get(id);
-      const itemIdentifier = item?.sourceName || `ID ${id}`;
+      const itemIdentifier = item?.sourceName || `ID ${id}`; // Cache identifier
       if (!item) {
           failureDetails.push({ id, itemIdentifier, error: '未找到条目。' });
           continue;
@@ -1533,35 +1507,33 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
           if (await prisma.iPAddress.count({ where: { selectedPaymentSource: item.sourceName } }) > 0) {
               throw new ResourceError(`付费来源 "${item.sourceName}" 正在被 IP 地址使用。`, 'PAYMENT_SOURCE_IN_USE_BATCH', `付费来源 "${item.sourceName}" 正在被 IP 地址使用。`);
           }
-          operations.push(prisma.paymentSourceDictionary.delete({ where: { id } }));
-          deletedItemNamesForLog.push(item.sourceName);
+          validDeletesForTransaction.push({ id: item.id, sourceName: item.sourceName });
       } catch (e: unknown) {
           const errRes = createActionErrorResponse(e, `${actionName}_single_check`);
           failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
-          const logIndex = deletedItemNamesForLog.indexOf(item.sourceName);
-          if (logIndex > -1) deletedItemNamesForLog.splice(logIndex, 1);
       }
   }
 
-  if (operations.length > 0) {
-      try {
-          await prisma.$transaction(operations);
-          successCount = operations.length;
-      } catch (transactionError: unknown) {
-          successCount = 0;
-          deletedItemNamesForLog.length = 0;
-          const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          ids.forEach(id => {
-              if (itemMap.has(id) && !failureDetails.some(f => f.id === id)) {
-                  const item = itemMap.get(id)!;
-                  failureDetails.push({ id, itemIdentifier: item.sourceName, error: `事务失败: ${errRes.userMessage}` });
-              }
-          });
-      }
+  if (validDeletesForTransaction.length > 0) {
+    const operations = validDeletesForTransaction.map(item => prisma.paymentSourceDictionary.delete({ where: { id: item.id }}));
+    try {
+        await prisma.$transaction(operations);
+        successCount = validDeletesForTransaction.length;
+        validDeletesForTransaction.forEach(item => deletedItemNamesForLog.push(item.sourceName));
+    } catch (transactionError: unknown) {
+        const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
+        validDeletesForTransaction.forEach(item => {
+            if (!failureDetails.some(f => f.id === item.id)) {
+                failureDetails.push({ id: item.id, itemIdentifier: item.sourceName, error: `事务失败: ${errRes.userMessage}` });
+            }
+        });
+        successCount = 0;
+        deletedItemNamesForLog.length = 0;
+    }
   }
 
   if (deletedItemNamesForLog.length > 0 && successCount > 0) {
-      await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_payment_source_dictionary', details: `批量成功删除了 ${deletedItemNamesForLog.length} 个付费字典条目。最初选中 ${ids.length} 个。`}});
+      await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_payment_source_dictionary', details: `批量成功删除了 ${successCount} 个付费字典条目。最初选中 ${ids.length} 个。`}});
       revalidatePath("/dictionaries/payment-source");
       revalidatePath("/ip-addresses");
   }
@@ -1629,8 +1601,8 @@ export async function batchDeleteAccessTypeDictionariesAction(ids: string[], per
   const auditUser = await getAuditUserInfo(performingUserId);
   let successCount = 0;
   const failureDetails: BatchOperationFailure[] = [];
-  const operations: Prisma.PrismaPromise<any>[] = [];
   const deletedItemNamesForLog: string[] = [];
+  const validDeletesForTransaction: { id: string; name: string; }[] = [];
 
   const itemsToProcess = await prisma.accessTypeDictionary.findMany({
       where: { id: { in: ids } },
@@ -1640,7 +1612,7 @@ export async function batchDeleteAccessTypeDictionariesAction(ids: string[], per
 
   for (const id of ids) {
       const item = itemMap.get(id);
-      const itemIdentifier = item?.name || `ID ${id}`;
+      const itemIdentifier = item?.name || `ID ${id}`; // Cache identifier
       if (!item) {
           failureDetails.push({ id, itemIdentifier, error: '未找到条目。' });
           continue;
@@ -1649,35 +1621,33 @@ export async function batchDeleteAccessTypeDictionariesAction(ids: string[], per
           if (await prisma.iPAddress.count({ where: { selectedAccessType: item.name } }) > 0) {
               throw new ResourceError(`接入方式 "${item.name}" 正在被 IP 地址使用。`, 'ACCESS_TYPE_IN_USE_BATCH', `接入方式 "${item.name}" 正在被 IP 地址使用。`);
           }
-          operations.push(prisma.accessTypeDictionary.delete({ where: { id } }));
-          deletedItemNamesForLog.push(item.name);
+          validDeletesForTransaction.push({ id: item.id, name: item.name });
       } catch (e: unknown) {
           const errRes = createActionErrorResponse(e, `${actionName}_single_check`);
           failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
-          const logIndex = deletedItemNamesForLog.indexOf(item.name);
-          if (logIndex > -1) deletedItemNamesForLog.splice(logIndex, 1);
       }
   }
 
-  if (operations.length > 0) {
-      try {
-          await prisma.$transaction(operations);
-          successCount = operations.length;
-      } catch (transactionError: unknown) {
-          successCount = 0;
-          deletedItemNamesForLog.length = 0;
-          const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          ids.forEach(id => {
-              if (itemMap.has(id) && !failureDetails.some(f => f.id === id)) {
-                  const item = itemMap.get(id)!;
-                  failureDetails.push({ id, itemIdentifier: item.name, error: `事务失败: ${errRes.userMessage}` });
-              }
-          });
-      }
+  if (validDeletesForTransaction.length > 0) {
+    const operations = validDeletesForTransaction.map(item => prisma.accessTypeDictionary.delete({ where: { id: item.id }}));
+    try {
+        await prisma.$transaction(operations);
+        successCount = validDeletesForTransaction.length;
+        validDeletesForTransaction.forEach(item => deletedItemNamesForLog.push(item.name));
+    } catch (transactionError: unknown) {
+        const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
+        validDeletesForTransaction.forEach(item => {
+            if (!failureDetails.some(f => f.id === item.id)) { // Avoid overwriting specific pre-check errors
+                failureDetails.push({ id: item.id, itemIdentifier: item.name, error: `事务失败: ${errRes.userMessage}` });
+            }
+        });
+        successCount = 0;
+        deletedItemNamesForLog.length = 0;
+    }
   }
 
   if (deletedItemNamesForLog.length > 0 && successCount > 0) {
-      await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_access_type_dictionary', details: `批量成功删除了 ${deletedItemNamesForLog.length} 个接入方式字典条目。最初选中 ${ids.length} 个。`}});
+      await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_access_type_dictionary', details: `批量成功删除了 ${successCount} 个接入方式字典条目。最初选中 ${ids.length} 个。`}});
       revalidatePath("/dictionaries/access-type");
       revalidatePath("/ip-addresses");
   }
@@ -1763,8 +1733,9 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   const auditUser = await getAuditUserInfo(performingUserId);
   let successCount = 0;
   const failureDetails: BatchOperationFailure[] = [];
-  const operations: Prisma.PrismaPromise<any>[] = [];
   const deletedItemNamesForLog: string[] = [];
+  const validDeletesForTransaction: { id: string; name: string; }[] = [];
+
 
   const itemsToProcess = await prisma.interfaceTypeDictionary.findMany({
       where: { id: { in: ids } },
@@ -1774,7 +1745,7 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
 
   for (const id of ids) {
       const item = itemMap.get(id);
-      const itemIdentifier = item?.name || `ID ${id}`;
+      const itemIdentifier = item?.name || `ID ${id}`; // Cache identifier
       if (!item) {
           failureDetails.push({ id, itemIdentifier, error: '未找到条目。' });
           continue;
@@ -1790,35 +1761,33 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
           const selectedDevicePortExactUsage = await prisma.iPAddress.count({ where: { selectedDevicePort: item.name } });
           if (selectedDevicePortExactUsage > 0) throw new ResourceError(`接口类型 "${item.name}" 正在被 ${selectedDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT_BATCH', `接口类型 "${item.name}" 正在被 ${selectedDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`);
           
-          operations.push(prisma.interfaceTypeDictionary.delete({ where: { id } }));
-          deletedItemNamesForLog.push(item.name);
+          validDeletesForTransaction.push({id: item.id, name: item.name});
       } catch (e: unknown) {
           const errRes = createActionErrorResponse(e, `${actionName}_single_check`);
           failureDetails.push({ id, itemIdentifier, error: errRes.userMessage });
-          const logIndex = deletedItemNamesForLog.indexOf(item.name);
-          if (logIndex > -1) deletedItemNamesForLog.splice(logIndex, 1);
       }
   }
-
-  if (operations.length > 0) {
-      try {
-          await prisma.$transaction(operations);
-          successCount = operations.length;
-      } catch (transactionError: unknown) {
-          successCount = 0;
-          deletedItemNamesForLog.length = 0;
-          const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
-          ids.forEach(id => {
-              if (itemMap.has(id) && !failureDetails.some(f => f.id === id)) {
-                  const item = itemMap.get(id)!;
-                  failureDetails.push({ id, itemIdentifier: item.name, error: `事务失败: ${errRes.userMessage}` });
-              }
-          });
-      }
+  
+  if (validDeletesForTransaction.length > 0) {
+    const operations = validDeletesForTransaction.map(item => prisma.interfaceTypeDictionary.delete({ where: { id: item.id } }));
+    try {
+        await prisma.$transaction(operations);
+        successCount = validDeletesForTransaction.length;
+        validDeletesForTransaction.forEach(item => deletedItemNamesForLog.push(item.name));
+    } catch (transactionError: unknown) {
+        const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
+        validDeletesForTransaction.forEach(item => {
+            if (!failureDetails.some(f => f.id === item.id)) { // Avoid overwriting specific pre-check errors
+                failureDetails.push({ id: item.id, itemIdentifier: item.name, error: `事务失败: ${errRes.userMessage}` });
+            }
+        });
+        successCount = 0;
+        deletedItemNamesForLog.length = 0;
+    }
   }
 
   if (deletedItemNamesForLog.length > 0 && successCount > 0) { 
-    await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_interface_type_dictionary', details: `批量成功删除了 ${deletedItemNamesForLog.length} 个接口类型字典条目。最初选中 ${ids.length} 个。`}}); 
+    await prisma.auditLog.create({data: {userId: auditUser.userId, username: auditUser.username, action: 'batch_delete_interface_type_dictionary', details: `批量成功删除了 ${successCount} 个接口类型字典条目。最初选中 ${ids.length} 个。`}}); 
     revalidatePath("/dictionaries/interface-type"); 
     revalidatePath("/ip-addresses");
     revalidatePath("/query");
@@ -1860,26 +1829,23 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     const unspecifiedUsageUnitCount = await prisma.iPAddress.count({ where: { OR: [{ usageUnit: null }, { usageUnit: "" }] } });
     if (unspecifiedUsageUnitCount > 0) {
         const unspecifiedExists = ipUsageByUnit.find(item => item.item === "未指定");
-        const currentTopNAndOtherSize = DASHBOARD_TOP_N_COUNT + (otherUsageUnitCount > 0 ? 1 : 0);
-        if (!unspecifiedExists && ipUsageByUnit.length < currentTopNAndOtherSize ) {
-             ipUsageByUnit.push({ item: "未指定", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
-        } else if (!unspecifiedExists) { // Already at max size, add to "其他" or create "其他"
-            const otherIndex = ipUsageByUnit.findIndex(item => item.item === "其他");
-            if (otherIndex !== -1) ipUsageByUnit[otherIndex].count += unspecifiedUsageUnitCount;
-            else if (ipUsageByUnit.length < DASHBOARD_TOP_N_COUNT + 1) { // +1 allows for one "Other" or "Unspecified" if distinct
+        let currentTopNSize = DASHBOARD_TOP_N_COUNT;
+        const otherItemIndex = ipUsageByUnit.findIndex(item => item.item === "其他");
+        
+        if (!unspecifiedExists) {
+            if (ipUsageByUnit.length < currentTopNSize || (ipUsageByUnit.length === currentTopNSize && otherItemIndex === -1)) {
+                 ipUsageByUnit.push({ item: "未指定", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
+            } else if (otherItemIndex !== -1) { 
+                 ipUsageByUnit[otherItemIndex].count += unspecifiedUsageUnitCount;
+            } else { 
                  ipUsageByUnit.push({ item: "其他", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
-            } else {
-                // If already DASHBOARD_TOP_N_COUNT items + "Other", and now "Unspecified" needs to be added,
-                // this means one of the top N items might be pushed into "Other".
-                // This logic can get complex to perfectly cap at DASHBOARD_TOP_N_COUNT including "Other" and "Unspecified" as distinct items if they are large enough.
-                // For simplicity, if "Other" exists, add to it. If not, and full, the smallest top N might be "implicitly" part of "Other".
-                 logger.warn(`[${actionName}] Dashboard ipUsageByUnit chart is full, unspecified count ${unspecifiedUsageUnitCount} might not be distinctly shown.`);
-                 // If "Other" doesn't exist and list is full, last item is effectively combined with unspecified.
-                 // This part of the logic could be refined if strict capping with "Other" and "Unspecified" is critical.
             }
         }
     }
     ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
+    if (ipUsageByUnit.length > DASHBOARD_TOP_N_COUNT +1) { 
+        ipUsageByUnit = ipUsageByUnit.slice(0, DASHBOARD_TOP_N_COUNT +1);
+    }
 
 
     const allVlansFromDb = await prisma.vLAN.findMany({
@@ -1894,20 +1860,19 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
-    // Optimized subnet utilization for dashboard
     const allSubnetsForDashboard = await prisma.subnet.findMany({select: {id: true, cidr: true, name: true}});
     let subnetsNeedingAttention: SubnetUtilizationInfo[] = [];
 
     if (allSubnetsForDashboard.length > 0) {
         const subnetIdsForDashboard = allSubnetsForDashboard.map(s => s.id);
         const ipCountsBySubnet = await prisma.iPAddress.groupBy({
-            by: ['subnetId', 'status'],
+            by: ['subnetId'],
             _count: { id: true },
             where: { subnetId: { in: subnetIdsForDashboard }, status: 'allocated' },
         });
         const allocatedIpCountMap = new Map<string, number>();
         ipCountsBySubnet.forEach(group => {
-            if (group.subnetId && group.status === 'allocated') {
+            if (group.subnetId) {
                 allocatedIpCountMap.set(group.subnetId, group._count.id);
             }
         });
@@ -1944,10 +1909,3 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-
-
-
-
-    
-
-
