@@ -140,7 +140,7 @@ export async function updateUserAction(id: string, data: Partial<Omit<AppUser, "
     const updateData: Prisma.UserUpdateInput = {};
     if (data.username && data.username !== userToUpdate.username) { if (await prisma.user.findFirst({ where: { username: data.username, NOT: { id } } })) throw new ResourceError(`用户名 "${data.username}" 已被使用。`, 'USERNAME_ALREADY_EXISTS', `用户名 "${data.username}" 已被使用。`, 'username'); updateData.username = data.username; }
     if (data.email && data.email !== userToUpdate.email) { if (await prisma.user.findFirst({ where: { email: data.email, NOT: { id } } })) throw new ResourceError(`邮箱 "${data.email}" 已被使用。`, 'EMAIL_ALREADY_EXISTS', `邮箱 "${data.email}" 已被使用。`, 'email'); updateData.email = data.email; }
-    if (data.roleId && data.roleId !== userToUpdate.roleId) { if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, `角色 ID ${data.roleId} 未找到。`, 'roleId'); updateData.roleId = data.roleId; }
+    if (data.roleId && data.roleId !== userToUpdate.roleId) { if (!(await prisma.role.findUnique({ where: { id: data.roleId } }))) throw new NotFoundError(`角色 ID: ${data.roleId}`, `角色 ID ${data.roleId} 未找到。`, 'roleId'); updateData.role = { connect: { id: data.roleId } }; }
     if (data.password) updateData.password = encrypt(data.password);
     if (data.hasOwnProperty('phone')) updateData.phone = data.phone || null;
     if (data.avatar) updateData.avatar = data.avatar;
@@ -1378,4 +1378,5 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 
