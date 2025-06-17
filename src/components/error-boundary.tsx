@@ -1,33 +1,29 @@
+
 // src/components/error-boundary.tsx
 'use client';
 
 import React, { useEffect } from 'react';
-// import { useErrorHandler } from '@/hooks/use-error-handler'; // Not using for now, as it causes infinite loop
+import { useErrorHandler } from '@/hooks/use-error-handler'; 
 import { Button } from './ui/button';
-import { logger } from '@/lib/logger'; // Use logger for more structured logging
+import { logger } from '@/lib/logger'; 
 
 interface ErrorBoundaryProps {
-  error: Error & { digest?: string }; // Next.js error boundary errors have digest
+  error: Error & { digest?: string }; 
   reset: () => void;
 }
 
 export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
-  // const { handleError } = useErrorHandler(); // Using toast here directly might cause loop if toast itself fails
+  const { handleError } = useErrorHandler(); 
 
   useEffect(() => {
-    // Log the error to the console and potentially to a remote logging service
     logger.error('React ErrorBoundary caught an error', error, { digest: error.digest });
 
-    // We could show a toast here, but if the error is persistent, it might keep re-showing.
-    // The UI below is the primary way to inform the user.
-    // Example:
-    // toast({
-    //   title: "应用渲染错误",
-    //   description: "页面的一部分遇到了问题。",
-    //   variant: "destructive"
-    // });
+    // Attempt to show a toast. If Toaster is outside this boundary, it should be safe.
+    // If this causes issues (e.g. infinite loop if Toaster itself errors), this may need to be removed
+    // or a more robust global error notification system implemented.
+    handleError(error);
 
-  }, [error]);
+  }, [error, handleError]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] p-4 text-center">

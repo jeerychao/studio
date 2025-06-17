@@ -44,7 +44,8 @@ async function main() {
         create: perm,
       });
     } catch (e: any) {
-      logger.error(`Error seeding permission ${perm.id}:`, e, { name: e.name, message: e.message, stack: e.stack });
+      logger.error(`CRITICAL: Error seeding permission ${perm.id} (${perm.name}). Exiting.`, e, { name: e.name, message: e.message, stack: e.stack });
+      process.exit(1); // Exit on critical data seeding failure
     }
   }
   logger.info(`${mockPermissions.length} Permissions processed.`);
@@ -73,7 +74,8 @@ async function main() {
         },
       });
     } catch (e: any) {
-      logger.error(`Error seeding role ${roleData.name}:`, e, { name: e.name, message: e.message, stack: e.stack });
+      logger.error(`CRITICAL: Error seeding role ${roleData.name}. Exiting.`, e, { name: e.name, message: e.message, stack: e.stack });
+      process.exit(1); // Exit on critical data seeding failure
     }
   }
   logger.info(`${mockRoles.length} Roles seeded.`);
@@ -83,9 +85,13 @@ async function main() {
   for (const userData of mockUsers) {
     try {
       const { password, ...restOfUserData } = userData;
+      if (!password) {
+        logger.error(`CRITICAL: Password not provided for seed user ${userData.email} (ID: ${userData.id}). All seed users must have a password defined in mockUsers. Exiting.`);
+        process.exit(1);
+      }
       const dataToUpsert: Prisma.UserUpsertArgs['create'] & Prisma.UserUpsertArgs['update'] = {
         ...restOfUserData,
-        password: password ? password : encrypt("FallbackDefaultPassword1!"),
+        password: encrypt(password), // Always encrypt provided password
       };
 
       await prisma.user.upsert({
@@ -97,7 +103,13 @@ async function main() {
         }
       });
     } catch (e: any) {
+      // For users, if one fails (e.g. unique constraint if not upserting by unique email), log and continue for now
+      // unless it's a critical setup user like admin.
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
+      if (userData.id === 'seed_user_admin') { // Example of a critical user
+          logger.error(`CRITICAL: Failed to seed admin user ${userData.email}. Exiting.`);
+          process.exit(1);
+      }
     }
   }
   logger.info(`${mockUsers.length} Users seeded.`);
@@ -107,7 +119,7 @@ async function main() {
   for (const vlanData of mockVLANs) {
     try {
       await prisma.vLAN.upsert({
-        where: { id: vlanData.id },
+        where: { id: vlanData.id }, // Assuming id is unique for upsert
         update: { vlanNumber: vlanData.vlanNumber, name: vlanData.name, description: vlanData.description },
         create: vlanData,
       });
@@ -139,7 +151,7 @@ async function main() {
       // If vlanId is null/undefined, 'vlan' is omitted from createPayload.
 
       await prisma.subnet.upsert({
-        where: { id: subnetData.id },
+        where: { id: subnetData.id }, // Assuming id is unique for upsert
         update: updatePayload,
         create: createPayload,
       });
@@ -169,7 +181,7 @@ async function main() {
       const baseIpDataPayload = {
         ...restOfIpData,
         id: ipData.id, // Ensure id is part of base for create
-        status: ipData.status as string,
+        status: ipData.status as string, // Assuming status is always provided and valid
         peerUnitName: peerUnitName || null,
         peerDeviceName: peerDeviceName || null,
         peerPortName: peerPortName || null,
@@ -202,7 +214,7 @@ async function main() {
       // If directVlanId is null/undefined, 'directVlan' is omitted from createPayload.
 
       await prisma.iPAddress.upsert({
-        where: { id: ipData.id },
+        where: { id: ipData.id }, // Assuming id is unique for upsert
         update: updatePayload,
         create: createPayload,
       });
@@ -217,9 +229,9 @@ async function main() {
   for (const deviceData of mockDeviceDictionaries) {
     try {
       await prisma.deviceDictionary.upsert({
-        where: { deviceName: deviceData.deviceName },
-        update: {}, // Corrected: No port to update, deviceName is the match
-        create: deviceData, // deviceData is { deviceName: string }
+        where: { deviceName: deviceData.deviceName }, // deviceName is unique
+        update: {}, 
+        create: deviceData, 
       });
     } catch (e: any) {
       logger.error(`Error seeding device dictionary ${deviceData.deviceName}:`, e, { name: e.name, message: e.message, stack: e.stack });
@@ -232,7 +244,7 @@ async function main() {
   for (const paymentData of mockPaymentSourceDictionaries) {
     try {
       await prisma.paymentSourceDictionary.upsert({
-        where: { sourceName: paymentData.sourceName },
+        where: { sourceName: paymentData.sourceName }, // sourceName is unique
         update: {}, 
         create: paymentData,
       });
@@ -247,7 +259,7 @@ async function main() {
   for (const accessTypeData of mockAccessTypeDictionaries) {
     try {
       await prisma.accessTypeDictionary.upsert({
-        where: { name: accessTypeData.name },
+        where: { name: accessTypeData.name }, // name is unique
         update: {}, 
         create: accessTypeData,
       });
@@ -262,7 +274,7 @@ async function main() {
   for (const interfaceTypeData of mockInterfaceTypeDictionaries) {
     try {
       await prisma.interfaceTypeDictionary.upsert({
-        where: { name: interfaceTypeData.name },
+        where: { name: interfaceTypeData.name }, // name is unique
         update: { description: interfaceTypeData.description },
         create: interfaceTypeData,
       });

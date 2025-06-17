@@ -3,8 +3,9 @@ import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
   return new PrismaClient({
-    // You can add logging options here if needed during debugging
-    // log: ['query', 'info', 'warn', 'error'],
+    log: process.env.NODE_ENV !== 'production' 
+         ? ['query', 'info', 'warn', 'error'] 
+         : ['warn', 'error'], // Example: less verbose in production
   })
 }
 

@@ -1,8 +1,8 @@
+
 // src/middleware.ts
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-// import { AppError } from '@/lib/errors'; // AppError typically not used in this middleware type
 
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
