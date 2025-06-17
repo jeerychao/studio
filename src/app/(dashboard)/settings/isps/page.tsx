@@ -4,7 +4,7 @@
 import * as React from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SignalOff, Loader2 } from "lucide-react"; 
+import { WifiOff, Loader2 } from "lucide-react"; // Changed SignalOff to WifiOff
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -14,7 +14,7 @@ function DeprecatedIspPage() {
       <PageHeader
         title="ISP 管理 (已废弃)"
         description="此功能已被移除。对端相关信息已整合到IP地址的“对端信息”中。设备信息请查看“设备字典”。"
-        icon={<SignalOff className="h-6 w-6 text-destructive" />}
+        icon={<WifiOff className="h-6 w-6 text-destructive" />} // Changed SignalOff to WifiOff
       />
       <Card>
         <CardHeader>
@@ -58,3 +58,4 @@ export default function IspManagementPage() {
   
   return <DeprecatedIspPage />;
 }
+

@@ -31,7 +31,10 @@ export default function DashboardLayout({
   const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   React.useEffect(() => {
-    logger.debug("[DashboardLayout Effect] Running. isAuthLoading:", isAuthLoading, "currentUser:", currentUser ? currentUser.username : 'null');
+    logger.debug(
+      "[DashboardLayout Effect] Running.", 
+      { isAuthLoading, currentUser: currentUser ? currentUser.username : 'null' }
+    );
     if (isAuthLoading) {
       setAuthStatus('loading');
       logger.info("DashboardLayout: Auth status is loading (isAuthLoading true).");
@@ -40,14 +43,14 @@ export default function DashboardLayout({
 
     if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
         setAuthStatus('authenticated');
-        logger.info(`DashboardLayout: User authenticated: ${currentUser.username} (ID: ${currentUser.id}). Current path: ${pathname}`);
+        logger.info("DashboardLayout: User authenticated.", { username: currentUser.username, userId: currentUser.id, currentPath: pathname });
         if (pathname === '/login'){
              logger.info("DashboardLayout: User authenticated and on /login, redirecting to /dashboard.");
              router.replace('/dashboard'); 
         }
     } else { 
       setAuthStatus('unauthenticated');
-      logger.warn(`DashboardLayout: User unauthenticated or guest. Current path: ${pathname}. Attempting redirect to /login if not already there.`);
+      logger.warn("DashboardLayout: User unauthenticated or guest.", { currentPath: pathname, action: "Attempting redirect to /login if not already there."});
       if (pathname !== '/login') {
         router.replace('/login');
       }
@@ -75,7 +78,7 @@ export default function DashboardLayout({
     );
   }
   
-  logger.info("DashboardLayout: Rendering main layout content. AuthStatus:", authStatus);
+  logger.info("DashboardLayout: Rendering main layout content.", { authStatus });
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
@@ -115,3 +118,4 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
+
