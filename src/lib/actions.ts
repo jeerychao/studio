@@ -1794,7 +1794,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     const usageUnitGroups = await prisma.iPAddress.groupBy({
       by: ['usageUnit'],
       _count: { usageUnit: true },
-      where: { usageUnit: { not: null, not: "" } },
+      where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
       orderBy: { _count: { usageUnit: 'desc' } },
     });
     let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
@@ -1885,6 +1885,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
+
 
 
 
