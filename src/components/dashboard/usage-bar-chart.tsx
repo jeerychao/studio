@@ -8,7 +8,6 @@ import type { TopNItemCount } from "@/types";
 
 interface UsageBarChartProps {
   data: TopNItemCount[];
-  dataKey: string;
   layout?: "horizontal" | "vertical";
   yAxisWidth?: number;
   barRadius?: [number, number, number, number];
@@ -17,11 +16,10 @@ interface UsageBarChartProps {
 
 export function UsageBarChart({
   data,
-  dataKey, // This should be 'value' or 'count' from TopNItemCount
   layout = "vertical",
-  yAxisWidth = 100, // Increased for longer labels
+  yAxisWidth = 100,
   barRadius = [0, 4, 4, 0],
-  chartMargin = { right: 30, left: 20, top: 5, bottom: layout === 'horizontal' ? 50 : 5 } // Adjusted margins
+  chartMargin = { right: 30, left: 20, top: 5, bottom: layout === 'horizontal' ? 50 : 5 }
 }: UsageBarChartProps) {
   if (!data || data.length === 0) {
     return <div className="text-center text-muted-foreground p-4 h-full flex items-center justify-center">无数据可显示。</div>;
