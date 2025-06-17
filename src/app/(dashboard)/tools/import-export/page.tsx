@@ -52,7 +52,7 @@ export default function ImportExportPage() {
     try {
       let dataToExport: any[] = [];
       let csvHeaders: string[] = [];
-      let filenameFragment = dataType;
+      let filenameFragment: string = dataType; // Changed type to string
       let sequentialId = 1;
 
       if (dataType === "subnets") {
@@ -189,3 +189,4 @@ export default function ImportExportPage() {
     </>
   );
 }
+
