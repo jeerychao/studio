@@ -86,10 +86,10 @@ export default function DashboardLayout({
           <Link href="/dashboard" className="flex items-center justify-center h-full w-full">
             <div className="group-data-[collapsible=icon]:hidden">
               <Image
-                src="/images/one-logo.png" 
+                src="/images/my-logo.png" 
                 alt="Company Logo" 
-                width={80} 
-                height={80}  
+                width={120} 
+                height={40}  
                 className="h-10 w-auto" 
                 priority 
               />
