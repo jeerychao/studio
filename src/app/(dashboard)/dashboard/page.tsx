@@ -166,7 +166,7 @@ export default function DashboardPage() {
         </Card>
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle className="text-base">按使用单位的 IP 分配 (Top N)</CardTitle></CardHeader>
-          <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByUnit} dataKey="value" layout="vertical" yAxisWidth={120} /></CardContent>
+          <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByUnit} layout="vertical" yAxisWidth={120} /></CardContent>
         </Card>
       </div>
 
