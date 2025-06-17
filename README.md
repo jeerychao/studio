@@ -116,3 +116,45 @@ docker-compose logs -f ipam-app
 ## 前后端技术栈信息整合:
 * 前端: Next.js (v14+), React (v18+), ShadCN UI, Tailwind CSS, TypeScript
 * 后端: Node.js (通过 Next.js 运行环境), Next.js (API Routes), Prisma ORM, SQLite
+
+## 管理员密码重置脚本
+
+本项目包含一个用于紧急情况下重置管理员账户密码的服务器端脚本。
+
+**用途**:
+当管理员忘记密码且无法通过常规方式恢复时，可以使用此脚本直接在服务器上重置密码。
+
+**脚本位置**:
+`scripts/reset-admin-password.ts`
+
+**如何使用**:
+
+1.  **访问服务器**: 通过 SSH 或其他方式登录到托管应用程序和数据库的服务器。
+2.  **导航到项目目录**: `cd /path/to/your-ipam-lite-project`
+3.  **确保环境就绪**:
+    *   服务器上已安装 Node.js (版本需与项目兼容，如 v18.x 或 v20.x)。
+    *   项目依赖已安装 (特别是 `typescript`, `ts-node`, `@prisma/client` 等)。如果是在生产服务器上首次运行，可能需要执行 `npm install` 或 `yarn install` 来安装包括 `devDependencies` 在内的依赖，因为 `ts-node` 和 `typescript` 通常是开发依赖。或者，您可以将脚本编译成 JavaScript 后再上传执行。
+4.  **执行脚本**:
+    推荐使用 `ts-node` (如果已安装并配置在 `package.json` 的 `devDependencies` 中):
+    ```bash
+    npx ts-node -P ./tsconfig.json scripts/reset-admin-password.ts
+    ```
+    或者，如果您已将 TypeScript 编译为 JavaScript (例如到 `dist/scripts` 目录):
+    ```bash
+    node dist/scripts/reset-admin-password.js
+    ```
+5.  **遵循提示**: 脚本会提示您输入：
+    *   要重置密码的管理员账户的**邮箱地址**。
+    *   新的管理员**密码**。
+    *   再次输入新密码进行**确认**。
+
+**安全警告**:
+
+*   **高权限操作**: 此脚本直接修改数据库，绕过了常规的密码验证流程。
+*   **仅限授权人员**: 只有完全受信任的系统管理员或运维人员才能执行此脚本。
+*   **服务器访问控制**: 执行此脚本的前提是拥有对服务器文件系统和命令执行环境的访问权限。请确保您的服务器本身是安全的。
+*   **脚本文件保护**: `scripts/reset-admin-password.ts` 文件应受到适当的文件权限保护，防止未授权的读取或执行。
+*   **生产环境注意事项**: 在高度安全或受严格审计的生产环境中，应谨慎使用此类脚本。考虑在不使用时移除此脚本，或将其访问权限限制到最低程度。执行此类操作后，建议手动记录详细的审计条目。
+*   **密码安全**: 通过脚本设置的新密码在输入过程中可能会显示在屏幕上或记录在命令行历史中。操作完成后请注意清理。
+
+此脚本提供了一种在紧急情况下恢复管理员访问权限的方法，但务必在理解其潜在影响和安全要求的前提下使用。
