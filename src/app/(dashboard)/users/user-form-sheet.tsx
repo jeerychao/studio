@@ -41,7 +41,7 @@ import { createUserAction, updateUserAction, type ActionResponse, type FetchedUs
 const userFormSchema = z.object({
   username: z.string().min(3, "用户名必须至少3个字符").max(50, "用户名过长"),
   email: z.string().email("无效的邮箱地址"),
-  phone: z.string().max(30, "电话号码过长").optional().or(z.literal('')), // Allow empty string, will be converted to null
+  phone: z.string().max(30, "电话号码过长").optional().or(z.literal('')), 
   roleId: z.string().min(1, "角色是必需的"),
   avatar: z.string().optional(),
   password: z.preprocess(
@@ -127,7 +127,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
         return;
     }
 
-    const payload: Partial<User> & { password?: string, phone?: string | null } = { // Ensure phone can be null
+    const payload: Partial<User> & { password?: string, phone?: string | null } = { 
       username: data.username,
       email: data.email,
       phone: data.phone === "" ? null : data.phone, // Convert empty string to null
@@ -164,7 +164,7 @@ export function UserFormSheet({ user, roles, children, buttonProps, onUserChange
           response.error.code === 'VALIDATION_ERROR' || 
           (response.error.code && response.error.code.includes('_EXISTS')) ||
           response.error.code === 'AUTH_ERROR' ||
-          response.error.code === 'NOT_FOUND' // e.g. Role not found
+          response.error.code === 'NOT_FOUND' 
           ? "输入或操作无效" 
           : "操作失败";
         toast({
