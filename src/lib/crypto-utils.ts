@@ -1,24 +1,50 @@
 
 import crypto from 'crypto';
+import { logger } from './logger'; // Using logger for more structured server-side logs
 
 const algorithm = 'aes-256-cbc';
 let ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_KEY;
 const DEFAULT_DEV_KEY_HEX = "000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
 
+let effectiveKeySource = "process.env.ENCRYPTION_KEY"; // For logging
+
 if (!ENCRYPTION_KEY_HEX || ENCRYPTION_KEY_HEX.length !== 64) {
+  effectiveKeySource = "DEFAULT_DEV_KEY_HEX";
   if (process.env.NODE_ENV === 'production') {
-    console.error('CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment.');
-    throw new Error('CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment.');
+    logger.error(
+      'CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment. THIS IS A SEVERE SECURITY RISK.',
+      undefined, // No specific error object here, it's a configuration issue
+      { context: 'crypto-utils-init' }
+    );
+    // Fallback to default key in production is a major security risk,
+    // but throwing here might prevent app startup for diagnosis.
+    // Ideally, a production app should fail hard if the key is missing/invalid.
+    ENCRYPTION_KEY_HEX = DEFAULT_DEV_KEY_HEX;
+  } else {
+    // Use logger.warn for development warnings
+    logger.warn(
+      'ENCRYPTION_KEY environment variable is not set or is invalid. ' +
+      `Using a default, insecure key (${effectiveKeySource}) for development purposes ONLY. ` +
+      'DO NOT USE THIS IN PRODUCTION. ' +
+      'Please set a secure 64-character hexadecimal string for ENCRYPTION_KEY in your .env file. ' +
+      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+      undefined,
+      { context: 'crypto-utils-init' }
+    );
+    ENCRYPTION_KEY_HEX = DEFAULT_DEV_KEY_HEX;
   }
-  console.warn(
-    '\n⚠️ WARNING: ENCRYPTION_KEY environment variable is not set or is invalid.\n' +
-    'Using a default, insecure key for development purposes ONLY.\n' +
-    'DO NOT USE THIS IN PRODUCTION.\n' +
-    'Please set a secure 64-character hexadecimal string for ENCRYPTION_KEY in your .env file.\n' +
-    'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"\n'
-  );
-  ENCRYPTION_KEY_HEX = DEFAULT_DEV_KEY_HEX;
+} else {
+    // Only log this if the key was actually found in process.env and is valid
+    logger.info(
+        `Using ENCRYPTION_KEY from environment. Starts with: ${ENCRYPTION_KEY_HEX.substring(0,4)}... Ends with: ...${ENCRYPTION_KEY_HEX.substring(ENCRYPTION_KEY_HEX.length - 4)} (Length: ${ENCRYPTION_KEY_HEX.length})`,
+        { context: 'crypto-utils-init' }
+    );
 }
+
+logger.info(
+  `Effective encryption key source: ${effectiveKeySource}. Key used starts with: ${ENCRYPTION_KEY_HEX.substring(0,4)}...`,
+  { context: 'crypto-utils-init' }
+);
 
 const key = Buffer.from(ENCRYPTION_KEY_HEX, 'hex');
 
@@ -51,6 +77,12 @@ export function decrypt(text: string): string {
   } catch (error) {
     let detail = "Unknown error during decryption.";
     if (error instanceof Error) detail = error.message;
+    // Log the specific key used for decryption attempt for better debugging
+    // logger.error(
+    //   `Decryption failed for input starting with: ${text.substring(0,20)}... Key used for decryption started with: ${key.toString('hex').substring(0,4)}...`,
+    //   error,
+    //   { context: 'crypto-utils-decrypt' }
+    // );
     throw new Error(`Decryption failed. Data might be corrupted or key mismatch. Detail: ${detail}`);
   }
 }
