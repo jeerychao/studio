@@ -1,8 +1,7 @@
 
 // Minimal font import or remove if Inter causes issues, though unlikely.
 import { Inter } from 'next/font/google';
-import { ThemeProvider } from 'next-themes'; // Re-added
-import { Toaster } from '@/components/ui/toaster'; // Re-added
+import { Providers } from '@/components/providers'; // Updated import
 import "./globals.css"; // Assuming this was intended to be imported here originally for global styles
 
 const inter = Inter({
@@ -24,15 +23,14 @@ export default function RootLayout({
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head />
       <body className="font-sans antialiased">
-        <ThemeProvider
+        <Providers
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
           {children}
-          <Toaster />
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );
