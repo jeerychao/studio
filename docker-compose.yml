@@ -30,7 +30,7 @@ services:
       # Persist application logs:
       # Mounts the 'ipam_logs_data' named volume to /app/logs inside the container.
       - ipam_logs_data:/app/logs
-      - ./.next/static:/app/.next/static
+      # - ./.next/static:/app/.next/static # Removed this problematic volume mount
     restart: unless-stopped
     networks:
       - app_network
@@ -47,3 +47,4 @@ networks:
 volumes:
   ipam_db_data: # Defines a named volume for the database
   ipam_logs_data: # Defines a named volume for logs
+
