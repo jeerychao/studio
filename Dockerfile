@@ -1,78 +1,75 @@
 
-# ---- Base Node ----
+# Base stage for Node.js
 FROM node:18-slim AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update -y && \
     apt-get install -y openssl curl && \
-    # Clean up apt caches to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
 
-# ---- Dependencies ----
+# Dependencies stage
 FROM base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm install --frozen-lockfile
 
-# ---- Builder ----
+# Builder stage
 FROM base AS builder
-ARG DATABASE_URL_BUILD_TIME="file:./dev.db"
-ENV DATABASE_URL=${DATABASE_URL_BUILD_TIME}
-
 WORKDIR /app
+
+# Declare ENCRYPTION_KEY_ARG for build-time
+ARG ENCRYPTION_KEY_ARG
+ENV ENCRYPTION_KEY=${ENCRYPTION_KEY_ARG}
+
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-# Make sure Prisma Client is generated
 RUN npx prisma generate
 
-# Initialize and seed the database
+# Ensure prisma client is generated before pushing and seeding
+# The `db push` command applies schema changes and creates the database if it doesn't exist.
+# It's suitable for development and initial setup.
 RUN npm run prisma:db:push -- --skip-generate
-RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed after push"
-RUN npm run prisma:db:seed
-RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed after seed"
+RUN echo "--- Contents of /app/prisma after db:push ---" && (ls -l /app/prisma || echo "ls /app/prisma failed")
 
-# Create logs directory with correct permissions before build
+# Seed the database. ENCRYPTION_KEY must be available here.
+RUN npm run prisma:db:seed
+RUN echo "--- Contents of /app/prisma after db:seed ---" && (ls -l /app/prisma || echo "ls /app/prisma failed")
+
+# Create logs directory and set permissions early
 RUN mkdir -p /app/logs && chown node:node /app/logs
 
 # Build the Next.js application
 RUN npm run build
 
-# ---- Runner ----
+# Runner stage (final production image)
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
-# The USER and GROUP are 'node' by default in the node:slim image
-# We don't need to create them again.
-# RUN addgroup --system node && adduser --system --ingroup node node # This line is removed
+# The ENCRYPTION_KEY for runtime will be supplied by docker-compose env_file
 
-# Copy only necessary production dependencies
-COPY --from=dependencies --chown=node:node /app/package.json ./
-COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
-
-# Copy standalone output, static assets, and public folder
+# Copy essential files from builder
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
-
-# Copy Prisma schema and health-check script
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/health-check.sh ./health-check.sh
 RUN chmod +x ./health-check.sh
-
-# Copy next.config.js (needed for standalone)
 COPY --chown=node:node next.config.js ./
+COPY --chown=node:node package.json ./ # package.json is needed for npm run start if that was used
 
-# Create and set permissions for logs directory (if not already covered or for explicitness)
-# Builder stage now creates /app/logs, so this might be redundant but harmless
+# Create and set permissions for logs directory in runner as well
 RUN mkdir -p /app/logs && chown node:node /app/logs
 
 USER node
 
 EXPOSE 3000
 
-# Start the application using the server.js from the standalone output
+# Start the application
+# server.js is now directly in /app (copied from .next/standalone)
 CMD ["node", "server.js"]

@@ -4,12 +4,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # ENCRYPTION_KEY_ARG 会从执行 docker-compose 的环境或 .env 文件中获取 ENCRYPTION_KEY 的值
+        # 如果 .env 文件中有 ENCRYPTION_KEY，它会被优先使用
+        - ENCRYPTION_KEY_ARG=${ENCRYPTION_KEY}
     image: ipam-app-local:latest
     container_name: ipam_app_local_prod
     ports:
       - "8081:3000" # Host port 8081 mapped to container port 3000
     env_file:
-      - ./production.env # Loads environment variables from production.env
+      - ./production.env # Loads environment variables from production.env for runtime
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0 # Make Next.js listen on all interfaces within the container
