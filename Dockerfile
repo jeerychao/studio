@@ -1,8 +1,6 @@
-# Base stage for common setup
+
+# Base stage with Node.js and common dependencies
 FROM node:18-slim AS base
-LABEL maintainer="leejie2017@gmail.com"
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update -y && \
     apt-get install -y openssl curl && \
     apt-get clean && \
@@ -16,7 +14,6 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm install --frozen-lockfile
-# RUN pnpm install --frozen-lockfile # If using pnpm
 
 # Builder stage
 FROM base AS builder
@@ -24,17 +21,24 @@ WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-# Ensure prisma/dev.db is created and seeded within the builder stage.
-ENV DATABASE_URL="file:/app/prisma/dev.db"
-RUN npm run prisma:db:push -- --skip-generate
-RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed in builder after push"
-RUN npm run prisma:db:seed
-RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed in builder after seed"
+# 关键：确保 next.config.js 在构建前可用，即使它在 .dockerignore 中
+# 如果 next.config.js 不在 .dockerignore 中，则此 COPY 可能不是必需的，
+# 因为 "COPY . ." 已经包含了它。但为了明确，可以保留。
+# COPY next.config.js ./
 
-# Make sure logs directory exists and is owned by node user before build
+# 确保数据库连接字符串在构建时可用 (用于 prisma db push 和 seed)
+# 如果您在 .env 文件中管理 DATABASE_URL，确保它被 COPY . . 命令包含，
+# 或者在构建时通过 --build-arg 传入。
+# Prisma CLI 将自动加载 .env 文件（如果存在）。
+
+RUN npm run prisma:db:push -- --skip-generate
+RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed or directory empty"
+RUN npm run prisma:db:seed
+RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed or directory empty"
+
+# 创建日志目录并设置权限
 RUN mkdir -p /app/logs && chown node:node /app/logs
 
-# Build the application
 RUN npm run build
 
 # Runner stage (final production image)
@@ -42,36 +46,32 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
+# 设置非 root 用户
+ENV USER=node
+ENV GROUP=node
+RUN addgroup --system $GROUP && adduser --system --ingroup $GROUP $USER
 
-# Copy necessary dependencies and files
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=dependencies /app/package.json ./package.json
-
-# Copy the standalone server and required files
+# 从 builder 阶段复制 standalone 应用到此阶段的根目录
+# 这包括了 server.js 和一个最小化的 node_modules (如果 next.config.js 中配置了 experimental.outputStandalone: true)
 COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+
+# 复制 public 和 .next/static 目录
+# standalone 服务器需要它们来提供公共文件和静态资源
 COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+
+# 复制 Prisma schema 和 health-check 脚本
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/health-check.sh ./health-check.sh
 RUN chmod +x ./health-check.sh
 
-# Copy configuration files
+# 复制 next.config.js (或 .mjs)，某些功能可能依赖它
 COPY --chown=node:node next.config.js ./
 
-# Ensure proper permissions
-RUN chown -R node:node ./.next
-
-# Switch to non-root user
 USER node
 
-# Create required directories with proper permissions
-RUN mkdir -p /app/logs && \
-    mkdir -p /app/.next/cache && \
-    mkdir -p /app/.next/server && \
-    mkdir -p /app/.next/static
-
-# Expose the port the app runs on
 EXPOSE 3000
 
-# Start the app
+# ✅ ***关键修改***
+# 直接使用 node 运行 standalone 的输出 server.js，而不是 "npm start"
 CMD ["node", "server.js"]

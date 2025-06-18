@@ -7,13 +7,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node .next/standalone/server.js",
+    "start": "node server.js",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
     "prisma:migrate:reset": "node ./node_modules/.bin/prisma migrate reset",
     "prisma:db:push": "node ./node_modules/.bin/prisma db push",
-    "prisma:db:seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P ./tsconfig.json ./prisma/seed.ts"
+    "prisma:db:seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P ./tsconfig.json ./prisma/seed.ts",
+    "reset:dev": "rm -rf .next && rm -rf node_modules && npm install && npx prisma migrate reset --force && npm run prisma:db:seed"
   },
   "prisma": {
     "seed": "node ./node_modules/.bin/prisma generate && node ./node_modules/.bin/ts-node -P ./tsconfig.json ./prisma/seed.ts",
