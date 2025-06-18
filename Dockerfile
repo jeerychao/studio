@@ -1,77 +1,78 @@
 
-# Base stage with Node.js and common dependencies
+# ---- Base Node ----
 FROM node:18-slim AS base
 RUN apt-get update -y && \
     apt-get install -y openssl curl && \
+    # Clean up apt caches to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
 
-# Dependencies stage
+# ---- Dependencies ----
 FROM base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm install --frozen-lockfile
 
-# Builder stage
+# ---- Builder ----
 FROM base AS builder
+ARG DATABASE_URL_BUILD_TIME="file:./dev.db"
+ENV DATABASE_URL=${DATABASE_URL_BUILD_TIME}
+
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-# 关键：确保 next.config.js 在构建前可用，即使它在 .dockerignore 中
-# 如果 next.config.js 不在 .dockerignore 中，则此 COPY 可能不是必需的，
-# 因为 "COPY . ." 已经包含了它。但为了明确，可以保留。
-# COPY next.config.js ./
+# Make sure Prisma Client is generated
+RUN npx prisma generate
 
-# 确保数据库连接字符串在构建时可用 (用于 prisma db push 和 seed)
-# 如果您在 .env 文件中管理 DATABASE_URL，确保它被 COPY . . 命令包含，
-# 或者在构建时通过 --build-arg 传入。
-# Prisma CLI 将自动加载 .env 文件（如果存在）。
-
+# Initialize and seed the database
 RUN npm run prisma:db:push -- --skip-generate
-RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed or directory empty"
+RUN echo "--- Contents of /app/prisma after db:push ---" && ls -l /app/prisma || echo "ls /app/prisma failed after push"
 RUN npm run prisma:db:seed
-RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed or directory empty"
+RUN echo "--- Contents of /app/prisma after db:seed ---" && ls -l /app/prisma || echo "ls /app/prisma failed after seed"
 
-# 创建日志目录并设置权限
+# Create logs directory with correct permissions before build
 RUN mkdir -p /app/logs && chown node:node /app/logs
 
+# Build the Next.js application
 RUN npm run build
 
-# Runner stage (final production image)
+# ---- Runner ----
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
-# 设置非 root 用户
-ENV USER=node
-ENV GROUP=node
-RUN addgroup --system $GROUP && adduser --system --ingroup $GROUP $USER
+# The USER and GROUP are 'node' by default in the node:slim image
+# We don't need to create them again.
+# RUN addgroup --system node && adduser --system --ingroup node node # This line is removed
 
-# 从 builder 阶段复制 standalone 应用到此阶段的根目录
-# 这包括了 server.js 和一个最小化的 node_modules (如果 next.config.js 中配置了 experimental.outputStandalone: true)
+# Copy only necessary production dependencies
+COPY --from=dependencies --chown=node:node /app/package.json ./
+COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+
+# Copy standalone output, static assets, and public folder
 COPY --from=builder --chown=node:node /app/.next/standalone ./
-
-# 复制 public 和 .next/static 目录
-# standalone 服务器需要它们来提供公共文件和静态资源
-COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
 
-# 复制 Prisma schema 和 health-check 脚本
+# Copy Prisma schema and health-check script
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/health-check.sh ./health-check.sh
 RUN chmod +x ./health-check.sh
 
-# 复制 next.config.js (或 .mjs)，某些功能可能依赖它
+# Copy next.config.js (needed for standalone)
 COPY --chown=node:node next.config.js ./
+
+# Create and set permissions for logs directory (if not already covered or for explicitness)
+# Builder stage now creates /app/logs, so this might be redundant but harmless
+RUN mkdir -p /app/logs && chown node:node /app/logs
 
 USER node
 
 EXPOSE 3000
 
-# ✅ ***关键修改***
-# 直接使用 node 运行 standalone 的输出 server.js，而不是 "npm start"
+# Start the application using the server.js from the standalone output
 CMD ["node", "server.js"]
