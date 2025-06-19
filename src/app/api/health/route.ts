@@ -1,23 +1,84 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma'; // 使用应用中配置的 Prisma 实例
+import prisma from '@/lib/prisma';
+import { headers } from 'next/headers';
+
+const getBaseUrl = () => {
+  return process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.EXTERNAL_PORT || '3000'}`;
+};
+
+export async function OPTIONS() {
+  const baseUrl = getBaseUrl();
+  
+  return NextResponse.json(
+    {},
+    {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': baseUrl,
+        'Access-Control-Allow-Methods': 'GET,OPTIONS',
+        'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      },
+    }
+  );
+}
 
 export async function GET() {
-  try {
-    // 检查数据库连接
-    // Prisma Client 在首次查询时会自动尝试连接，所以一个简单的查询可以测试连接
-    await prisma.user.findFirst(); // 尝试一个轻量级查询，例如查找第一个用户
+  const headersList = headers();
+  const origin = headersList.get('origin') || getBaseUrl();
 
-    return NextResponse.json({ status: 'healthy' }, { status: 200 });
+  try {
+    await prisma.user.findFirst();
+
+    return NextResponse.json(
+      { 
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || 'unknown',
+        environment: process.env.NODE_ENV,
+        server: {
+          port: process.env.PORT || '3000',
+          external_port: process.env.EXTERNAL_PORT || '3000',
+          created_at: process.env.CREATED_AT,
+          created_by: process.env.CREATED_BY
+        }
+      },
+      {
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Credentials': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+      }
+    );
   } catch (error: any) {
     console.error('Health check failed:', error);
-    // 在生产中，避免泄露过于详细的错误信息
-    const errorMessage = process.env.NODE_ENV === 'production' ? 'Database connectivity issue' : error.message;
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? 'Database connectivity issue' 
+      : error.message;
+
     return NextResponse.json(
-      { status: 'unhealthy', error: errorMessage },
-      { status: 500 }
+      { 
+        status: 'unhealthy', 
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV,
+        created_at: process.env.CREATED_AT,
+        created_by: process.env.CREATED_BY
+      },
+      {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Credentials': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+      }
     );
-  } finally {
-    // 通常 Prisma Client 会管理连接池，不需要每次都手动断开
-    // await prisma.$disconnect(); // 在 serverless 环境或短生命周期任务中可能需要
   }
 }

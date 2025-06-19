@@ -1,25 +1,27 @@
+version: '3.8'
 
 services:
   ipam-app:
     build:
       context: .
       dockerfile: Dockerfile
-      args: # 将ENCRYPTION_KEY作为构建参数传递
+      args:
+        - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
         - ENCRYPTION_KEY_ARG=${ENCRYPTION_KEY}
     image: ipam-app-local:latest
     container_name: ipam_app_local_prod
     ports:
-      - "8081:3000"
+      - "${EXTERNAL_PORT}:${INTERNAL_PORT}"
     env_file:
+      - .env
       - ./production.env
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
-      - PORT=3000
-      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
-      - NEXTAUTH_URL=${NEXTAUTH_URL:-${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}}
-      - NEXT_PUBLIC_EXTERNAL_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
-      - NEXT_PRIVATE_EXTERNAL_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8081}
+      - PORT=${INTERNAL_PORT}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     volumes:
       - ipam_db_data:/app/prisma
       - ipam_logs_data:/app/logs
@@ -27,7 +29,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "/app/health-check.sh"]
+      test: ["CMD", "curl", "-f", "http://localhost:${INTERNAL_PORT}/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
