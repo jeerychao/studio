@@ -94,7 +94,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
         <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-card">
-          <div className="mx-auto w-full max-w-md space-y-8">
+          <div className="mx-auto w-full max-w-sm space-y-8">
             <div>
               <h2 className="mt-6 text-center text-4xl font-bold tracking-tight text-foreground">
                 Sign In
@@ -162,10 +162,9 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="hidden bg-[#191a52] lg:flex lg:flex-col lg:items-center lg:justify-center p-0 relative overflow-hidden">
-          {/* Image container to help with centering and responsiveness */}
           <div className="relative w-full h-full flex items-center justify-center">
             <Image
-              src="/images/right.png"
+              src="/images/middl.png"
               alt="IP Address Management Illustration"
               width={1280}
               height={816}
@@ -186,5 +185,4 @@ export default function LoginPage() {
     </div>
   );
 }
-
     
