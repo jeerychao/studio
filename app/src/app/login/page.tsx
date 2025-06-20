@@ -69,7 +69,6 @@ export default function LoginPage() {
   if (isAuthLoading) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-            {/* The /images/one-logo.png was commented out in the provided context file. Kept as is. */}
             {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" /> */}
             <p className="ml-4 text-lg text-muted-foreground">初始化认证...</p>
         </div>
@@ -190,7 +189,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-    
-
-    
