@@ -11,7 +11,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
-import { TypewriterEffect } from "@/components/typewriter-effect"; 
+// Removed: import { TypewriterEffect } from "@/components/typewriter-effect"; 
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
@@ -71,7 +71,7 @@ export default function LoginPage() {
     }
   };
 
-  const typewriterText = "IPAM Lite是一个小型ip地址管理系统，旨在帮助网络管理员高效规划、跟踪和管理网络中的IP地址空间";
+  // Removed: const typewriterText = ...
 
   if (isAuthLoading || pageAuthStatus === 'loading') {
     return (
@@ -163,26 +163,17 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right Panel: Image and Typewriter */}
-        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10 space-y-8">
+        {/* Right Panel: Image */}
+        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10">
           <Image
             src="/images/middl.png"
             alt="Login background image"
             width={881}
             height={559}
-            className="object-contain max-w-[90%] max-h-[65vh]"
+            className="object-contain max-w-full max-h-full"
             priority
             data-ai-hint="globe network"
           />
-          <div className="w-full max-w-md lg:max-w-lg xl:max-w-xl p-4 bg-gradient-to-b from-black/60 to-black/30 rounded-md shadow-lg">
-            <TypewriterEffect
-              text={typewriterText}
-              className="text-white text-sm sm:text-base text-center"
-              speed={100}
-              loop={true}
-              loopDelay={3000}
-            />
-          </div>
         </div>
       </div>
     );
