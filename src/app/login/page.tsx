@@ -7,14 +7,15 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Loader2 } from "lucide-react"; // NetworkIcon no longer needed for login page
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
+import { TypewriterEffect } from "@/components/typewriter-effect"; // Import the new component
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
-  const [password, setPassword] = React.useState(""); // Password not pre-filled
+  const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
@@ -69,6 +70,8 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
+
+  const typewriterText = "IPAM Lite是一个小型ip地址管理系统，旨在帮助网络管理员高效规划、跟踪和管理网络中的IP地址空间";
 
   if (isAuthLoading || pageAuthStatus === 'loading') {
     return (
@@ -152,25 +155,32 @@ export default function LoginPage() {
             </div>
           </div>
           {/* Copyright and Contact Info */}
-          <div className="mt-auto pt-6 text-center"> {/* Changed: Added text-center */}
-            <hr className="my-2 border-border" /> {/* Horizontal line */}
+          <div className="mt-auto pt-6 text-center">
+            <hr className="my-2 border-border" />
             <p className="text-xs text-muted-foreground">
               © 2025 IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com
             </p>
           </div>
         </div>
 
-        {/* Right Panel: Image */}
+        {/* Right Panel: Image and Typewriter */}
         <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10 relative">
-          <div className="w-full h-full flex items-center justify-center">
+          <div className="w-full h-full flex items-center justify-center mb-8"> {/* Added mb-8 for spacing */}
             <Image
               src="/images/middl.png"
               alt="Login background image"
               width={881}
               height={559}
-              className="object-contain max-w-[80%] max-h-[80%]"
+              className="object-contain max-w-[80%] max-h-[70%]" // Adjusted max-h for space
               priority
               data-ai-hint="globe network"
+            />
+          </div>
+          <div className="absolute bottom-10 right-10 left-10 lg:left-auto lg:max-w-md xl:max-w-lg p-4 bg-black/50 rounded-md shadow-lg">
+            <TypewriterEffect
+              text={typewriterText}
+              className="text-white text-sm sm:text-base"
+              speed={60}
             />
           </div>
         </div>
@@ -178,7 +188,6 @@ export default function LoginPage() {
     );
   }
 
-  // Fallback for any other unhandled pageAuthStatus, though ideally it should be one of the above.
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
