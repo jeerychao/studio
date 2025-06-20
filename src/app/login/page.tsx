@@ -11,7 +11,6 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
-// Removed: import { TypewriterEffect } from "@/components/typewriter-effect"; 
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
@@ -70,8 +69,6 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
-
-  // Removed: const typewriterText = ...
 
   if (isAuthLoading || pageAuthStatus === 'loading') {
     return (
@@ -141,7 +138,7 @@ export default function LoginPage() {
                     </Button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full h-10" disabled={isSubmitting || pageAuthStatus !== 'unauthenticated'}>
+                <Button type="submit" className="w-full h-10" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
