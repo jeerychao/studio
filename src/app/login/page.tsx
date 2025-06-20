@@ -96,7 +96,7 @@ export default function LoginPage() {
           <div className="w-full max-w-sm space-y-6">
             <div>
               <h1 className="text-3xl font-bold">登录</h1>
-              <p className="text-muted-foreground">请输入邮箱和密码登录</p>
+              <p className="text-muted-foreground">请输入邮箱和密码登录 (例如: admin@example.com)</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2">
@@ -109,6 +109,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isSubmitting}
+                  className="h-10"
                 />
               </div>
               <div className="space-y-2">
@@ -122,7 +123,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isSubmitting}
-                    className="pr-10"
+                    className="pr-10 h-10"
                   />
                   <Button
                     type="button"
@@ -136,7 +137,7 @@ export default function LoginPage() {
                   </Button>
                 </div>
               </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button type="submit" className="w-full h-10" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -158,7 +159,7 @@ export default function LoginPage() {
               alt="Login background image"
               width={881}
               height={559}
-              className="object-contain max-w-full max-h-full"
+              className="object-contain max-w-[80%] max-h-[80%]"
               priority
               data-ai-hint="globe network"
             />
