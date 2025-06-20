@@ -73,7 +73,7 @@ export default function LoginPage() {
   if (isAuthLoading || pageAuthStatus === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <NetworkIcon className="h-20 w-20 text-primary mb-6 animate-pulse" data-ai-hint="logo network icon" />
+        {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={150} height={50} priority /> */}
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">初始化认证...</p>
       </div>
@@ -83,13 +83,14 @@ export default function LoginPage() {
   if (pageAuthStatus === 'authenticated' && pathname === '/login') {
      return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <NetworkIcon className="h-20 w-20 text-primary mb-6 animate-pulse" data-ai-hint="logo network icon" />
+        {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={150} height={50} priority /> */}
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">正在重定向到仪表盘...</p>
       </div>
     );
   }
 
+  // Only render the login form if unauthenticated
   if (pageAuthStatus === 'unauthenticated') {
     return (
       <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
@@ -115,7 +116,7 @@ export default function LoginPage() {
                   required
                   disabled={isSubmitting}
                   autoComplete="email"
-                  className="h-12 text-base"
+                  className="text-base" // Removed h-12, default is h-10
                 />
               </div>
               <div className="space-y-2">
@@ -130,7 +131,7 @@ export default function LoginPage() {
                     required
                     disabled={isSubmitting}
                     autoComplete="current-password"
-                    className="h-12 text-base pr-10"
+                    className="text-base pr-10" // Removed h-12, default is h-10
                   />
                   <Button
                     type="button"
@@ -146,7 +147,7 @@ export default function LoginPage() {
               </div>
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-semibold"
+                className="w-full text-base font-semibold h-10" // explicit h-10 to match input
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -161,42 +162,29 @@ export default function LoginPage() {
             </form>
           </div>
         </div>
-        <div className="hidden bg-[#191a52] lg:flex lg:flex-col lg:items-center lg:justify-center p-12 text-white relative overflow-hidden">
-          {/* Subtle background pattern - kept for visual interest, adjust opacity or remove if not desired */}
-          <div
-            className="absolute inset-0 opacity-[0.02]" // Reduced opacity further
-            style={{
-              backgroundImage:
-                "linear-gradient(45deg, hsl(0 0% 100%) 12.50%, transparent 12.50%, transparent 37.50%, hsl(0 0% 100%) 37.50%, hsl(0 0% 100%) 62.50%, transparent 62.50%, transparent 87.50%, hsl(0 0% 100%) 87.50%), linear-gradient(-45deg, hsl(0 0% 100%) 12.50%, transparent 12.50%, transparent 37.50%, hsl(0 0% 100%) 37.50%, hsl(0 0% 100%) 62.50%, transparent 62.50%, transparent 87.50%, hsl(0 0% 100%) 87.50%)",
-              backgroundSize: "40px 40px",
-            }}
-          />
-          <div className="relative z-10 text-center flex flex-col items-center justify-center h-full">
-            <NetworkIcon className="h-12 w-12 mx-auto mb-4 text-white opacity-90" data-ai-hint="network icon" />
-            <h1 className="text-4xl font-bold tracking-tight">IPAM Lite</h1>
-            <p className="mt-2 text-lg opacity-80">ip address management</p>
-            <div className="mt-8 flex-grow flex items-center justify-center w-full max-w-md">
-              <Image
-                src="/image/right.png"
-                alt="IP Address Management Globe"
-                width={400} // Adjusted size for potentially better fit
-                height={400}
-                priority
-                className="object-contain" // Ensures the image scales within its container
-                data-ai-hint="globe network"
-              />
-            </div>
+        <div className="hidden bg-[#191a52] lg:flex lg:flex-col lg:items-center lg:justify-center p-0 relative overflow-hidden">
+          {/* Image container to help with centering and responsiveness */}
+          <div className="relative w-full h-full flex items-center justify-center">
+            <Image
+              src="/images/right.png"
+              alt="IP Address Management Illustration"
+              width={1280} 
+              height={816}
+              className="object-contain max-w-full max-h-full" // Ensures image fits and maintains aspect ratio
+              priority
+              data-ai-hint="globe network illustration"
+            />
           </div>
         </div>
       </div>
     );
   }
 
+  // Fallback for any other unhandled state (should ideally not be reached if logic above is correct)
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-      <NetworkIcon className="h-20 w-20 text-primary mb-6 animate-pulse" data-ai-hint="logo network icon" />
-      <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-      <p className="text-lg text-muted-foreground">加载中...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">加载中...</p>
     </div>
   );
 }
