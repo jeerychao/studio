@@ -14,7 +14,7 @@ import { loginAction } from "@/lib/actions";
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
-  const [password, setPassword] = React.useState(""); // Cleared password pre-fill
+  const [password, setPassword] = React.useState(""); // Password not pre-filled
   const [showPassword, setShowPassword] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
@@ -152,8 +152,9 @@ export default function LoginPage() {
             </div>
           </div>
           <div className="mt-auto pt-6 text-center md:text-left">
+            <hr className="my-2 border-border" /> 
             <p className="text-xs text-muted-foreground">
-              软件版权 © 2025 IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com
+              © 2025 IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com
             </p>
           </div>
         </div>
@@ -183,3 +184,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
