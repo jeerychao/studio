@@ -7,7 +7,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn, Network as NetworkIcon, Eye, EyeOff } from "lucide-react"; // Added NetworkIcon, Eye, EyeOff
+import { LogIn, Network as NetworkIcon, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
@@ -69,6 +69,8 @@ export default function LoginPage() {
   if (isAuthLoading) {
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
+            {/* The /images/one-logo.png was commented out in the provided context file. Kept as is. */}
+            {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" /> */}
             <p className="ml-4 text-lg text-muted-foreground">初始化认证...</p>
         </div>
     );
@@ -77,6 +79,7 @@ export default function LoginPage() {
   if (pageAuthStatus === 'authenticated' && pathname === '/login') {
      return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
+            {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" /> */}
             <p className="ml-4 text-lg text-muted-foreground">正在重定向到仪表盘...</p>
         </div>
     );
@@ -84,20 +87,20 @@ export default function LoginPage() {
 
   if (pageAuthStatus === 'unauthenticated') {
     return (
-      <div className="flex min-h-screen bg-gray-100">
+      <div className="flex min-h-screen bg-gray-100 dark:bg-neutral-900">
         {/* Left Panel: Form */}
-        <div className="w-full md:w-1/2 flex flex-col justify-center items-center bg-white p-8 sm:p-12 lg:px-24 xl:px-32">
+        <div className="w-full md:w-1/2 flex flex-col justify-center items-center bg-white dark:bg-neutral-800 p-8 sm:p-12 lg:px-24 xl:px-32">
           <div className="w-full max-w-md space-y-8">
             <div>
-              <h2 className="mt-6 text-left text-4xl font-bold text-gray-900">Sign In</h2>
-              <p className="mt-2 text-left text-sm text-gray-500">
+              <h2 className="mt-6 text-left text-4xl font-bold text-gray-900 dark:text-gray-100">Sign In</h2>
+              <p className="mt-2 text-left text-sm text-gray-500 dark:text-gray-400">
                 请输入邮箱和密码登录
               </p>
             </div>
             <form onSubmit={handleLogin} className="mt-8 space-y-6">
               <div className="rounded-md shadow-sm -space-y-px">
                 <div className="space-y-2 mb-6">
-                  <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">Email <span className="text-red-500">*</span></Label>
                   <Input
                     id="email"
                     type="email"
@@ -107,11 +110,11 @@ export default function LoginPage() {
                     required
                     disabled={isSubmitting}
                     autoComplete="email"
-                    className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                    className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 placeholder-gray-400 dark:placeholder-neutral-500 text-gray-900 dark:text-gray-100 bg-white dark:bg-neutral-700 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-input" className="text-sm font-medium text-gray-700">Password <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="password-input" className="text-sm font-medium text-gray-700 dark:text-gray-300">Password <span className="text-red-500">*</span></Label>
                   <div className="relative">
                     <Input
                       id="password-input"
@@ -122,12 +125,12 @@ export default function LoginPage() {
                       required
                       disabled={isSubmitting}
                       autoComplete="current-password"
-                      className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm pr-10"
+                      className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 placeholder-gray-400 dark:placeholder-neutral-500 text-gray-900 dark:text-gray-100 bg-white dark:bg-neutral-700 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm pr-10"
                     />
                     <button
                       type="button"
                       onClick={toggleShowPassword}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -142,7 +145,14 @@ export default function LoginPage() {
                   className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "登录中..." : "Sign in"}
+                  {isSubmitting ? (
+                    <>
+                      <LogIn className="mr-2 h-4 w-4 animate-spin" />
+                      登录中...
+                    </>
+                  ) : (
+                    "Sign in"
+                  )}
                 </Button>
               </div>
             </form>
@@ -151,7 +161,6 @@ export default function LoginPage() {
 
         {/* Right Panel: Branding and Image */}
         <div className="hidden md:flex md:w-1/2 bg-blue-900 flex-col justify-center items-center p-12 text-white relative overflow-hidden">
-          {/* You can add a subtle grid pattern here later if needed with pseudo-elements or an SVG background */}
           <div className="text-center space-y-4 mb-8">
             <NetworkIcon className="h-16 w-16 mx-auto text-sky-400" />
             <h1 className="text-5xl font-bold">IPAM Lite</h1>
@@ -176,7 +185,10 @@ export default function LoginPage() {
   // Fallback for states other than 'unauthenticated' if needed, though router.replace should handle most cases.
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={80} height={80} priority data-ai-hint="company logo" /> */}
         <p className="ml-4 text-lg text-muted-foreground">加载中...</p>
     </div>
   );
 }
+
+    
