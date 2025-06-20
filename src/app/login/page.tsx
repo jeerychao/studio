@@ -11,7 +11,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
-import { TypewriterEffect } from "@/components/typewriter-effect"; // Import the new component
+import { TypewriterEffect } from "@/components/typewriter-effect"; 
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
@@ -165,22 +165,24 @@ export default function LoginPage() {
 
         {/* Right Panel: Image and Typewriter */}
         <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10 relative">
-          <div className="w-full h-full flex items-center justify-center mb-8"> {/* Added mb-8 for spacing */}
+          <div className="w-full h-full flex items-center justify-center mb-8"> 
             <Image
               src="/images/middl.png"
               alt="Login background image"
               width={881}
               height={559}
-              className="object-contain max-w-[80%] max-h-[70%]" // Adjusted max-h for space
+              className="object-contain max-w-[80%] max-h-[70%]" 
               priority
               data-ai-hint="globe network"
             />
           </div>
-          <div className="absolute bottom-10 right-10 left-10 lg:left-auto lg:max-w-md xl:max-w-lg p-4 bg-black/50 rounded-md shadow-lg">
+          <div className="absolute bottom-16 right-10 left-10 lg:left-auto lg:max-w-md xl:max-w-lg p-4 bg-black/50 rounded-md shadow-lg">
             <TypewriterEffect
               text={typewriterText}
               className="text-white text-sm sm:text-base"
               speed={60}
+              loop={true}
+              loopDelay={3000}
             />
           </div>
         </div>
