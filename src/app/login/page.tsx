@@ -5,6 +5,7 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Eye, EyeOff, Network as NetworkIcon, Loader2 } from "lucide-react";
@@ -92,88 +93,69 @@ export default function LoginPage() {
 
   if (pageAuthStatus === 'unauthenticated') {
     return (
-      <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
-        <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-card">
-          <div className="mx-auto w-full max-w-sm space-y-8"> {/* Changed max-w-md to max-w-sm */}
-            <div>
-              <h2 className="mt-6 text-center text-4xl font-bold tracking-tight text-foreground">
-                Sign In
-              </h2>
-              <p className="mt-2 text-center text-sm text-muted-foreground">
-                请输入邮箱和密码登录
-              </p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email<span className="text-destructive">*</span></Label>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl flex items-center justify-center">
+              <NetworkIcon className="mr-2 h-6 w-6 text-primary" />
+              登录
+            </CardTitle>
+            <CardDescription className="text-center">
+              请输入您的邮箱和密码以登录系统。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <form onSubmit={handleLogin} className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">邮箱</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="info@gmail.com"
+                  placeholder="m@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isSubmitting}
-                  autoComplete="email"
-                  className="text-base"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password<span className="text-destructive">*</span></Label>
+              <div className="grid gap-2">
+                <Label htmlFor="password">密码</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder="输入您的密码"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isSubmitting}
-                    autoComplete="current-password"
-                    className="text-base pr-10"
+                    className="pr-10" // Make space for the icon
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
                     onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "隐藏密码" : "显示密码"}
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
-              <Button
-                type="submit"
-                className="w-full text-base font-semibold h-10"
-                disabled={isSubmitting}
-              >
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     登录中...
                   </>
                 ) : (
-                  "Sign in"
+                  "登录"
                 )}
               </Button>
             </form>
-          </div>
-        </div>
-        <div className="hidden bg-[#191a52] lg:flex lg:flex-col lg:items-center lg:justify-center p-0 relative overflow-hidden">
-          <div className="relative w-full h-full flex items-center justify-center">
-            <Image
-              src="/images/middl.png"
-              alt="IP Address Management Illustration"
-              width={881}
-              height={559}
-              className="object-contain max-w-[80%] max-h-[80%]" 
-              priority
-              data-ai-hint="globe network illustration"
-            />
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
