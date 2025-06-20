@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn } from "lucide-react"; // Network icon is no longer needed
+import { LogIn } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
@@ -28,21 +28,27 @@ export default function LoginPage() {
   const pathname = usePathname();
   const { toast } = useToast();
   const { currentUser, isAuthLoading } = useCurrentUser();
-  const [pageAuthStatus, setPageAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const [pageAuthStatus, setPageAuthStatus] = React.useState<
+    "loading" | "authenticated" | "unauthenticated"
+  >("loading");
 
   React.useEffect(() => {
     if (isAuthLoading) {
-      setPageAuthStatus('loading');
+      setPageAuthStatus("loading");
       return;
     }
 
-    if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-      setPageAuthStatus('authenticated');
-      if (pathname === '/login') {
+    if (
+      currentUser &&
+      currentUser.id &&
+      !(currentUser.id === "guest-fallback-id" && currentUser.username === "Guest")
+    ) {
+      setPageAuthStatus("authenticated");
+      if (pathname === "/login") {
         router.replace("/dashboard");
       }
     } else {
-      setPageAuthStatus('unauthenticated');
+      setPageAuthStatus("unauthenticated");
     }
   }, [currentUser, isAuthLoading, router, pathname]);
 
@@ -100,11 +106,11 @@ export default function LoginPage() {
             <CardTitle className="text-2xl">欢迎使用 IPAM Lite</CardTitle>
             <CardDescription>
               输入您的凭据以访问 IP 地址管理系统。 <br/>
-              (例如: admin/admin)
+              (例如: admin@example.com / admin)
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
-            <CardContent className="space-y-6"> {/* Increased spacing */}
+            <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="email">邮箱</Label>
                 <Input
@@ -154,3 +160,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    
