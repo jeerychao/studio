@@ -73,7 +73,6 @@ export default function LoginPage() {
   if (isAuthLoading || pageAuthStatus === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        {/* Placeholder for a logo if needed during loading, currently using NetworkIcon */}
         <NetworkIcon className="h-20 w-20 text-primary mb-6 animate-pulse" data-ai-hint="logo network icon" />
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">初始化认证...</p>
@@ -91,11 +90,10 @@ export default function LoginPage() {
     );
   }
 
-  // Only render login form if unauthenticated
   if (pageAuthStatus === 'unauthenticated') {
     return (
       <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
-        <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-card">
           <div className="mx-auto w-full max-w-md space-y-8">
             <div>
               <h2 className="mt-6 text-center text-4xl font-bold tracking-tight text-foreground">
@@ -163,28 +161,28 @@ export default function LoginPage() {
             </form>
           </div>
         </div>
-        <div className="hidden bg-primary lg:flex lg:flex-col lg:items-center lg:justify-center p-12 text-primary-foreground relative overflow-hidden">
-          {/* Subtle background pattern */}
+        <div className="hidden bg-[#191a52] lg:flex lg:flex-col lg:items-center lg:justify-center p-12 text-white relative overflow-hidden">
+          {/* Subtle background pattern - kept for visual interest, adjust opacity or remove if not desired */}
           <div
-            className="absolute inset-0 opacity-[0.03]"
+            className="absolute inset-0 opacity-[0.02]" // Reduced opacity further
             style={{
               backgroundImage:
-                "linear-gradient(45deg, hsl(var(--primary-foreground)) 12.50%, transparent 12.50%, transparent 37.50%, hsl(var(--primary-foreground)) 37.50%, hsl(var(--primary-foreground)) 62.50%, transparent 62.50%, transparent 87.50%, hsl(var(--primary-foreground)) 87.50%), linear-gradient(-45deg, hsl(var(--primary-foreground)) 12.50%, transparent 12.50%, transparent 37.50%, hsl(var(--primary-foreground)) 37.50%, hsl(var(--primary-foreground)) 62.50%, transparent 62.50%, transparent 87.50%, hsl(var(--primary-foreground)) 87.50%)",
+                "linear-gradient(45deg, hsl(0 0% 100%) 12.50%, transparent 12.50%, transparent 37.50%, hsl(0 0% 100%) 37.50%, hsl(0 0% 100%) 62.50%, transparent 62.50%, transparent 87.50%, hsl(0 0% 100%) 87.50%), linear-gradient(-45deg, hsl(0 0% 100%) 12.50%, transparent 12.50%, transparent 37.50%, hsl(0 0% 100%) 37.50%, hsl(0 0% 100%) 62.50%, transparent 62.50%, transparent 87.50%, hsl(0 0% 100%) 87.50%)",
               backgroundSize: "40px 40px",
             }}
           />
-          <div className="relative z-10 text-center">
-            <NetworkIcon className="h-16 w-16 mx-auto mb-6 opacity-80" data-ai-hint="network icon" />
-            <h1 className="text-5xl font-bold tracking-tight">IPAM Lite</h1>
-            <p className="mt-3 text-xl opacity-90">ip address management</p>
-            <div className="mt-12 aspect-square max-w-md mx-auto">
+          <div className="relative z-10 text-center flex flex-col items-center justify-center h-full">
+            <NetworkIcon className="h-12 w-12 mx-auto mb-4 text-white opacity-90" data-ai-hint="network icon" />
+            <h1 className="text-4xl font-bold tracking-tight">IPAM Lite</h1>
+            <p className="mt-2 text-lg opacity-80">ip address management</p>
+            <div className="mt-8 flex-grow flex items-center justify-center w-full max-w-md">
               <Image
                 src="/image/right.png"
                 alt="IP Address Management Globe"
-                width={500}
-                height={500}
+                width={400} // Adjusted size for potentially better fit
+                height={400}
                 priority
-                className="object-contain"
+                className="object-contain" // Ensures the image scales within its container
                 data-ai-hint="globe network"
               />
             </div>
@@ -194,7 +192,6 @@ export default function LoginPage() {
     );
   }
 
-  // Fallback for any other state, though should ideally be covered by above
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <NetworkIcon className="h-20 w-20 text-primary mb-6 animate-pulse" data-ai-hint="logo network icon" />
