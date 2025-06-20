@@ -164,23 +164,21 @@ export default function LoginPage() {
         </div>
 
         {/* Right Panel: Image and Typewriter */}
-        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10 relative">
-          <div className="w-full h-full flex items-center justify-center mb-8"> 
-            <Image
-              src="/images/middl.png"
-              alt="Login background image"
-              width={881}
-              height={559}
-              className="object-contain max-w-[80%] max-h-[70%]" 
-              priority
-              data-ai-hint="globe network"
-            />
-          </div>
-          <div className="absolute bottom-16 right-10 left-10 lg:left-auto lg:max-w-md xl:max-w-lg p-4 bg-black/50 rounded-md shadow-lg">
+        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10 space-y-8">
+          <Image
+            src="/images/middl.png"
+            alt="Login background image"
+            width={881}
+            height={559}
+            className="object-contain max-w-[90%] max-h-[65vh]"
+            priority
+            data-ai-hint="globe network"
+          />
+          <div className="w-full max-w-md lg:max-w-lg xl:max-w-xl p-4 bg-gradient-to-b from-black/60 to-black/30 rounded-md shadow-lg">
             <TypewriterEffect
               text={typewriterText}
-              className="text-white text-sm sm:text-base"
-              speed={60}
+              className="text-white text-sm sm:text-base text-center"
+              speed={100}
               loop={true}
               loopDelay={3000}
             />
