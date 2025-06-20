@@ -94,7 +94,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
         <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-card">
-          <div className="mx-auto w-full max-w-sm space-y-8">
+          <div className="mx-auto w-full max-w-sm space-y-8"> {/* Changed max-w-md to max-w-sm */}
             <div>
               <h2 className="mt-6 text-center text-4xl font-bold tracking-tight text-foreground">
                 Sign In
@@ -166,8 +166,8 @@ export default function LoginPage() {
             <Image
               src="/images/middl.png"
               alt="IP Address Management Illustration"
-              width={1280}
-              height={816}
+              width={881}
+              height={559}
               className="object-contain max-w-[80%] max-h-[80%]" 
               priority
               data-ai-hint="globe network illustration"
@@ -185,4 +185,3 @@ export default function LoginPage() {
     </div>
   );
 }
-    
