@@ -5,7 +5,6 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Eye, EyeOff, Network as NetworkIcon, Loader2 } from "lucide-react";
@@ -74,7 +73,6 @@ export default function LoginPage() {
   if (isAuthLoading || pageAuthStatus === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={150} height={50} priority /> */}
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">初始化认证...</p>
       </div>
@@ -84,7 +82,6 @@ export default function LoginPage() {
   if (pageAuthStatus === 'authenticated' && pathname === '/login') {
      return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        {/* <Image src="/images/one-logo.png" alt="IPAM Lite Logo" width={150} height={50} priority /> */}
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">正在重定向到仪表盘...</p>
       </div>
@@ -93,20 +90,16 @@ export default function LoginPage() {
 
   if (pageAuthStatus === 'unauthenticated') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl flex items-center justify-center">
-              <NetworkIcon className="mr-2 h-6 w-6 text-primary" />
-              登录
-            </CardTitle>
-            <CardDescription className="text-center">
-              请输入您的邮箱和密码以登录系统。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <form onSubmit={handleLogin} className="grid gap-4">
-              <div className="grid gap-2">
+      <div className="flex min-h-screen bg-background">
+        {/* Left Panel: Login Form */}
+        <div className="flex flex-1 flex-col items-center justify-center p-6 md:p-10">
+          <div className="w-full max-w-sm space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold">登录</h1>
+              <p className="text-muted-foreground">请输入邮箱和密码登录</p>
+            </div>
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div className="space-y-2">
                 <Label htmlFor="email">邮箱</Label>
                 <Input
                   id="email"
@@ -118,7 +111,7 @@ export default function LoginPage() {
                   disabled={isSubmitting}
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label htmlFor="password">密码</Label>
                 <div className="relative">
                   <Input
@@ -129,7 +122,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isSubmitting}
-                    className="pr-10" // Make space for the icon
+                    className="pr-10"
                   />
                   <Button
                     type="button"
@@ -154,8 +147,23 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Right Panel: Image */}
+        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10 relative">
+          <div className="w-full h-full flex items-center justify-center">
+            <Image
+              src="/images/middl.png"
+              alt="Login background image"
+              width={881}
+              height={559}
+              className="object-contain max-w-full max-h-full"
+              priority
+              data-ai-hint="globe network"
+            />
+          </div>
+        </div>
       </div>
     );
   }
