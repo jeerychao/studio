@@ -7,7 +7,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn, Eye, EyeOff, Network as NetworkIcon, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react"; // NetworkIcon no longer needed for login page
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { loginAction } from "@/lib/actions";
@@ -110,7 +110,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isSubmitting}
-                    className="h-10"
+                    className="h-10" 
                   />
                 </div>
                 <div className="space-y-2">
@@ -124,7 +124,7 @@ export default function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       disabled={isSubmitting}
-                      className="pr-10 h-10"
+                      className="pr-10 h-10" 
                     />
                     <Button
                       type="button"
@@ -151,8 +151,9 @@ export default function LoginPage() {
               </form>
             </div>
           </div>
-          <div className="mt-auto pt-6 text-center md:text-left">
-            <hr className="my-2 border-border" /> 
+          {/* Copyright and Contact Info */}
+          <div className="mt-auto pt-6 text-center"> {/* Changed: Added text-center */}
+            <hr className="my-2 border-border" /> {/* Horizontal line */}
             <p className="text-xs text-muted-foreground">
               © 2025 IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com
             </p>
@@ -177,6 +178,7 @@ export default function LoginPage() {
     );
   }
 
+  // Fallback for any other unhandled pageAuthStatus, though ideally it should be one of the above.
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -184,4 +186,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
