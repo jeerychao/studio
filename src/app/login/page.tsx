@@ -14,7 +14,7 @@ import { loginAction } from "@/lib/actions";
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
-  const [password, setPassword] = React.useState("admin");
+  const [password, setPassword] = React.useState(""); // Cleared password pre-fill
   const [showPassword, setShowPassword] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
@@ -92,62 +92,69 @@ export default function LoginPage() {
     return (
       <div className="flex min-h-screen bg-background">
         {/* Left Panel: Login Form */}
-        <div className="flex flex-1 flex-col items-center justify-center p-6 md:p-10">
-          <div className="w-full max-w-sm space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold">登录</h1>
-              <p className="text-muted-foreground">请输入邮箱和密码登录 (例如: admin@example.com)</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">邮箱</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isSubmitting}
-                  className="h-10"
-                />
+        <div className="flex flex-1 flex-col p-6 md:p-10">
+          <div className="flex flex-grow flex-col items-center justify-center">
+            <div className="w-full max-w-sm space-y-6">
+              <div>
+                <h1 className="text-3xl font-bold">登录</h1>
+                <p className="text-muted-foreground">请输入邮箱和密码登录 (例如: youmail@example.com)</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
-                <div className="relative">
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="email">邮箱</Label>
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="输入您的密码"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    id="email"
+                    type="email"
+                    placeholder="m@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isSubmitting}
-                    className="pr-10 h-10"
+                    className="h-10"
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
                 </div>
-              </div>
-              <Button type="submit" className="w-full h-10" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    登录中...
-                  </>
-                ) : (
-                  "登录"
-                )}
-              </Button>
-            </form>
+                <div className="space-y-2">
+                  <Label htmlFor="password">密码</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="输入您的密码"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={isSubmitting}
+                      className="pr-10 h-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <Button type="submit" className="w-full h-10" disabled={isSubmitting || pageAuthStatus !== 'unauthenticated'}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      登录中...
+                    </>
+                  ) : (
+                    "登录"
+                  )}
+                </Button>
+              </form>
+            </div>
+          </div>
+          <div className="mt-auto pt-6 text-center md:text-left">
+            <p className="text-xs text-muted-foreground">
+              软件版权 © 2025 IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com
+            </p>
           </div>
         </div>
 
