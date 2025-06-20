@@ -90,7 +90,6 @@ export default function LoginPage() {
     );
   }
 
-  // Only render the login form if unauthenticated
   if (pageAuthStatus === 'unauthenticated') {
     return (
       <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
@@ -116,7 +115,7 @@ export default function LoginPage() {
                   required
                   disabled={isSubmitting}
                   autoComplete="email"
-                  className="text-base" // Removed h-12, default is h-10
+                  className="text-base"
                 />
               </div>
               <div className="space-y-2">
@@ -131,7 +130,7 @@ export default function LoginPage() {
                     required
                     disabled={isSubmitting}
                     autoComplete="current-password"
-                    className="text-base pr-10" // Removed h-12, default is h-10
+                    className="text-base pr-10"
                   />
                   <Button
                     type="button"
@@ -147,7 +146,7 @@ export default function LoginPage() {
               </div>
               <Button
                 type="submit"
-                className="w-full text-base font-semibold h-10" // explicit h-10 to match input
+                className="w-full text-base font-semibold h-10"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -168,9 +167,9 @@ export default function LoginPage() {
             <Image
               src="/images/right.png"
               alt="IP Address Management Illustration"
-              width={1280} 
+              width={1280}
               height={816}
-              className="object-contain max-w-full max-h-full" // Ensures image fits and maintains aspect ratio
+              className="object-contain max-w-[80%] max-h-[80%]" 
               priority
               data-ai-hint="globe network illustration"
             />
@@ -180,7 +179,6 @@ export default function LoginPage() {
     );
   }
 
-  // Fallback for any other unhandled state (should ideally not be reached if logic above is correct)
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
@@ -188,3 +186,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    
