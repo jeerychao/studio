@@ -43,39 +43,43 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const hasFetched = React.useRef(false); // Ref to track fetch status
 
   React.useEffect(() => {
-    async function fetchData() {
-      if (isAuthLoading || !currentUser) {
-        return;
-      }
-      setIsLoading(true);
-      setError(null);
+    // Only fetch data if auth is complete, user exists, and we haven't fetched yet.
+    if (!isAuthLoading && currentUser && !hasFetched.current) {
+      hasFetched.current = true; // Mark as fetched immediately to prevent re-runs
 
-      if (!hasPermission(currentUser, PERMISSIONS.VIEW_DASHBOARD)) {
-        setError("您没有权限查看仪表盘。");
-        setIsLoading(false);
-        setDashboardData(null);
-        return;
-      }
+      async function fetchData() {
+        setIsLoading(true);
+        setError(null);
 
-      try {
-        const response: ActionResponse<DashboardData> = await getDashboardDataAction();
-        if (response.success && response.data) {
-          setDashboardData(response.data);
-        } else {
-          setError(response.error?.userMessage || "加载仪表盘数据失败。");
+        if (!hasPermission(currentUser!, PERMISSIONS.VIEW_DASHBOARD)) {
+          setError("您没有权限查看仪表盘。");
+          setIsLoading(false);
           setDashboardData(null);
+          return;
         }
-      } catch (e) {
-        setError((e as Error).message || "加载仪表盘数据时发生未知错误。");
-        setDashboardData(null);
-      } finally {
-        setIsLoading(false);
+
+        try {
+          const response: ActionResponse<DashboardData> = await getDashboardDataAction();
+          if (response.success && response.data) {
+            setDashboardData(response.data);
+          } else {
+            setError(response.error?.userMessage || "加载仪表盘数据失败。");
+            setDashboardData(null);
+          }
+        } catch (e) {
+          setError((e as Error).message || "加载仪表盘数据时发生未知错误。");
+          setDashboardData(null);
+        } finally {
+          setIsLoading(false);
+        }
       }
+
+      fetchData();
     }
-    fetchData();
-  }, [currentUser, isAuthLoading]);
+  }, [currentUser, isAuthLoading]); // Dependencies trigger the effect, but the ref gatekeeps the fetch call.
 
   if (isAuthLoading || (isLoading && !dashboardData && !error)) {
     return (

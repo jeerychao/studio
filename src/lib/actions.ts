@@ -1775,11 +1775,36 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
 export async function getDashboardDataAction(): Promise<ActionResponse<DashboardData>> {
   const actionName = 'getDashboardDataAction';
   try {
-    const totalIpCount = await prisma.iPAddress.count();
-    const ipStatusGroups = await prisma.iPAddress.groupBy({
-      by: ['status'],
-      _count: { status: true },
-    });
+    const [
+      totalIpCount,
+      ipStatusGroups,
+      totalVlanCount,
+      totalSubnetCount,
+      usageUnitGroups,
+      unspecifiedUsageUnitCount,
+      allVlansFromDb,
+      allSubnetsForDashboard,
+      recentAuditLogsDb
+    ] = await prisma.$transaction([
+      prisma.iPAddress.count(),
+      prisma.iPAddress.groupBy({ by: ['status'], _count: { status: true } }),
+      prisma.vLAN.count(),
+      prisma.subnet.count(),
+      prisma.iPAddress.groupBy({
+        by: ['usageUnit'],
+        _count: { usageUnit: true },
+        where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
+        orderBy: { _count: { usageUnit: 'desc' } },
+      }),
+      prisma.iPAddress.count({ where: { OR: [{ usageUnit: null }, { usageUnit: "" }] } }),
+      prisma.vLAN.findMany({
+        include: { _count: { select: { subnets: true, directIPs: true } } },
+        orderBy: { vlanNumber: 'asc' }
+      }),
+      prisma.subnet.findMany({ select: { id: true, cidr: true, name: true } }),
+      prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: DASHBOARD_AUDIT_LOG_COUNT })
+    ]);
+
     const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
     ipStatusGroups.forEach(group => {
       const statusKey = group.status as keyof IPStatusCounts;
@@ -1788,21 +1813,11 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       }
     });
 
-    const totalVlanCount = await prisma.vLAN.count();
-    const totalSubnetCount = await prisma.subnet.count();
-
-    const usageUnitGroups = await prisma.iPAddress.groupBy({
-      by: ['usageUnit'],
-      _count: { usageUnit: true },
-      where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
-      orderBy: { _count: { usageUnit: 'desc' } },
-    });
     let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
       .map((g, index) => ({ item: g.usageUnit!, count: g._count.usageUnit, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
       .slice(0, DASHBOARD_TOP_N_COUNT);
     const otherUsageUnitCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count.usageUnit, 0);
     if (otherUsageUnitCount > 0) ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length]});
-    const unspecifiedUsageUnitCount = await prisma.iPAddress.count({ where: { OR: [{ usageUnit: null }, { usageUnit: "" }] } });
     if (unspecifiedUsageUnitCount > 0) {
         const unspecifiedExists = ipUsageByUnit.find(item => item.item === "未指定");
         let currentTopNSize = DASHBOARD_TOP_N_COUNT;
@@ -1819,15 +1834,10 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         }
     }
     ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
-    if (ipUsageByUnit.length > DASHBOARD_TOP_N_COUNT +1) { 
-        ipUsageByUnit = ipUsageByUnit.slice(0, DASHBOARD_TOP_N_COUNT +1);
+    if (ipUsageByUnit.length > DASHBOARD_TOP_N_COUNT + 1) { 
+        ipUsageByUnit = ipUsageByUnit.slice(0, DASHBOARD_TOP_N_COUNT + 1);
     }
 
-
-    const allVlansFromDb = await prisma.vLAN.findMany({
-      include: { _count: { select: { subnets: true, directIPs: true } } },
-      orderBy: { vlanNumber: 'asc' }
-    });
     const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({
       id: vlan.id,
       vlanNumber: vlan.vlanNumber,
@@ -1836,7 +1846,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
-    const allSubnetsForDashboard = await prisma.subnet.findMany({select: {id: true, cidr: true, name: true}});
     let subnetsNeedingAttention: SubnetUtilizationInfo[] = [];
 
     if (allSubnetsForDashboard.length > 0) {
@@ -1869,8 +1878,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         subnetsNeedingAttention = subnetsWithUtilization.filter(s => s.utilization > 80).sort((a, b) => b.utilization - a.utilization).slice(0, DASHBOARD_TOP_N_COUNT);
     }
 
-
-    const recentAuditLogsDb = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: DASHBOARD_AUDIT_LOG_COUNT });
     const recentAuditLogs: AuditLog[] = recentAuditLogsDb.map(log => ({ id: log.id, userId: log.userId || undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
 
     const dashboardData: DashboardData = {
@@ -1885,7 +1892,3 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     return { success: false, error: createActionErrorResponse(error, actionName) };
   }
 }
-
-
-
-
