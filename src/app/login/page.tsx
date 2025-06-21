@@ -39,8 +39,10 @@ export default function LoginPage() {
         if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
           (window as any).setCurrentMockUser(result.user.id);
           toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
-          // Navigate to dashboard after successful state update, instead of reloading.
-          router.push('/dashboard');
+          // Perform a hard navigation to the dashboard.
+          // This forces the entire app to reload, including the CurrentUserProvider,
+          // which will then read the new user ID from localStorage.
+          window.location.href = '/dashboard';
         } else {
           toast({ title: "登录错误", description: "客户端错误: 无法设置用户会话。", variant: "destructive" });
         }
