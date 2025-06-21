@@ -1843,29 +1843,17 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   try {
     const [
       ipStatusGroups,
+      vlanResources,
+      subnets,
+      recentAuditLogsDb,
       usageUnitGroups,
       unspecifiedUsageUnitCount,
-      allVlansFromDb,
-      allSubnetsForDashboard,
-      recentAuditLogsDb,
     ] = await prisma.$transaction([
-      // 1. Group by status to get counts for each status and total count
       prisma.iPAddress.groupBy({
         by: ['status'],
         _count: { _all: true },
+        orderBy: { status: 'asc' }, // Fix for build error
       }),
-      // 2. Group by usage unit for chart data
-      prisma.iPAddress.groupBy({
-        by: ['usageUnit'],
-        _count: { usageUnit: true },
-        where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
-        orderBy: { _count: { usageUnit: 'desc' } },
-      }),
-      // 3. Count IPs with no usage unit specified
-      prisma.iPAddress.count({
-        where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
-      }),
-      // 4. Get all VLANs with their resource counts
       prisma.vLAN.findMany({
         select: {
           id: true,
@@ -1875,7 +1863,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         },
         orderBy: { vlanNumber: 'asc' },
       }),
-      // 5. Get all Subnets with allocated IP counts (FIXED: ipAddresses)
       prisma.subnet.findMany({
         select: {
           id: true,
@@ -1883,23 +1870,32 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
           name: true,
           _count: {
             select: {
-              ipAddresses: { where: { status: 'allocated' } }, // Corrected from 'ips'
+              ipAddresses: { where: { status: 'allocated' } },
             },
           },
         },
+        orderBy: { cidr: 'asc' },
       }),
-      // 6. Get recent audit logs
       prisma.auditLog.findMany({
         select: { id: true, username: true, action: true, timestamp: true, details: true },
         orderBy: { timestamp: 'desc' },
         take: DASHBOARD_AUDIT_LOG_COUNT,
       }),
+      prisma.iPAddress.groupBy({
+        by: ['usageUnit'],
+        _count: { usageUnit: true },
+        where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
+        orderBy: { _count: { usageUnit: 'desc' } },
+      }),
+      prisma.iPAddress.count({
+        where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
+      }),
     ]);
 
     // Process results
     const totalIpCount = ipStatusGroups.reduce((sum, group) => sum + group._count._all, 0);
-    const totalVlanCount = allVlansFromDb.length;
-    const totalSubnetCount = allSubnetsForDashboard.length;
+    const totalVlanCount = vlanResources.length;
+    const totalSubnetCount = subnets.length;
 
     const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
     ipStatusGroups.forEach(group => {
@@ -1934,7 +1930,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         ipUsageByUnit = ipUsageByUnit.slice(0, DASHBOARD_TOP_N_COUNT + 1);
     }
 
-    const vlanResourceCounts: VLANResourceInfo[] = allVlansFromDb.map(vlan => ({
+    const vlanResourceCounts: VLANResourceInfo[] = vlanResources.map(vlan => ({
       id: vlan.id,
       vlanNumber: vlan.vlanNumber,
       name: vlan.name || undefined,
@@ -1942,12 +1938,12 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
-    const subnetsWithUtilization: SubnetUtilizationInfo[] = allSubnetsForDashboard.map(subnet => {
+    const subnetsWithUtilization: SubnetUtilizationInfo[] = subnets.map(subnet => {
       const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
       let utilization = 0;
       if (subnetProperties) {
           const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-          const allocatedIpsCount = subnet._count.ipAddresses; // Corrected from 'ips'
+          const allocatedIpsCount = subnet._count.ipAddresses;
           if (totalUsableIps > 0) {
               const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
               utilization = (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) ? 1 : Math.round(rawPercentage);
