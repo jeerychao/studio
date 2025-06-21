@@ -19,6 +19,7 @@ export interface CurrentUserContextValue {
 export interface UseCurrentUserReturn {
   currentUser: CurrentUserContextValue | null;
   isAuthLoading: boolean;
+  setCurrentUser: (user: CurrentUserContextValue | null) => void;
 }
 
 export const CurrentUserContext = createContext<UseCurrentUserReturn | undefined>(undefined);

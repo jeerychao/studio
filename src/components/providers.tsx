@@ -10,67 +10,53 @@ import { fetchCurrentUserDetailsAction } from "@/lib/actions";
 import { logger } from "@/lib/logger";
 
 function CurrentUserProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
+  const [currentUser, _setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
-  const isInitializedRef = React.useRef(false);
 
+  // Initialize state from localStorage on initial mount
   React.useEffect(() => {
-    if (isInitializedRef.current) return;
-    isInitializedRef.current = true;
-
     const initializeUser = async () => {
       setIsAuthLoading(true);
-      let userToSet: CurrentUserContextValue | null = null;
       try {
         const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
         if (storedUserId) {
           logger.debug(`CurrentUserProvider: Found storedUserId: ${storedUserId}. Fetching details...`);
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
           if (userDetails) {
-            logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
-            userToSet = { ...userDetails, permissions: userDetails.permissions || [] };
+            _setCurrentUser({ ...userDetails, permissions: userDetails.permissions || [] });
           } else {
-            // **FIX**: Removed localStorage.removeItem to prevent auth loop.
-            // If user details are not found, we simply treat them as logged out for this session.
-            // The invalid ID will be overwritten on next successful login.
-            logger.error(
-              `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This may indicate a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out for this session. The invalid session key was NOT removed to prevent a login loop.`,
-              undefined,
-              { storedUserId }
-            );
+            logger.warn(`CurrentUserProvider: User details not found for stored ID "${storedUserId}". Clearing invalid session.`, undefined, { storedUserId });
+            localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+            _setCurrentUser(null);
           }
         } else {
-          logger.debug("CurrentUserProvider: No storedUserId found. User is not authenticated.");
+           _setCurrentUser(null);
         }
       } catch (error) {
         logger.error("CurrentUserProvider: Error during user initialization.", error as Error);
+        _setCurrentUser(null);
       } finally {
-        setCurrentUser(userToSet);
         setIsAuthLoading(false);
-        logger.debug("CurrentUserProvider: Initialization complete.", { userSet: userToSet ? userToSet.username : 'null' });
       }
     };
-
     initializeUser();
+  }, []);
 
-    if (typeof window !== "undefined" && !(window as any).setCurrentMockUser) {
-      (window as any).setCurrentMockUser = (userId: string | null) => {
-        logger.debug(`Global setCurrentMockUser called with ID: ${userId}.`);
-        if (!userId || userId.trim() === "") {
-          localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-        } else {
-          localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-        }
-        // DO NOT RELOAD. Let the caller handle navigation.
-        // This was the source of the race condition.
-      };
+  // Create a stable setCurrentUser function that updates both state and localStorage
+  const setCurrentUser = React.useCallback((user: CurrentUserContextValue | null) => {
+    _setCurrentUser(user);
+    if (user) {
+      localStorage.setItem(MOCK_USER_STORAGE_KEY, user.id);
+    } else {
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
     }
   }, []);
 
   const value = React.useMemo(() => ({
     currentUser,
     isAuthLoading,
-  }), [currentUser, isAuthLoading]);
+    setCurrentUser,
+  }), [currentUser, isAuthLoading, setCurrentUser]);
 
   return (
     <CurrentUserContext.Provider value={value}>

@@ -1,3 +1,4 @@
+
 "use client";
 import Link from "next/link";
 import { Menu, UserCircle, Network, KeyRound, LogOut, ChevronDown } from "lucide-react";
@@ -13,7 +14,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { useCurrentUser, MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -23,20 +24,16 @@ import { cn } from "@/lib/utils";
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const router = useRouter();
-  const { currentUser } = useCurrentUser();
+  const { currentUser, setCurrentUser } = useCurrentUser();
   const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
 
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
-    if (typeof window !== "undefined") {
-      // Clear the session from local storage.
-      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      
-      // Perform a hard redirect to the login page.
-      // This is the most reliable way to clear all client-side state (including React state)
-      // and force the application to re-initialize its authentication state.
-      window.location.href = "/login";
-    }
+    // Clear the user state in the provider, which will also clear localStorage
+    setCurrentUser(null);
+    // Use soft navigation to the login page.
+    // AuthGuard will handle the rest if any protected routes are accessed.
+    router.replace("/login");
   };
 
   return (

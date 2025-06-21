@@ -19,7 +19,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { currentUser, isAuthLoading } = useCurrentUser();
+  const { currentUser, isAuthLoading, setCurrentUser } = useCurrentUser();
 
   React.useEffect(() => {
     // Only check for redirection after the initial loading is complete.
@@ -36,16 +36,12 @@ export default function LoginPage() {
       const result = await loginAction({ email, password });
 
       if (result.success && result.user) {
-        if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
-          (window as any).setCurrentMockUser(result.user.id);
-          toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
-          // Perform a hard navigation to the dashboard.
-          // This forces the entire app to reload, including the CurrentUserProvider,
-          // which will then read the new user ID from localStorage.
-          window.location.href = '/dashboard';
-        } else {
-          toast({ title: "登录错误", description: "客户端错误: 无法设置用户会话。", variant: "destructive" });
-        }
+        toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
+        // Set the user in the provider, which will also update localStorage
+        setCurrentUser(result.user);
+        // Soft navigation to the dashboard.
+        // The AuthGuard will now see the updated user state.
+        router.replace('/dashboard');
       } else {
         toast({ title: "登录失败", description: result.message || "邮箱或密码无效。", variant: "destructive" });
       }
