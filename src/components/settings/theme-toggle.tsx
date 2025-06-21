@@ -21,7 +21,7 @@ export function ThemeToggle() {
     <DropdownMenu open={isThemeMenuOpen} onOpenChange={setIsThemeMenuOpen}>
       <DropdownMenuTrigger asChild>
         <Button
-          className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 text-current hover:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 text-current hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
         >
           <div className="h-6 w-6 relative flex items-center justify-center">
             <Sun className="absolute h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

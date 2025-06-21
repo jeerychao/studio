@@ -92,7 +92,7 @@ export function Header() {
         <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
-              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 text-current hover:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 text-current hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <UserCircle className="h-6 w-6" />
               <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">
