@@ -155,7 +155,7 @@ export default function LoginPage() {
           <div className="mt-auto pt-6 text-center">
             <hr className="my-2 border-border" />
             <p className="text-xs text-muted-foreground">
-              © 2025 IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com
+              © 2025 IPAM Lite. 版权所有.联系方式: leejie2017@gmail.com
             </p>
           </div>
         </div>
