@@ -58,8 +58,21 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
   const actionName = 'loginAction'; const { email, password: passwordAttempt } = payload;
   if (!email || !passwordAttempt) { return { success: false, message: "邮箱和密码是必需的。" }; }
   try {
-    const userFromDb = await prisma.user.findUnique({ where: { email }, include: { role: { include: { permissions: true } } } });
-    if (!userFromDb) { logger.warn(`[${actionName}] Login failed: User not found for email ${email}.`, new AuthError(`User with email ${email} not found.`), { email }, actionName); return { success: false, message: "邮箱或密码无效。" }; }
+    const userFromDb = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        role: {
+          include: {
+            permissions: true
+          }
+        }
+      }
+    });
+
+    if (!userFromDb) {
+      logger.warn(`[${actionName}] Login failed: User not found for email ${email}.`, new AuthError(`User with email ${email} not found.`), { email }, actionName);
+      return { success: false, message: "邮箱或密码无效。" };
+    }
 
     let decryptedStoredPassword;
     try {
@@ -74,11 +87,40 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
       return { success: false, message: "邮箱或密码无效。" };
     }
 
-    if (!userFromDb.role || !userFromDb.role.name) { logger.error(`[${actionName}] User ${userFromDb.id} (${userFromDb.username}) missing role.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName); return { success: false, message: "用户角色信息不完整。" }; }
+    if (!userFromDb.role || !userFromDb.role.name) {
+      logger.error(`[${actionName}] User ${userFromDb.id} (${userFromDb.username}) missing role.`, new AppError('User role data incomplete'), { userId: userFromDb.id }, actionName);
+      return { success: false, message: "用户角色信息不完整。" };
+    }
+    
     let permissionsList: AppPermissionIdType[] = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
-    await prisma.user.update({ where: { id: userFromDb.id }, data: { lastLogin: new Date() } });
-    await prisma.auditLog.create({ data: { userId: userFromDb.id, username: userFromDb.username, action: 'user_login', details: `用户 ${userFromDb.username} 成功登录。` } });
-    return { success: true, user: { id: userFromDb.id, username: userFromDb.username, email: userFromDb.email, roleId: userFromDb.roleId, roleName: userFromDb.role.name as AppRoleNameType, avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', permissions: permissionsList, lastLogin: userFromDb.lastLogin?.toISOString() } };
+    
+    await prisma.user.update({
+      where: { id: userFromDb.id },
+      data: { lastLogin: new Date() }
+    });
+    
+    await prisma.auditLog.create({
+      data: {
+        userId: userFromDb.id,
+        username: userFromDb.username,
+        action: 'user_login',
+        details: `用户 ${userFromDb.username} 成功登录。`
+      }
+    });
+    
+    return {
+      success: true,
+      user: {
+        id: userFromDb.id,
+        username: userFromDb.username,
+        email: userFromDb.email,
+        roleId: userFromDb.roleId,
+        roleName: userFromDb.role.name as AppRoleNameType,
+        avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
+        permissions: permissionsList,
+        lastLogin: userFromDb.lastLogin?.toISOString()
+      }
+    };
   } catch (error) {
     logger.error(`[${actionName}] Login error`, error as Error, { email }, actionName);
     if (error instanceof Error && error.message.includes('Decryption failed')) {
@@ -91,11 +133,35 @@ export async function loginAction(payload: LoginPayload): Promise<LoginResponse>
 export async function fetchCurrentUserDetailsAction(userId: string): Promise<FetchedUserDetails | null> {
   const actionName = 'fetchCurrentUserDetailsAction'; if (!userId) return null;
   try {
-    const userFromDb = await prisma.user.findUnique({ where: { id: userId }, include: { role: { include: { permissions: true } } } });
-    if (!userFromDb || !userFromDb.role || !userFromDb.role.name) { logger.warn(`[${actionName}] User ${userId} or role invalid.`, new AppError("User role data invalid"), { userId }, actionName); return null; }
+    const userFromDb = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: {
+          include: {
+            permissions: true
+          }
+        }
+      }
+    });
+    if (!userFromDb || !userFromDb.role || !userFromDb.role.name) {
+      logger.warn(`[${actionName}] User ${userId} or role invalid.`, new AppError("User role data invalid"), { userId }, actionName);
+      return null;
+    }
     let permissionsList: AppPermissionIdType[] = userFromDb.role.permissions.map(p => p.id as AppPermissionIdType);
-    return { id: userFromDb.id, username: userFromDb.username, email: userFromDb.email, roleId: userFromDb.roleId, roleName: userFromDb.role.name as AppRoleNameType, avatar: userFromDb.avatar || '/images/avatars/default_avatar.png', permissions: permissionsList, lastLogin: userFromDb.lastLogin?.toISOString() || undefined };
-  } catch (error) { logger.error(`[${actionName}] Error for userId ${userId}`, error as Error, { userId }, actionName); return null; }
+    return {
+      id: userFromDb.id,
+      username: userFromDb.username,
+      email: userFromDb.email,
+      roleId: userFromDb.roleId,
+      roleName: userFromDb.role.name as AppRoleNameType,
+      avatar: userFromDb.avatar || '/images/avatars/default_avatar.png',
+      permissions: permissionsList,
+      lastLogin: userFromDb.lastLogin?.toISOString() || undefined
+    };
+  } catch (error) {
+    logger.error(`[${actionName}] Error for userId ${userId}`, error as Error, { userId }, actionName);
+    return null;
+  }
 }
 
 export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> {
