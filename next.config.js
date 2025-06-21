@@ -1,4 +1,11 @@
 /** @type {import('next').NextConfig} */
+
+// Prepare the allowed origins for development, primarily for Next.js Fast Refresh.
+const allowedDevOrigins = [];
+if (process.env.NEXT_PUBLIC_BASE_URL) {
+    allowedDevOrigins.push(process.env.NEXT_PUBLIC_BASE_URL);
+}
+
 const nextConfig = {
   output: 'standalone',
   async headers() {
@@ -13,7 +20,10 @@ const nextConfig = {
         ]
       }
     ]
-  }
+  },
+  experimental: {
+    allowedDevOrigins: allowedDevOrigins
+  },
 };
 
 module.exports = nextConfig;
