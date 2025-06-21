@@ -73,7 +73,7 @@ export function Header() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub Profile"
-          className="h-10 w-10 rounded-full flex items-center justify-center text-current hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-current focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <svg
             role="img"
@@ -96,9 +96,6 @@ export function Header() {
               className="text-current hover:no-underline rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <UserCircle className="h-6 w-6" />
-              <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">
-                  {currentUser?.username || "用户"}
-              </span>
               <ChevronDown
                 className={cn(
                   "h-4 w-4 text-muted-foreground transition-transform duration-200",
