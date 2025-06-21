@@ -34,7 +34,7 @@ export default function ChangePasswordPage() {
     );
   }
 
-  if (!currentUser || (currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
+  if (!currentUser) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <UserCircle2 className="h-16 w-16 text-destructive mb-4" />

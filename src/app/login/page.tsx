@@ -26,7 +26,7 @@ export default function LoginPage() {
       return; // Wait for authentication check to complete
     }
 
-    const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
+    const isAuthenticated = !!currentUser;
 
     if (isAuthenticated) {
       router.replace("/dashboard");
@@ -44,9 +44,6 @@ export default function LoginPage() {
         if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
           (window as any).setCurrentMockUser(result.user.id);
           toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
-          // No need to router.push here, the AuthGuard in the layout will handle showing the dashboard
-          // And the useEffect on this page will handle redirecting if the user somehow lands here again.
-          // Let the page reload do its work driven by setCurrentMockUser.
         } else {
           toast({ title: "登录错误", description: "客户端错误: 无法设置用户会话。", variant: "destructive" });
         }
@@ -60,7 +57,7 @@ export default function LoginPage() {
     }
   };
   
-  const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
+  const isAuthenticated = !!currentUser;
 
   // Show a loading screen while checking auth status or if user is authenticated and redirecting
   if (isAuthLoading || isAuthenticated) {

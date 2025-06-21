@@ -1,7 +1,7 @@
 
 // --- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2) ---
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Execution Started ---");
-
+import 'dotenv/config'; // Ensures .env variables are loaded for this script
 import { PrismaClient, Prisma } from '@prisma/client';
 import { encrypt } from '../src/lib/crypto-utils';
 import {
@@ -254,4 +254,3 @@ main()
   });
 
 console.log("--- PRISMA SEED SCRIPT (FULL RESTORED LOGIC V2): Script Execution Reached End (before main might have finished) ---");
-

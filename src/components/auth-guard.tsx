@@ -18,17 +18,18 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   React.useEffect(() => {
     if (isAuthLoading) {
-      return; // Do nothing while we are waiting for the user data
+      return; // Wait until loading is complete
     }
 
-    const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
+    const isAuthenticated = !!currentUser;
 
     if (!isAuthenticated) {
-      logger.warn(`AuthGuard: User is not authenticated. Redirecting from ${pathname} to /login.`);
+      logger.warn(`AuthGuard: User not authenticated. Redirecting from ${pathname} to /login.`);
       router.replace('/login');
     }
   }, [currentUser, isAuthLoading, router, pathname]);
 
+  // While loading, show a full-page spinner
   if (isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -38,9 +39,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
   
-  const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
-
-  if (!isAuthenticated) {
+  // If loading is finished and user is not authenticated, they will be redirected.
+  // We can show a message during this brief period.
+  if (!currentUser) {
       return (
         <div className="flex flex-col items-center justify-center h-full">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -50,5 +51,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
+  // If loading is finished and user is authenticated, render the children
   return <>{children}</>;
 }
