@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: 'IPAM Lite Minimal Test',
-  description: 'Testing basic page rendering.',
+  title: 'IPAM Lite Management',
+  description: 'An intuitive IP Address Management (IPAM) solution built with Next.js.',
 };
 
 export default function RootLayout({
