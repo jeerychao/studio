@@ -3,9 +3,8 @@
 
 import * as React from "react";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { logger } from "@/lib/logger";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -14,23 +13,20 @@ interface AuthGuardProps {
 export function AuthGuard({ children }: AuthGuardProps) {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
-  const pathname = usePathname();
 
+  // The redirect logic is now a side-effect that runs only when the conditions are met.
   React.useEffect(() => {
-    if (isAuthLoading) {
-      return; // Wait until loading is complete
-    }
-
-    const isAuthenticated = !!currentUser;
-
-    if (!isAuthenticated) {
-      logger.warn(`AuthGuard: User not authenticated. Redirecting from ${pathname} to /login.`);
+    // We only want to check for redirection *after* the initial loading is complete.
+    if (!isAuthLoading && !currentUser) {
       router.replace('/login');
     }
-  }, [currentUser, isAuthLoading, router, pathname]);
+  }, [isAuthLoading, currentUser, router]);
 
-  // While loading, show a full-page spinner
-  if (isAuthLoading) {
+  // If we are still loading, or if we are not authenticated, show a loading spinner.
+  // The useEffect above will handle the redirect for the unauthenticated case.
+  // This prevents the redirect loop by showing a consistent loading state
+  // until the user is authenticated.
+  if (isAuthLoading || !currentUser) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -38,19 +34,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
       </div>
     );
   }
-  
-  // If loading is finished and user is not authenticated, they will be redirected.
-  // We can show a message during this brief period.
-  if (!currentUser) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-lg text-muted-foreground">会话无效或已过期。</p>
-            <p className="text-md text-muted-foreground">正在重定向到登录页面...</p>
-        </div>
-    );
-  }
 
-  // If loading is finished and user is authenticated, render the children
+  // If loading is done and the user is authenticated, render the children.
   return <>{children}</>;
 }

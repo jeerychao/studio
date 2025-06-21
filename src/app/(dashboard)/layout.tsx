@@ -33,7 +33,8 @@ export default function DashboardLayout({
                 alt="Company Logo" 
                 width={120} 
                 height={40}  
-                className="h-10 w-auto" 
+                className="h-10" 
+                style={{ width: 'auto' }}
                 priority 
               />
             </div>
