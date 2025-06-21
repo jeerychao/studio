@@ -18,13 +18,10 @@ import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
-import { cn } from "@/lib/utils";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const router = useRouter();
-
-  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
 
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
@@ -87,30 +84,18 @@ export function Header() {
         
         <ThemeToggle />
 
-        <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              onMouseEnter={() => setIsUserMenuOpen(true)}
-              onMouseLeave={() => setIsUserMenuOpen(false)}
-              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-transparent"
+              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <UserCircle className="h-6 w-6" />
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 text-muted-foreground transition-transform duration-200",
-                  isUserMenuOpen && "rotate-180"
-                )}
-              />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="w-48"
-            onMouseEnter={() => setIsUserMenuOpen(true)}
-            onMouseLeave={() => setIsUserMenuOpen(false)}
-          >
+          <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>用户菜单</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>

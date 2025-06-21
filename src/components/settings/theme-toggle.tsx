@@ -11,40 +11,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
 export function ThemeToggle() {
   const { setTheme } = useTheme();
-  const [isThemeMenuOpen, setIsThemeMenuOpen] = React.useState(false);
 
   return (
-    <DropdownMenu open={isThemeMenuOpen} onOpenChange={setIsThemeMenuOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          onMouseEnter={() => setIsThemeMenuOpen(true)}
-          onMouseLeave={() => setIsThemeMenuOpen(false)}
-          className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-transparent"
+          className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0"
         >
           <div className="h-6 w-6 relative flex items-center justify-center">
             <Sun className="absolute h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </div>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform duration-200",
-              isThemeMenuOpen && "rotate-180"
-            )}
-          />
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-48"
-        onMouseEnter={() => setIsThemeMenuOpen(true)}
-        onMouseLeave={() => setIsThemeMenuOpen(false)}
-      >
+      <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer">
           <Sun className="mr-2 h-4 w-4" />
           Light
