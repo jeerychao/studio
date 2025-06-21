@@ -101,42 +101,40 @@ export function Header() {
           </Button>
         </Link>
         <ThemeToggle />
-        <DropdownMenu open={isUserMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              onMouseEnter={handleMenuOpen}
-              onMouseLeave={handleMenuClose}
-              variant="ghost"
-              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"
+        <div onMouseEnter={handleMenuOpen} onMouseLeave={handleMenuClose}>
+            <DropdownMenu open={isUserMenuOpen}>
+            <DropdownMenuTrigger asChild>
+                <Button
+                variant="ghost"
+                className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent"
+                >
+                <UserCircle className="h-6 w-6" />
+                <ChevronDown
+                    className={cn(
+                    "h-3 w-3 text-muted-foreground opacity-70 transition-transform duration-200",
+                    isUserMenuOpen && "rotate-180"
+                    )}
+                />
+                <span className="sr-only">切换用户菜单</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                align="end"
+                className="w-48"
             >
-              <UserCircle className="h-6 w-6" />
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 text-muted-foreground opacity-70 transition-transform duration-200",
-                  isUserMenuOpen && "rotate-180"
-                )}
-              />
-              <span className="sr-only">切换用户菜单</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            onMouseEnter={handleMenuOpen}
-            onMouseLeave={handleMenuClose}
-            className="w-48"
-          >
-            <DropdownMenuLabel>用户菜单</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/account/change-password" className="flex items-center w-full">
-                <KeyRound className="mr-2 h-4 w-4" />
-                修改密码
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <DropdownMenuLabel>用户菜单</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                <Link href="/account/change-password" className="flex items-center w-full">
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    修改密码
+                </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>退出登录</DropdownMenuItem>
+            </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
       </div>
     </header>
   );
