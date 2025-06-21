@@ -216,7 +216,7 @@ export const mockRoles: Role[] = [
 ];
 
 export const mockUsers: Array<Omit<User, 'roleName' | 'permissions' | 'lastLogin'> & { password?: string, phone?: string, lastLogin?: string }> = [
-  { id: 'seed_user_admin', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID,
+  { id: 'user_admin_001', username: 'admin', email: 'admin@example.com', roleId: ADMIN_ROLE_ID,
     password: 'admin', // Plain text password
     phone: '11111111111',
     avatar: '/images/avatars/admin_avatar.png', lastLogin: new Date(Date.now() - 86400000).toISOString() },
@@ -232,10 +232,10 @@ export const mockUsers: Array<Omit<User, 'roleName' | 'permissions' | 'lastLogin
 
 
 export let mockAuditLogs: AuditLog[] = [
-  { id: 'seed_log_001', userId: 'seed_user_admin', username: 'admin', action: 'create_subnet_seed', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Seeded subnet 172.16.0.0/20 (Guest WiFi Zone)' },
+  { id: 'seed_log_001', userId: 'user_admin_001', username: 'admin', action: 'create_subnet_seed', timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), details: 'Seeded subnet 172.16.0.0/20 (Guest WiFi Zone)' },
   { id: 'seed_log_002', userId: 'seed_user_operator', username: 'operator', action: 'assign_ip_seed', timestamp: new Date(Date.now() - 3600000).toISOString(), details: 'Seeded IP 192.168.1.10 to John Doe\'s PC' },
-  { id: 'seed_log_003', userId: 'seed_user_admin', username: 'admin', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 (Office VLAN) description update' },
-  { id: 'seed_log_004', userId: 'seed_user_admin', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
+  { id: 'seed_log_003', userId: 'user_admin_001', username: 'admin', action: 'update_vlan_seed', timestamp: new Date().toISOString(), details: 'Seeded VLAN 10 (Office VLAN) description update' },
+  { id: 'seed_log_004', userId: 'user_admin_001', username: 'admin', action: 'user_login_seed', timestamp: new Date(Date.now() - 86400000).toISOString(), details: 'User admin successfully logged in.' },
 ];
 
 export const mockDeviceDictionaries: Omit<DeviceDictionary, 'id' | 'createdAt' | 'updatedAt' | 'port'>[] = [
