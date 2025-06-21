@@ -105,7 +105,7 @@ async function main() {
       });
     } catch (e: any) {
       logger.error(`Error seeding user ${userData.email}:`, e, { name: e.name, message: e.message, stack: e.stack });
-      if (userData.id === 'seed_user_admin') {
+      if (userData.id === 'user_admin_001') {
           logger.error(`CRITICAL: Failed to seed admin user ${userData.email}. Exiting.`);
           process.exit(1);
       }
