@@ -22,7 +22,7 @@ export function ThemeToggle() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
+          className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"
         >
           <div className="relative w-[1.1rem] h-[1.1rem] flex items-center justify-center">
             <Sun className="h-full w-full rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
