@@ -1,11 +1,9 @@
-
 "use client";
 
 import type { User, RoleName, PermissionId } from '@/types';
-import { fetchCurrentUserDetailsAction, type FetchedUserDetails } from '@/lib/actions';
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
-import { logger } from '@/lib/logger';
+import React, { createContext, useContext } from 'react';
 
+// Keep the types
 export interface CurrentUserContextValue {
   id: string;
   username: string;
@@ -22,89 +20,24 @@ export interface UseCurrentUserReturn {
   isAuthLoading: boolean;
 }
 
+// Create and export the context
 export const CurrentUserContext = createContext<UseCurrentUserReturn | undefined>(undefined);
 
+// Export the key
 export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma_real_data';
 
-export const CurrentUserProvider = ({ children }: { children: React.ReactNode }) => {
-  const [currentUser, setCurrentUser] = useState<CurrentUserContextValue | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const isInitializedRef = useRef(false);
+// The provider component is moved to providers.tsx
 
-  useEffect(() => {
-    if (isInitializedRef.current) {
-      return;
-    }
-    isInitializedRef.current = true;
-
-    const initializeUser = async () => {
-      setIsAuthLoading(true);
-      let userToSet: CurrentUserContextValue | null = null;
-      try {
-        const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
-        if (storedUserId) {
-          logger.debug(`CurrentUserProvider: Found storedUserId: ${storedUserId}. Fetching details...`);
-          // This single call eagerly loads user, role, and permissions, addressing the N+1 query pattern.
-          // It is now called only once per application load from this central provider.
-          const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
-
-          if (userDetails) {
-            logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
-            userToSet = {
-              ...userDetails,
-              permissions: userDetails.permissions || [],
-            };
-          } else {
-            logger.warn(`CurrentUserProvider: User details not found for stored ID "${storedUserId}". Clearing storage.`);
-            localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-            userToSet = null;
-          }
-        } else {
-          logger.debug("CurrentUserProvider: No storedUserId found. User is not authenticated.");
-          userToSet = null;
-        }
-      } catch (error) {
-        logger.error("CurrentUserProvider: Error during user initialization.", error as Error);
-        userToSet = null;
-      } finally {
-        setCurrentUser(userToSet);
-        setIsAuthLoading(false);
-        logger.debug("CurrentUserProvider: Initialization complete.", { userSet: userToSet ? userToSet.username : 'null' });
-      }
-    };
-
-    initializeUser();
-
-    if (!(window as any).setCurrentMockUser) {
-        (window as any).setCurrentMockUser = (userId: string | null) => {
-          logger.debug(`Global setCurrentMockUser called with ID: ${userId}. Reloading window.`);
-          if (!userId || userId.trim() === "") {
-            localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-          } else {
-            localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-          }
-          window.location.reload();
-        };
-    }
-  }, []);
-
-  const value = useMemo(() => ({
-    currentUser,
-    isAuthLoading,
-  }), [currentUser, isAuthLoading]);
-
-  return React.createElement(CurrentUserContext.Provider, { value }, children);
-};
-
-
+// The hook itself just consumes the context
 export function useCurrentUser(): UseCurrentUserReturn {
   const context = useContext(CurrentUserContext);
   if (context === undefined) {
-    throw new Error('useCurrentUser must be used within a CurrentUserProvider');
+    throw new Error('useCurrentUser must be used within a CurrentUserProvider, which is defined in providers.tsx');
   }
   return context;
 }
 
+// The helper function stays
 export const hasPermission = (currentUser: CurrentUserContextValue | null, permissionId: PermissionId): boolean => {
   if (!currentUser || !currentUser.permissions) {
     return false;
