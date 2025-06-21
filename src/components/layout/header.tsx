@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, ChevronDown, LogOut } from "lucide-react";
+import { Menu, UserCircle, Network, KeyRound, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -69,7 +69,7 @@ export function Header() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub Profile"
-          className="h-10 w-10 rounded-full flex items-center justify-center text-current focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-current hover:bg-card focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <svg
             role="img"
@@ -89,10 +89,10 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-transparent"
+              size="icon"
+              className="rounded-full hover:bg-card focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <UserCircle className="h-6 w-6" />
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
