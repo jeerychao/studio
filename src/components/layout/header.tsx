@@ -1,4 +1,3 @@
-
 "use client";
 import Link from "next/link";
 import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
@@ -19,23 +18,42 @@ import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
+import { cn } from "@/lib/utils";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const router = useRouter();
 
+  // State and ref for hover-controlled dropdown
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+  const timeoutRef = React.useRef<number | null>(null);
+
+  const handleMenuOpen = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setIsUserMenuOpen(true);
+  };
+
+  const handleMenuClose = () => {
+    timeoutRef.current = window.setTimeout(() => {
+      setIsUserMenuOpen(false);
+    }, 300); // 300ms delay for smoother experience
+  };
+
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
     if (typeof window !== "undefined") {
       localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      window.location.href = '/login'; 
+      window.location.href = "/login";
     }
   };
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 sticky top-0 z-30">
       {isMobile ? (
-         <Sheet>
+        <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="shrink-0 md:hidden h-8 w-8">
               <Menu className="h-4 w-4" />
@@ -58,8 +76,8 @@ export function Header() {
         </Sheet>
       ) : (
         <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={toggleSidebar}>
-            <Menu className="h-4 w-4" />
-            <span className="sr-only">切换侧边栏</span>
+          <Menu className="h-4 w-4" />
+          <span className="sr-only">切换侧边栏</span>
         </Button>
       )}
 
@@ -83,18 +101,30 @@ export function Header() {
           </Button>
         </Link>
         <ThemeToggle />
-        <DropdownMenu>
+        <DropdownMenu open={isUserMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
+              onMouseEnter={handleMenuOpen}
+              onMouseLeave={handleMenuClose}
               variant="ghost"
-              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent"
+              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"
             >
               <UserCircle className="h-6 w-6" />
-              <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 text-muted-foreground opacity-70 transition-transform duration-200",
+                  isUserMenuOpen && "rotate-180"
+                )}
+              />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onMouseEnter={handleMenuOpen}
+            onMouseLeave={handleMenuClose}
+            className="w-48"
+          >
             <DropdownMenuLabel>用户菜单</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -12,14 +11,33 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 export function ThemeToggle() {
   const { setTheme } = useTheme();
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = React.useState(false);
+  const timeoutRef = React.useRef<number | null>(null);
+
+  const handleMenuOpen = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setIsThemeMenuOpen(true);
+  };
+
+  const handleMenuClose = () => {
+    timeoutRef.current = window.setTimeout(() => {
+      setIsThemeMenuOpen(false);
+    }, 300); // 300ms delay for smoother experience
+  };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isThemeMenuOpen}>
       <DropdownMenuTrigger asChild>
         <Button
+          onMouseEnter={handleMenuOpen}
+          onMouseLeave={handleMenuClose}
           variant="ghost"
           className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"
         >
@@ -27,11 +45,21 @@ export function ThemeToggle() {
             <Sun className="h-full w-full rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute inset-0 h-full w-full rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </div>
-          <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
+          <ChevronDown
+            className={cn(
+              "h-3 w-3 text-muted-foreground opacity-70 transition-transform duration-200",
+              isThemeMenuOpen && "rotate-180"
+            )}
+          />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        onMouseEnter={handleMenuOpen}
+        onMouseLeave={handleMenuClose}
+        className="w-48"
+      >
         <DropdownMenuItem onClick={() => setTheme("light")}>
           <Sun className="mr-2 h-4 w-4" />
           Light
