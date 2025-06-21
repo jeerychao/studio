@@ -1864,11 +1864,31 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       }),
       prisma.iPAddress.count({ where: { OR: [{ usageUnit: null }, { usageUnit: "" }] } }),
       prisma.vLAN.findMany({
-        include: { _count: { select: { subnets: true, directIPs: true } } },
+        select: {
+          id: true,
+          vlanNumber: true,
+          name: true,
+          _count: { select: { subnets: true, directIPs: true } }
+        },
         orderBy: { vlanNumber: 'asc' }
       }),
-      prisma.subnet.findMany({ select: { id: true, cidr: true, name: true } }),
-      prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: DASHBOARD_AUDIT_LOG_COUNT })
+      prisma.subnet.findMany({
+        select: {
+          id: true,
+          cidr: true,
+          name: true,
+          _count: {
+            select: {
+              ips: { where: { status: 'allocated' } }
+            }
+          }
+        }
+      }),
+      prisma.auditLog.findMany({ 
+        select: { id: true, username: true, action: true, timestamp: true, details: true },
+        orderBy: { timestamp: 'desc' }, 
+        take: DASHBOARD_AUDIT_LOG_COUNT 
+      })
     ]);
 
     const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
@@ -1912,39 +1932,22 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
 
-    let subnetsNeedingAttention: SubnetUtilizationInfo[] = [];
+    const subnetsWithUtilization: SubnetUtilizationInfo[] = allSubnetsForDashboard.map(subnet => {
+      const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
+      let utilization = 0;
+      if (subnetProperties) {
+          const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
+          const allocatedIpsCount = subnet._count.ips;
+          if (totalUsableIps > 0) {
+              const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
+              utilization = (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) ? 1 : Math.round(rawPercentage);
+          }
+      }
+      return { id: subnet.id, cidr: subnet.cidr, name: subnet.name || undefined, utilization };
+    });
+    const subnetsNeedingAttention = subnetsWithUtilization.filter(s => s.utilization > 80).sort((a, b) => b.utilization - a.utilization).slice(0, DASHBOARD_TOP_N_COUNT);
 
-    if (allSubnetsForDashboard.length > 0) {
-        const subnetIdsForDashboard = allSubnetsForDashboard.map(s => s.id);
-        const ipCountsBySubnet = await prisma.iPAddress.groupBy({
-            by: ['subnetId'],
-            _count: { id: true },
-            where: { subnetId: { in: subnetIdsForDashboard }, status: 'allocated' },
-        });
-        const allocatedIpCountMap = new Map<string, number>();
-        ipCountsBySubnet.forEach(group => {
-            if (group.subnetId) {
-                allocatedIpCountMap.set(group.subnetId, group._count.id);
-            }
-        });
-
-        const subnetsWithUtilization: SubnetUtilizationInfo[] = allSubnetsForDashboard.map(subnet => {
-            const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
-            let utilization = 0;
-            if (subnetProperties) {
-                const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-                const allocatedIpsCount = allocatedIpCountMap.get(subnet.id) || 0;
-                if (totalUsableIps > 0) {
-                    const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
-                    utilization = (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) ? 1 : Math.round(rawPercentage);
-                }
-            }
-            return { id: subnet.id, cidr: subnet.cidr, name: subnet.name || undefined, utilization };
-        });
-        subnetsNeedingAttention = subnetsWithUtilization.filter(s => s.utilization > 80).sort((a, b) => b.utilization - a.utilization).slice(0, DASHBOARD_TOP_N_COUNT);
-    }
-
-    const recentAuditLogs: AuditLog[] = recentAuditLogsDb.map(log => ({ id: log.id, userId: log.userId || undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
+    const recentAuditLogs: AuditLog[] = recentAuditLogsDb.map(log => ({ id: log.id, userId: undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
 
     const dashboardData: DashboardData = {
       totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
