@@ -14,7 +14,7 @@ import { loginAction } from "@/lib/actions";
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("admin@example.com");
-  const [password, setPassword] = React.useState("");
+  const [password, setPassword] = React.useState("admin");
   const [showPassword, setShowPassword] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
