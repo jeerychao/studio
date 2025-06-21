@@ -1,15 +1,19 @@
-
 /** @type {import('next').NextConfig} */
-
 const nextConfig = {
-  devIndicators: {
-    // This setting is to prevent cross-origin errors in development environments
-    // like Firebase Studio, where the preview pane might be on a different subdomain.
-    allowedDevOrigins: [
-      "*.cloudworkstations.dev",
+  output: 'standalone',
+  async headers() {
+    return [
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Credentials", value: "true" },
+          { key: "Access-Control-Allow-Origin", value: process.env.NEXT_PUBLIC_BASE_URL },
+          { key: "Access-Control-Allow-Methods", value: "GET,OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" },
+        ]
+      }
     ]
-  },
-  // Security headers are handled in middleware.
+  }
 };
 
 module.exports = nextConfig;
