@@ -1,3 +1,4 @@
+
 "use client";
 import Link from "next/link";
 import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
@@ -110,12 +111,9 @@ export function Header() {
               onMouseEnter={handleMenuOpen}
               onMouseLeave={handleMenuClose}
               variant="ghost"
-              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5"
+              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
             >
               <UserCircle className="h-6 w-6" />
-              <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">
-                {isAuthLoading ? "加载中..." : usernameForDisplay}
-              </span>
               <ChevronDown className={cn(
                 "h-3 w-3 text-muted-foreground opacity-70 transition-transform duration-200",
                 isUserMenuOpen && "rotate-180"
