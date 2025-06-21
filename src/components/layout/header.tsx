@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, LogOut } from "lucide-react";
+import { Menu, UserCircle, Network, KeyRound, LogOut, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,21 +13,25 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
+import { cn } from "@/lib/utils";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const router = useRouter();
   const { currentUser } = useCurrentUser();
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
 
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+    if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
+      (window as any).setCurrentMockUser(null);
+    } else {
+      localStorage.removeItem("mock_current_user_id_v3_prisma_real_data");
       window.location.href = "/login";
     }
   };
@@ -69,7 +73,7 @@ export function Header() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub Profile"
-          className="h-10 w-10 rounded-full flex items-center justify-center text-current hover:bg-card focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-current hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <svg
             role="img"
@@ -85,15 +89,21 @@ export function Header() {
         
         <ThemeToggle />
 
-        <DropdownMenu>
+        <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full hover:bg-card focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 text-current hover:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <UserCircle className="h-6 w-6" />
-              <span className="sr-only">切换用户菜单</span>
+              <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">
+                  {currentUser?.username || "用户"}
+              </span>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                  isUserMenuOpen && "rotate-180"
+                )}
+              />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
