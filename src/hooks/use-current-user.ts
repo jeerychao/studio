@@ -2,9 +2,8 @@
 "use client";
 
 import type { User, RoleName, PermissionId } from '@/types';
-import { PERMISSIONS } from '@/types';
 import { fetchCurrentUserDetailsAction, type FetchedUserDetails } from '@/lib/actions';
-import React from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { logger } from '@/lib/logger';
 
 export interface CurrentUserContextValue {
@@ -23,14 +22,16 @@ export interface UseCurrentUserReturn {
   isAuthLoading: boolean;
 }
 
+export const CurrentUserContext = createContext<UseCurrentUserReturn | undefined>(undefined);
+
 export const MOCK_USER_STORAGE_KEY = 'mock_current_user_id_v3_prisma_real_data';
 
-export function useCurrentUser(): UseCurrentUserReturn {
-  const [currentUser, setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
-  const isInitializedRef = React.useRef(false);
+export const CurrentUserProvider = ({ children }: { children: React.ReactNode }) => {
+  const [currentUser, setCurrentUser] = useState<CurrentUserContextValue | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const isInitializedRef = useRef(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isInitializedRef.current) {
       return;
     }
@@ -42,40 +43,41 @@ export function useCurrentUser(): UseCurrentUserReturn {
       try {
         const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
         if (storedUserId) {
-          logger.debug(`useCurrentUser: Found storedUserId: ${storedUserId}. Fetching...`);
+          logger.debug(`CurrentUserProvider: Found storedUserId: ${storedUserId}. Fetching details...`);
+          // This single call eagerly loads user, role, and permissions, addressing the N+1 query pattern.
+          // It is now called only once per application load from this central provider.
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
 
           if (userDetails) {
-            logger.debug(`useCurrentUser: User details fetched for ${userDetails.username}.`);
+            logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
             userToSet = {
               ...userDetails,
               permissions: userDetails.permissions || [],
             };
           } else {
-            logger.warn(`useCurrentUser: User details not found for stored ID "${storedUserId}". Clearing storage.`);
+            logger.warn(`CurrentUserProvider: User details not found for stored ID "${storedUserId}". Clearing storage.`);
             localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-            userToSet = null; // Set to null instead of guest
+            userToSet = null;
           }
         } else {
-          logger.debug("useCurrentUser: No storedUserId found. User is not authenticated.");
-          userToSet = null; // Set to null instead of guest
+          logger.debug("CurrentUserProvider: No storedUserId found. User is not authenticated.");
+          userToSet = null;
         }
       } catch (error) {
-        logger.error("useCurrentUser: Error during initialization.", error as Error);
-        userToSet = null; // Set to null on error
+        logger.error("CurrentUserProvider: Error during user initialization.", error as Error);
+        userToSet = null;
       } finally {
         setCurrentUser(userToSet);
         setIsAuthLoading(false);
-        logger.debug("useCurrentUser: Initialization complete.", { userSet: userToSet ? userToSet.username : 'null' });
+        logger.debug("CurrentUserProvider: Initialization complete.", { userSet: userToSet ? userToSet.username : 'null' });
       }
     };
 
     initializeUser();
 
-    // Guard against re-declaration in Fast Refresh
     if (!(window as any).setCurrentMockUser) {
         (window as any).setCurrentMockUser = (userId: string | null) => {
-          logger.debug(`Global setCurrentMockUser called with ID: ${userId}. Reloading.`);
+          logger.debug(`Global setCurrentMockUser called with ID: ${userId}. Reloading window.`);
           if (!userId || userId.trim() === "") {
             localStorage.removeItem(MOCK_USER_STORAGE_KEY);
           } else {
@@ -84,13 +86,23 @@ export function useCurrentUser(): UseCurrentUserReturn {
           window.location.reload();
         };
     }
-    
-  }, []); // Empty dependency array ensures this runs only once per application lifecycle.
+  }, []);
 
-  return {
-    currentUser: currentUser,
-    isAuthLoading: isAuthLoading
-  };
+  const value = useMemo(() => ({
+    currentUser,
+    isAuthLoading,
+  }), [currentUser, isAuthLoading]);
+
+  return React.createElement(CurrentUserContext.Provider, { value }, children);
+};
+
+
+export function useCurrentUser(): UseCurrentUserReturn {
+  const context = useContext(CurrentUserContext);
+  if (context === undefined) {
+    throw new Error('useCurrentUser must be used within a CurrentUserProvider');
+  }
+  return context;
 }
 
 export const hasPermission = (currentUser: CurrentUserContextValue | null, permissionId: PermissionId): boolean => {
