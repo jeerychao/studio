@@ -1842,36 +1842,40 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
   const actionName = 'getDashboardDataAction';
   try {
     const [
-      totalIpCount,
       ipStatusGroups,
-      totalVlanCount,
-      totalSubnetCount,
       usageUnitGroups,
       unspecifiedUsageUnitCount,
       allVlansFromDb,
       allSubnetsForDashboard,
-      recentAuditLogsDb
+      recentAuditLogsDb,
     ] = await prisma.$transaction([
-      prisma.iPAddress.count(),
-      prisma.iPAddress.groupBy({ by: ['status'], _count: { status: true } }),
-      prisma.vLAN.count(),
-      prisma.subnet.count(),
+      // 1. Group by status to get counts for each status and total count
+      prisma.iPAddress.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      // 2. Group by usage unit for chart data
       prisma.iPAddress.groupBy({
         by: ['usageUnit'],
         _count: { usageUnit: true },
         where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
         orderBy: { _count: { usageUnit: 'desc' } },
       }),
-      prisma.iPAddress.count({ where: { OR: [{ usageUnit: null }, { usageUnit: "" }] } }),
+      // 3. Count IPs with no usage unit specified
+      prisma.iPAddress.count({
+        where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
+      }),
+      // 4. Get all VLANs with their resource counts
       prisma.vLAN.findMany({
         select: {
           id: true,
           vlanNumber: true,
           name: true,
-          _count: { select: { subnets: true, directIPs: true } }
+          _count: { select: { subnets: true, directIPs: true } },
         },
-        orderBy: { vlanNumber: 'asc' }
+        orderBy: { vlanNumber: 'asc' },
       }),
+      // 5. Get all Subnets with allocated IP counts (FIXED: ipAddresses)
       prisma.subnet.findMany({
         select: {
           id: true,
@@ -1879,23 +1883,29 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
           name: true,
           _count: {
             select: {
-              ips: { where: { status: 'allocated' } }
-            }
-          }
-        }
+              ipAddresses: { where: { status: 'allocated' } }, // Corrected from 'ips'
+            },
+          },
+        },
       }),
-      prisma.auditLog.findMany({ 
+      // 6. Get recent audit logs
+      prisma.auditLog.findMany({
         select: { id: true, username: true, action: true, timestamp: true, details: true },
-        orderBy: { timestamp: 'desc' }, 
-        take: DASHBOARD_AUDIT_LOG_COUNT 
-      })
+        orderBy: { timestamp: 'desc' },
+        take: DASHBOARD_AUDIT_LOG_COUNT,
+      }),
     ]);
+
+    // Process results
+    const totalIpCount = ipStatusGroups.reduce((sum, group) => sum + group._count._all, 0);
+    const totalVlanCount = allVlansFromDb.length;
+    const totalSubnetCount = allSubnetsForDashboard.length;
 
     const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
     ipStatusGroups.forEach(group => {
       const statusKey = group.status as keyof IPStatusCounts;
       if (statusKey in ipStatusCounts) {
-        ipStatusCounts[statusKey] = group._count.status;
+        ipStatusCounts[statusKey] = group._count._all;
       }
     });
 
@@ -1937,7 +1947,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       let utilization = 0;
       if (subnetProperties) {
           const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-          const allocatedIpsCount = subnet._count.ips;
+          const allocatedIpsCount = subnet._count.ipAddresses; // Corrected from 'ips'
           if (totalUsableIps > 0) {
               const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
               utilization = (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) ? 1 : Math.round(rawPercentage);
@@ -1954,6 +1964,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       ipUsageByUnit, busiestVlans,
       subnetsNeedingAttention, recentAuditLogs,
     };
+    
     revalidatePath("/dashboard");
     return { success: true, data: dashboardData };
   } catch (error: unknown) {
