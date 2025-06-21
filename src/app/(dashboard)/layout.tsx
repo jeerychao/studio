@@ -17,7 +17,7 @@ import {
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
 import { Toaster } from "@/components/ui/toaster";
-import { useCurrentUser, type CurrentUserContextValue } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { logger } from "@/lib/logger";
 
 export default function DashboardLayout({
@@ -28,37 +28,23 @@ export default function DashboardLayout({
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
-  const [authStatus, setAuthStatus] = React.useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   React.useEffect(() => {
-    logger.debug(
-      "[DashboardLayout Effect] Running.", 
-      { isAuthLoading, currentUser: currentUser ? currentUser.username : 'null' }
-    );
+    // This effect now only handles redirection logic after loading is complete.
     if (isAuthLoading) {
-      setAuthStatus('loading');
-      logger.info("DashboardLayout: Auth status is loading (isAuthLoading true).");
-      return;
+      return; // Do nothing while authentication is in progress.
     }
 
-    if (currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest')) {
-        setAuthStatus('authenticated');
-        logger.info("DashboardLayout: User authenticated.", { username: currentUser.username, userId: currentUser.id, currentPath: pathname });
-        if (pathname === '/login'){
-             logger.info("DashboardLayout: User authenticated and on /login, redirecting to /dashboard.");
-             router.replace('/dashboard'); 
-        }
-    } else { 
-      setAuthStatus('unauthenticated');
-      logger.warn("DashboardLayout: User unauthenticated or guest.", { currentPath: pathname, action: "Attempting redirect to /login if not already there."});
-      if (pathname !== '/login') {
-        router.replace('/login');
-      }
+    const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
+
+    if (!isAuthenticated && pathname !== '/login') {
+      logger.warn(`DashboardLayout: User is not authenticated. Redirecting from ${pathname} to /login.`);
+      router.replace('/login');
     }
   }, [currentUser, isAuthLoading, router, pathname]);
 
-  if (authStatus === 'loading') {
-    logger.info("DashboardLayout: Auth status is 'loading', rendering loading spinner.");
+  // Render a loading spinner while the auth status is being determined.
+  if (isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -67,8 +53,11 @@ export default function DashboardLayout({
     );
   }
 
-  if (authStatus === 'unauthenticated' && pathname !== '/login') {
-    logger.info("DashboardLayout: Auth status 'unauthenticated' and not on /login, rendering redirect message.");
+  const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
+
+  // If the user is not authenticated, render a loading/redirect message.
+  // This prevents flashing the content of a protected page before the redirect effect kicks in.
+  if (!isAuthenticated) {
     return (
         <div className="flex flex-col items-center justify-center h-screen">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -78,7 +67,7 @@ export default function DashboardLayout({
     );
   }
   
-  logger.info("DashboardLayout: Rendering main layout content.", { authStatus });
+  // If authenticated, render the main layout.
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
@@ -118,4 +107,3 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
-

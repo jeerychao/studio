@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,32 +18,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const router = useRouter();
-  const pathname = usePathname();
   const { toast } = useToast();
   const { currentUser, isAuthLoading } = useCurrentUser();
-  const [pageAuthStatus, setPageAuthStatus] = React.useState<
-    "loading" | "authenticated" | "unauthenticated"
-  >("loading");
 
   React.useEffect(() => {
     if (isAuthLoading) {
-      setPageAuthStatus("loading");
-      return;
+      return; // Wait for authentication check to complete
     }
 
-    if (
-      currentUser &&
-      currentUser.id &&
-      !(currentUser.id === "guest-fallback-id" && currentUser.username === "Guest")
-    ) {
-      setPageAuthStatus("authenticated");
-      if (pathname === "/login") {
-        router.replace("/dashboard");
-      }
-    } else {
-      setPageAuthStatus("unauthenticated");
+    const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
+
+    if (isAuthenticated) {
+      router.replace("/dashboard");
     }
-  }, [currentUser, isAuthLoading, router, pathname]);
+  }, [currentUser, isAuthLoading, router]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -69,117 +57,105 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
+  
+  const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
 
-  if (isAuthLoading || pageAuthStatus === 'loading') {
+  // Show a loading screen while checking auth status or if user is authenticated and redirecting
+  if (isAuthLoading || isAuthenticated) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">初始化认证...</p>
+        <p className="text-lg text-muted-foreground">
+          {isAuthLoading ? "正在验证您的身份..." : "正在重定向到仪表盘..."}
+        </p>
       </div>
     );
   }
 
-  if (pageAuthStatus === 'authenticated' && pathname === '/login') {
-     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">正在重定向到仪表盘...</p>
-      </div>
-    );
-  }
-
-  if (pageAuthStatus === 'unauthenticated') {
-    return (
-      <div className="flex min-h-screen bg-background">
-        {/* Left Panel: Login Form */}
-        <div className="flex flex-1 flex-col p-6 md:p-10">
-          <div className="flex flex-grow flex-col items-center justify-center">
-            <div className="w-full max-w-sm space-y-6">
-              <div>
-                <h1 className="text-3xl font-bold">登录</h1>
-                <p className="text-muted-foreground">请输入邮箱和密码登录 (例如: youmail@example.com)</p>
+  // If not loading and not authenticated, show the login form
+  return (
+    <div className="flex min-h-screen bg-background">
+      {/* Left Panel: Login Form */}
+      <div className="flex flex-1 flex-col p-6 md:p-10">
+        <div className="flex flex-grow flex-col items-center justify-center">
+          <div className="w-full max-w-sm space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold">登录</h1>
+              <p className="text-muted-foreground">请输入邮箱和密码登录 (例如: youmail@example.com)</p>
+            </div>
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="email">邮箱</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="m@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  className="h-10" 
+                />
               </div>
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="email">邮箱</Label>
+              <div className="space-y-2">
+                <Label htmlFor="password">密码</Label>
+                <div className="relative">
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="m@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="输入您的密码"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isSubmitting}
-                    className="h-10" 
+                    className="pr-10 h-10" 
                   />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">密码</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="输入您的密码"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={isSubmitting}
-                      className="pr-10 h-10" 
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-current"
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? "隐藏密码" : "显示密码"}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-                <Button type="submit" className="w-full h-10" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      登录中...
-                    </>
-                  ) : (
-                    "登录"
-                  )}
-                </Button>
-              </form>
-            </div>
-          </div>
-          {/* Copyright and Contact Info */}
-          <div className="mt-auto pt-6 text-center">
-            <hr className="my-2 border-border" />
-            <p className="text-xs text-muted-foreground">
-              © 2025 IPAM Lite. 版权所有.联系方式: leejie2017@gmail.com
-            </p>
+              </div>
+              <Button type="submit" className="w-full h-10" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    登录中...
+                  </>
+                ) : (
+                  "登录"
+                )}
+              </Button>
+            </form>
           </div>
         </div>
-
-        {/* Right Panel: Image */}
-        <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10">
-          <Image
-            src="/images/middl.png"
-            alt="Login background image"
-            width={881}
-            height={559}
-            className="object-contain max-w-full max-h-full"
-            priority
-            data-ai-hint="globe network"
-          />
+        {/* Copyright and Contact Info */}
+        <div className="mt-auto pt-6 text-center">
+          <hr className="my-2 border-border" />
+          <p className="text-xs text-muted-foreground">
+            © 2025 IPAM Lite. 版权所有.联系方式: leejie2017@gmail.com
+          </p>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">加载中...</p>
+      {/* Right Panel: Image */}
+      <div className="hidden md:flex md:flex-1 flex-col items-center justify-center bg-[#191a52] p-10">
+        <Image
+          src="/images/middl.png"
+          alt="Login background image"
+          width={881}
+          height={559}
+          className="object-contain max-w-full max-h-full"
+          priority
+          data-ai-hint="globe network"
+        />
+      </div>
     </div>
   );
 }
