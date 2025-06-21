@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
+import { Menu, UserCircle, Network, KeyRound, ChevronDown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,7 +13,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
+import { MOCK_USER_STORAGE_KEY, useCurrentUser } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ import { logger } from "@/lib/logger";
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
 
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
@@ -68,7 +69,7 @@ export function Header() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub Profile"
-          className="h-10 w-10 rounded-full flex items-center justify-center text-current hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-current focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <svg
             role="img"
@@ -88,7 +89,7 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="rounded-full h-10 w-auto px-2 flex items-center justify-center gap-x-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-transparent"
             >
               <UserCircle className="h-6 w-6" />
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -96,7 +97,7 @@ export function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>用户菜单</DropdownMenuLabel>
+            <DropdownMenuLabel>{currentUser?.username || "用户菜单"}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/account/change-password" className="flex items-center w-full cursor-pointer">
@@ -105,7 +106,10 @@ export function Header() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">退出登录</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+              <LogOut className="mr-2 h-4 w-4" />
+              退出登录
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
