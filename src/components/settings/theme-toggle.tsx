@@ -15,7 +15,6 @@ import {
 
 export function ThemeToggle() {
   const { setTheme } = useTheme();
-  // No longer using local isOpen state or timers, Radix handles its own state.
 
   return (
     <DropdownMenu>
