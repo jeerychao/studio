@@ -30,8 +30,11 @@ function CurrentUserProvider({ children }: { children: React.ReactNode }) {
             logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
             userToSet = { ...userDetails, permissions: userDetails.permissions || [] };
           } else {
+            // **FIX**: Removed localStorage.removeItem to prevent auth loop.
+            // If user details are not found, we simply treat them as logged out for this session.
+            // The invalid ID will be overwritten on next successful login.
             logger.error(
-              `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This indicates a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out for this session.`,
+              `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This may indicate a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out for this session. The invalid session key was NOT removed to prevent a login loop.`,
               undefined,
               { storedUserId }
             );
