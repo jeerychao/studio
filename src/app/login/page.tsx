@@ -22,13 +22,8 @@ export default function LoginPage() {
   const { currentUser, isAuthLoading } = useCurrentUser();
 
   React.useEffect(() => {
-    if (isAuthLoading) {
-      return; // Wait for authentication check to complete
-    }
-
-    const isAuthenticated = !!currentUser;
-
-    if (isAuthenticated) {
+    // Only check for redirection after the initial loading is complete.
+    if (!isAuthLoading && currentUser) {
       router.replace("/dashboard");
     }
   }, [currentUser, isAuthLoading, router]);
@@ -41,6 +36,8 @@ export default function LoginPage() {
       const result = await loginAction({ email, password });
 
       if (result.success && result.user) {
+        // The reload is now handled by the global function in CurrentUserProvider
+        // which ensures a clean state transition.
         if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
           (window as any).setCurrentMockUser(result.user.id);
           toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
@@ -57,10 +54,8 @@ export default function LoginPage() {
     }
   };
   
-  const isAuthenticated = !!currentUser;
-
   // Show a loading screen while checking auth status or if user is authenticated and redirecting
-  if (isAuthLoading || isAuthenticated) {
+  if (isAuthLoading || currentUser) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />

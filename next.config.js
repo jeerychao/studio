@@ -1,6 +1,13 @@
+
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
+  // Add devIndicators to solve the Cross origin request warning in dev environment
+  devIndicators: {
+    allowedDevOrigins: [
+      'https://*.cloudworkstations.dev',
+    ],
+  },
   async headers() {
     return [
       {
