@@ -57,7 +57,7 @@ export default function DashboardLayout({
           </AuthGuard>
         </main>
         <footer className="py-4 px-4 md:px-6 lg:px-8 text-center text-xs text-muted-foreground border-t">
-          <p>© {new Date().getFullYear()} IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com</p>
+          <p>© {new Date().getFullYear()} IPAM Lite. 版权所有.联系方式: leejie2017@gmail.com</p>
         </footer>
         <Toaster />
       </SidebarInset>

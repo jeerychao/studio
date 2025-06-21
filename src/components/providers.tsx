@@ -30,12 +30,11 @@ function CurrentUserProvider({ children }: { children: React.ReactNode }) {
             logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
             userToSet = { ...userDetails, permissions: userDetails.permissions || [] };
           } else {
-            // CRITICAL FIX: Do not remove the item from local storage.
-            // This prevents the infinite loop. If the user's data is corrupt or
-            // they were deleted, they will be treated as logged out for this session
-            // and redirected to /login by AuthGuard. This is the correct behavior.
+            // This is the critical fix. We log the error but DO NOT remove the stored key.
+            // This prevents the self-destructive loop. The user is treated as logged out for this session
+            // and AuthGuard will redirect them. If they log in again, the key will be correctly overwritten.
             logger.error(
-              `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This indicates a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out.`,
+              `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This indicates a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out for this session.`,
               undefined,
               { storedUserId }
             );
