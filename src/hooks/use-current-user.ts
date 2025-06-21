@@ -46,32 +46,22 @@ const createGuestUser = async (): Promise<CurrentUserContextValue> => {
 export function useCurrentUser(): UseCurrentUserReturn {
   const [currentUser, setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
-  const [isInitialized, setIsInitialized] = React.useState(false);
-  // const router = useRouter(); // Not directly used in this effect's core logic
-  // const pathname = usePathname(); // Not directly used in this effect's core logic
+  const isInitializedRef = React.useRef(false); // Use ref to survive Strict Mode re-renders
 
   React.useEffect(() => {
-    // logger.debug("[useCurrentUser Effect Outer] Running. isInitialized:", isInitialized);
-    if (typeof window === "undefined") {
-      // logger.debug("useCurrentUser Effect: window is undefined (SSR), skipping initialization.");
-      // On SSR, we typically don't have localStorage or a "current user" in this client-side sense.
-      // Set loading to false and initialized to true to avoid an infinite loading state on SSR.
-      // The actual user will be determined client-side.
-      if (!isInitialized) { // Only set these if not already initialized (e.g. by a previous client render)
-          setIsAuthLoading(false);
-          setIsInitialized(true);
-      }
-      return;
+    if (typeof window === "undefined" || isInitializedRef.current) {
+        if (isInitializedRef.current) {
+             // If already initialized, we shouldn't be loading anymore.
+             // This can happen if another component instance already finished.
+             // We just need to ensure our local loading state is false.
+             if (isAuthLoading) setIsAuthLoading(false);
+        }
+        return;
     }
 
-    if (isInitialized) {
-      // logger.debug("useCurrentUser Effect: Already initialized, skipping actual user fetch logic.");
-      return;
-    }
+    isInitializedRef.current = true; // Mark as initialized immediately
 
-    // logger.debug("useCurrentUser Effect: Starting initialization (isInitialized=false).");
     const initializeUser = async () => {
-      // logger.debug("useCurrentUser initializeUser: Setting isAuthLoading to true.");
       setIsAuthLoading(true);
       let userToSet: CurrentUserContextValue | null = null;
       try {
@@ -104,69 +94,66 @@ export function useCurrentUser(): UseCurrentUserReturn {
       } finally {
         setCurrentUser(userToSet);
         setIsAuthLoading(false);
-        setIsInitialized(true); // Mark as initialized
         logger.debug("useCurrentUser initializeUser: Initialization complete.", { 
           userSet: userToSet ? userToSet.username : 'null', 
-          isAuthLoading: false, 
-          isInitialized: true,
-          finalPermissions: userToSet ? userToSet.permissions.slice(0,5) : [],
-          finalPermissionsCount: userToSet ? userToSet.permissions.length : 0
+          isAuthLoading: false
         });
       }
     };
 
     initializeUser();
 
-    (window as any).setCurrentMockUser = (userId: string | null) => {
-      logger.debug(`Global setCurrentMockUser called with ID: ${userId}.`);
-      if (!userId || userId.trim() === "") {
-        logger.debug("setCurrentMockUser: Clearing user ID from localStorage.");
-        localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      } else {
-        logger.debug(`setCurrentMockUser: Storing user ID ${userId} in localStorage.`);
-        localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
-      }
-      setIsInitialized(false); // Reset initialization flag to force re-fetch
-      logger.debug("setCurrentMockUser: Reloading window to re-initialize user state.");
-      window.location.reload();
-    };
-
-    (window as any).clearCurrentMockUser = () => {
-      logger.debug("Global clearCurrentMockUser called. Removing user ID from localStorage and reloading.");
-      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-      setIsInitialized(false); // Reset initialization flag
-      window.location.reload();
-    };
-
-    (window as any).cycleMockUser = () => {
-        const userCycleOrder = [
-            'seed_user_admin',
-            'seed_user_operator',
-            'seed_user_viewer'
-        ];
-        const currentStoredId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
-        let nextUserId = userCycleOrder[0];
-
-        if (currentStoredId) {
-            const currentIndex = userCycleOrder.indexOf(currentStoredId);
-            if (currentIndex !== -1) {
-                nextUserId = userCycleOrder[(currentIndex + 1) % userCycleOrder.length];
-            }
-        }
-        logger.debug(`Global cycleMockUser: Cycling to ID: ${nextUserId}. Storing and reloading.`);
-        localStorage.setItem(MOCK_USER_STORAGE_KEY, nextUserId);
-        setIsInitialized(false); // Reset initialization flag
-        window.location.reload();
-    };
+    // These debug functions on window can cause Fast Refresh issues if re-declared.
+    // Guarding them ensures they are set only once.
+    if (!(window as any).setCurrentMockUser) {
+        (window as any).setCurrentMockUser = (userId: string | null) => {
+          logger.debug(`Global setCurrentMockUser called with ID: ${userId}.`);
+          if (!userId || userId.trim() === "") {
+            logger.debug("setCurrentMockUser: Clearing user ID from localStorage.");
+            localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+          } else {
+            logger.debug(`setCurrentMockUser: Storing user ID ${userId} in localStorage.`);
+            localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
+          }
+          window.location.reload();
+        };
+    }
     
-    return () => {
-        // logger.debug("[useCurrentUser Cleanup Effect] Running. isInitialized:", isInitialized);
-    };
-  }, [isInitialized]); // Effect only runs when isInitialized changes
+    if (!(window as any).clearCurrentMockUser) {
+        (window as any).clearCurrentMockUser = () => {
+          logger.debug("Global clearCurrentMockUser called. Removing user ID from localStorage and reloading.");
+          localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+          window.location.reload();
+        };
+    }
+
+    if (!(window as any).cycleMockUser) {
+        (window as any).cycleMockUser = () => {
+            const userCycleOrder = [
+                'seed_user_admin',
+                'seed_user_operator',
+                'seed_user_viewer'
+            ];
+            const currentStoredId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
+            let nextUserId = userCycleOrder[0];
+
+            if (currentStoredId) {
+                const currentIndex = userCycleOrder.indexOf(currentStoredId);
+                if (currentIndex !== -1) {
+                    nextUserId = userCycleOrder[(currentIndex + 1) % userCycleOrder.length];
+                }
+            }
+            logger.debug(`Global cycleMockUser: Cycling to ID: ${nextUserId}. Storing and reloading.`);
+            localStorage.setItem(MOCK_USER_STORAGE_KEY, nextUserId);
+            window.location.reload();
+        };
+    }
+
+  }, []); // Empty dependency array ensures this effect runs only on mount.
 
   return {
-    currentUser: currentUser, // Return current state, could be null briefly during init
-    isAuthLoading: isAuthLoading || !isInitialized // Consider loading if not yet initialized OR explicitly loading
+    currentUser: currentUser,
+    isAuthLoading: isAuthLoading
   };
 }
 
@@ -179,4 +166,3 @@ export const hasPermission = (currentUser: CurrentUserContextValue | null, permi
   // logger.debug(`[hasPermission] Check for perm '${permissionId}' for user '${currentUser.username}': Result: ${userHasPermission}. User perms: [${currentUser.permissions.join(', ')}]`);
   return userHasPermission;
 };
-
