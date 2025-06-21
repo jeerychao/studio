@@ -394,6 +394,9 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         by: ['subnetId'],
         _count: { id: true },
         where: { subnetId: { in: subnetIds }, status: 'allocated' },
+        orderBy: {
+            subnetId: 'asc'
+        }
       });
 
       const allocatedIpCountMap = new Map<string, number>();
@@ -963,8 +966,7 @@ export async function createIPAddressAction(data: Omit<AppIPAddress, "id" | "cre
       peerDeviceName: data.peerDeviceName || null,
       peerPortName: data.peerPortName || null,
       selectedAccessType: data.selectedAccessType || null,
-      selectedLocalDeviceName: data.selectedLocalDeviceName || null,
-      selectedDevicePort: data.selectedDevicePort || null,
+      selectedLocalDeviceName: data.selectedLocalDeviceName || null, selectedDevicePort: data.selectedDevicePort || null,
       selectedPaymentSource: data.selectedPaymentSource || null,
     };
 
@@ -1849,11 +1851,15 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       usageUnitGroups,
       unspecifiedUsageUnitCount,
     ] = await prisma.$transaction([
+      // 1. Group by status to get counts for each status and total count
       prisma.iPAddress.groupBy({
         by: ['status'],
         _count: { _all: true },
-        orderBy: { status: 'asc' }, // Fix for build error
+        orderBy: {
+          status: 'asc',
+        },
       }),
+      // 2. Get VLANs with their resource counts
       prisma.vLAN.findMany({
         select: {
           id: true,
@@ -1863,6 +1869,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         },
         orderBy: { vlanNumber: 'asc' },
       }),
+      // 3. Get Subnets with their allocated IP counts
       prisma.subnet.findMany({
         select: {
           id: true,
@@ -1876,17 +1883,20 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         },
         orderBy: { cidr: 'asc' },
       }),
+      // 4. Get recent audit logs
       prisma.auditLog.findMany({
         select: { id: true, username: true, action: true, timestamp: true, details: true },
         orderBy: { timestamp: 'desc' },
         take: DASHBOARD_AUDIT_LOG_COUNT,
       }),
+      // 5. Get IP usage by unit
       prisma.iPAddress.groupBy({
         by: ['usageUnit'],
         _count: { usageUnit: true },
         where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
         orderBy: { _count: { usageUnit: 'desc' } },
       }),
+      // 6. Get count of IPs with no specified usage unit
       prisma.iPAddress.count({
         where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
       }),
