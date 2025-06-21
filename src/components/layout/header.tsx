@@ -13,7 +13,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 import { useSidebar } from "@/components/ui/sidebar";
-import { useCurrentUser } from "@/hooks/use-current-user";
+import { useCurrentUser, MOCK_USER_STORAGE_KEY } from "@/hooks/use-current-user";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -28,10 +28,13 @@ export function Header() {
 
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
-    if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
-      (window as any).setCurrentMockUser(null);
-    } else {
-      localStorage.removeItem("mock_current_user_id_v3_prisma_real_data");
+    if (typeof window !== "undefined") {
+      // Clear the session from local storage.
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+      
+      // Perform a hard redirect to the login page.
+      // This is the most reliable way to clear all client-side state (including React state)
+      // and force the application to re-initialize its authentication state.
       window.location.href = "/login";
     }
   };
@@ -73,7 +76,7 @@ export function Header() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub Profile"
-          className="h-10 w-10 rounded-full flex items-center justify-center text-current focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-current focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 hover:bg-transparent"
         >
           <svg
             role="img"
