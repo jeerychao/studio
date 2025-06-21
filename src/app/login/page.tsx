@@ -44,7 +44,9 @@ export default function LoginPage() {
         if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
           (window as any).setCurrentMockUser(result.user.id);
           toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
-          router.push("/dashboard");
+          // No need to router.push here, the AuthGuard in the layout will handle showing the dashboard
+          // And the useEffect on this page will handle redirecting if the user somehow lands here again.
+          // Let the page reload do its work driven by setCurrentMockUser.
         } else {
           toast({ title: "登录错误", description: "客户端错误: 无法设置用户会话。", variant: "destructive" });
         }
@@ -66,7 +68,7 @@ export default function LoginPage() {
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
         <p className="text-lg text-muted-foreground">
-          {isAuthLoading ? "正在验证您的身份..." : "正在重定向到仪表盘..."}
+          {isAuthLoading ? "正在验证您的身份..." : "已登录，正在重定向到仪表盘..."}
         </p>
       </div>
     );

@@ -2,9 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from 'next/navigation';
-import * as React from "react";
-import { Network, Loader2 } from "lucide-react"; 
+import { Network } from "lucide-react"; 
 import Image from 'next/image';
 import {
   SidebarProvider,
@@ -17,57 +15,13 @@ import {
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Header } from "@/components/layout/header";
 import { Toaster } from "@/components/ui/toaster";
-import { useCurrentUser } from "@/hooks/use-current-user";
-import { logger } from "@/lib/logger";
+import { AuthGuard } from "@/components/auth-guard"; // Import the new AuthGuard
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {  
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  React.useEffect(() => {
-    // This effect now only handles redirection logic after loading is complete.
-    if (isAuthLoading) {
-      return; // Do nothing while authentication is in progress.
-    }
-
-    const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
-
-    if (!isAuthenticated && pathname !== '/login') {
-      logger.warn(`DashboardLayout: User is not authenticated. Redirecting from ${pathname} to /login.`);
-      router.replace('/login');
-    }
-  }, [currentUser, isAuthLoading, router, pathname]);
-
-  // Render a loading spinner while the auth status is being determined.
-  if (isAuthLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">加载应用中...</p>
-      </div>
-    );
-  }
-
-  const isAuthenticated = currentUser && currentUser.id && !(currentUser.id === 'guest-fallback-id' && currentUser.username === 'Guest');
-
-  // If the user is not authenticated, render a loading/redirect message.
-  // This prevents flashing the content of a protected page before the redirect effect kicks in.
-  if (!isAuthenticated) {
-    return (
-        <div className="flex flex-col items-center justify-center h-screen">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-lg text-muted-foreground">会话无效或已过期。</p>
-            <p className="text-md text-muted-foreground">正在重定向到登录页面...</p>
-        </div>
-    );
-  }
-  
-  // If authenticated, render the main layout.
   return (
     <SidebarProvider defaultOpen={true}>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r">
@@ -97,7 +51,9 @@ export default function DashboardLayout({
       <SidebarInset>
         <Header />
         <main className="flex-1 px-4 py-2 md:px-6 md:py-3 lg:px-8 lg:py-4 overflow-auto">
-          {children}
+          <AuthGuard>
+            {children}
+          </AuthGuard>
         </main>
         <footer className="py-4 px-4 md:px-6 lg:px-8 text-center text-xs text-muted-foreground border-t">
           <p>© {new Date().getFullYear()} IPAM Lite. 版权所有。联系方式: leejie2017@gmail.com</p>
