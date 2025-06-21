@@ -1,3 +1,4 @@
+
 "use client";
 import Link from "next/link";
 import { Menu, UserCircle, Network, KeyRound, ChevronDown } from "lucide-react";
@@ -18,29 +19,10 @@ import { ThemeToggle } from "@/components/settings/theme-toggle";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
-import { cn } from "@/lib/utils";
 
 export function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const router = useRouter();
-
-  // State and ref for hover-controlled dropdown
-  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
-  const timeoutRef = React.useRef<number | null>(null);
-
-  const handleMenuOpen = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    setIsUserMenuOpen(true);
-  };
-
-  const handleMenuClose = () => {
-    timeoutRef.current = window.setTimeout(() => {
-      setIsUserMenuOpen(false);
-    }, 200); // 200ms delay
-  };
 
   const handleLogout = () => {
     logger.info("Header: Logout initiated by user.");
@@ -86,7 +68,7 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-full h-10 w-10 flex items-center justify-center hover:bg-transparent hover:text-current"
+            className="rounded-full h-10 w-10 flex items-center justify-center"
           >
             <svg
               role="img"
@@ -101,27 +83,18 @@ export function Header() {
           </Button>
         </Link>
         <ThemeToggle />
-        <DropdownMenu open={isUserMenuOpen}>
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              onMouseEnter={handleMenuOpen}
-              onMouseLeave={handleMenuClose}
               variant="ghost"
-              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent hover:text-current"
+              className="rounded-full h-10 w-auto px-2.5 flex items-center justify-center space-x-1.5 hover:bg-transparent"
             >
               <UserCircle className="h-6 w-6" />
-              <ChevronDown className={cn(
-                "h-3 w-3 text-muted-foreground opacity-70 transition-transform duration-200",
-                isUserMenuOpen && "rotate-180"
-              )} />
+              <ChevronDown className="h-3 w-3 text-muted-foreground opacity-70" />
               <span className="sr-only">切换用户菜单</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            align="end"
-            onMouseEnter={handleMenuOpen}
-            onMouseLeave={handleMenuClose}
-          >
+          <DropdownMenuContent align="end">
             <DropdownMenuLabel>用户菜单</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
