@@ -5,7 +5,7 @@ import * as React from "react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ThemeProviderProps } from "next-themes/dist/types";
 import { Toaster } from "@/components/ui/toaster";
-import { CurrentUserContext, MOCK_USER_STORAGE_KEY, type CurrentUserContextValue, type UseCurrentUserReturn } from "@/hooks/use-current-user";
+import { CurrentUserContext, MOCK_USER_STORAGE_KEY, type CurrentUserContextValue } from "@/hooks/use-current-user";
 import { fetchCurrentUserDetailsAction } from "@/lib/actions";
 import { logger } from "@/lib/logger";
 
@@ -30,8 +30,15 @@ function CurrentUserProvider({ children }: { children: React.ReactNode }) {
             logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
             userToSet = { ...userDetails, permissions: userDetails.permissions || [] };
           } else {
-            logger.warn(`CurrentUserProvider: User details not found for stored ID "${storedUserId}". Clearing storage.`);
-            localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+            // CRITICAL FIX: Do not remove the item from local storage.
+            // This prevents the infinite loop. If the user's data is corrupt or
+            // they were deleted, they will be treated as logged out for this session
+            // and redirected to /login by AuthGuard. This is the correct behavior.
+            logger.error(
+              `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This indicates a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out.`,
+              undefined,
+              { storedUserId }
+            );
           }
         } else {
           logger.debug("CurrentUserProvider: No storedUserId found. User is not authenticated.");
