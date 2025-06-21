@@ -30,9 +30,6 @@ function CurrentUserProvider({ children }: { children: React.ReactNode }) {
             logger.debug(`CurrentUserProvider: User details fetched for ${userDetails.username}.`);
             userToSet = { ...userDetails, permissions: userDetails.permissions || [] };
           } else {
-            // This is the critical fix. We log the error but DO NOT remove the stored key.
-            // This prevents the self-destructive loop. The user is treated as logged out for this session
-            // and AuthGuard will redirect them. If they log in again, the key will be correctly overwritten.
             logger.error(
               `CurrentUserProvider: fetchCurrentUserDetailsAction returned null for stored ID "${storedUserId}". This indicates a data integrity issue (e.g., user deleted but session remains) or a server error. The user will be treated as logged out for this session.`,
               undefined,
@@ -55,13 +52,14 @@ function CurrentUserProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== "undefined" && !(window as any).setCurrentMockUser) {
       (window as any).setCurrentMockUser = (userId: string | null) => {
-        logger.debug(`Global setCurrentMockUser called with ID: ${userId}. Reloading window.`);
+        logger.debug(`Global setCurrentMockUser called with ID: ${userId}.`);
         if (!userId || userId.trim() === "") {
           localStorage.removeItem(MOCK_USER_STORAGE_KEY);
         } else {
           localStorage.setItem(MOCK_USER_STORAGE_KEY, userId);
         }
-        window.location.reload();
+        // DO NOT RELOAD. Let the caller handle navigation.
+        // This was the source of the race condition.
       };
     }
   }, []);

@@ -36,11 +36,11 @@ export default function LoginPage() {
       const result = await loginAction({ email, password });
 
       if (result.success && result.user) {
-        // The reload is now handled by the global function in CurrentUserProvider
-        // which ensures a clean state transition.
         if (typeof window !== "undefined" && (window as any).setCurrentMockUser) {
           (window as any).setCurrentMockUser(result.user.id);
           toast({ title: "登录成功", description: `欢迎回来, ${result.user.username}!` });
+          // Navigate to dashboard after successful state update, instead of reloading.
+          router.push('/dashboard');
         } else {
           toast({ title: "登录错误", description: "客户端错误: 无法设置用户会话。", variant: "destructive" });
         }
