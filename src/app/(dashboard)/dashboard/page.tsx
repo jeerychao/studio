@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table";
 import { VirtualizedSubnetTable } from "@/components/dashboard/virtualized-subnet-table";
 import { CHART_COLORS_REMAINDER, DASHBOARD_AUDIT_LOG_COUNT, DASHBOARD_TOP_N_COUNT } from "@/lib/constants";
 
