@@ -321,20 +321,18 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
 
 export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteAuditLogsAction';
-  const BATCH_SIZE = 100; // Define batch size for chunking operations
+  const BATCH_SIZE = 100;
   const auditUser = await getAuditUserInfo(performingUserId);
   const failureDetails: BatchOperationFailure[] = [];
   const successfullyDeletedIds: string[] = [];
   let successCount = 0;
 
-  // 1. Find all valid IDs that actually exist to avoid trying to delete non-existent records.
   const itemsToProcess = await prisma.auditLog.findMany({
     where: { id: { in: ids } },
     select: { id: true }
   });
   const validIdsToDelete = new Set(itemsToProcess.map(item => item.id));
 
-  // Add non-existent IDs to failure details right away.
   for (const id of ids) {
     if (!validIdsToDelete.has(id)) {
       failureDetails.push({ id, itemIdentifier: `日志 ID ${id}`, error: '审计日志条目未找到。' });
@@ -343,7 +341,6 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
   
   const validIdArray = Array.from(validIdsToDelete);
 
-  // 2. Process the valid IDs in batches.
   for (let i = 0; i < validIdArray.length; i += BATCH_SIZE) {
     const batch = validIdArray.slice(i, i + BATCH_SIZE);
     
