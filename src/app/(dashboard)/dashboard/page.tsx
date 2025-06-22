@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table";
+import { VirtualizedSubnetTable } from "@/components/dashboard/virtualized-subnet-table";
 
 const CHART_COLORS_REMAINDER = [
   "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
@@ -192,29 +193,9 @@ export default function DashboardPage() {
             <CardTitle className="text-base">高利用率子网 (Top {dashboardData.subnetsNeedingAttention.length || 0})</CardTitle>
             <CardDescription>利用率超过 80% 的子网，可能需要关注。</CardDescription>
           </CardHeader>
-          <CardContent>
-            {subnetsNeedingAttention.length > 0 ? (
-              <ScrollArea className="h-[200px]">
-                <Table>
-                  <TableHeader><TableRow><TableHead>子网</TableHead><TableHead className="text-right">利用率</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {subnetsNeedingAttention.map(subnet => (
-                      <TableRow key={subnet.id}>
-                        <TableCell>
-                          <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline">
-                            {subnet.cidr} {subnet.name && `(${subnet.name})`}
-                          </Link>
-                        </TableCell>
-                        <TableCell className="text-right"><Badge variant={subnet.utilization > 90 ? "destructive" : "default"}>{subnet.utilization}%</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">当前没有利用率超过80%的子网。</p>
-            )}
-             <div className="mt-4 text-right">
+          <CardContent className="p-0">
+            <VirtualizedSubnetTable subnets={subnetsNeedingAttention} />
+            <div className="p-6 pt-2 text-right">
                 <Button variant="outline" size="sm" asChild>
                     <Link href="/subnets">查看所有子网</Link>
                 </Button>
