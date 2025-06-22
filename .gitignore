@@ -74,3 +74,8 @@ $RECYCLE.BIN/
 *.bak
 *.swp
 *~
+Dockerfile
+docker-compose.yml
+next.config.js
+production.env
+.env
