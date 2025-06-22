@@ -9,38 +9,62 @@ import { CurrentUserContext, MOCK_USER_STORAGE_KEY, type CurrentUserContextValue
 import { fetchCurrentUserDetailsAction } from "@/lib/actions";
 import { logger } from "@/lib/logger";
 
+const AUTH_TIMEOUT = 8000; // 8 seconds
+
 function CurrentUserProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, _setCurrentUser] = React.useState<CurrentUserContextValue | null>(null);
   const [isAuthLoading, setIsAuthLoading] = React.useState(true);
 
   // Initialize state from localStorage on initial mount
   React.useEffect(() => {
+    let isMounted = true;
+    const timeoutId = setTimeout(() => {
+      if (isMounted && isAuthLoading) {
+        logger.error(`Authentication timed out after ${AUTH_TIMEOUT / 1000} seconds. This might indicate a database connection issue.`, undefined, { context: 'CurrentUserProvider' });
+        if(isMounted) {
+          _setCurrentUser(null);
+          setIsAuthLoading(false);
+        }
+      }
+    }, AUTH_TIMEOUT);
+
     const initializeUser = async () => {
-      setIsAuthLoading(true);
+      if (!isMounted) return;
       try {
         const storedUserId = localStorage.getItem(MOCK_USER_STORAGE_KEY);
         if (storedUserId) {
           logger.debug(`CurrentUserProvider: Found storedUserId: ${storedUserId}. Fetching details...`);
           const userDetails = await fetchCurrentUserDetailsAction(storedUserId);
-          if (userDetails) {
-            _setCurrentUser({ ...userDetails, permissions: userDetails.permissions || [] });
-          } else {
-            logger.warn(`CurrentUserProvider: User details not found for stored ID "${storedUserId}". Clearing invalid session.`, undefined, { storedUserId });
-            localStorage.removeItem(MOCK_USER_STORAGE_KEY);
-            _setCurrentUser(null);
+          if (isMounted) {
+            if (userDetails) {
+              _setCurrentUser({ ...userDetails, permissions: userDetails.permissions || [] });
+            } else {
+              logger.warn(`CurrentUserProvider: User details not found for stored ID "${storedUserId}". Clearing invalid session.`, undefined, { storedUserId });
+              localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+              _setCurrentUser(null);
+            }
           }
         } else {
-           _setCurrentUser(null);
+           if (isMounted) _setCurrentUser(null);
         }
       } catch (error) {
         logger.error("CurrentUserProvider: Error during user initialization.", error as Error);
-        _setCurrentUser(null);
+        if (isMounted) _setCurrentUser(null);
       } finally {
-        setIsAuthLoading(false);
+        if (isMounted) {
+          setIsAuthLoading(false);
+          clearTimeout(timeoutId);
+        }
       }
     };
+    
     initializeUser();
-  }, []);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []); // Run only once on mount
 
   // Create a stable setCurrentUser function that updates both state and localStorage
   const setCurrentUser = React.useCallback((user: CurrentUserContextValue | null) => {

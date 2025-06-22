@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 const getBaseUrl = () => {
   return process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.EXTERNAL_PORT || '3000'}`;
@@ -28,7 +29,8 @@ export async function GET() {
   const origin = headersList.get('origin') || getBaseUrl();
 
   try {
-    await prisma.user.findFirst();
+    // A lightweight but effective check
+    await prisma.$queryRaw`SELECT 1`;
 
     return NextResponse.json(
       { 
@@ -55,22 +57,23 @@ export async function GET() {
       }
     );
   } catch (error: any) {
-    console.error('Health check failed:', error);
+    logger.error('Health check failed: Database connection error.', error, { context: 'api/health' });
     const errorMessage = process.env.NODE_ENV === 'production' 
-      ? 'Database connectivity issue' 
+      ? 'A database connectivity issue was detected.' 
       : error.message;
 
     return NextResponse.json(
       { 
         status: 'unhealthy', 
-        error: errorMessage,
+        error: "Database connection failed.",
+        details: errorMessage,
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
         created_at: process.env.CREATED_AT,
         created_by: process.env.CREATED_BY
       },
       {
-        status: 500,
+        status: 503, // Service Unavailable
         headers: {
           'Access-Control-Allow-Origin': origin,
           'Access-Control-Allow-Credentials': 'true',
