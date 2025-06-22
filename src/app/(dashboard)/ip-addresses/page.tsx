@@ -122,7 +122,21 @@ function IPAddressesView() {
   }, [currentUser, isAuthLoading, toast, selectedSubnetId, selectedStatus, currentPage, router, pathname, searchParams]);
 
   React.useEffect(() => {
-    fetchData();
+    let isMounted = true;
+    
+    const performFetch = async () => {
+      await fetchData();
+      if (isMounted) {
+        // Any state updates that depend on fetchData result can be here.
+        // Since fetchData sets state, this might be primarily for setIsLoading(false) if it were outside.
+      }
+    };
+
+    performFetch();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchData]);
 
   const handleIpAddressChangeSuccess = React.useCallback(async () => {

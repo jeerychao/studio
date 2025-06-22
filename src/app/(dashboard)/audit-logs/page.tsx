@@ -86,8 +86,25 @@ function AuditLogsView() {
   }, [currentUser, isAuthLoading, toast, currentPage, router, pathname, searchParams]);
 
   React.useEffect(() => {
-    fetchData();
+    let isMounted = true;
+    
+    const performFetch = async () => {
+      await fetchData();
+      if (isMounted) {
+        // Any state updates that depend on fetchData result can be here,
+        // but since fetchData already sets state, we might not need more.
+        // For instance, if setIsLoading(false) was outside fetchData:
+        // setIsLoading(false);
+      }
+    };
+
+    performFetch();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchData]);
+
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();

@@ -8,20 +8,15 @@ const DEFAULT_DEV_KEY_HEX = "000102030405060708090a0b0c0d0e0f0001020304050607080
 
 let effectiveKeySource = "process.env.ENCRYPTION_KEY"; // For logging
 
-if (!ENCRYPTION_KEY_HEX || ENCRYPTION_KEY_HEX.length !== 64) {
-  effectiveKeySource = "DEFAULT_DEV_KEY_HEX";
+const isKeyInvalid = !ENCRYPTION_KEY_HEX || ENCRYPTION_KEY_HEX.length !== 64;
+
+if (isKeyInvalid) {
   if (process.env.NODE_ENV === 'production') {
-    logger.error(
-      'CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment. THIS IS A SEVERE SECURITY RISK.',
-      undefined, // No specific error object here, it's a configuration issue
-      { context: 'crypto-utils-init' }
-    );
-    // Fallback to default key in production is a major security risk,
-    // but throwing here might prevent app startup for diagnosis.
-    // Ideally, a production app should fail hard if the key is missing/invalid.
-    ENCRYPTION_KEY_HEX = DEFAULT_DEV_KEY_HEX;
+    const errorMessage = 'CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment. Application will not start.';
+    logger.error(errorMessage, undefined, { context: 'crypto-utils-init' });
+    throw new Error(errorMessage);
   } else {
-    // Use logger.warn for development warnings
+    effectiveKeySource = "DEFAULT_DEV_KEY_HEX";
     logger.warn(
       'ENCRYPTION_KEY environment variable is not set or is invalid. ' +
       `Using a default, insecure key (${effectiveKeySource}) for development purposes ONLY. ` +

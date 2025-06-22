@@ -14,10 +14,7 @@ interface AuthGuardProps {
 export function AuthGuard({ children }: AuthGuardProps) {
   const { currentUser, isAuthLoading } = useCurrentUser();
   const router = useRouter();
-
-  // Use a ref to track if a redirection has already been triggered.
-  // This helps prevent multiple redirects if the component re-renders quickly.
-  const redirectTriggered = React.useRef(false);
+  const [redirectTriggered, setRedirectTriggered] = React.useState(false);
 
   React.useEffect(() => {
     // Only perform checks after the initial authentication status has been determined.
@@ -26,12 +23,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
     }
 
     // If loading is complete AND there is no user AND a redirect hasn't been triggered yet.
-    if (!currentUser && !redirectTriggered.current) {
-      redirectTriggered.current = true; // Mark that we are initiating a redirect.
+    if (!currentUser && !redirectTriggered) {
+      setRedirectTriggered(true); // Mark that we are initiating a redirect.
       logger.warn("AuthGuard: User not authenticated. Redirecting from a protected page to /login.");
       router.replace('/login');
     }
-  }, [isAuthLoading, currentUser, router]);
+  }, [isAuthLoading, currentUser, router, redirectTriggered]);
 
   // While the authentication status is being determined, show a loading screen.
   // This prevents rendering children components that might rely on user data prematurely.
@@ -61,4 +58,3 @@ export function AuthGuard({ children }: AuthGuardProps) {
       </div>
   );
 }
-

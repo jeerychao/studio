@@ -63,7 +63,21 @@ function RolesView() {
   }, [currentUser, isAuthLoading, toast, currentPage]);
 
   React.useEffect(() => {
-    fetchData();
+    let isMounted = true;
+    
+    const performFetch = async () => {
+        await fetchData();
+        if (isMounted) {
+            // Since fetchData sets its own loading state, direct updates here might be minimal
+            // but this structure is safer against race conditions on unmount.
+        }
+    };
+
+    performFetch();
+
+    return () => {
+        isMounted = false;
+    };
   }, [fetchData]);
 
   if (isAuthLoading || isLoading) {

@@ -67,13 +67,25 @@ function UsersView() {
   }, [currentUser, isAuthLoading, toast, currentPage]);
 
   React.useEffect(() => {
-    if (!isAuthLoading && currentUser) {
-      fetchData();
-    } else if (!isAuthLoading && !currentUser) {
-      setIsLoading(false);
-      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-      setRoles([]);
-    }
+    let isMounted = true;
+    const performFetch = async () => {
+      if (!isAuthLoading && currentUser) {
+        await fetchData();
+        if (isMounted) {
+            // setIsLoading(false) is handled in fetchData, so we are good.
+        }
+      } else if (!isAuthLoading && !currentUser && isMounted) {
+        setIsLoading(false);
+        setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
+        setRoles([]);
+      }
+    };
+
+    performFetch();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchData, currentUser, isAuthLoading]);
 
   const getRoleName = (roleId: string) => {

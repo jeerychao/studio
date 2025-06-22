@@ -19,32 +19,33 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, field?: string, value?: any, userMessage?: string) {
-    super(message, 400, 'VALIDATION_ERROR', userMessage || '输入验证失败，请检查您的输入。', field);
+  constructor(message: string, field?: string, value?: any, userMessage: string = '输入验证失败，请检查您的输入。') {
+    super(message, 400, 'VALIDATION_ERROR', userMessage, field);
   }
 }
 
 export class NetworkError extends AppError {
-  constructor(message: string, userMessage = '网络连接错误，请稍后重试。') {
+  constructor(message: string, userMessage: string = '网络连接错误，请稍后重试。') {
     super(message, 503, 'NETWORK_ERROR', userMessage);
   }
 }
 
 export class AuthError extends AppError {
-  constructor(message: string, userMessage = '认证失败，请检查您的凭据或重新登录。', field?: string) {
+  constructor(message: string, userMessage: string = '认证失败，请检查您的凭据或重新登录。', field?: string) {
     super(message, 401, 'AUTH_ERROR', userMessage, field);
   }
 }
 
 export class ResourceError extends AppError {
-  constructor(message: string, code = 'RESOURCE_ERROR', userMessage = '操作的资源存在冲突或问题。', field?: string) {
+  constructor(message: string, code = 'RESOURCE_ERROR', userMessage: string = '操作的资源存在冲突或问题。', field?: string) {
     super(message, 409, code, userMessage, field);
   }
 }
 
 export class NotFoundError extends AppError {
   constructor(resource: string, userMessage?: string, field?: string) {
-    super(`${resource} not found`, 404, 'NOT_FOUND', userMessage || `未找到所请求的资源：${resource}。`, field);
+    const finalUserMessage = userMessage || `未找到所请求的资源：${resource}。`;
+    super(`${resource} not found`, 404, 'NOT_FOUND', finalUserMessage, field);
   }
 }
 
@@ -55,5 +56,3 @@ export interface ActionErrorResponse {
   field?: string;
   details?: string; // For development-only verbose details
 }
-
-    
