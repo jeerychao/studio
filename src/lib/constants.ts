@@ -1,4 +1,3 @@
-
 // src/lib/constants.ts
 
 export const DEFAULT_PAGE_SIZE = 10;
@@ -16,4 +15,3 @@ export const CHART_COLORS_REMAINDER = [
   "hsl(var(--chart-5))",
   "hsl(var(--muted))" // Fallback or additional color
 ];
-    

@@ -19,8 +19,7 @@ import { UserFormSheet } from "./user-form-sheet";
 import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
-
-const ITEMS_PER_PAGE = 10;
+import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 function LoadingUsersPage() {
   return (
@@ -50,18 +49,18 @@ function UsersView() {
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
         const [fetchedUsersResult, fetchedRolesResult] = await Promise.all([
-          getUsersAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
+          getUsersAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE }),
           getRolesAction(),
         ]);
         setUsersData(fetchedUsersResult);
         setRoles(fetchedRolesResult.data);
       } else {
-        setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+        setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
         setRoles([]);
       }
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
-      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +71,7 @@ function UsersView() {
       fetchData();
     } else if (!isAuthLoading && !currentUser) {
       setIsLoading(false);
-      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
       setRoles([]);
     }
   }, [fetchData, currentUser, isAuthLoading]);

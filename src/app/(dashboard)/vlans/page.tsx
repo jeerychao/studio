@@ -26,8 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const ITEMS_PER_PAGE = 10;
+import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 function LoadingVlansPage() {
   return (
@@ -56,7 +55,7 @@ function VlansView() {
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
-        const fetchedResult = await getVLANsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
+        const fetchedResult = await getVLANsAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE });
         setVlansData(fetchedResult);
 
         if (fetchedResult.data.length === 0 && fetchedResult.currentPage > 1) {
@@ -70,11 +69,11 @@ function VlansView() {
           }
         }
       } else {
-        setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+        setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
       }
     } catch (error) {
        toast({ title: "获取VLAN错误", description: (error as Error).message, variant: "destructive" });
-       setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+       setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
     } finally {
       setIsLoading(false);
       setSelectedIds(new Set());
@@ -129,7 +128,7 @@ function VlansView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading && !vlansData) {
+  if (isAuthLoading || (isLoading && !vlansData)) {
      return <LoadingVlansPage />;
   }
 

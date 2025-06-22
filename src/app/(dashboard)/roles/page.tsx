@@ -22,8 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const ITEMS_PER_PAGE = 10; 
+import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 function LoadingRolesPage() {
   return (
@@ -50,14 +49,14 @@ function RolesView() {
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
-          const fetchedRolesResult = await getRolesAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
+          const fetchedRolesResult = await getRolesAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE });
           setRolesData(fetchedRolesResult);
       } else {
-        setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+        setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
       }
     } catch (error) {
       toast({ title: "获取角色错误", description: (error as Error).message, variant: "destructive" });
-      setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
     } finally {
       setIsLoading(false);
     }

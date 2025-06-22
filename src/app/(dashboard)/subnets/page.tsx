@@ -27,8 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const ITEMS_PER_PAGE = 10;
+import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 function LoadingSubnetsPage() {
   return (
@@ -56,7 +55,7 @@ function SubnetsView() {
   const fetchData = React.useCallback(async () => {
     if (isAuthLoading || !currentUser) {
       if (!isAuthLoading && !currentUser) {
-           setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+           setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
            setVlans([]);
            setIsLoading(false);
       } else {
@@ -67,14 +66,14 @@ function SubnetsView() {
     setIsLoading(true);
     try {
       if (!hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
-          setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+          setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
           setVlans([]);
           setIsLoading(false);
           return;
       }
 
       const [subnetsResponse, vlansResponse] = await Promise.all([
-        getSubnetsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE }),
+        getSubnetsAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE }),
         getVLANsAction(),
       ]);
       setSubnetsData(subnetsResponse);
@@ -98,7 +97,7 @@ function SubnetsView() {
         description: error.message || "无法加载子网和VLAN。",
         variant: "destructive",
       });
-      setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
       setVlans([]);
     } finally {
       setIsLoading(false);
@@ -154,7 +153,7 @@ function SubnetsView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading && !subnetsData) {
+  if (isAuthLoading || (isLoading && !subnetsData)) {
     return <LoadingSubnetsPage />;
   }
 
@@ -364,10 +363,3 @@ export default function SubnetsPage() {
     </Suspense>
   );
 }
-    
-
-    
-
-    
-
-

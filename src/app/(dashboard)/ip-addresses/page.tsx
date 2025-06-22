@@ -34,8 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const ITEMS_PER_PAGE = 10;
+import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 function LoadingIPAddressesPageContent() {
   return (
@@ -73,7 +72,7 @@ function IPAddressesView() {
     setIsLoading(true);
     try {
       if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
-        setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+        setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
         setSubnets([]); setVlans([]); setDeviceDictionaries([]); setPaymentSourceDictionaries([]); setAccessTypeDictionaries([]); setInterfaceTypes([]);
         setIsLoading(false);
         return;
@@ -83,7 +82,7 @@ function IPAddressesView() {
         fetchedDeviceDictResult, fetchedPaymentDictResult,
         fetchedAccessTypeDictResult, fetchedInterfaceTypesResult
       ] = await Promise.all([
-        getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: ITEMS_PER_PAGE }),
+        getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: DEFAULT_PAGE_SIZE }),
         getSubnetsAction(),
         getVLANsAction(),
         getDeviceDictionariesAction(),
@@ -115,7 +114,7 @@ function IPAddressesView() {
 
     } catch (error) {
       toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
-      setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
     } finally {
       setIsLoading(false);
       setSelectedIds(new Set());
@@ -135,7 +134,7 @@ function IPAddressesView() {
       const targetPage = newTotalPages > 0 ? newTotalPages : 1;
       const currentUrlPage = Number(searchParams.get('page')) || 1;
 
-      if (targetPage !== currentUrlPage || (ipAddressesData && ipAddressesData.data.length === ITEMS_PER_PAGE && targetPage > currentUrlPage)) {
+      if (targetPage !== currentUrlPage || (ipAddressesData && ipAddressesData.data.length === DEFAULT_PAGE_SIZE && targetPage > currentUrlPage)) {
         const params = new URLSearchParams(searchParams.toString());
         if (selectedSubnetId) params.set("subnetId", selectedSubnetId); else params.delete("subnetId");
         if (selectedStatus && selectedStatus !== 'all') params.set("status", selectedStatus); else params.delete("status");

@@ -29,7 +29,7 @@ import { createActionErrorResponse } from './error-utils';
 import { mockPermissions as seedPermissionsData } from "./data";
 import { Prisma } from '@prisma/client';
 import { encrypt, decrypt } from './crypto-utils';
-import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE, CHART_COLORS_REMAINDER } from "./constants"; // Import CHART_COLORS_REMAINDER
+import { DASHBOARD_TOP_N_COUNT, DASHBOARD_AUDIT_LOG_COUNT, DEFAULT_PAGE_SIZE, DEFAULT_QUERY_PAGE_SIZE, CHART_COLORS_REMAINDER } from "./constants";
 import { z } from 'zod';
 
 
@@ -394,7 +394,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       }),
     ]);
     
-    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const totalPages = (pageSize > 0 && totalCount > 0) ? Math.ceil(totalCount / pageSize) : 1;
 
     let appSubnets: AppSubnet[] = [];
     if (subnetsFromDb.length > 0) {
@@ -970,7 +970,9 @@ export type AppIPAddressWithRelations = AppIPAddress & {
 };
 
 export async function getIPAddressesAction(params?: FetchParams): Promise<PaginatedResponse<AppIPAddressWithRelations>> {
-  const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
+  const page = params?.page || 1;
+  const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+  const skip = (page - 1) * pageSize;
   const whereClause: Prisma.IPAddressWhereInput = {};
   if (params?.subnetId) whereClause.subnetId = params.subnetId;
   if (params?.status && params.status !== 'all') whereClause.status = params.status as AppIPAddressStatusType;

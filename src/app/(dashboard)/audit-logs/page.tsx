@@ -28,8 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-
-const ITEMS_PER_PAGE = 10;
+import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
 function LoadingAuditLogsPage() {
   return (
@@ -60,7 +59,7 @@ function AuditLogsView() {
     setIsLoading(true);
     try {
       if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
-        const fetchedLogsResult = await getAuditLogsAction({ page: currentPage, pageSize: ITEMS_PER_PAGE });
+        const fetchedLogsResult = await getAuditLogsAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE });
         setLogsData(fetchedLogsResult);
 
         // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
@@ -75,11 +74,11 @@ function AuditLogsView() {
           }
         }
       } else {
-        setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+        setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
       }
     } catch (error) {
       toast({ title: "获取审计日志错误", description: (error as Error).message, variant: "destructive" });
-      setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: ITEMS_PER_PAGE });
+      setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
     } finally {
       setIsLoading(false);
       setSelectedIds(new Set());
@@ -122,7 +121,7 @@ function AuditLogsView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading && !logsData) {
+  if (isAuthLoading || (isLoading && !logsData)) {
     return <LoadingAuditLogsPage />;
   }
 
