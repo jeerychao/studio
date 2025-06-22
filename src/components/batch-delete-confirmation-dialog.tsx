@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -18,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { BatchDeleteResult, BatchOperationFailure } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Trash2, Loader2 } from "lucide-react";
 
 interface BatchDeleteConfirmationDialogProps {
   selectedIds: Set<string>;
@@ -161,7 +160,14 @@ export function BatchDeleteConfirmationDialog({
                 disabled={isDeleting || selectedIds.size === 0}
                 className={!deleteResult ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : ""}
             >
-            {isDeleting ? "删除中..." : (deleteResult ? `重试失败的 (${deleteResult.failureCount})` : "确认删除")}
+            {isDeleting ? (
+                <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    删除中...
+                </>
+            ) : (
+                deleteResult ? `重试失败的 (${deleteResult.failureCount})` : "确认删除"
+            )}
             </AlertDialogAction>
           )}
           {/* If all successful, the primary action above won't show. User can close with "Cancel" or implicitly. */}

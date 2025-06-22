@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -16,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { ActionResponse } from "@/lib/actions"; // Import ActionResponse
+import { Loader2 } from "lucide-react";
 
 interface DeleteConfirmationDialogProps {
   itemId: string;
@@ -124,7 +124,14 @@ export function DeleteConfirmationDialog({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
           <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-            {isDeleting ? "删除中..." : "删除"}
+            {isDeleting ? (
+                <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    删除中...
+                </>
+            ) : (
+                "删除"
+            )}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
