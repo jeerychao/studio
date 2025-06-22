@@ -1555,11 +1555,10 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
   for (let i = 0; i < validDeletes.length; i += BATCH_SIZE) {
     const batch = validDeletes.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(item => item.id);
-    const operations = batchIds.map(id => prisma.deviceDictionary.delete({ where: { id }}));
-
+    
     try {
-        await prisma.$transaction(operations);
-        successCount += batch.length;
+        const result = await prisma.deviceDictionary.deleteMany({ where: { id: { in: batchIds } } });
+        successCount += result.count;
         batch.forEach(item => successfullyDeletedItemNames.push(item.deviceName));
     } catch (transactionError: unknown) {
         const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
@@ -1678,11 +1677,10 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   for (let i = 0; i < validDeletes.length; i += BATCH_SIZE) {
     const batch = validDeletes.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(item => item.id);
-    const operations = batchIds.map(id => prisma.paymentSourceDictionary.delete({ where: { id }}));
 
     try {
-        await prisma.$transaction(operations);
-        successCount += batch.length;
+        const result = await prisma.paymentSourceDictionary.deleteMany({ where: { id: { in: batchIds } } });
+        successCount += result.count;
         batch.forEach(item => successfullyDeletedItemNames.push(item.sourceName));
     } catch (transactionError: unknown) {
         const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
@@ -1798,11 +1796,10 @@ export async function batchDeleteAccessTypeDictionariesAction(ids: string[], per
   for (let i = 0; i < validDeletes.length; i += BATCH_SIZE) {
     const batch = validDeletes.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(item => item.id);
-    const operations = batchIds.map(id => prisma.accessTypeDictionary.delete({ where: { id }}));
 
     try {
-        await prisma.$transaction(operations);
-        successCount += batch.length;
+        const result = await prisma.accessTypeDictionary.deleteMany({ where: { id: { in: batchIds } } });
+        successCount += result.count;
         batch.forEach(item => successfullyDeletedItemNames.push(item.name));
     } catch (transactionError: unknown) {
         const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
@@ -1943,11 +1940,10 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
   for (let i = 0; i < validDeletes.length; i += BATCH_SIZE) {
     const batch = validDeletes.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(item => item.id);
-    const operations = batchIds.map(id => prisma.interfaceTypeDictionary.delete({ where: { id }}));
 
     try {
-        await prisma.$transaction(operations);
-        successCount += batch.length;
+        const result = await prisma.interfaceTypeDictionary.deleteMany({ where: { id: { in: batchIds } } });
+        successCount += result.count;
         batch.forEach(item => successfullyDeletedItemNames.push(item.name));
     } catch (transactionError: unknown) {
         const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
