@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,24 +11,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getAuditLogsAction, deleteAuditLogAction, batchDeleteAuditLogsAction } from "@/lib/actions";
-import type { AuditLog, PaginatedResponse } from "@/types";
+import type { AuditLog } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { ListChecks, Trash2, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { PaginationControls } from "@/components/pagination-controls";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { useEntityManagement } from "@/hooks/use-entity-management";
+import { useSelection } from "@/hooks/use-selection";
 
 function LoadingAuditLogsPage() {
   return (
@@ -40,71 +31,22 @@ function LoadingAuditLogsPage() {
 }
 
 function AuditLogsView() {
-  const [logsData, setLogsData] = React.useState<PaginatedResponse<AuditLog> | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const { toast } = useToast();
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
+  const { data: logsData, isLoading, fetchData, canView, canDelete } = useEntityManagement<AuditLog, any>({
+    fetchAction: getAuditLogsAction,
+    permission: {
+      view: PERMISSIONS.VIEW_AUDIT_LOG,
+      delete: PERMISSIONS.DELETE_AUDIT_LOG
+    },
+  });
+
+  const logsToDisplay = logsData?.data || [];
+  const { selectedIds, setSelectedIds, handleSelectAll, handleSelectItem, checkboxState } = useSelection(logsToDisplay);
+  
   const [selectedLogForDetails, setSelectedLogForDetails] = React.useState<AuditLog | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = React.useState(false);
-
-  const currentPage = Number(searchParams.get('page')) || 1;
-
-  const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return;
-    setIsLoading(true);
-    try {
-      if (hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
-        const fetchedLogsResult = await getAuditLogsAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE });
-        setLogsData(fetchedLogsResult);
-
-        // Adjust page if current page becomes invalid after data fetch (e.g., after deletion)
-        if (fetchedLogsResult.data.length === 0 && fetchedLogsResult.currentPage > 1) {
-          const newTargetPage = fetchedLogsResult.totalPages > 0 ? fetchedLogsResult.totalPages : 1;
-          const currentUrlPage = Number(searchParams.get('page')) || 1;
-          if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedLogsResult.totalPages) {
-              const params = new URLSearchParams(searchParams.toString());
-              params.set("page", String(newTargetPage));
-              router.push(`${pathname}?${params.toString()}`);
-              return; 
-          }
-        }
-      } else {
-        setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-      }
-    } catch (error) {
-      toast({ title: "获取审计日志错误", description: (error as Error).message, variant: "destructive" });
-      setLogsData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-    } finally {
-      setIsLoading(false);
-      setSelectedIds(new Set());
-    }
-  }, [currentUser, isAuthLoading, toast, currentPage, router, pathname, searchParams]);
-
-  React.useEffect(() => {
-    let isMounted = true;
-    
-    const performFetch = async () => {
-      await fetchData();
-      if (isMounted) {
-        // Any state updates that depend on fetchData result can be here,
-        // but since fetchData already sets state, we might not need more.
-        // For instance, if setIsLoading(false) was outside fetchData:
-        // setIsLoading(false);
-      }
-    };
-
-    performFetch();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchData]);
-
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -119,30 +61,16 @@ function AuditLogsView() {
     setIsDetailsDialogOpen(true);
   };
   
-  const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked === true) {
-      const allIdsOnPage = logsData?.data?.map(log => log.id) || []; 
-      setSelectedIds(new Set(allIdsOnPage));
-    } else {
-      setSelectedIds(new Set());
-    }
+  const onActionSuccess = () => {
+    fetchData();
+    setSelectedIds(new Set());
   };
 
-  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
-    const newSelectedIds = new Set(selectedIds);
-    if (checked === true) {
-      newSelectedIds.add(id);
-    } else {
-      newSelectedIds.delete(id);
-    }
-    setSelectedIds(newSelectedIds);
-  };
-
-  if (isAuthLoading || (isLoading && !logsData)) {
+  if (isLoading) {
     return <LoadingAuditLogsPage />;
   }
 
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_AUDIT_LOG)) {
+  if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <ListChecks className="h-16 w-16 text-destructive mb-4" />
@@ -152,23 +80,12 @@ function AuditLogsView() {
     );
   }
 
-  const canDeleteLog = hasPermission(currentUser, PERMISSIONS.DELETE_AUDIT_LOG);
-
-  const logsToDisplay = logsData?.data || [];
-  const finalTotalCount = logsData?.totalCount || 0;
-  const finalCurrentPage = logsData?.currentPage || 1;
-  const finalTotalPages = logsData?.totalPages || 0;
-
-  const dataIsAvailable = logsToDisplay.length > 0;
-  const isAllOnPageSelected = dataIsAvailable ? logsToDisplay.every(log => selectedIds.has(log.id)) : false;
-  const isSomeOnPageSelected = dataIsAvailable ? logsToDisplay.some(log => selectedIds.has(log.id)) : false;
-
-  const pageActionElement = canDeleteLog && selectedIds.size > 0 ? (
+  const pageActionElement = canDelete && selectedIds.size > 0 ? (
     <BatchDeleteConfirmationDialog
       selectedIds={selectedIds}
       itemTypeDisplayName="审计日志条目"
       batchDeleteAction={batchDeleteAuditLogsAction}
-      onBatchDeleted={fetchData}
+      onBatchDeleted={onActionSuccess}
     />
   ) : null;
 
@@ -185,19 +102,19 @@ function AuditLogsView() {
           <CardTitle>系统活动日志</CardTitle>
           <CardDescription>
             IPAM 系统中执行操作的时间顺序记录。
-            显示 {logsToDisplay.length} 条，共 {finalTotalCount} 条日志。
+            显示 {logsToDisplay.length} 条，共 {logsData?.totalCount || 0} 条日志。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {dataIsAvailable ? ( 
+          {logsToDisplay.length > 0 ? ( 
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]">
-                      {canDeleteLog && (
+                      {canDelete && (
                         <Checkbox
-                            checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
+                            checked={checkboxState}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
                         />
@@ -207,7 +124,7 @@ function AuditLogsView() {
                     <TableHead>用户</TableHead>
                     <TableHead>操作</TableHead>
                     <TableHead>详情 (点击行查看)</TableHead>
-                    {canDeleteLog && <TableHead className="text-right">管理操作</TableHead>}
+                    {canDelete && <TableHead className="text-right">管理操作</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -219,7 +136,7 @@ function AuditLogsView() {
                       data-state={selectedIds.has(log.id) ? "selected" : ""} 
                     >
                       <TableCell>
-                        {canDeleteLog && (
+                        {canDelete && (
                            <Checkbox
                             checked={selectedIds.has(log.id)}
                             onCheckedChange={(checked) => handleSelectItem(log.id, checked)}
@@ -238,13 +155,13 @@ function AuditLogsView() {
                       <TableCell className="max-w-xs truncate">
                         {log.details || "无"}
                       </TableCell>
-                      {canDeleteLog && (
+                      {canDelete && (
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <DeleteConfirmationDialog
                             itemId={log.id}
                             itemName={`审计日志条目 (操作: ${log.action}, 用户: ${log.username || '系统'})`}
                             deleteAction={deleteAuditLogAction}
-                            onDeleted={fetchData}
+                            onDeleted={onActionSuccess}
                             triggerButton={
                               <Button variant="ghost" size="icon" aria-label="删除审计日志">
                                 <Trash2 className="h-4 w-4" />
@@ -257,10 +174,10 @@ function AuditLogsView() {
                   ))}
                 </TableBody>
               </Table>
-              {finalTotalPages > 1 && (
+              {logsData && logsData.totalPages > 1 && (
                 <PaginationControls
-                  currentPage={finalCurrentPage}
-                  totalPages={finalTotalPages}
+                  currentPage={logsData.currentPage}
+                  totalPages={logsData.totalPages}
                   basePath={pathname}
                   currentQuery={searchParams}
                 />

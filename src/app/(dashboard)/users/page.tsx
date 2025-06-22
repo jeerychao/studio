@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Edit, Trash2, Users as UsersIcon, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,14 +12,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { getUsersAction, getRolesAction, deleteUserAction } from "@/lib/actions";
-import type { User, Role, PaginatedResponse } from "@/types";
+import type { User, Role } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { UserFormSheet } from "./user-form-sheet";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import { useEntityManagement } from "@/hooks/use-entity-management";
 
 function LoadingUsersPage() {
   return (
@@ -31,77 +31,49 @@ function LoadingUsersPage() {
 }
 
 function UsersView() {
-  const [usersData, setUsersData] = React.useState<PaginatedResponse<User> | null>(null);
-  const [roles, setRoles] = React.useState<Role[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const [roles, setRoles] = React.useState<Role[]>([]);
+  const { currentUser } = useCurrentUser();
 
-  const currentPage = Number(searchParams.get('page')) || 1;
-
-  const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return;
-    setIsLoading(true);
-    try {
-      if (hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
-        const [fetchedUsersResult, fetchedRolesResult] = await Promise.all([
-          getUsersAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE }),
-          getRolesAction(),
-        ]);
-        setUsersData(fetchedUsersResult);
-        setRoles(fetchedRolesResult.data);
-      } else {
-        setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-        setRoles([]);
-      }
-    } catch (error) {
-      toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
-      setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUser, isAuthLoading, toast, currentPage]);
+  const { data: usersData, isLoading, fetchData, canView, canCreate, canEdit, canDelete } = useEntityManagement<User, any>({
+    fetchAction: getUsersAction,
+    permission: {
+      view: PERMISSIONS.VIEW_USER,
+      create: PERMISSIONS.CREATE_USER,
+      edit: PERMISSIONS.EDIT_USER,
+      delete: PERMISSIONS.DELETE_USER,
+    },
+  });
 
   React.useEffect(() => {
     let isMounted = true;
-    const performFetch = async () => {
-      if (!isAuthLoading && currentUser) {
-        await fetchData();
-        if (isMounted) {
-            // setIsLoading(false) is handled in fetchData, so we are good.
-        }
-      } else if (!isAuthLoading && !currentUser && isMounted) {
-        setIsLoading(false);
-        setUsersData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-        setRoles([]);
-      }
-    };
-
-    performFetch();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchData, currentUser, isAuthLoading]);
+    if (canView) {
+      getRolesAction()
+        .then(fetchedRolesResult => {
+          if (isMounted) setRoles(fetchedRolesResult.data);
+        })
+        .catch(error => {
+          if (isMounted) toast({ title: "获取角色错误", description: (error as Error).message, variant: "destructive" });
+        });
+    }
+    return () => { isMounted = false; };
+  }, [canView, toast]);
 
   const getRoleName = (roleId: string) => {
-    const role = roles.find(r => r.id === roleId);
-    return role ? role.name : "无";
+    return roles.find(r => r.id === roleId)?.name || "无";
   };
 
   const getInitials = (name: string = "") => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
-  }
+  };
 
-  if (isAuthLoading || isLoading) {
+  if (isLoading) {
      return <LoadingUsersPage />;
   }
 
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_USER)) {
+  if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <UsersIcon className="h-16 w-16 text-destructive mb-4" />
@@ -111,9 +83,7 @@ function UsersView() {
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_USER);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_USER);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_USER);
+  const usersToDisplay = usersData?.data || [];
 
   return (
     <>
@@ -127,10 +97,10 @@ function UsersView() {
       <Card>
         <CardHeader>
           <CardTitle>用户列表</CardTitle>
-          <CardDescription>系统中所有已注册用户。显示 {usersData?.data.length || 0} 条，共 {usersData?.totalCount || 0} 条用户数据。</CardDescription>
+          <CardDescription>系统中所有已注册用户。显示 {usersToDisplay.length} 条，共 {usersData?.totalCount || 0} 条用户数据。</CardDescription>
         </CardHeader>
         <CardContent>
-          {usersData && usersData.data.length > 0 ? (
+          {usersToDisplay.length > 0 ? (
             <>
               <Table>
                 <TableHeader>
@@ -143,7 +113,7 @@ function UsersView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {usersData.data.map((user) => (
+                  {usersToDisplay.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
@@ -189,7 +159,7 @@ function UsersView() {
                   ))}
                 </TableBody>
               </Table>
-              {usersData.totalPages > 1 && (
+              {usersData && usersData.totalPages > 1 && (
                 <PaginationControls
                     currentPage={usersData.currentPage}
                     totalPages={usersData.totalPages}

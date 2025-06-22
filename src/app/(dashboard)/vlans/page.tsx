@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Edit, Trash2, Cable, PlusCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,22 +11,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { getVLANsAction, deleteVLANAction, batchDeleteVLANsAction } from "@/lib/actions";
-import type { VLAN, PaginatedResponse } from "@/types";
+import type { VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { VlanFormSheet } from "./vlan-form-sheet";
 import { VlanBatchFormSheet } from "./vlan-batch-form-sheet";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useEntityManagement } from "@/hooks/use-entity-management";
+import { useSelection } from "@/hooks/use-selection";
 
 function LoadingVlansPage() {
   return (
@@ -38,101 +32,32 @@ function LoadingVlansPage() {
 }
 
 function VlansView() {
-  const [vlansData, setVlansData] = React.useState<PaginatedResponse<VLAN> | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const currentPage = Number(searchParams.get('page')) || 1;
+  const { data: vlansData, isLoading, fetchData, canView, canCreate, canEdit, canDelete } = useEntityManagement<VLAN, any>({
+    fetchAction: getVLANsAction,
+    permission: {
+      view: PERMISSIONS.VIEW_VLAN,
+      create: PERMISSIONS.CREATE_VLAN,
+      edit: PERMISSIONS.EDIT_VLAN,
+      delete: PERMISSIONS.DELETE_VLAN,
+    },
+  });
 
-  const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return;
-    setIsLoading(true);
-    try {
-      if (hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
-        const fetchedResult = await getVLANsAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE });
-        setVlansData(fetchedResult);
+  const vlansToDisplay = vlansData?.data || [];
+  const { selectedIds, setSelectedIds, handleSelectAll, handleSelectItem, checkboxState } = useSelection(vlansToDisplay);
 
-        if (fetchedResult.data.length === 0 && fetchedResult.currentPage > 1) {
-          const newTargetPage = fetchedResult.totalPages > 0 ? fetchedResult.totalPages : 1;
-          const currentUrlPage = Number(searchParams.get('page')) || 1;
-          if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedResult.totalPages) {
-              const params = new URLSearchParams(searchParams.toString());
-              params.set("page", String(newTargetPage));
-              router.push(`${pathname}?${params.toString()}`);
-              return;
-          }
-        }
-      } else {
-        setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-      }
-    } catch (error) {
-       toast({ title: "获取VLAN错误", description: (error as Error).message, variant: "destructive" });
-       setVlansData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-    } finally {
-      setIsLoading(false);
-      setSelectedIds(new Set());
-    }
-  }, [currentUser, isAuthLoading, toast, currentPage, router, pathname, searchParams]);
-
-  React.useEffect(() => {
+  const onActionSuccess = () => {
     fetchData();
-  }, [fetchData]);
-
-  const handleVlanCreationSuccess = React.useCallback(async () => {
-    try {
-      const paginationInfo = await getVLANsAction({ page: 1, pageSize: 1 }); // Fetch minimal to get totalPages
-      const newTotalPages = paginationInfo.totalPages;
-      const targetPage = newTotalPages > 0 ? newTotalPages : 1;
-      const currentUrlPage = Number(searchParams.get('page')) || 1;
-
-      if (targetPage !== currentUrlPage) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("page", String(targetPage));
-        router.push(`${pathname}?${params.toString()}`);
-      } else {
-        fetchData();
-      }
-    } catch (error) {
-      toast({
-        title: "刷新错误",
-        description: "创建VLAN后无法导航到目标页面，正在刷新当前页面。",
-        variant: "destructive",
-      });
-      fetchData(); 
-    }
-  }, [fetchData, router, pathname, searchParams, toast]);
-
-
-  const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked === true) {
-      const allIdsOnPage = vlansData?.data.map(v => v.id) || [];
-      setSelectedIds(new Set(allIdsOnPage));
-    } else {
-      setSelectedIds(new Set());
-    }
+    setSelectedIds(new Set());
   };
 
-  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
-    const newSelectedIds = new Set(selectedIds);
-    if (checked === true) {
-      newSelectedIds.add(id);
-    } else {
-      newSelectedIds.delete(id);
-    }
-    setSelectedIds(newSelectedIds);
-  };
-
-  if (isAuthLoading || (isLoading && !vlansData)) {
+  if (isLoading) {
      return <LoadingVlansPage />;
   }
 
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_VLAN)) {
+  if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Cable className="h-16 w-16 text-destructive mb-4" />
@@ -142,10 +67,6 @@ function VlansView() {
     );
   }
 
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_VLAN);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_VLAN);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_VLAN);
-
   const actionButtons = (
     <div className="flex flex-wrap gap-2">
       {canDelete && selectedIds.size > 0 && (
@@ -153,30 +74,21 @@ function VlansView() {
           selectedIds={selectedIds}
           itemTypeDisplayName="VLAN"
           batchDeleteAction={batchDeleteVLANsAction}
-          onBatchDeleted={fetchData}
+          onBatchDeleted={onActionSuccess}
         />
       )}
       {canCreate && (
         <>
-          <VlanBatchFormSheet onVlanChange={handleVlanCreationSuccess}>
+          <VlanBatchFormSheet onVlanChange={onActionSuccess}>
             <Button variant="outline">
               <PlusCircle className="mr-2 h-4 w-4" /> 批量添加VLAN
             </Button>
           </VlanBatchFormSheet>
-          <VlanFormSheet onVlanChange={handleVlanCreationSuccess} />
+          <VlanFormSheet onVlanChange={onActionSuccess} />
         </>
       )}
     </div>
   );
-
-  const dataIsAvailable = !!(vlansData && vlansData.data && vlansData.data.length > 0);
-  const isAllOnPageSelected = dataIsAvailable ? vlansData.data!.every(v => selectedIds.has(v.id)) : false;
-  const isSomeOnPageSelected = dataIsAvailable ? vlansData.data!.some(s => selectedIds.has(s.id)) : false;
-  const finalCurrentPage = vlansData?.currentPage || 1;
-  const finalTotalPages = vlansData?.totalPages || 0;
-  const finalTotalCount = vlansData?.totalCount || 0;
-  const vlansToDisplay = vlansData?.data || [];
-
 
   return (
     <TooltipProvider>
@@ -190,10 +102,10 @@ function VlansView() {
       <Card>
         <CardHeader>
           <CardTitle>VLAN 列表</CardTitle>
-          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansToDisplay.length} 条，共 {finalTotalCount} 条VLAN。</CardDescription>
+          <CardDescription>您网络中所有已配置的VLAN。显示 {vlansToDisplay.length} 条，共 {vlansData?.totalCount || 0} 条VLAN。</CardDescription>
         </CardHeader>
         <CardContent>
-          {dataIsAvailable ? (
+          {vlansToDisplay.length > 0 ? (
             <>
               <Table>
                 <TableHeader>
@@ -201,7 +113,7 @@ function VlansView() {
                     <TableHead className="w-[50px]">
                       {canDelete && (
                         <Checkbox
-                            checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
+                            checked={checkboxState}
                             onCheckedChange={handleSelectAll}
                             aria-label="全选当前页"
                         />
@@ -246,7 +158,7 @@ function VlansView() {
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right">
                           {canEdit && (
-                              <VlanFormSheet vlan={vlan} onVlanChange={fetchData}>
+                              <VlanFormSheet vlan={vlan} onVlanChange={onActionSuccess}>
                               <Button variant="ghost" size="icon" aria-label="编辑VLAN">
                                   <Edit className="h-4 w-4" />
                               </Button>
@@ -257,7 +169,7 @@ function VlansView() {
                               itemId={vlan.id}
                               itemName={`VLAN ${vlan.vlanNumber} (${vlan.name || '无名称'})`}
                               deleteAction={deleteVLANAction}
-                              onDeleted={fetchData}
+                              onDeleted={onActionSuccess}
                               triggerButton={
                                   <Button variant="ghost" size="icon" aria-label="删除VLAN">
                                   <Trash2 className="h-4 w-4" />
@@ -271,10 +183,10 @@ function VlansView() {
                   ))}
                 </TableBody>
               </Table>
-              {finalTotalPages > 1 && (
+              {vlansData && vlansData.totalPages > 1 && (
                 <PaginationControls
-                  currentPage={finalCurrentPage}
-                  totalPages={finalTotalPages}
+                  currentPage={vlansData.currentPage}
+                  totalPages={vlansData.totalPages}
                   basePath={pathname}
                   currentQuery={searchParams}
                 />
@@ -283,7 +195,7 @@ function VlansView() {
           ) : (
              <div className="text-center py-10">
               <p className="text-muted-foreground">未找到VLAN。</p>
-              {canCreate && <VlanFormSheet onVlanChange={handleVlanCreationSuccess} buttonProps={{className: "mt-4"}} />}
+              {canCreate && <VlanFormSheet onVlanChange={onActionSuccess} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>

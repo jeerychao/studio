@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { NetworkIcon, Edit, Trash2, Loader2, PlusCircle, CheckCircle, XCircle } from "lucide-react"; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,23 +11,19 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/page-header";
 import { getSubnetsAction, getVLANsAction, deleteSubnetAction, batchDeleteSubnetsAction } from "@/lib/actions";
-import type { Subnet, VLAN, PaginatedResponse } from "@/types";
+import type { Subnet, VLAN } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
 import { SubnetFormSheet } from "./subnet-form-sheet";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useEntityManagement } from "@/hooks/use-entity-management";
+import { useSelection } from "@/hooks/use-selection";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 function LoadingSubnetsPage() {
   return (
@@ -39,125 +35,49 @@ function LoadingSubnetsPage() {
 }
 
 function SubnetsView() {
-  const [subnetsData, setSubnetsData] = React.useState<PaginatedResponse<Subnet> | null>(null);
-  const [vlans, setVlans] = React.useState<VLAN[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const { toast } = useToast();
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const [vlans, setVlans] = React.useState<VLAN[]>([]);
+  const { currentUser } = useCurrentUser();
 
-  const currentPage = Number(searchParams.get('page')) || 1;
+  const { data: subnetsData, isLoading, fetchData, canView, canCreate, canEdit, canDelete } = useEntityManagement<Subnet, any>({
+    fetchAction: getSubnetsAction,
+    permission: {
+      view: PERMISSIONS.VIEW_SUBNET,
+      create: PERMISSIONS.CREATE_SUBNET,
+      edit: PERMISSIONS.EDIT_SUBNET,
+      delete: PERMISSIONS.DELETE_SUBNET,
+    },
+  });
 
-  const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) {
-      if (!isAuthLoading && !currentUser) {
-           setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-           setVlans([]);
-           setIsLoading(false);
-      } else {
-        setIsLoading(true);
-      }
-      return;
-    }
-    setIsLoading(true);
-    try {
-      if (!hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
-          setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-          setVlans([]);
-          setIsLoading(false);
-          return;
-      }
-
-      const [subnetsResponse, vlansResponse] = await Promise.all([
-        getSubnetsAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE }),
-        getVLANsAction(),
-      ]);
-      setSubnetsData(subnetsResponse);
-      setVlans(vlansResponse.data || []);
-
-      if (subnetsResponse.data.length === 0 && subnetsResponse.currentPage > 1) {
-        const newTargetPage = subnetsResponse.totalPages > 0 ? subnetsResponse.totalPages : 1;
-        const currentUrlPage = Number(searchParams.get('page')) || 1;
-        if (currentUrlPage !== newTargetPage && currentUrlPage > subnetsResponse.totalPages) {
-            const params = new URLSearchParams(searchParams.toString());
-            params.set("page", String(newTargetPage));
-            router.push(`${pathname}?${params.toString()}`);
-            return;
-        }
-      }
-
-    } catch (error: any) {
-      console.error("加载子网数据时出错:", error);
-      toast({
-        title: "加载子网错误",
-        description: error.message || "无法加载子网和VLAN。",
-        variant: "destructive",
-      });
-      setSubnetsData({ data: [], totalCount: 0, currentPage: currentPage, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-      setVlans([]);
-    } finally {
-      setIsLoading(false);
-      setSelectedIds(new Set());
-    }
-  }, [currentPage, toast, currentUser, isAuthLoading, router, pathname, searchParams]);
+  const subnetsToDisplay = subnetsData?.data || [];
+  const { selectedIds, setSelectedIds, handleSelectAll, handleSelectItem, checkboxState } = useSelection(subnetsToDisplay);
 
   React.useEffect(() => {
+    let isMounted = true;
+    if (canView) {
+      getVLANsAction()
+        .then(vlansResponse => {
+          if (isMounted) setVlans(vlansResponse.data || []);
+        })
+        .catch(error => {
+          if (isMounted) toast({ title: "获取VLAN错误", description: (error as Error).message, variant: "destructive" });
+        });
+    }
+    return () => { isMounted = false; };
+  }, [canView, toast]);
+
+  const onActionSuccess = () => {
     fetchData();
-  }, [fetchData]);
-
-  const handleSubnetCreationSuccess = React.useCallback(async () => {
-    try {
-      const paginationInfo = await getSubnetsAction({ page: 1, pageSize: 1 });
-      const newTotalPages = paginationInfo.totalPages;
-      const targetPage = newTotalPages > 0 ? newTotalPages : 1;
-      const currentUrlPage = Number(searchParams.get('page')) || 1;
-
-      if (targetPage !== currentUrlPage) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("page", String(targetPage));
-        router.push(`${pathname}?${params.toString()}`);
-      } else {
-        fetchData();
-      }
-    } catch (error) {
-      toast({
-        title: "刷新错误",
-        description: "创建子网后无法导航到目标页面，正在刷新当前页面。",
-        variant: "destructive",
-      });
-      fetchData(); 
-    }
-  }, [fetchData, router, pathname, searchParams, toast]);
-
-
-  const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked === true) {
-      const allIdsOnPage = subnetsData?.data.map(s => s.id) || [];
-      setSelectedIds(new Set(allIdsOnPage));
-    } else {
-      setSelectedIds(new Set());
-    }
+    setSelectedIds(new Set());
   };
 
-  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
-    const newSelectedIds = new Set(selectedIds);
-    if (checked === true) {
-      newSelectedIds.add(id);
-    } else {
-      newSelectedIds.delete(id);
-    }
-    setSelectedIds(newSelectedIds);
-  };
-
-  if (isAuthLoading || (isLoading && !subnetsData)) {
+  if (isLoading) {
     return <LoadingSubnetsPage />;
   }
 
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_SUBNET)) {
+  if (!canView) {
     return (
         <div className="flex flex-col items-center justify-center h-full">
             <NetworkIcon className="h-16 w-16 text-destructive mb-4" />
@@ -167,29 +87,10 @@ function SubnetsView() {
     );
   }
 
-  if (!subnetsData) {
-    return <p>准备子网数据时出错。请尝试刷新。</p>;
-  }
-
-  const { data: subnetsToDisplay, totalCount, currentPage: finalCurrentPage, totalPages } = subnetsData;
-
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_SUBNET);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_SUBNET);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_SUBNET);
-
-  const isAllOnPageSelected = subnetsToDisplay.length > 0 && subnetsToDisplay.every(s => selectedIds.has(s.id));
-  const isSomeOnPageSelected = subnetsToDisplay.length > 0 && subnetsToDisplay.some(s => selectedIds.has(s.id));
-
-
   return (
     <>
       <div className="md:hidden">
-        <Card>
-          <CardHeader>
-            <CardTitle>不支持移动视图</CardTitle>
-            <CardDescription>请使用桌面或更大屏幕查看此页面。</CardDescription>
-          </CardHeader>
-        </Card>
+        <Card><CardHeader><CardTitle>不支持移动视图</CardTitle><CardDescription>请使用桌面或更大屏幕查看此页面。</CardDescription></CardHeader></Card>
       </div>
       <div className="hidden md:block">
         <PageHeader
@@ -203,152 +104,55 @@ function SubnetsView() {
                   selectedIds={selectedIds}
                   itemTypeDisplayName="子网"
                   batchDeleteAction={batchDeleteSubnetsAction}
-                  onBatchDeleted={fetchData}
+                  onBatchDeleted={onActionSuccess}
                 />
               )}
               {canCreate && (
-                <SubnetFormSheet vlans={vlans} onSubnetChange={handleSubnetCreationSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
+                <SubnetFormSheet vlans={vlans} onSubnetChange={onActionSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
               )}
             </div>
           }
         />
         <Card>
-          <CardHeader>
-            <CardTitle>子网列表</CardTitle>
-            <CardDescription>
-              显示 {subnetsToDisplay.length} 条，共 {totalCount} 条子网。
-            </CardDescription>
-          </CardHeader>
+          <CardHeader><CardTitle>子网列表</CardTitle><CardDescription>显示 {subnetsToDisplay.length} 条，共 {subnetsData?.totalCount || 0} 条子网。</CardDescription></CardHeader>
           <CardContent>
             <TooltipProvider>
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
-                      {canDelete && (
-                        <Checkbox
-                          checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)}
-                          onCheckedChange={handleSelectAll}
-                          aria-label="全选当前页"
-                        />
-                      )}
-                    </TableHead>
-                    <TableHead>CIDR</TableHead>
-                    <TableHead>名称</TableHead>
-                    <TableHead>VLAN</TableHead>
-                    <TableHead>DHCP</TableHead>
-                    <TableHead>利用率</TableHead>
-                    <TableHead>描述</TableHead>
-                    {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow>
+                  <TableHead className="w-[50px]">{canDelete && <Checkbox checked={checkboxState} onCheckedChange={handleSelectAll} aria-label="全选当前页" />}</TableHead>
+                  <TableHead>CIDR</TableHead><TableHead>名称</TableHead><TableHead>VLAN</TableHead><TableHead>DHCP</TableHead><TableHead>利用率</TableHead><TableHead>描述</TableHead>
+                  {(canEdit || canDelete) && <TableHead className="text-right">操作</TableHead>}
+                </TableRow></TableHeader>
                 <TableBody>
-                  {subnetsToDisplay.map((subnet) => {
+                  {subnetsToDisplay.length > 0 ? subnetsToDisplay.map((subnet) => {
                     const vlanInfo = subnet.vlanId ? vlans.find(v => v.id === subnet.vlanId) : null;
-                    const vlanDisplay = vlanInfo
-                      ? `VLAN ${vlanInfo.vlanNumber}${vlanInfo.name ? ` (${vlanInfo.name})` : ''}`
-                      : <span className="text-muted-foreground text-xs">无</span>;
+                    const vlanDisplay = vlanInfo ? `VLAN ${vlanInfo.vlanNumber}${vlanInfo.name ? ` (${vlanInfo.name})` : ''}` : <span className="text-muted-foreground text-xs">无</span>;
                     return (
                       <TableRow key={subnet.id} data-state={selectedIds.has(subnet.id) && "selected"}>
-                        <TableCell>
-                          {canDelete && (
-                            <Checkbox
-                              checked={selectedIds.has(subnet.id)}
-                              onCheckedChange={(checked) => handleSelectItem(subnet.id, checked)}
-                              aria-label={`选择子网 ${subnet.cidr}`}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline font-medium">
-                            {subnet.cidr}
-                          </Link>
-                        </TableCell>
+                        <TableCell>{canDelete && <Checkbox checked={selectedIds.has(subnet.id)} onCheckedChange={(checked) => handleSelectItem(subnet.id, checked)} aria-label={`选择子网 ${subnet.cidr}`}/>}</TableCell>
+                        <TableCell><Link href={`/ip-addresses?subnetId=${subnet.id}`} className="hover:underline font-medium">{subnet.cidr}</Link></TableCell>
                         <TableCell className="max-w-[150px] truncate text-sm">{subnet.name || "无"}</TableCell>
-                        <TableCell>
-                          {vlanInfo ? (
-                            <Badge variant="outline">{vlanDisplay}</Badge>
-                          ) : (
-                            vlanDisplay
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {subnet.dhcpEnabled ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-muted-foreground" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={ (subnet.utilization ?? 0) > 85 ? "destructive" : "secondary"}>
-                            {subnet.utilization ?? 0}%
-                          </Badge>
-                        </TableCell>
+                        <TableCell>{vlanInfo ? <Badge variant="outline">{vlanDisplay}</Badge> : vlanDisplay}</TableCell>
+                        <TableCell className="text-center">{subnet.dhcpEnabled ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-muted-foreground" />}</TableCell>
+                        <TableCell><Badge variant={ (subnet.utilization ?? 0) > 85 ? "destructive" : "secondary"}>{subnet.utilization ?? 0}%</Badge></TableCell>
                         <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-                          {subnet.description ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-default">{subnet.description}</span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="start">
-                                <p className="max-w-xs whitespace-pre-wrap break-words">{subnet.description}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            "无"
-                          )}
+                          {subnet.description ? (<Tooltip><TooltipTrigger asChild><span className="cursor-default">{subnet.description}</span></TooltipTrigger><TooltipContent side="top" align="start"><p className="max-w-xs whitespace-pre-wrap break-words">{subnet.description}</p></TooltipContent></Tooltip>) : ("无")}
                         </TableCell>
                         {(canEdit || canDelete) && (
                           <TableCell className="text-right">
-                            {canEdit && (
-                              <SubnetFormSheet
-                                subnet={subnet}
-                                vlans={vlans}
-                                onSubnetChange={fetchData}
-                              >
-                                <Button variant="ghost" size="icon" aria-label="编辑子网">
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                              </SubnetFormSheet>
-                            )}
-                            {canDelete && (
-                              <DeleteConfirmationDialog
-                                itemId={subnet.id}
-                                itemName={`${subnet.name || subnet.cidr}`}
-                                deleteAction={deleteSubnetAction}
-                                onDeleted={fetchData}
-                                dialogTitle="删除子网?"
-                                dialogDescription={`您确定要删除子网 ${subnet.name || subnet.cidr} 吗？此操作无法撤销。`}
-                                triggerButton={
-                                  <Button variant="ghost" size="icon" aria-label="删除子网">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                }
-                              />
-                            )}
+                            {canEdit && <SubnetFormSheet subnet={subnet} vlans={vlans} onSubnetChange={onActionSuccess}><Button variant="ghost" size="icon" aria-label="编辑子网"><Edit className="h-4 w-4" /></Button></SubnetFormSheet>}
+                            {canDelete && <DeleteConfirmationDialog itemId={subnet.id} itemName={`${subnet.name || subnet.cidr}`} deleteAction={deleteSubnetAction} onDeleted={onActionSuccess} dialogTitle="删除子网?" dialogDescription={`您确定要删除子网 ${subnet.name || subnet.cidr} 吗？此操作无法撤销。`} triggerButton={<Button variant="ghost" size="icon" aria-label="删除子网"><Trash2 className="h-4 w-4" /></Button>}/>}
                           </TableCell>
                         )}
                       </TableRow>
                     );
-                  })}
-                  {subnetsToDisplay.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={(canEdit || canDelete) ? 8 : 7} className="text-center h-24 text-muted-foreground">
-                        未找到子网。{canCreate && "尝试创建一个！"}
-                      </TableCell>
-                    </TableRow>
+                  }) : (
+                    <TableRow><TableCell colSpan={(canEdit || canDelete) ? 8 : 7} className="text-center h-24 text-muted-foreground">未找到子网。{canCreate && "尝试创建一个！"}</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </TooltipProvider>
-            {totalPages > 1 && (
-              <PaginationControls
-                currentPage={finalCurrentPage}
-                totalPages={totalPages}
-                basePath={pathname}
-                currentQuery={searchParams}
-              />
-            )}
+            {subnetsData && subnetsData.totalPages > 1 && <PaginationControls currentPage={subnetsData.currentPage} totalPages={subnetsData.totalPages} basePath={pathname} currentQuery={searchParams}/>}
           </CardContent>
         </Card>
       </div>

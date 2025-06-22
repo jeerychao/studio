@@ -3,26 +3,19 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Edit, ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { getRolesAction } from "@/lib/actions"; 
-import type { Role, PaginatedResponse } from "@/types";
+import type { Role } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { RoleFormSheet } from "./role-form-sheet";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
-import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useEntityManagement } from "@/hooks/use-entity-management";
 
 function LoadingRolesPage() {
   return (
@@ -34,57 +27,25 @@ function LoadingRolesPage() {
 }
 
 function RolesView() {
-  const [rolesData, setRolesData] = React.useState<PaginatedResponse<Role> | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const { currentUser, isAuthLoading } = useCurrentUser();
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const currentPage = Number(searchParams.get('page')) || 1;
+  const { data: rolesData, isLoading, fetchData, canView, canEdit, canDelete } = useEntityManagement<Role, any>({
+    fetchAction: getRolesAction,
+    permission: {
+      view: PERMISSIONS.VIEW_ROLE,
+      edit: PERMISSIONS.EDIT_ROLE_PERMISSIONS, // Simplified permission check
+      delete: PERMISSIONS.EDIT_ROLE_DESCRIPTION, // Grouping edit permissions here
+    },
+  });
 
-  const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return;
-    setIsLoading(true);
-    try {
-      if (hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
-          const fetchedRolesResult = await getRolesAction({ page: currentPage, pageSize: DEFAULT_PAGE_SIZE });
-          setRolesData(fetchedRolesResult);
-      } else {
-        setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-      }
-    } catch (error) {
-      toast({ title: "获取角色错误", description: (error as Error).message, variant: "destructive" });
-      setRolesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUser, isAuthLoading, toast, currentPage]);
+  const canEditAnyPartOfRole = canEdit || canDelete; // Combine permissions for display logic
 
-  React.useEffect(() => {
-    let isMounted = true;
-    
-    const performFetch = async () => {
-        await fetchData();
-        if (isMounted) {
-            // Since fetchData sets its own loading state, direct updates here might be minimal
-            // but this structure is safer against race conditions on unmount.
-        }
-    };
-
-    performFetch();
-
-    return () => {
-        isMounted = false;
-    };
-  }, [fetchData]);
-
-  if (isAuthLoading || isLoading) {
+  if (isLoading) {
      return <LoadingRolesPage />;
   }
   
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_ROLE)) {
+  if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <ShieldCheck className="h-16 w-16 text-destructive mb-4" />
@@ -94,10 +55,7 @@ function RolesView() {
     );
   }
   
-  const canEditRolePermissions = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_PERMISSIONS);
-  const canEditRoleDescription = hasPermission(currentUser, PERMISSIONS.EDIT_ROLE_DESCRIPTION);
-  const canEditAnyPartOfRole = canEditRolePermissions || canEditRoleDescription;
-
+  const rolesToDisplay = rolesData?.data || [];
 
   return (
     <TooltipProvider>
@@ -112,11 +70,11 @@ function RolesView() {
           <CardTitle>系统角色</CardTitle>
           <CardDescription>
             这些角色具有预定义的名称。管理员可以编辑它们的描述和细粒度权限。
-            显示 {rolesData?.data.length} 条，共 {rolesData?.totalCount} 条角色数据。
+            显示 {rolesToDisplay.length} 条，共 {rolesData?.totalCount || 0} 条角色数据。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {rolesData && rolesData.data.length > 0 ? (
+          {rolesToDisplay.length > 0 ? (
             <>
               <Table>
                 <TableHeader>
@@ -129,7 +87,7 @@ function RolesView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rolesData.data.map((role) => (
+                  {rolesToDisplay.map((role) => (
                     <TableRow key={role.id}>
                       <TableCell className="font-medium">{role.name}</TableCell>
                       <TableCell>{role.permissions.length}</TableCell>
@@ -161,12 +119,14 @@ function RolesView() {
                   ))}
                 </TableBody>
               </Table>
-              <PaginationControls
-                currentPage={rolesData.currentPage}
-                totalPages={rolesData.totalPages}
-                basePath={pathname}
-                currentQuery={searchParams}
-              />
+              {rolesData && rolesData.totalPages > 1 && (
+                <PaginationControls
+                  currentPage={rolesData.currentPage}
+                  totalPages={rolesData.totalPages}
+                  basePath={pathname}
+                  currentQuery={searchParams}
+                />
+              )}
             </>
           ) : (
             <div className="text-center py-10">

@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Suspense } from 'react';
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Globe, Edit, Trash2, PlusCircle, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +17,7 @@ import {
   getAccessTypeDictionariesAction, getInterfaceTypeDictionariesAction
 } from "@/lib/actions";
 import type { AppIPAddressWithRelations } from "@/lib/actions";
-import type { IPAddressStatus, Subnet, VLAN, PaginatedResponse, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
+import type { IPAddressStatus, Subnet, VLAN, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
 import { PERMISSIONS } from "@/types";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { BatchDeleteConfirmationDialog } from "@/components/batch-delete-confirmation-dialog";
@@ -25,16 +25,12 @@ import { IPAddressFormSheet } from "./ip-address-form-sheet";
 import { IPBatchFormSheet } from "./ip-batch-form-sheet";
 import { IPSubnetFilter } from "./ip-subnet-filter";
 import { IPStatusFilter } from "./ip-status-filter";
-import { useCurrentUser, hasPermission } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useToast } from "@/hooks/use-toast";
 import { PaginationControls } from "@/components/pagination-controls";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useEntityManagement } from "@/hooks/use-entity-management";
+import { useSelection } from "@/hooks/use-selection";
 
 function LoadingIPAddressesPageContent() {
   return (
@@ -47,150 +43,69 @@ function LoadingIPAddressesPageContent() {
 
 function IPAddressesView() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
 
   const selectedSubnetId = searchParams.get("subnetId") || undefined;
-  const selectedStatus = searchParams.get("status") as IPAddressStatus | 'all' || 'all';
-  const currentPage = Number(searchParams.get('page')) || 1;
+  const selectedStatus = (searchParams.get("status") as IPAddressStatus | 'all') || 'all';
 
-  const [ipAddressesData, setIpAddressesData] = React.useState<PaginatedResponse<AppIPAddressWithRelations> | null>(null);
   const [subnets, setSubnets] = React.useState<Subnet[]>([]);
   const [vlans, setVlans] = React.useState<VLAN[]>([]);
   const [deviceDictionaries, setDeviceDictionaries] = React.useState<DeviceDictionary[]>([]);
   const [paymentSourceDictionaries, setPaymentSourceDictionaries] = React.useState<PaymentSourceDictionary[]>([]);
   const [accessTypeDictionaries, setAccessTypeDictionaries] = React.useState<AccessTypeDictionary[]>([]);
   const [interfaceTypes, setInterfaceTypes] = React.useState<InterfaceTypeDictionary[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-
-  const { currentUser, isAuthLoading } = useCurrentUser();
+  
   const { toast } = useToast();
+  const { currentUser } = useCurrentUser();
 
-  const fetchData = React.useCallback(async () => {
-    if (isAuthLoading || !currentUser) return;
-    setIsLoading(true);
-    try {
-      if (!hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
-        setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-        setSubnets([]); setVlans([]); setDeviceDictionaries([]); setPaymentSourceDictionaries([]); setAccessTypeDictionaries([]); setInterfaceTypes([]);
-        setIsLoading(false);
-        return;
-      }
-      const [
-        fetchedIpsResult, fetchedSubnetsResult, fetchedVlansResult,
-        fetchedDeviceDictResult, fetchedPaymentDictResult,
-        fetchedAccessTypeDictResult, fetchedInterfaceTypesResult
-      ] = await Promise.all([
-        getIPAddressesAction({ subnetId: selectedSubnetId, status: selectedStatus, page: currentPage, pageSize: DEFAULT_PAGE_SIZE }),
-        getSubnetsAction(),
-        getVLANsAction(),
-        getDeviceDictionariesAction(),
-        getPaymentSourceDictionariesAction(),
-        getAccessTypeDictionariesAction(),
-        getInterfaceTypeDictionariesAction({ pageSize: 1000 }),
-      ]);
+  const { data: ipAddressesData, isLoading, fetchData, canView, canCreate, canEdit, canDelete } = useEntityManagement<AppIPAddressWithRelations, any>({
+    fetchAction: getIPAddressesAction,
+    fetchActionParams: { subnetId: selectedSubnetId, status: selectedStatus },
+    permission: {
+      view: PERMISSIONS.VIEW_IPADDRESS,
+      create: PERMISSIONS.CREATE_IPADDRESS,
+      edit: PERMISSIONS.EDIT_IPADDRESS,
+      delete: PERMISSIONS.DELETE_IPADDRESS,
+    },
+    dependencies: [selectedSubnetId, selectedStatus],
+  });
 
-      setIpAddressesData(fetchedIpsResult);
-      setSubnets(fetchedSubnetsResult.data);
-      setVlans(fetchedVlansResult.data);
-      if (fetchedDeviceDictResult.success) setDeviceDictionaries(fetchedDeviceDictResult.data?.data || []); else setDeviceDictionaries([]);
-      if (fetchedPaymentDictResult.success) setPaymentSourceDictionaries(fetchedPaymentDictResult.data?.data || []); else setPaymentSourceDictionaries([]);
-      if (fetchedAccessTypeDictResult.success) setAccessTypeDictionaries(fetchedAccessTypeDictResult.data?.data || []); else setAccessTypeDictionaries([]);
-      if (fetchedInterfaceTypesResult.success) setInterfaceTypes(fetchedInterfaceTypesResult.data?.data || []); else setInterfaceTypes([]);
-
-      if (fetchedIpsResult.data.length === 0 && fetchedIpsResult.currentPage > 1) {
-        const newTargetPage = fetchedIpsResult.totalPages > 0 ? fetchedIpsResult.totalPages : 1;
-        const currentUrlPage = Number(searchParams.get('page')) || 1;
-        if (currentUrlPage !== newTargetPage && currentUrlPage > fetchedIpsResult.totalPages) {
-            const params = new URLSearchParams(searchParams.toString());
-            if (selectedSubnetId) params.set("subnetId", selectedSubnetId); else params.delete("subnetId");
-            if (selectedStatus && selectedStatus !== 'all') params.set("status", selectedStatus); else params.delete("status");
-            params.set("page", String(newTargetPage));
-            router.push(`${pathname}?${params.toString()}`);
-            return;
-        }
-      }
-
-    } catch (error) {
-      toast({ title: "获取数据错误", description: (error as Error).message, variant: "destructive" });
-      setIpAddressesData({ data: [], totalCount: 0, currentPage: 1, totalPages: 0, pageSize: DEFAULT_PAGE_SIZE });
-    } finally {
-      setIsLoading(false);
-      setSelectedIds(new Set());
-    }
-  }, [currentUser, isAuthLoading, toast, selectedSubnetId, selectedStatus, currentPage, router, pathname, searchParams]);
+  const ipsToDisplay = ipAddressesData?.data || [];
+  const { selectedIds, setSelectedIds, handleSelectAll, handleSelectItem, checkboxState } = useSelection(ipsToDisplay);
 
   React.useEffect(() => {
     let isMounted = true;
-    
-    const performFetch = async () => {
-      await fetchData();
-      if (isMounted) {
-        // Any state updates that depend on fetchData result can be here.
-        // Since fetchData sets state, this might be primarily for setIsLoading(false) if it were outside.
+    const fetchAuxiliaryData = async () => {
+      try {
+        if (!currentUser || !canView) return;
+        const [
+          fetchedSubnetsResult, fetchedVlansResult,
+          fetchedDeviceDictResult, fetchedPaymentDictResult,
+          fetchedAccessTypeDictResult, fetchedInterfaceTypesResult
+        ] = await Promise.all([
+          getSubnetsAction(), getVLANsAction(), getDeviceDictionariesAction(), getPaymentSourceDictionariesAction(), getAccessTypeDictionariesAction(), getInterfaceTypeDictionariesAction({ pageSize: 1000 }),
+        ]);
+
+        if (isMounted) {
+          setSubnets(fetchedSubnetsResult.data);
+          setVlans(fetchedVlansResult.data);
+          if (fetchedDeviceDictResult.success) setDeviceDictionaries(fetchedDeviceDictResult.data?.data || []);
+          if (fetchedPaymentDictResult.success) setPaymentSourceDictionaries(fetchedPaymentDictResult.data?.data || []);
+          if (fetchedAccessTypeDictResult.success) setAccessTypeDictionaries(fetchedAccessTypeDictResult.data?.data || []);
+          if (fetchedInterfaceTypesResult.success) setInterfaceTypes(fetchedInterfaceTypesResult.data?.data || []);
+        }
+      } catch (error) {
+        toast({ title: "获取辅助数据错误", description: (error as Error).message, variant: "destructive" });
       }
     };
+    fetchAuxiliaryData();
+    return () => { isMounted = false; };
+  }, [toast, currentUser, canView]);
 
-    performFetch();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchData]);
-
-  const handleIpAddressChangeSuccess = React.useCallback(async () => {
-    try {
-      const paginationInfo = await getIPAddressesAction({
-        page: 1, pageSize: 1, subnetId: selectedSubnetId, status: selectedStatus,
-      });
-      const newTotalPages = paginationInfo.totalPages;
-      const targetPage = newTotalPages > 0 ? newTotalPages : 1;
-      const currentUrlPage = Number(searchParams.get('page')) || 1;
-
-      if (targetPage !== currentUrlPage || (ipAddressesData && ipAddressesData.data.length === DEFAULT_PAGE_SIZE && targetPage > currentUrlPage)) {
-        const params = new URLSearchParams(searchParams.toString());
-        if (selectedSubnetId) params.set("subnetId", selectedSubnetId); else params.delete("subnetId");
-        if (selectedStatus && selectedStatus !== 'all') params.set("status", selectedStatus); else params.delete("status");
-        params.set("page", String(targetPage));
-        router.push(`${pathname}?${params.toString()}`);
-      } else {
-        fetchData();
-      }
-    } catch (error) {
-      toast({ title: "刷新错误", description: "操作后无法导航到目标页面，正在刷新当前页面。", variant: "destructive" });
-      fetchData();
-    }
-  }, [fetchData, router, pathname, searchParams, toast, selectedSubnetId, selectedStatus, ipAddressesData]);
-
-  const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked === true) setSelectedIds(new Set(ipAddressesData?.data.map(ip => ip.id) || []));
-    else setSelectedIds(new Set());
+  const onActionSuccess = () => {
+    fetchData();
+    setSelectedIds(new Set());
   };
-
-  const handleSelectItem = (id: string, checked: boolean | 'indeterminate') => {
-    const newSelectedIds = new Set(selectedIds);
-    if (checked === true) newSelectedIds.add(id); else newSelectedIds.delete(id);
-    setSelectedIds(newSelectedIds);
-  };
-
-  if (isAuthLoading || (isLoading && !ipAddressesData)) {
-    return <LoadingIPAddressesPageContent />;
-  }
-  
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Globe className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
-        <p className="text-muted-foreground">您没有权限查看IP地址。</p>
-      </div>
-    );
-  }
-
-  const canCreate = hasPermission(currentUser, PERMISSIONS.CREATE_IPADDRESS);
-  const canEdit = hasPermission(currentUser, PERMISSIONS.EDIT_IPADDRESS);
-  const canDelete = hasPermission(currentUser, PERMISSIONS.DELETE_IPADDRESS);
 
   const getStatusBadgeVariant = (status: IPAddressStatus) => {
     switch (status) { case "allocated": return "default"; case "free": return "secondary"; case "reserved": return "outline"; default: return "secondary"; }
@@ -203,9 +118,23 @@ function IPAddressesView() {
     return "无";
   };
 
+  if (isLoading) {
+    return <LoadingIPAddressesPageContent />;
+  }
+  
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Globe className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">访问被拒绝</h2>
+        <p className="text-muted-foreground">您没有权限查看IP地址。</p>
+      </div>
+    );
+  }
+
   const pageActionButtons = (
     <div className="flex flex-col sm:flex-row gap-2">
-      {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="IP 地址" batchDeleteAction={batchDeleteIPAddressesAction} onBatchDeleted={fetchData}/>}
+      {canDelete && selectedIds.size > 0 && <BatchDeleteConfirmationDialog selectedIds={selectedIds} itemTypeDisplayName="IP 地址" batchDeleteAction={batchDeleteIPAddressesAction} onBatchDeleted={onActionSuccess}/>}
       {canCreate && (
         <>
         <IPBatchFormSheet
@@ -213,7 +142,7 @@ function IPAddressesView() {
             deviceDictionaries={deviceDictionaries}
             paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries}
             interfaceTypes={interfaceTypes}
-            onIpAddressChange={handleIpAddressChangeSuccess}>
+            onIpAddressChange={onActionSuccess}>
           <Button variant="outline" className="w-full sm:w-auto"><PlusCircle className="mr-2 h-4 w-4" />批量添加IP</Button>
         </IPBatchFormSheet>
         <IPAddressFormSheet
@@ -221,19 +150,11 @@ function IPAddressesView() {
             deviceDictionaries={deviceDictionaries}
             paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries}
             interfaceTypes={interfaceTypes}
-            currentSubnetId={selectedSubnetId} onIpAddressChange={handleIpAddressChangeSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
+            currentSubnetId={selectedSubnetId} onIpAddressChange={onActionSuccess} buttonProps={{className: "w-full sm:w-auto"}} />
         </>
       )}
     </div>
   );
-
-  const dataIsAvailable = ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0;
-  const isAllOnPageSelected = dataIsAvailable ? ipAddressesData.data!.every(ip => selectedIds.has(ip.id)) : false;
-  const isSomeOnPageSelected = dataIsAvailable ? ipAddressesData.data!.some(ip => selectedIds.has(ip.id)) : false;
-  const finalCurrentPage = ipAddressesData?.currentPage || 1;
-  const finalTotalPages = ipAddressesData?.totalPages || 0;
-  const finalTotalCount = ipAddressesData?.totalCount || 0;
-  const ipsToDisplay = ipAddressesData?.data || [];
 
   return (
     <TooltipProvider>
@@ -245,13 +166,13 @@ function IPAddressesView() {
       <Card>
         <CardHeader><CardTitle>IP 地址列表</CardTitle><CardDescription>
             {selectedSubnetId ? `子网 ${subnets.find(s => s.id === selectedSubnetId)?.cidr || ''} 内的IP地址` : "所有受管IP地址。"}
-            {selectedStatus !== 'all' && ` (状态: ${ipAddressStatusLabels[selectedStatus as IPAddressStatus]})`} 显示 {ipsToDisplay.length} 条，共 {finalTotalCount} 条IP。</CardDescription></CardHeader>
+            {selectedStatus !== 'all' && ` (状态: ${ipAddressStatusLabels[selectedStatus as IPAddressStatus]})`} 显示 {ipsToDisplay.length} 条，共 {ipAddressesData?.totalCount || 0} 条IP。</CardDescription></CardHeader>
         <CardContent>
-          {dataIsAvailable ? (
+          {ipsToDisplay.length > 0 ? (
             <>
               <Table>
                 <TableHeader><TableRow>
-                    <TableHead className="w-[50px]">{canDelete && <Checkbox checked={isAllOnPageSelected ? true : (isSomeOnPageSelected ? 'indeterminate' : false)} onCheckedChange={handleSelectAll} aria-label="全选当前页"/>}</TableHead>
+                    <TableHead className="w-[50px]">{canDelete && <Checkbox checked={checkboxState} onCheckedChange={handleSelectAll} aria-label="全选当前页"/>}</TableHead>
                     <TableHead>IP 地址</TableHead><TableHead>状态</TableHead><TableHead>网关?</TableHead>
                     <TableHead>分配给</TableHead><TableHead>使用单位</TableHead><TableHead>联系人</TableHead><TableHead>电话</TableHead>
                     <TableHead>对端单位</TableHead><TableHead>对端设备</TableHead><TableHead>对端端口</TableHead>
@@ -300,20 +221,20 @@ function IPAddressesView() {
                       <TableCell className="text-sm text-muted-foreground">{ip.updatedAt ? new Date(ip.updatedAt).toLocaleString() : '未知'}</TableCell>
                       {(canEdit || canDelete) && (
                         <TableCell className="text-right whitespace-nowrap">
-                          {canEdit && <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} deviceDictionaries={deviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} interfaceTypes={interfaceTypes} currentSubnetId={selectedSubnetId} onIpAddressChange={fetchData}><Button variant="ghost" size="icon" aria-label="编辑IP地址"><Edit className="h-4 w-4" /></Button></IPAddressFormSheet>}
-                          {canDelete && <DeleteConfirmationDialog itemId={ip.id} itemName={ip.ipAddress} deleteAction={deleteIPAddressAction} onDeleted={fetchData} triggerButton={<Button variant="ghost" size="icon" aria-label="删除IP地址"><Trash2 className="h-4 w-4" /></Button>}/>}
+                          {canEdit && <IPAddressFormSheet ipAddress={ip} subnets={subnets} vlans={vlans} deviceDictionaries={deviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} interfaceTypes={interfaceTypes} currentSubnetId={selectedSubnetId} onIpAddressChange={onActionSuccess}><Button variant="ghost" size="icon" aria-label="编辑IP地址"><Edit className="h-4 w-4" /></Button></IPAddressFormSheet>}
+                          {canDelete && <DeleteConfirmationDialog itemId={ip.id} itemName={ip.ipAddress} deleteAction={deleteIPAddressAction} onDeleted={onActionSuccess} triggerButton={<Button variant="ghost" size="icon" aria-label="删除IP地址"><Trash2 className="h-4 w-4" /></Button>}/>}
                         </TableCell>
                       )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              {finalTotalPages > 1 && <PaginationControls currentPage={finalCurrentPage} totalPages={finalTotalPages} basePath={pathname} currentQuery={searchParams} />}
+              {ipAddressesData && ipAddressesData.totalPages > 1 && <PaginationControls currentPage={ipAddressesData.currentPage} totalPages={ipAddressesData.totalPages} basePath={pathname} currentQuery={searchParams} />}
             </>
           ) : (
             <div className="text-center py-10">
               <p className="text-muted-foreground">{selectedSubnetId || selectedStatus !== 'all' ? "未找到符合当前筛选条件的IP地址。" : "未找到IP地址。选择一个子网或添加新的IP。"}</p>
-              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} deviceDictionaries={deviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} interfaceTypes={interfaceTypes} currentSubnetId={selectedSubnetId} onIpAddressChange={handleIpAddressChangeSuccess} buttonProps={{className: "mt-4"}} />}
+              {canCreate && <IPAddressFormSheet subnets={subnets} vlans={vlans} deviceDictionaries={deviceDictionaries} paymentSourceDictionaries={paymentSourceDictionaries} accessTypeDictionaries={accessTypeDictionaries} interfaceTypes={interfaceTypes} currentSubnetId={selectedSubnetId} onIpAddressChange={onActionSuccess} buttonProps={{className: "mt-4"}} />}
             </div>
           )}
         </CardContent>
