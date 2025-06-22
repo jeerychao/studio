@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  ipam-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+        - ENCRYPTION_KEY_ARG=${ENCRYPTION_KEY}
+    image: ipam-app-local:latest
+    container_name: ipam_app_local_prod
+    ports:
+      - "${EXTERNAL_PORT}:${INTERNAL_PORT}"
+    env_file:
+      - .env
+      - ./production.env
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=${INTERNAL_PORT}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - ipam_db_data:/app/prisma
+      - ipam_logs_data:/app/logs
+    restart: unless-stopped
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${INTERNAL_PORT}/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  ipam_db_data:
+  ipam_logs_data:

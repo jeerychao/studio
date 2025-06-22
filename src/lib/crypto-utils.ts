@@ -3,38 +3,39 @@ import crypto from 'crypto';
 import { logger } from './logger'; // Using logger for more structured server-side logs
 
 const algorithm = 'aes-256-cbc';
-let ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_KEY;
 const DEFAULT_DEV_KEY_HEX = "000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
 
-let effectiveKeySource = "process.env.ENCRYPTION_KEY"; // For logging
+function getEncryptionKey(): { keyHex: string; source: string } {
+    const envKey = process.env.ENCRYPTION_KEY;
+    const isKeyInvalid = !envKey || envKey.length !== 64;
 
-const isKeyInvalid = !ENCRYPTION_KEY_HEX || ENCRYPTION_KEY_HEX.length !== 64;
-
-if (isKeyInvalid) {
-  if (process.env.NODE_ENV === 'production') {
-    const errorMessage = 'CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment. Application will not start.';
-    logger.error(errorMessage, undefined, { context: 'crypto-utils-init' });
-    throw new Error(errorMessage);
-  } else {
-    effectiveKeySource = "DEFAULT_DEV_KEY_HEX";
-    logger.warn(
-      'ENCRYPTION_KEY environment variable is not set or is invalid. ' +
-      `Using a default, insecure key (${effectiveKeySource}) for development purposes ONLY. ` +
-      'DO NOT USE THIS IN PRODUCTION. ' +
-      'Please set a secure 64-character hexadecimal string for ENCRYPTION_KEY in your .env file. ' +
-      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
-      undefined,
-      { context: 'crypto-utils-init' }
-    );
-    ENCRYPTION_KEY_HEX = DEFAULT_DEV_KEY_HEX;
-  }
-} else {
-    // Only log this if the key was actually found in process.env and is valid
-    logger.info(
-        `Using ENCRYPTION_KEY from environment. Starts with: ${ENCRYPTION_KEY_HEX.substring(0,4)}... Ends with: ...${ENCRYPTION_KEY_HEX.substring(ENCRYPTION_KEY_HEX.length - 4)} (Length: ${ENCRYPTION_KEY_HEX.length})`,
-        { context: 'crypto-utils-init' }
-    );
+    if (isKeyInvalid) {
+        if (process.env.NODE_ENV === 'production') {
+            const errorMessage = 'CRITICAL: ENCRYPTION_KEY environment variable is not set or is not a 64-character hex string in a production environment. Application will not start.';
+            logger.error(errorMessage, undefined, { context: 'crypto-utils-init' });
+            throw new Error(errorMessage);
+        } else {
+            logger.warn(
+                'ENCRYPTION_KEY environment variable is not set or is invalid. ' +
+                `Using a default, insecure key (DEFAULT_DEV_KEY_HEX) for development purposes ONLY. ` +
+                'DO NOT USE THIS IN PRODUCTION. ' +
+                'Please set a secure 64-character hexadecimal string for ENCRYPTION_KEY in your .env file. ' +
+                'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+                undefined,
+                { context: 'crypto-utils-init' }
+            );
+            return { keyHex: DEFAULT_DEV_KEY_HEX, source: "DEFAULT_DEV_KEY_HEX" };
+        }
+    } else {
+        logger.info(
+            `Using ENCRYPTION_KEY from environment. Starts with: ${envKey.substring(0, 4)}... Ends with: ...${envKey.substring(envKey.length - 4)} (Length: ${envKey.length})`,
+            { context: 'crypto-utils-init' }
+        );
+        return { keyHex: envKey, source: "process.env.ENCRYPTION_KEY" };
+    }
 }
+
+const { keyHex: ENCRYPTION_KEY_HEX, source: effectiveKeySource } = getEncryptionKey();
 
 logger.info(
   `Effective encryption key source: ${effectiveKeySource}. Key used starts with: ${ENCRYPTION_KEY_HEX.substring(0,4)}...`,
