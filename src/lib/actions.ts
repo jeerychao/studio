@@ -1600,17 +1600,32 @@ export async function checkInterfaceTypeUsage(interfaceTypeName: string, forItem
   if (localDevicePortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortExactUsage} 个 IP 地址的“本端设备端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`);
 }
 
-export async function getDeviceDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppDeviceDictionary>>> {
-  const actionName = 'getDeviceDictionariesAction';
-  try {
-    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const totalCount = await prisma.deviceDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = params?.page && params?.pageSize
-        ? await prisma.deviceDictionary.findMany({ orderBy: { deviceName: 'asc' }, skip, take: pageSize })
-        : await prisma.deviceDictionary.findMany({ orderBy: { deviceName: 'asc' } });
-    const appItems: AppDeviceDictionary[] = itemsFromDb.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString()}));
-    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+export async function getDeviceDictionariesAction(params?: FetchParams): Promise<PaginatedResponse<AppDeviceDictionary>> {
+    const actionName = 'getDeviceDictionariesAction';
+    try {
+        const page = params?.page || 1;
+        const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+        const skip = (page - 1) * pageSize;
+        const totalCount = await prisma.deviceDictionary.count();
+        const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+        const itemsFromDb = await prisma.deviceDictionary.findMany({
+            orderBy: { deviceName: 'asc' },
+            skip,
+            take: pageSize
+        });
+        
+        const appItems: AppDeviceDictionary[] = itemsFromDb.map(item => ({ 
+            ...item, 
+            createdAt: item.createdAt.toISOString(), 
+            updatedAt: item.updatedAt.toISOString() 
+        }));
+        
+        return { data: appItems, totalCount, currentPage: page, totalPages, pageSize };
+    } catch (error: unknown) {
+        logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
+        throw new AppError("获取设备字典数据时发生服务器错误。", 500, "GET_DEVICE_DICTS_FAILED", "无法加载设备字典数据。");
+    }
 }
 
 export async function createDeviceDictionaryAction(data: Omit<AppDeviceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppDeviceDictionary>> {
@@ -1728,17 +1743,32 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
-export async function getPaymentSourceDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppPaymentSourceDictionary>>> {
-  const actionName = 'getPaymentSourceDictionariesAction';
-  try {
-    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const totalCount = await prisma.paymentSourceDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = params?.page && params?.pageSize
-        ? await prisma.paymentSourceDictionary.findMany({ orderBy: { sourceName: 'asc' }, skip, take: pageSize })
-        : await prisma.paymentSourceDictionary.findMany({ orderBy: { sourceName: 'asc' } });
-    const appItems: AppPaymentSourceDictionary[] = itemsFromDb.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString()}));
-    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+export async function getPaymentSourceDictionariesAction(params?: FetchParams): Promise<PaginatedResponse<AppPaymentSourceDictionary>> {
+    const actionName = 'getPaymentSourceDictionariesAction';
+    try {
+        const page = params?.page || 1;
+        const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+        const skip = (page - 1) * pageSize;
+        const totalCount = await prisma.paymentSourceDictionary.count();
+        const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+        const itemsFromDb = await prisma.paymentSourceDictionary.findMany({
+            orderBy: { sourceName: 'asc' },
+            skip,
+            take: pageSize
+        });
+        
+        const appItems: AppPaymentSourceDictionary[] = itemsFromDb.map(item => ({ 
+            ...item, 
+            createdAt: item.createdAt.toISOString(), 
+            updatedAt: item.updatedAt.toISOString() 
+        }));
+        
+        return { data: appItems, totalCount, currentPage: page, totalPages, pageSize };
+    } catch (error: unknown) {
+        logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
+        throw new AppError("获取付费来源字典数据时发生服务器错误。", 500, "GET_PAYMENT_SOURCE_DICTS_FAILED", "无法加载付费来源字典数据。");
+    }
 }
 
 export async function createPaymentSourceDictionaryAction(data: Omit<AppPaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppPaymentSourceDictionary>> {
@@ -1850,18 +1880,34 @@ export async function batchDeletePaymentSourceDictionariesAction(ids: string[], 
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
-export async function getAccessTypeDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppAccessTypeDictionary>>> {
-  const actionName = 'getAccessTypeDictionariesAction';
-  try {
-    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const totalCount = await prisma.accessTypeDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = params?.page && params?.pageSize
-        ? await prisma.accessTypeDictionary.findMany({ orderBy: { name: 'asc' }, skip, take: pageSize })
-        : await prisma.accessTypeDictionary.findMany({ orderBy: { name: 'asc' } });
-    const appItems: AppAccessTypeDictionary[] = itemsFromDb.map(item => ({ ...item, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
-    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+export async function getAccessTypeDictionariesAction(params?: FetchParams): Promise<PaginatedResponse<AppAccessTypeDictionary>> {
+    const actionName = 'getAccessTypeDictionariesAction';
+    try {
+        const page = params?.page || 1;
+        const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+        const skip = (page - 1) * pageSize;
+        const totalCount = await prisma.accessTypeDictionary.count();
+        const totalPages = Math.ceil(totalCount / pageSize) || 1;
+        
+        const itemsFromDb = await prisma.accessTypeDictionary.findMany({
+            orderBy: { name: 'asc' },
+            skip,
+            take: pageSize
+        });
+        
+        const appItems: AppAccessTypeDictionary[] = itemsFromDb.map(item => ({ 
+            ...item, 
+            createdAt: item.createdAt.toISOString(), 
+            updatedAt: item.updatedAt.toISOString() 
+        }));
+
+        return { data: appItems, totalCount, currentPage: page, totalPages, pageSize };
+    } catch (error: unknown) {
+        logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
+        throw new AppError("获取接入方式字典数据时发生服务器错误。", 500, "GET_ACCESS_TYPE_DICTS_FAILED", "无法加载接入方式字典数据。");
+    }
 }
+
 
 export async function createAccessTypeDictionaryAction(data: Omit<AppAccessTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppAccessTypeDictionary>> {
   const actionName = 'createAccessTypeDictionaryAction';
@@ -1969,17 +2015,33 @@ export async function batchDeleteAccessTypeDictionariesAction(ids: string[], per
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
-export async function getInterfaceTypeDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppInterfaceTypeDictionary>>> {
-  const actionName = 'getInterfaceTypeDictionariesAction';
-  try {
-    const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
-    const totalCount = await prisma.interfaceTypeDictionary.count(); const totalPages = Math.ceil(totalCount / pageSize) || 1;
-    const itemsFromDb = params?.page && params?.pageSize
-        ? await prisma.interfaceTypeDictionary.findMany({ orderBy: { name: 'asc' }, skip, take: pageSize })
-        : await prisma.interfaceTypeDictionary.findMany({ orderBy: { name: 'asc' } });
-    const appItems: AppInterfaceTypeDictionary[] = itemsFromDb.map(item => ({ ...item, description: item.description || undefined, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }));
-    return { success: true, data: { data: appItems, totalCount: params?.page && params?.pageSize ? totalCount : appItems.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize } };
-  } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+export async function getInterfaceTypeDictionariesAction(params?: FetchParams): Promise<PaginatedResponse<AppInterfaceTypeDictionary>> {
+    const actionName = 'getInterfaceTypeDictionariesAction';
+    try {
+        const page = params?.page || 1;
+        const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+        const skip = (page - 1) * pageSize;
+        const totalCount = await prisma.interfaceTypeDictionary.count();
+        const totalPages = Math.ceil(totalCount / pageSize) || 1;
+        
+        const itemsFromDb = await prisma.interfaceTypeDictionary.findMany({
+            orderBy: { name: 'asc' },
+            skip,
+            take: pageSize
+        });
+
+        const appItems: AppInterfaceTypeDictionary[] = itemsFromDb.map(item => ({ 
+            ...item, 
+            description: item.description || undefined, 
+            createdAt: item.createdAt.toISOString(), 
+            updatedAt: item.updatedAt.toISOString() 
+        }));
+        
+        return { data: appItems, totalCount, currentPage: page, totalPages, pageSize };
+    } catch (error: unknown) {
+        logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
+        throw new AppError("获取接口类型字典数据时发生服务器错误。", 500, "GET_INTERFACE_TYPE_DICTS_FAILED", "无法加载接口类型字典数据。");
+    }
 }
 
 export async function createInterfaceTypeDictionaryAction(data: Omit<AppInterfaceTypeDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppInterfaceTypeDictionary>> {
