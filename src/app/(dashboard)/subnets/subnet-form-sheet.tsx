@@ -39,6 +39,7 @@ import { PlusCircle, Edit, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Subnet, VLAN } from "@/types";
 import { createSubnetAction, updateSubnetAction, type ActionResponse, type UpdateSubnetData, type CreateSubnetData } from "@/lib/actions";
+import { NO_VLAN_SENTINEL_VALUE } from "@/lib/constants";
 
 const subnetFormSchema = z.object({
   cidr: z.string().min(7, "CIDR 表示法太短 (例如 x.x.x.x/y)"),
@@ -57,8 +58,6 @@ interface SubnetFormSheetProps {
   buttonProps?: ButtonProps;
   onSubnetChange?: () => void;
 }
-
-const NO_VLAN_SENTINEL_VALUE = "__NO_VLAN_INTERNAL__";
 
 export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnetChange }: SubnetFormSheetProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -328,4 +327,3 @@ export function SubnetFormSheet({ subnet, vlans, children, buttonProps, onSubnet
     </Sheet>
   );
 }
-

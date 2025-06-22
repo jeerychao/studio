@@ -213,7 +213,7 @@ function IPAddressesView() {
     </div>
   );
 
-  const dataIsAvailable = !!(ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0);
+  const dataIsAvailable = ipAddressesData && ipAddressesData.data && ipAddressesData.data.length > 0;
   const isAllOnPageSelected = dataIsAvailable ? ipAddressesData.data!.every(ip => selectedIds.has(ip.id)) : false;
   const isSomeOnPageSelected = dataIsAvailable ? ipAddressesData.data!.some(ip => selectedIds.has(ip.id)) : false;
   const finalCurrentPage = ipAddressesData?.currentPage || 1;

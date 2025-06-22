@@ -22,10 +22,9 @@ import type { Subnet, VLAN, IPAddressStatus, DeviceDictionary, PaymentSourceDict
 import { batchCreateIPAddressesAction, type BatchIpCreationResult, type ActionResponse } from "@/lib/actions";
 import { ipToNumber } from "@/lib/ip-utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { NO_DIRECT_VLAN_SENTINEL, NO_SELECTION_SENTINEL } from "@/lib/constants";
 
 
-const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
-const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
 const ipAddressStatusOptions = ["allocated", "free", "reserved"] as const;
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = { allocated: "已分配", free: "空闲", reserved: "预留" };
 

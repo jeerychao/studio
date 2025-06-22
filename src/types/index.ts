@@ -141,30 +141,30 @@ export interface AuditLog {
 export interface DeviceDictionary {
   id: string;
   deviceName: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PaymentSourceDictionary {
   id: string;
   sourceName: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AccessTypeDictionary {
   id: string;
   name: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface InterfaceTypeDictionary {
   id: string;
   name: string;
   description?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 

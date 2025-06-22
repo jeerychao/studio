@@ -21,13 +21,10 @@ import { PlusCircle, Edit, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { IPAddress, Subnet, IPAddressStatus, VLAN, DeviceDictionary, PaymentSourceDictionary, AccessTypeDictionary, InterfaceTypeDictionary } from "@/types";
 import { createIPAddressAction, updateIPAddressAction, type ActionResponse } from "@/lib/actions";
+import { NO_DIRECT_VLAN_SENTINEL, NO_SELECTION_SENTINEL, NO_SUBNET_SELECTED_SENTINEL } from "@/lib/constants";
 
 const ipAddressStatusOptions: IPAddressStatus[] = ["allocated", "free", "reserved"];
 const ipAddressStatusLabels: Record<IPAddressStatus, string> = { allocated: "已分配", free: "空闲", reserved: "预留" };
-
-const NO_SUBNET_SELECTED_SENTINEL = "__NO_SUBNET_INTERNAL__";
-const NO_DIRECT_VLAN_SENTINEL = "__NO_DIRECT_VLAN_INTERNAL__";
-const NO_SELECTION_SENTINEL = "__NO_SELECTION_INTERNAL__";
 
 const ipAddressFormSchema = z.object({
   ipAddress: z.string().ip({ version: "v4", message: "无效的 IPv4 地址" }),
