@@ -741,7 +741,32 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
   const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize; const whereClause = {};
   const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize);
   const vlansFromDb = params?.page && params?.pageSize ? await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize }) : await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' } });
-  const appVlans: AppVLAN[] = await Promise.all(vlansFromDb.map(async (vlan) => ({ ...vlan, name: vlan.name || undefined, description: vlan.description || undefined, subnetCount: (await prisma.subnet.count({ where: { vlanId: vlan.id } })) + (await prisma.iPAddress.count({where: {directVlanId: vlan.id}})) })));
+  
+  // Optimization: Fetch counts in batches instead of N+1
+  const vlanIds = vlansFromDb.map(v => v.id);
+  
+  const subnetCounts = await prisma.subnet.groupBy({
+    by: ['vlanId'],
+    where: { vlanId: { in: vlanIds } },
+    _count: { _all: true },
+  });
+
+  const directIpCounts = await prisma.iPAddress.groupBy({
+    by: ['directVlanId'],
+    where: { directVlanId: { in: vlanIds } },
+    _count: { _all: true },
+  });
+
+  const subnetCountMap = new Map(subnetCounts.map(item => [item.vlanId, item._count._all]));
+  const directIpCountMap = new Map(directIpCounts.map(item => [item.directVlanId, item._count._all]));
+
+  const appVlans: AppVLAN[] = vlansFromDb.map(vlan => ({
+    ...vlan,
+    name: vlan.name || undefined,
+    description: vlan.description || undefined,
+    subnetCount: (subnetCountMap.get(vlan.id) || 0) + (directIpCountMap.get(vlan.id) || 0),
+  }));
+
   return { data: appVlans, totalCount: params?.page && params?.pageSize ? totalCount : appVlans.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
 }
 
@@ -1765,7 +1790,7 @@ export async function updateInterfaceTypeDictionaryAction(id: string, data: Part
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-async function checkInterfaceTypeUsage(interfaceTypeName: string, forItemIdentifier: string): Promise<void> {
+export async function checkInterfaceTypeUsage(interfaceTypeName: string, forItemIdentifier: string): Promise<void> {
   const [
     peerPortPrefixUsage,
     peerPortExactUsage,
