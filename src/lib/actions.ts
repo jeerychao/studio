@@ -592,15 +592,22 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
 }
 
 async function calculateSubnetUtilizationHelper(subnetId: string): Promise<number> {
-  const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); if (!subnet || !subnet.cidr) return 0;
-  const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
-  const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0;
-  const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" } });
-  const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
-  if (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) {
-    return 1;
+  try {
+    const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); 
+    if (!subnet || !subnet.cidr) return 0;
+    const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); 
+    if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
+    const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0;
+    const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" } });
+    const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
+    if (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) {
+      return 1;
+    }
+    return Math.round(rawPercentage);
+  } catch (error) {
+    logger.error(`Failed to calculate utilization for subnet ${subnetId}`, error);
+    return 0; // Return a safe value on error
   }
-  return Math.round(rawPercentage);
 }
 
 export async function deleteSubnetAction(id: string, performingUserId?: string): Promise<ActionResponse> {
@@ -930,11 +937,10 @@ export async function batchDeleteVLANsAction(ids: string[], performingUserId?: s
   for (let i = 0; i < validDeletes.length; i += BATCH_SIZE) {
     const batch = validDeletes.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(item => item.id);
-    const operations = batchIds.map(id => prisma.vLAN.delete({ where: { id } }));
-
+    
     try {
-        await prisma.$transaction(operations);
-        successCount += batch.length;
+        const result = await prisma.vLAN.deleteMany({ where: { id: { in: batchIds } } });
+        successCount += result.count;
         batch.forEach(v => successfullyDeletedVlanSummaries.push(`${v.vlanNumber}${v.name ? ` (${v.name})` : ''}`));
     } catch (transactionError: unknown) {
         const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
@@ -1222,11 +1228,10 @@ export async function batchDeleteIPAddressesAction(ids: string[], performingUser
   for (let i = 0; i < validDeletes.length; i += BATCH_SIZE) {
     const batch = validDeletes.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(item => item.id);
-    const operations = batchIds.map(id => prisma.iPAddress.delete({ where: { id } }));
     
     try {
-        await prisma.$transaction(operations);
-        successCount += batch.length;
+        const result = await prisma.iPAddress.deleteMany({ where: { id: { in: batchIds } } });
+        successCount += result.count;
         batch.forEach(item => successfullyDeletedIpAddresses.push(item.ipAddress));
     } catch (transactionError: unknown) {
         const errRes = createActionErrorResponse(transactionError, `${actionName}_transaction`);
@@ -1448,6 +1453,153 @@ export async function getSubnetFreeIpDetailsAction(subnetId: string): Promise<Ac
     const calculatedAvailableIpRanges = groupConsecutiveIpsToRanges(availableIpNumbers);
     return { success: true, data: { subnetId, subnetCidr: subnet.cidr, totalUsableIPs, dbAllocatedIPsCount, dbReservedIPsCount, calculatedAvailableIPsCount: availableIpNumbers.length, calculatedAvailableIpRanges, } };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
+}
+
+export async function getDashboardDataAction(): Promise<ActionResponse<DashboardData>> {
+  const actionName = 'getDashboardDataAction';
+  try {
+    const [
+      ipStatusGroups,
+      vlanResources,
+      // Removed direct subnet fetch, will be fetched conditionally
+      recentAuditLogsDb,
+      usageUnitGroups,
+      unspecifiedUsageUnitCount,
+    ] = await prisma.$transaction([
+      prisma.iPAddress.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+        orderBy: {
+          status: 'asc',
+        },
+      }),
+      prisma.vLAN.findMany({
+        select: {
+          id: true,
+          vlanNumber: true,
+          name: true,
+          _count: { select: { subnets: true, directIPs: true } },
+        },
+        orderBy: { vlanNumber: 'asc' },
+      }),
+      prisma.auditLog.findMany({
+        select: { id: true, username: true, action: true, timestamp: true, details: true },
+        orderBy: { timestamp: 'desc' },
+        take: DASHBOARD_AUDIT_LOG_COUNT,
+      }),
+      prisma.iPAddress.groupBy({
+        by: ['usageUnit'],
+        _count: { usageUnit: true },
+        where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
+        orderBy: { _count: { usageUnit: 'desc' } },
+      }),
+      prisma.iPAddress.count({
+        where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
+      }),
+    ]);
+
+    const [totalIpCount, totalVlanCount, totalSubnetCount] = await prisma.$transaction([
+        prisma.iPAddress.count(),
+        prisma.vLAN.count(),
+        prisma.subnet.count(),
+    ]);
+
+    const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
+    ipStatusGroups.forEach(group => {
+      const statusKey = group.status as keyof IPStatusCounts;
+      if (statusKey in ipStatusCounts) {
+        ipStatusCounts[statusKey] = group._count._all;
+      }
+    });
+
+    let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
+      .map((g, index) => ({ item: g.usageUnit!, count: g._count.usageUnit, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
+      .slice(0, DASHBOARD_TOP_N_COUNT);
+    const otherUsageUnitCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count.usageUnit, 0);
+    if (otherUsageUnitCount > 0) ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length]});
+    if (unspecifiedUsageUnitCount > 0) {
+        const unspecifiedExists = ipUsageByUnit.find(item => item.item === "未指定");
+        let currentTopNSize = DASHBOARD_TOP_N_COUNT;
+        const otherItemIndex = ipUsageByUnit.findIndex(item => item.item === "其他");
+        
+        if (!unspecifiedExists) {
+            if (ipUsageByUnit.length < currentTopNSize || (ipUsageByUnit.length === currentTopNSize && otherItemIndex === -1)) {
+                 ipUsageByUnit.push({ item: "未指定", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
+            } else if (otherItemIndex !== -1) { 
+                 ipUsageByUnit[otherItemIndex].count += unspecifiedUsageUnitCount;
+            } else { 
+                 ipUsageByUnit.push({ item: "其他", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
+            }
+        }
+    }
+    ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
+    if (ipUsageByUnit.length > DASHBOARD_TOP_N_COUNT + 1) { 
+        ipUsageByUnit = ipUsageByUnit.slice(0, DASHBOARD_TOP_N_COUNT + 1);
+    }
+
+    const vlanResourceCounts: VLANResourceInfo[] = vlanResources.map(vlan => ({
+      id: vlan.id,
+      vlanNumber: vlan.vlanNumber,
+      name: vlan.name || undefined,
+      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.directIPs || 0),
+    }));
+    const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
+    
+    // Optimized fetch for subnets needing attention
+    const subnetsNeedingAttentionRaw = await prisma.subnet.findMany({
+        select: { id: true, cidr: true, name: true, _count: { select: { ipAddresses: { where: { status: 'allocated' } } } } },
+    });
+    
+    const subnetsNeedingAttention: SubnetUtilizationInfo[] = subnetsNeedingAttentionRaw.map(subnet => {
+        const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
+        let utilization = 0;
+        if (subnetProperties) {
+            const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
+            const allocatedIpsCount = subnet._count.ipAddresses;
+            if (totalUsableIps > 0) {
+                const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
+                utilization = Math.round(rawPercentage);
+            }
+        }
+        return { id: subnet.id, cidr: subnet.cidr, name: subnet.name || undefined, utilization };
+    })
+    .filter(s => s.utilization > 80)
+    .sort((a, b) => b.utilization - a.utilization)
+    .slice(0, DASHBOARD_TOP_N_COUNT);
+
+    const recentAuditLogs: AuditLog[] = recentAuditLogsDb.map(log => ({ id: log.id, userId: undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
+
+    const dashboardData: DashboardData = {
+      totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
+      ipUsageByUnit, busiestVlans,
+      subnetsNeedingAttention, recentAuditLogs,
+    };
+    
+    revalidatePath("/dashboard");
+    return { success: true, data: dashboardData };
+  } catch (error: unknown) {
+    logger.error(actionName, error as Error, { context: actionName });
+    return { success: false, error: createActionErrorResponse(error, actionName) };
+  }
+}
+
+export async function checkInterfaceTypeUsage(interfaceTypeName: string, forItemIdentifier: string): Promise<void> {
+  const [
+    peerPortPrefixUsage,
+    peerPortExactUsage,
+    localDevicePortPrefixUsage,
+    localDevicePortExactUsage
+  ] = await Promise.all([
+    prisma.iPAddress.count({ where: { peerPortName: { startsWith: `${interfaceTypeName} ` } } }),
+    prisma.iPAddress.count({ where: { peerPortName: interfaceTypeName } }),
+    prisma.iPAddress.count({ where: { selectedDevicePort: { startsWith: `${interfaceTypeName} ` } } }),
+    prisma.iPAddress.count({ where: { selectedDevicePort: interfaceTypeName } })
+  ]);
+  
+  if (peerPortPrefixUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${peerPortPrefixUsage} 个 IP 地址的“对端端口”字段作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_PREFIX', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${peerPortPrefixUsage} 个 IP 的“对端端口”作为前缀使用。`);
+  if (peerPortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${peerPortExactUsage} 个 IP 地址的“对端端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${peerPortExactUsage} 个 IP 的“对端端口”精确匹配使用。`);
+  if (localDevicePortPrefixUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortPrefixUsage} 个 IP 地址的“本端设备端口”字段作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_PREFIX', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortPrefixUsage} 个 IP 的“本端设备端口”作为前缀使用。`);
+  if (localDevicePortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortExactUsage} 个 IP 地址的“本端设备端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`);
 }
 
 export async function getDeviceDictionariesAction(params?: FetchParams): Promise<ActionResponse<PaginatedResponse<AppDeviceDictionary>>> {
@@ -1867,25 +2019,6 @@ export async function updateInterfaceTypeDictionaryAction(id: string, data: Part
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
 
-export async function checkInterfaceTypeUsage(interfaceTypeName: string, forItemIdentifier: string): Promise<void> {
-  const [
-    peerPortPrefixUsage,
-    peerPortExactUsage,
-    localDevicePortPrefixUsage,
-    localDevicePortExactUsage,
-  ] = await Promise.all([
-    prisma.iPAddress.count({ where: { peerPortName: { startsWith: `${interfaceTypeName} ` } } }),
-    prisma.iPAddress.count({ where: { peerPortName: interfaceTypeName } }),
-    prisma.iPAddress.count({ where: { selectedDevicePort: { startsWith: `${interfaceTypeName} ` } } }),
-    prisma.iPAddress.count({ where: { selectedDevicePort: interfaceTypeName } }),
-  ]);
-
-  if (peerPortPrefixUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${peerPortPrefixUsage} 个 IP 地址的“对端端口”字段作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_PREFIX', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${peerPortPrefixUsage} 个 IP 的“对端端口”作为前缀使用。`);
-  if (peerPortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${peerPortExactUsage} 个 IP 地址的“对端端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${peerPortExactUsage} 个 IP 的“对端端口”精确匹配使用。`);
-  if (localDevicePortPrefixUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortPrefixUsage} 个 IP 地址的“本端设备端口”字段作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_PREFIX', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortPrefixUsage} 个 IP 的“本端设备端口”作为前缀使用。`);
-  if (localDevicePortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortExactUsage} 个 IP 地址的“本端设备端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`);
-}
-
 export async function deleteInterfaceTypeDictionaryAction(id: string, performingUserId?: string): Promise<ActionResponse> {
   const actionName = 'deleteInterfaceTypeDictionaryAction';
   try {
@@ -1962,137 +2095,4 @@ export async function batchDeleteInterfaceTypeDictionariesAction(ids: string[], 
     revalidatePath("/query");
   }
   return { successCount, failureCount: failureDetails.length, failureDetails };
-}
-
-
-export async function getDashboardDataAction(): Promise<ActionResponse<DashboardData>> {
-  const actionName = 'getDashboardDataAction';
-  try {
-    const [
-      ipStatusGroups,
-      vlanResources,
-      subnets,
-      recentAuditLogsDb,
-      usageUnitGroups,
-      unspecifiedUsageUnitCount,
-    ] = await prisma.$transaction([
-      prisma.iPAddress.groupBy({
-        by: ['status'],
-        _count: { _all: true },
-        orderBy: {
-          status: 'asc',
-        },
-      }),
-      prisma.vLAN.findMany({
-        select: {
-          id: true,
-          vlanNumber: true,
-          name: true,
-          _count: { select: { subnets: true, directIPs: true } },
-        },
-        orderBy: { vlanNumber: 'asc' },
-      }),
-      prisma.subnet.findMany({
-        select: {
-          id: true,
-          cidr: true,
-          name: true,
-          _count: {
-            select: {
-              ipAddresses: { where: { status: 'allocated' } },
-            },
-          },
-        },
-        orderBy: { cidr: 'asc' },
-      }),
-      prisma.auditLog.findMany({
-        select: { id: true, username: true, action: true, timestamp: true, details: true },
-        orderBy: { timestamp: 'desc' },
-        take: DASHBOARD_AUDIT_LOG_COUNT,
-      }),
-      prisma.iPAddress.groupBy({
-        by: ['usageUnit'],
-        _count: { usageUnit: true },
-        where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
-        orderBy: { _count: { usageUnit: 'desc' } },
-      }),
-      prisma.iPAddress.count({
-        where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
-      }),
-    ]);
-
-    const totalIpCount = ipStatusGroups.reduce((sum, group) => sum + group._count._all, 0);
-    const totalVlanCount = vlanResources.length;
-    const totalSubnetCount = subnets.length;
-
-    const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
-    ipStatusGroups.forEach(group => {
-      const statusKey = group.status as keyof IPStatusCounts;
-      if (statusKey in ipStatusCounts) {
-        ipStatusCounts[statusKey] = group._count._all;
-      }
-    });
-
-    let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
-      .map((g, index) => ({ item: g.usageUnit!, count: g._count.usageUnit, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
-      .slice(0, DASHBOARD_TOP_N_COUNT);
-    const otherUsageUnitCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count.usageUnit, 0);
-    if (otherUsageUnitCount > 0) ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length]});
-    if (unspecifiedUsageUnitCount > 0) {
-        const unspecifiedExists = ipUsageByUnit.find(item => item.item === "未指定");
-        let currentTopNSize = DASHBOARD_TOP_N_COUNT;
-        const otherItemIndex = ipUsageByUnit.findIndex(item => item.item === "其他");
-        
-        if (!unspecifiedExists) {
-            if (ipUsageByUnit.length < currentTopNSize || (ipUsageByUnit.length === currentTopNSize && otherItemIndex === -1)) {
-                 ipUsageByUnit.push({ item: "未指定", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
-            } else if (otherItemIndex !== -1) { 
-                 ipUsageByUnit[otherItemIndex].count += unspecifiedUsageUnitCount;
-            } else { 
-                 ipUsageByUnit.push({ item: "其他", count: unspecifiedUsageUnitCount, fill: CHART_COLORS_REMAINDER[(ipUsageByUnit.length) % CHART_COLORS_REMAINDER.length]});
-            }
-        }
-    }
-    ipUsageByUnit.sort((a, b) => { if (a.item === "其他" || a.item === "未指定") return 1; if (b.item === "其他" || b.item === "未指定") return -1; return b.count - a.count; });
-    if (ipUsageByUnit.length > DASHBOARD_TOP_N_COUNT + 1) { 
-        ipUsageByUnit = ipUsageByUnit.slice(0, DASHBOARD_TOP_N_COUNT + 1);
-    }
-
-    const vlanResourceCounts: VLANResourceInfo[] = vlanResources.map(vlan => ({
-      id: vlan.id,
-      vlanNumber: vlan.vlanNumber,
-      name: vlan.name || undefined,
-      resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.directIPs || 0),
-    }));
-    const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
-
-    const subnetsWithUtilization: SubnetUtilizationInfo[] = subnets.map(subnet => {
-      const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
-      let utilization = 0;
-      if (subnetProperties) {
-          const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-          const allocatedIpsCount = subnet._count.ipAddresses;
-          if (totalUsableIps > 0) {
-              const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
-              utilization = (allocatedIpsCount > 0 && rawPercentage > 0 && rawPercentage < 1) ? 1 : Math.round(rawPercentage);
-          }
-      }
-      return { id: subnet.id, cidr: subnet.cidr, name: subnet.name || undefined, utilization };
-    });
-    const subnetsNeedingAttention = subnetsWithUtilization.filter(s => s.utilization > 80).sort((a, b) => b.utilization - a.utilization).slice(0, DASHBOARD_TOP_N_COUNT);
-
-    const recentAuditLogs: AuditLog[] = recentAuditLogsDb.map(log => ({ id: log.id, userId: undefined, username: log.username || '系统', action: log.action, timestamp: log.timestamp.toISOString(), details: log.details || undefined }));
-
-    const dashboardData: DashboardData = {
-      totalIpCount, ipStatusCounts, totalVlanCount, totalSubnetCount,
-      ipUsageByUnit, busiestVlans,
-      subnetsNeedingAttention, recentAuditLogs,
-    };
-    
-    revalidatePath("/dashboard");
-    return { success: true, data: dashboardData };
-  } catch (error: unknown) {
-    logger.error(actionName, error as Error, { context: actionName });
-    return { success: false, error: createActionErrorResponse(error, actionName) };
-  }
 }
