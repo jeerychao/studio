@@ -164,13 +164,13 @@ export async function fetchCurrentUserDetailsAction(userId: string): Promise<Fet
   }
 }
 
-export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<FetchedUserDetails>> {
+export async function getUsersAction(params?: FetchParams): Promise<PaginatedResponse<AppUser>> {
   const actionName = 'getUsersAction';
   try {
     const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.user.count(); const totalPages = Math.ceil(totalCount / pageSize);
     const usersFromDb = await prisma.user.findMany({ include: { role: { include: { permissions: true } } }, orderBy: { username: 'asc' }, skip, take: pageSize });
-    const appUsers: FetchedUserDetails[] = usersFromDb.map(user => ({ id: user.id, username: user.username, email: user.email, roleId: user.roleId, roleName: user.role.name as AppRoleNameType, avatar: user.avatar || undefined, lastLogin: user.lastLogin?.toISOString() || undefined, permissions: user.role.permissions.map(p => p.id as AppPermissionIdType) }));
+    const appUsers: AppUser[] = usersFromDb.map(user => ({ id: user.id, username: user.username, email: user.email, roleId: user.roleId, roleName: user.role.name as AppRoleNameType, avatar: user.avatar || undefined, lastLogin: user.lastLogin?.toISOString() || undefined, permissions: user.role.permissions.map(p => p.id as AppPermissionIdType) }));
     return { data: appUsers, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取用户数据时发生服务器错误。", 500, "GET_USERS_FAILED", "无法加载用户数据。"); }
 }
@@ -738,24 +738,33 @@ export async function batchDeleteSubnetsAction(ids: string[], performingUserId?:
 
 
 export async function getVLANsAction(params?: FetchParams): Promise<PaginatedResponse<AppVLAN>> {
-  const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize; const whereClause = {};
-  const totalCount = await prisma.vLAN.count({ where: whereClause }); const totalPages = Math.ceil(totalCount / pageSize);
-  const vlansFromDb = params?.page && params?.pageSize ? await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize }) : await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' } });
+  const page = params?.page || 1;
+  const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+  const skip = (page - 1) * pageSize;
+  const whereClause = {};
+
+  const totalCount = await prisma.vLAN.count({ where: whereClause });
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+  const vlansFromDb = params?.page && params?.pageSize
+    ? await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' }, skip, take: pageSize })
+    : await prisma.vLAN.findMany({ where: whereClause, orderBy: { vlanNumber: 'asc' } });
   
-  // Optimization: Fetch counts in batches instead of N+1
   const vlanIds = vlansFromDb.map(v => v.id);
   
-  const subnetCounts = await prisma.subnet.groupBy({
-    by: ['vlanId'],
-    where: { vlanId: { in: vlanIds } },
-    _count: { _all: true },
-  });
-
-  const directIpCounts = await prisma.iPAddress.groupBy({
-    by: ['directVlanId'],
-    where: { directVlanId: { in: vlanIds } },
-    _count: { _all: true },
-  });
+  // Optimized Batch Counting
+  const [subnetCounts, directIpCounts] = await Promise.all([
+    prisma.subnet.groupBy({
+      by: ['vlanId'],
+      where: { vlanId: { in: vlanIds } },
+      _count: { _all: true },
+    }),
+    prisma.iPAddress.groupBy({
+      by: ['directVlanId'],
+      where: { directVlanId: { in: vlanIds } },
+      _count: { _all: true },
+    })
+  ]);
 
   const subnetCountMap = new Map(subnetCounts.map(item => [item.vlanId, item._count._all]));
   const directIpCountMap = new Map(directIpCounts.map(item => [item.directVlanId, item._count._all]));
@@ -1285,32 +1294,60 @@ export async function queryVlansAction(params: QueryToolParams): Promise<ActionR
       LIMIT ${pageSize} OFFSET ${skip};
     `;
 
-    const results: VlanQueryResult[] = await Promise.all(
-      vlansFromDb.map(async (v_raw) => {
-        const v: AppVLAN = {
-          id: v_raw.id,
-          vlanNumber: v_raw.vlan_number,
-          name: v_raw.name || undefined,
-          description: v_raw.description || undefined,
-        };
+    const vlanIds = vlansFromDb.map(v => v.id);
 
-        const [subnetCount, directIpCount, associatedSubnets, associatedDirectIPs] = await Promise.all([
-          prisma.subnet.count({ where: { vlanId: v.id } }),
-          prisma.iPAddress.count({ where: { directVlanId: v.id } }),
-          prisma.subnet.findMany({ where: { vlanId: v.id }, select: {id: true, cidr: true, name: true, description: true } }),
-          prisma.iPAddress.findMany({ where: { directVlanId: v.id }, select: { id: true, ipAddress: true, description: true } })
-        ]);
-        return {
-          id: v.id,
-          vlanNumber: v.vlanNumber,
-          name: v.name,
-          description: v.description,
-          associatedSubnets: associatedSubnets.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})),
-          associatedDirectIPs: associatedDirectIPs.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})),
-          resourceCount: subnetCount + directIpCount,
-        };
+    // Optimized batch fetch for related data
+    const [allAssociatedSubnets, allAssociatedDirectIPs] = await Promise.all([
+      prisma.subnet.findMany({
+        where: { vlanId: { in: vlanIds } },
+        select: { id: true, cidr: true, name: true, description: true, vlanId: true }
+      }),
+      prisma.iPAddress.findMany({
+        where: { directVlanId: { in: vlanIds } },
+        select: { id: true, ipAddress: true, description: true, directVlanId: true }
       })
-    );
+    ]);
+
+    // Group related data by vlanId in memory
+    const subnetsByVlanId = allAssociatedSubnets.reduce((acc, subnet) => {
+      if (subnet.vlanId) {
+        if (!acc[subnet.vlanId]) acc[subnet.vlanId] = [];
+        acc[subnet.vlanId].push(subnet);
+      }
+      return acc;
+    }, {} as Record<string, typeof allAssociatedSubnets>);
+
+    const directIpsByVlanId = allAssociatedDirectIPs.reduce((acc, ip) => {
+      if (ip.directVlanId) {
+        if (!acc[ip.directVlanId]) acc[ip.directVlanId] = [];
+        acc[ip.directVlanId].push(ip);
+      }
+      return acc;
+    }, {} as Record<string, typeof allAssociatedDirectIPs>);
+
+
+    // Map the results without further DB calls
+    const results: VlanQueryResult[] = vlansFromDb.map((v_raw) => {
+      const v: AppVLAN = {
+        id: v_raw.id,
+        vlanNumber: v_raw.vlan_number,
+        name: v_raw.name || undefined,
+        description: v_raw.description || undefined,
+      };
+      
+      const associatedSubnets = subnetsByVlanId[v.id] || [];
+      const associatedDirectIPs = directIpsByVlanId[v.id] || [];
+
+      return {
+        id: v.id,
+        vlanNumber: v.vlanNumber,
+        name: v.name,
+        description: v.description,
+        associatedSubnets: associatedSubnets.map(s => ({ id: s.id, cidr: s.cidr, name: s.name || undefined, description: s.description || undefined})),
+        associatedDirectIPs: associatedDirectIPs.map(ip => ({id: ip.id, ipAddress: ip.ipAddress, description: ip.description || undefined})),
+        resourceCount: associatedSubnets.length + associatedDirectIPs.length,
+      };
+    });
 
     return { success: true, data: { data: results, totalCount, currentPage: page, totalPages, pageSize } };
 
