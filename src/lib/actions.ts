@@ -347,17 +347,14 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
   for (let i = 0; i < validIdArray.length; i += BATCH_SIZE) {
     const batch = validIdArray.slice(i, i + BATCH_SIZE);
     
-    // Create delete operations for the current batch
-    const operations = batch.map(id => prisma.auditLog.delete({ where: { id } }));
-
     try {
-      // Execute the transaction for the current batch
-      const results = await prisma.$transaction(operations);
-      const deletedCountInBatch = results.length;
+      const result = await prisma.auditLog.deleteMany({
+        where: { id: { in: batch } }
+      });
+      const deletedCountInBatch = result.count;
       successCount += deletedCountInBatch;
       batch.forEach(id => successfullyDeletedIds.push(id));
     } catch (error: unknown) {
-      // If a transaction for a batch fails, add all items in that batch to failure details.
       const errRes = createActionErrorResponse(error, `${actionName}_transaction_batch`);
       batch.forEach(failedId => {
         failureDetails.push({ id: failedId, itemIdentifier: `日志 ID ${failedId}`, error: `事务失败: ${errRes.userMessage}` });
@@ -365,20 +362,18 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
     }
   }
   
-  // 3. Log the summary of the batch operation if any were successful.
   if (successCount > 0) {
     await prisma.auditLog.create({
       data: {
         userId: auditUser.userId,
         username: auditUser.username,
         action: 'batch_delete_audit_log',
-        details: `批量成功删除了 ${successCount} 条审计日志。IDs: ${successfullyDeletedIds.join(', ')}。最初选中 ${ids.length} 个。`
+        details: `批量成功删除了 ${successCount} 条审计日志。IDs: ${successfullyDeletedIds.slice(0, 10).join(', ')}${successfullyDeletedIds.length > 10 ? '...' : ''}。最初选中 ${ids.length} 个。`
       }
     });
     revalidatePath("/audit-logs");
   }
 
-  // 4. Return the final result.
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
@@ -390,12 +385,16 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
     const skip = (page - 1) * pageSize;
     const whereClause = {};
 
-    const totalCount = await prisma.subnet.count({ where: whereClause });
+    const [totalCount, subnetsFromDb] = await prisma.$transaction([
+      prisma.subnet.count({ where: whereClause }),
+      prisma.subnet.findMany({
+        where: whereClause,
+        orderBy: { cidr: 'asc' },
+        ...(params?.page && params?.pageSize && { skip, take: pageSize }),
+      }),
+    ]);
+    
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
-
-    const subnetsFromDb = params?.page && params?.pageSize
-      ? await prisma.subnet.findMany({ where: whereClause, orderBy: { cidr: 'asc' }, skip, take: pageSize })
-      : await prisma.subnet.findMany({ where: whereClause, orderBy: { cidr: 'asc' } });
 
     let appSubnets: AppSubnet[] = [];
     if (subnetsFromDb.length > 0) {
@@ -436,7 +435,7 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
       });
     }
 
-    return { data: appSubnets, totalCount: params?.page && params?.pageSize ? totalCount : appSubnets.length, currentPage: page, totalPages: params?.page && params?.pageSize ? totalPages : 1, pageSize };
+    return { data: appSubnets, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error: unknown) {
     logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
     if (error instanceof AppError) throw error;
@@ -976,18 +975,15 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
   if (params?.subnetId) whereClause.subnetId = params.subnetId;
   if (params?.status && params.status !== 'all') whereClause.status = params.status as AppIPAddressStatusType;
   const includeClause = { subnet: { include: { vlan: { select: { vlanNumber: true, name: true } } } }, directVlan: { select: { vlanNumber: true, name: true } } };
-  let paginatedDbItems: PrismaIPAddressWithRelations[]; let finalTotalCount: number;
-  if (params?.subnetId) {
-    const allIpsInSubnetUnsorted = await prisma.iPAddress.findMany({ where: whereClause, include: includeClause }) as PrismaIPAddressWithRelations[];
-    const allIpsInSubnetSorted = allIpsInSubnetUnsorted.sort((a, b) => compareIpStrings(a.ipAddress, b.ipAddress));
-    finalTotalCount = allIpsInSubnetSorted.length; paginatedDbItems = allIpsInSubnetSorted.slice(skip, skip + pageSize);
-  } else {
-    const orderByClause: Prisma.IPAddressOrderByWithRelationInput[] = [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ];
-    if (params?.page && params?.pageSize) { finalTotalCount = await prisma.iPAddress.count({ where: whereClause }); paginatedDbItems = await prisma.iPAddress.findMany({ where: whereClause, include: includeClause, orderBy: orderByClause, skip: skip, take: pageSize }) as PrismaIPAddressWithRelations[]; }
-    else { const allIPs = await prisma.iPAddress.findMany({ where: whereClause, include: includeClause, orderBy: orderByClause }) as PrismaIPAddressWithRelations[]; finalTotalCount = allIPs.length; paginatedDbItems = allIPs; }
-  }
-  const totalPages = (pageSize > 0 && finalTotalCount > 0) ? Math.ceil(finalTotalCount / pageSize) : 1;
-  const appIps: AppIPAddressWithRelations[] = paginatedDbItems.map(ip => ({
+
+  const [totalCount, paginatedDbItems] = await prisma.$transaction([
+    prisma.iPAddress.count({ where: whereClause }),
+    prisma.iPAddress.findMany({ where: whereClause, include: includeClause, orderBy: [ { subnet: { networkAddress: 'asc' } }, { ipAddress: 'asc' } ], skip, take: pageSize })
+  ]);
+  
+  const totalPages = (pageSize > 0 && totalCount > 0) ? Math.ceil(totalCount / pageSize) : 1;
+
+  const appIps: AppIPAddressWithRelations[] = (paginatedDbItems as PrismaIPAddressWithRelations[]).map(ip => ({
     id: ip.id, ipAddress: ip.ipAddress, status: ip.status as AppIPAddressStatusType, isGateway: ip.isGateway ?? false,
     allocatedTo: ip.allocatedTo || undefined, usageUnit: ip.usageUnit || undefined, contactPerson: ip.contactPerson || undefined, phone: ip.phone || undefined,
     description: ip.description || undefined, 
@@ -1001,7 +997,7 @@ export async function getIPAddressesAction(params?: FetchParams): Promise<Pagina
     selectedAccessType: ip.selectedAccessType || undefined,
     selectedLocalDeviceName: ip.selectedLocalDeviceName || undefined, selectedDevicePort: ip.selectedDevicePort || undefined, selectedPaymentSource: ip.selectedPaymentSource || undefined,
   }));
-  return { data: appIps, totalCount: finalTotalCount, currentPage: page, totalPages: totalPages, pageSize: pageSize };
+  return { data: appIps, totalCount: totalCount, currentPage: page, totalPages: totalPages, pageSize: pageSize };
 }
 
 export async function createIPAddressAction(data: Omit<AppIPAddress, "id" | "createdAt" | "updatedAt">, performingUserId?: string): Promise<ActionResponse<AppIPAddress>> {
@@ -1985,7 +1981,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       usageUnitGroups,
       unspecifiedUsageUnitCount,
     ] = await prisma.$transaction([
-      // 1. Group by status to get counts for each status and total count
       prisma.iPAddress.groupBy({
         by: ['status'],
         _count: { _all: true },
@@ -1993,7 +1988,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
           status: 'asc',
         },
       }),
-      // 2. Get VLANs with their resource counts
       prisma.vLAN.findMany({
         select: {
           id: true,
@@ -2003,7 +1997,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         },
         orderBy: { vlanNumber: 'asc' },
       }),
-      // 3. Get Subnets with their allocated IP counts
       prisma.subnet.findMany({
         select: {
           id: true,
@@ -2017,26 +2010,22 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         },
         orderBy: { cidr: 'asc' },
       }),
-      // 4. Get recent audit logs
       prisma.auditLog.findMany({
         select: { id: true, username: true, action: true, timestamp: true, details: true },
         orderBy: { timestamp: 'desc' },
         take: DASHBOARD_AUDIT_LOG_COUNT,
       }),
-      // 5. Get IP usage by unit
       prisma.iPAddress.groupBy({
         by: ['usageUnit'],
         _count: { usageUnit: true },
         where: { AND: [{ usageUnit: { not: null } }, { usageUnit: { not: "" } }] },
         orderBy: { _count: { usageUnit: 'desc' } },
       }),
-      // 6. Get count of IPs with no specified usage unit
       prisma.iPAddress.count({
         where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
       }),
     ]);
 
-    // Process results
     const totalIpCount = ipStatusGroups.reduce((sum, group) => sum + group._count._all, 0);
     const totalVlanCount = vlanResources.length;
     const totalSubnetCount = subnets.length;

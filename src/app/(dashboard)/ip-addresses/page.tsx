@@ -161,7 +161,10 @@ function IPAddressesView() {
     setSelectedIds(newSelectedIds);
   };
 
-  if (isAuthLoading || isLoading && !ipAddressesData) return <LoadingIPAddressesPageContent />;
+  if (isAuthLoading || (isLoading && !ipAddressesData)) {
+    return <LoadingIPAddressesPageContent />;
+  }
+  
   if (!currentUser || !hasPermission(currentUser, PERMISSIONS.VIEW_IPADDRESS)) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
