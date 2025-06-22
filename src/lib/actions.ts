@@ -321,42 +321,51 @@ export async function deleteAuditLogAction(id: string, performingUserId?: string
 
 export async function batchDeleteAuditLogsAction(ids: string[], performingUserId?: string): Promise<BatchDeleteResult> {
   const actionName = 'batchDeleteAuditLogsAction';
+  const BATCH_SIZE = 100; // Define batch size for chunking operations
   const auditUser = await getAuditUserInfo(performingUserId);
   const failureDetails: BatchOperationFailure[] = [];
   const successfullyDeletedIds: string[] = [];
+  let successCount = 0;
 
+  // 1. Find all valid IDs that actually exist to avoid trying to delete non-existent records.
   const itemsToProcess = await prisma.auditLog.findMany({
     where: { id: { in: ids } },
     select: { id: true }
   });
-  const foundIdsMap = new Map(itemsToProcess.map(item => [item.id, `日志 ID ${item.id}`]));
+  const validIdsToDelete = new Set(itemsToProcess.map(item => item.id));
 
-  const operations: Prisma.PrismaPromise<any>[] = [];
+  // Add non-existent IDs to failure details right away.
   for (const id of ids) {
-    if (foundIdsMap.has(id)) {
-      operations.push(prisma.auditLog.delete({ where: { id } }));
-    } else {
+    if (!validIdsToDelete.has(id)) {
       failureDetails.push({ id, itemIdentifier: `日志 ID ${id}`, error: '审计日志条目未找到。' });
     }
   }
+  
+  const validIdArray = Array.from(validIdsToDelete);
 
-  let successCount = 0;
-  if (operations.length > 0) {
+  // 2. Process the valid IDs in batches.
+  for (let i = 0; i < validIdArray.length; i += BATCH_SIZE) {
+    const batch = validIdArray.slice(i, i + BATCH_SIZE);
+    
+    // Create delete operations for the current batch
+    const operations = batch.map(id => prisma.auditLog.delete({ where: { id } }));
+
     try {
+      // Execute the transaction for the current batch
       const results = await prisma.$transaction(operations);
-      successCount = results.length;
-      const originalAttemptedIdsInTx = ids.filter(id => foundIdsMap.has(id));
-      originalAttemptedIdsInTx.forEach(id => successfullyDeletedIds.push(id));
+      const deletedCountInBatch = results.length;
+      successCount += deletedCountInBatch;
+      batch.forEach(id => successfullyDeletedIds.push(id));
     } catch (error: unknown) {
-      const errRes = createActionErrorResponse(error, `${actionName}_transaction_error`);
-      const idsInFailedTransaction = ids.filter(id => foundIdsMap.has(id) && !failureDetails.some(f => f.id === id));
-      idsInFailedTransaction.forEach(failedId => {
-        failureDetails.push({ id: failedId, itemIdentifier: foundIdsMap.get(failedId)!, error: `事务失败: ${errRes.userMessage}` });
+      // If a transaction for a batch fails, add all items in that batch to failure details.
+      const errRes = createActionErrorResponse(error, `${actionName}_transaction_batch`);
+      batch.forEach(failedId => {
+        failureDetails.push({ id: failedId, itemIdentifier: `日志 ID ${failedId}`, error: `事务失败: ${errRes.userMessage}` });
       });
-      successCount = 0;
     }
   }
   
+  // 3. Log the summary of the batch operation if any were successful.
   if (successCount > 0) {
     await prisma.auditLog.create({
       data: {
@@ -368,6 +377,8 @@ export async function batchDeleteAuditLogsAction(ids: string[], performingUserId
     });
     revalidatePath("/audit-logs");
   }
+
+  // 4. Return the final result.
   return { successCount, failureCount: failureDetails.length, failureDetails };
 }
 
