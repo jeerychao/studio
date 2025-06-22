@@ -31,8 +31,8 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DEFAULT_QUERY_PAGE_SIZE } from "@/lib/constants";
 
-const ITEMS_PER_PAGE_QUERY = 10;
 const DEBOUNCE_DELAY = 500;
 
 const ipAddressStatusQueryOptions: Array<{ value: AppIPAddressStatusType | 'all'; label: string }> = [
@@ -128,7 +128,7 @@ function QueryPageContent() {
     if (!trimmedQuery) { setSubnetResultsData(null); setSubnetError(null); setIsSubnetLoading(false); return; }
     setIsSubnetLoading(true); setSubnetError(null);
     try {
-      const response = await querySubnetsAction({ queryString: trimmedQuery, page, pageSize: ITEMS_PER_PAGE_QUERY });
+      const response = await querySubnetsAction({ queryString: trimmedQuery, page, pageSize: DEFAULT_QUERY_PAGE_SIZE });
       if (response.success && response.data) setSubnetResultsData(response.data);
       else { setSubnetResultsData(null); setSubnetError(response.error?.userMessage || "查询子网失败"); toast({ title: "子网查询失败", description: response.error?.userMessage, variant: "destructive" });}
     } catch (e) {
@@ -145,7 +145,7 @@ function QueryPageContent() {
     if (!trimmedQuery) { setVlanResultsData(null); setVlanError(null); setIsVlanLoading(false); return; }
     setIsVlanLoading(true); setVlanError(null);
     try {
-      const response = await queryVlansAction({ queryString: trimmedQuery, page, pageSize: ITEMS_PER_PAGE_QUERY });
+      const response = await queryVlansAction({ queryString: trimmedQuery, page, pageSize: DEFAULT_QUERY_PAGE_SIZE });
       if (response.success && response.data) setVlanResultsData(response.data);
       else { setVlanResultsData(null); setVlanError(response.error?.userMessage || "查询VLAN失败"); toast({ title: "VLAN查询失败", description: response.error?.userMessage, variant: "destructive" });}
     } catch (e) {
@@ -162,7 +162,7 @@ function QueryPageContent() {
     if (!trimmedQuery && statusToUse === 'all') { setIpResultsData(null); setIpError(null); setIsIpLoading(false); return; }
     setIsIpLoading(true); setIpError(null);
     try {
-      const response = await queryIpAddressesAction({ searchTerm: trimmedQuery, status: statusToUse, page, pageSize: ITEMS_PER_PAGE_QUERY });
+      const response = await queryIpAddressesAction({ searchTerm: trimmedQuery, status: statusToUse, page, pageSize: DEFAULT_QUERY_PAGE_SIZE });
       if (response.success && response.data) setIpResultsData(response.data);
       else { setIpResultsData(null); setIpError(response.error?.userMessage || "查询IP失败"); toast({ title: "IP查询失败", description: response.error?.userMessage, variant: "destructive" });}
     } catch (e) {

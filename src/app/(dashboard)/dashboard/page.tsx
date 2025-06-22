@@ -17,11 +17,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table";
 import { VirtualizedSubnetTable } from "@/components/dashboard/virtualized-subnet-table";
-
-const CHART_COLORS_REMAINDER = [
-  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"
-];
+import { CHART_COLORS_REMAINDER, DASHBOARD_AUDIT_LOG_COUNT, DASHBOARD_TOP_N_COUNT } from "@/lib/constants";
 
 function DashboardStatCard({ title, value, icon: IconComponent, description, linkTo }: { title: string; value: string | number; icon: React.ElementType; description?: string; linkTo?: string }) {
   const cardElement = (
@@ -170,7 +166,7 @@ export default function DashboardPage() {
           <CardContent className="h-[250px]"><IPStatusPieChart data={ipStatusChartData} /></CardContent>
         </Card>
         <Card className="lg:col-span-1">
-          <CardHeader><CardTitle className="text-base">按使用单位的 IP 分配 (Top N)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">按使用单位的 IP 分配 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle></CardHeader>
           <CardContent className="h-[250px]"><UsageBarChart data={ipUsageByUnit} layout="vertical" yAxisWidth={120} /></CardContent>
         </Card>
       </div>
@@ -178,7 +174,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 mb-6">
         <Card>
             <CardHeader>
-                <CardTitle className="text-base">最繁忙的 VLAN (按资源数 Top {dashboardData.busiestVlans.length || 0})</CardTitle>
+                <CardTitle className="text-base">最繁忙的 VLAN (按资源数 Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
                 <CardDescription>显示关联子网和直接IP数量最多的VLAN。</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px] pl-2 pr-6 pb-6">
@@ -190,7 +186,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">高利用率子网 (Top {dashboardData.subnetsNeedingAttention.length || 0})</CardTitle>
+            <CardTitle className="text-base">高利用率子网 (Top {DASHBOARD_TOP_N_COUNT})</CardTitle>
             <CardDescription>利用率超过 80% 的子网，可能需要关注。</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -204,7 +200,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">最近活动日志 (Top {recentAuditLogs?.length || 0})</CardTitle>
+            <CardTitle className="text-base">最近活动日志 (Top {DASHBOARD_AUDIT_LOG_COUNT})</CardTitle>
             <CardDescription>系统最近的操作记录。</CardDescription>
           </CardHeader>
           <CardContent>
