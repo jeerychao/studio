@@ -131,7 +131,7 @@ function QueryPageContent() {
       const response = await querySubnetsAction({ queryString: trimmedQuery, page, pageSize: DEFAULT_QUERY_PAGE_SIZE });
       if (response.success && response.data) setSubnetResultsData(response.data);
       else { setSubnetResultsData(null); setSubnetError(response.error?.userMessage || "查询子网失败"); toast({ title: "子网查询失败", description: response.error?.userMessage, variant: "destructive" });}
-    } catch (e) {
+    } catch (e: unknown) {
       setSubnetResultsData(null);
       setSubnetError("查询子网时发生意外错误。");
       const errorMessage = e instanceof Error ? e.message : "未知错误";
@@ -148,7 +148,7 @@ function QueryPageContent() {
       const response = await queryVlansAction({ queryString: trimmedQuery, page, pageSize: DEFAULT_QUERY_PAGE_SIZE });
       if (response.success && response.data) setVlanResultsData(response.data);
       else { setVlanResultsData(null); setVlanError(response.error?.userMessage || "查询VLAN失败"); toast({ title: "VLAN查询失败", description: response.error?.userMessage, variant: "destructive" });}
-    } catch (e) {
+    } catch (e: unknown) {
       setVlanResultsData(null);
       setVlanError("查询VLAN时发生意外错误。");
       const errorMessage = e instanceof Error ? e.message : "未知错误";
@@ -165,7 +165,7 @@ function QueryPageContent() {
       const response = await queryIpAddressesAction({ searchTerm: trimmedQuery, status: statusToUse, page, pageSize: DEFAULT_QUERY_PAGE_SIZE });
       if (response.success && response.data) setIpResultsData(response.data);
       else { setIpResultsData(null); setIpError(response.error?.userMessage || "查询IP失败"); toast({ title: "IP查询失败", description: response.error?.userMessage, variant: "destructive" });}
-    } catch (e) {
+    } catch (e: unknown) {
       setIpResultsData(null);
       setIpError("查询IP时发生意外错误。");
       const errorMessage = e instanceof Error ? e.message : "未知错误";
@@ -208,7 +208,7 @@ function QueryPageContent() {
         setSubnetDetailsError(response.error?.userMessage || "获取子网可用IP详情失败。");
         toast({ title: "获取详情失败", description: response.error?.userMessage, variant: "destructive" });
       }
-    } catch (e) {
+    } catch (e: unknown) {
       setSubnetDetailsError("获取子网可用IP详情时发生意外错误。");
       const errorMessage = e instanceof Error ? e.message : "未知错误";
       toast({ title: "获取详情错误", description: errorMessage, variant: "destructive" });

@@ -401,9 +401,6 @@ export async function getSubnetsAction(params?: FetchParams): Promise<PaginatedR
         by: ['subnetId'],
         _count: { id: true },
         where: { subnetId: { in: subnetIds }, status: 'allocated' },
-        orderBy: {
-            subnetId: 'asc'
-        }
       });
 
       const allocatedIpCountMap = new Map<string, number>();
@@ -592,11 +589,16 @@ export async function updateSubnetAction(id: string, data: UpdateSubnetData, per
 }
 
 async function calculateSubnetUtilizationHelper(subnetId: string): Promise<number> {
-  try {
     const subnet = await prisma.subnet.findUnique({ where: { id: subnetId } }); 
-    if (!subnet || !subnet.cidr) return 0;
+    if (!subnet || !subnet.cidr) {
+        logger.warn(`Could not find subnet or subnet CIDR for ID: ${subnetId} in calculateSubnetUtilizationHelper.`);
+        return 0;
+    }
     const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr); 
-    if (!subnetProperties || typeof subnetProperties.prefix !== 'number') return 0;
+    if (!subnetProperties || typeof subnetProperties.prefix !== 'number') {
+        logger.warn(`Could not parse CIDR properties for subnet: ${subnet.cidr} (ID: ${subnetId}).`);
+        return 0;
+    }
     const totalUsableIps = getUsableIpCount(subnetProperties.prefix); if (totalUsableIps === 0) return 0;
     const allocatedIpsCount = await prisma.iPAddress.count({ where: { subnetId: subnetId, status: "allocated" } });
     const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
@@ -604,10 +606,6 @@ async function calculateSubnetUtilizationHelper(subnetId: string): Promise<numbe
       return 1;
     }
     return Math.round(rawPercentage);
-  } catch (error) {
-    logger.error(`Failed to calculate utilization for subnet ${subnetId}`, error);
-    return 0; // Return a safe value on error
-  }
 }
 
 export async function deleteSubnetAction(id: string, performingUserId?: string): Promise<ActionResponse> {
@@ -1461,10 +1459,10 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     const [
       ipStatusGroups,
       vlanResources,
-      // Removed direct subnet fetch, will be fetched conditionally
       recentAuditLogsDb,
       usageUnitGroups,
       unspecifiedUsageUnitCount,
+      subnetsNeedingAttentionRaw
     ] = await prisma.$transaction([
       prisma.iPAddress.groupBy({
         by: ['status'],
@@ -1496,6 +1494,11 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       prisma.iPAddress.count({
         where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
       }),
+      // This query is intentionally kept simple to avoid complex raw SQL in this action.
+      // The calculation of utilization happens in JS layer below.
+      prisma.subnet.findMany({
+        select: { id: true, cidr: true, name: true, _count: { select: { ipAddresses: { where: { status: 'allocated' } } } } },
+      })
     ]);
 
     const [totalIpCount, totalVlanCount, totalSubnetCount] = await prisma.$transaction([
@@ -1544,11 +1547,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       resourceCount: (vlan._count?.subnets || 0) + (vlan._count?.directIPs || 0),
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
-    
-    // Optimized fetch for subnets needing attention
-    const subnetsNeedingAttentionRaw = await prisma.subnet.findMany({
-        select: { id: true, cidr: true, name: true, _count: { select: { ipAddresses: { where: { status: 'allocated' } } } } },
-    });
     
     const subnetsNeedingAttention: SubnetUtilizationInfo[] = subnetsNeedingAttentionRaw.map(subnet => {
         const subnetProperties = getSubnetPropertiesFromCidr(subnet.cidr);
