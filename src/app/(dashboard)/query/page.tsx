@@ -289,8 +289,8 @@ function QueryPageContent() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input placeholder="例如 192.168.1.0/24, 办公网络A区" value={subnetQuery} onChange={handleSubnetQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleSubnetQuerySubmitButton()} />
-                <Button onClick={handleSubnetQuerySubmitButton} disabled={isSubnetLoading && subnetQuery === debouncedSubnetQuery}>
-                  {(isSubnetLoading && subnetQuery === debouncedSubnetQuery) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
+                <Button onClick={handleSubnetQuerySubmitButton} disabled={isSubnetLoading}>
+                  {isSubnetLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
                 </Button>
               </div>
               {isSubnetLoading && <LoadingSpinner />}
@@ -329,8 +329,8 @@ function QueryPageContent() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input placeholder="例如 10, Office, 或 生产网" value={vlanQuery} onChange={handleVlanQueryChange} onKeyPress={(e) => e.key === 'Enter' && handleVlanQuerySubmitButton()} />
-                <Button onClick={handleVlanQuerySubmitButton} disabled={isVlanLoading && vlanQuery === debouncedVlanQuery}>
-                  {(isVlanLoading && vlanQuery === debouncedVlanQuery) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
+                <Button onClick={handleVlanQuerySubmitButton} disabled={isVlanLoading}>
+                  {isVlanLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
                 </Button>
               </div>
               {isVlanLoading && <LoadingSpinner />}
@@ -378,8 +378,8 @@ function QueryPageContent() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleIpQuerySubmitButton} disabled={isIpLoading && ipQuery === debouncedIpQuery && ipQueryStatus === debouncedIpQueryStatus} className="w-full sm:w-auto">
-                  {(isIpLoading && ipQuery === debouncedIpQuery && ipQueryStatus === debouncedIpQueryStatus) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
+                <Button onClick={handleIpQuerySubmitButton} disabled={isIpLoading} className="w-full sm:w-auto">
+                  {isIpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}查询
                 </Button>
               </div>
               {isIpLoading && <LoadingSpinner />}
