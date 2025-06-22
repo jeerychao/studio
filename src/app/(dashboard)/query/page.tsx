@@ -131,7 +131,12 @@ function QueryPageContent() {
       const response = await querySubnetsAction({ queryString: trimmedQuery, page, pageSize: ITEMS_PER_PAGE_QUERY });
       if (response.success && response.data) setSubnetResultsData(response.data);
       else { setSubnetResultsData(null); setSubnetError(response.error?.userMessage || "查询子网失败"); toast({ title: "子网查询失败", description: response.error?.userMessage, variant: "destructive" });}
-    } catch (e) { setSubnetResultsData(null); setSubnetError("查询子网时发生意外错误。"); toast({ title: "子网查询错误", description: (e as Error).message, variant: "destructive" });}
+    } catch (e) {
+      setSubnetResultsData(null);
+      setSubnetError("查询子网时发生意外错误。");
+      const errorMessage = e instanceof Error ? e.message : "未知错误";
+      toast({ title: "子网查询错误", description: errorMessage, variant: "destructive" });
+    }
     finally { setIsSubnetLoading(false); }
   }, [toast, debouncedSubnetQuery]);
 
@@ -143,7 +148,12 @@ function QueryPageContent() {
       const response = await queryVlansAction({ queryString: trimmedQuery, page, pageSize: ITEMS_PER_PAGE_QUERY });
       if (response.success && response.data) setVlanResultsData(response.data);
       else { setVlanResultsData(null); setVlanError(response.error?.userMessage || "查询VLAN失败"); toast({ title: "VLAN查询失败", description: response.error?.userMessage, variant: "destructive" });}
-    } catch (e) { setVlanResultsData(null); setVlanError("查询VLAN时发生意外错误。"); toast({ title: "VLAN查询错误", description: (e as Error).message, variant: "destructive" });}
+    } catch (e) {
+      setVlanResultsData(null);
+      setVlanError("查询VLAN时发生意外错误。");
+      const errorMessage = e instanceof Error ? e.message : "未知错误";
+      toast({ title: "VLAN查询错误", description: errorMessage, variant: "destructive" });
+    }
     finally { setIsVlanLoading(false); }
   }, [toast, debouncedVlanQuery]);
 
@@ -155,7 +165,12 @@ function QueryPageContent() {
       const response = await queryIpAddressesAction({ searchTerm: trimmedQuery, status: statusToUse, page, pageSize: ITEMS_PER_PAGE_QUERY });
       if (response.success && response.data) setIpResultsData(response.data);
       else { setIpResultsData(null); setIpError(response.error?.userMessage || "查询IP失败"); toast({ title: "IP查询失败", description: response.error?.userMessage, variant: "destructive" });}
-    } catch (e) { setIpResultsData(null); setIpError("查询IP时发生意外错误。"); toast({ title: "IP查询错误", description: (e as Error).message, variant: "destructive" });}
+    } catch (e) {
+      setIpResultsData(null);
+      setIpError("查询IP时发生意外错误。");
+      const errorMessage = e instanceof Error ? e.message : "未知错误";
+      toast({ title: "IP查询错误", description: errorMessage, variant: "destructive" });
+    }
     finally { setIsIpLoading(false); }
   }, [toast, debouncedIpQuery, debouncedIpQueryStatus]);
 
@@ -195,7 +210,8 @@ function QueryPageContent() {
       }
     } catch (e) {
       setSubnetDetailsError("获取子网可用IP详情时发生意外错误。");
-      toast({ title: "获取详情错误", description: (e as Error).message, variant: "destructive" });
+      const errorMessage = e instanceof Error ? e.message : "未知错误";
+      toast({ title: "获取详情错误", description: errorMessage, variant: "destructive" });
     } finally {
       setIsSubnetDetailsLoading(false);
       setIsSubnetDetailsSheetOpen(true);

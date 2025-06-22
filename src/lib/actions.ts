@@ -1755,13 +1755,21 @@ export async function updateInterfaceTypeDictionaryAction(id: string, data: Part
 }
 
 async function checkInterfaceTypeUsage(interfaceTypeName: string, forItemIdentifier: string): Promise<void> {
-  const peerPortPrefixUsage = await prisma.iPAddress.count({ where: { peerPortName: { startsWith: interfaceTypeName + " " } } });
+  const [
+    peerPortPrefixUsage,
+    peerPortExactUsage,
+    localDevicePortPrefixUsage,
+    localDevicePortExactUsage,
+  ] = await Promise.all([
+    prisma.iPAddress.count({ where: { peerPortName: { startsWith: `${interfaceTypeName} ` } } }),
+    prisma.iPAddress.count({ where: { peerPortName: interfaceTypeName } }),
+    prisma.iPAddress.count({ where: { selectedDevicePort: { startsWith: `${interfaceTypeName} ` } } }),
+    prisma.iPAddress.count({ where: { selectedDevicePort: interfaceTypeName } }),
+  ]);
+
   if (peerPortPrefixUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${peerPortPrefixUsage} 个 IP 地址的“对端端口”字段作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_PREFIX', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${peerPortPrefixUsage} 个 IP 的“对端端口”作为前缀使用。`);
-  const peerPortExactUsage = await prisma.iPAddress.count({ where: { peerPortName: interfaceTypeName } });
   if (peerPortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${peerPortExactUsage} 个 IP 地址的“对端端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_PEER_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${peerPortExactUsage} 个 IP 的“对端端口”精确匹配使用。`);
-  const localDevicePortPrefixUsage = await prisma.iPAddress.count({ where: { selectedDevicePort: { startsWith: interfaceTypeName + " " } } });
   if (localDevicePortPrefixUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortPrefixUsage} 个 IP 地址的“本端设备端口”字段作为前缀使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_PREFIX', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortPrefixUsage} 个 IP 的“本端设备端口”作为前缀使用。`);
-  const localDevicePortExactUsage = await prisma.iPAddress.count({ where: { selectedDevicePort: interfaceTypeName } });
   if (localDevicePortExactUsage > 0) throw new ResourceError(`接口类型 "${interfaceTypeName}" 正在被 ${localDevicePortExactUsage} 个 IP 地址的“本端设备端口”字段精确匹配使用。`, 'INTERFACE_TYPE_IN_USE_LOCAL_PORT_EXACT', `接口类型 "${interfaceTypeName}" (条目: ${forItemIdentifier}) 正在被 ${localDevicePortExactUsage} 个 IP 的“本端设备端口”精确匹配使用。`);
 }
 
