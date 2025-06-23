@@ -266,7 +266,7 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
     const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.role.count(); const totalPages = Math.ceil(totalCount / pageSize);
     const rolesFromDb = await prisma.role.findMany({ include: { permissions: true, _count: { select: { users: true } } }, orderBy: { name: 'asc' }, skip, take: pageSize });
-    const appRoles: AppRole[] = rolesFromDb.map(role => ({ id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, permissions: role.permissions.map(p => p.id as AppPermissionIdType), userCount: (role._count && typeof role._count === 'object' ? role._count.users : 0) }));
+    const appRoles: AppRole[] = rolesFromDb.map(role => ({ id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, permissions: role.permissions.map(p => p.id as AppPermissionIdType), userCount: (role._count && typeof role._count === 'object' ? role._count.users : 0) || 0 }));
     return { data: appRoles, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取角色数据时发生服务器错误。", 500, "GET_ROLES_FAILED", "无法加载角色数据。"); }
 }
@@ -285,11 +285,11 @@ export async function updateRoleAction(id: string, data: Partial<Omit<AppRole, "
         if (validPermissions.length !== data.permissions.length) throw new ValidationError("一个或多个提供的权限 ID 无效。", "permissions", undefined, "一个或多个提供的权限ID无效。");
         updatePayload.permissions = { set: data.permissions.map(pid => ({ id: pid })) };
     }
-    if (Object.keys(updatePayload).length === 0) { const currentRoleData = await prisma.role.findUnique({ where: { id }, include: {permissions: true, _count: {select: {users: true}}} }); if (!currentRoleData) throw new NotFoundError(`角色 ID: ${id}`, `角色 ID ${id} 未找到。`); const appRole : AppRole = { id: currentRoleData.id, name: currentRoleData.name as AppRoleNameType, description: currentRoleData.description || undefined, permissions: currentRoleData.permissions.map(p=>p.id as AppPermissionIdType), userCount: (currentRoleData._count && typeof currentRoleData._count === 'object' ? currentRoleData._count.users : 0) }; return { success: true, data: appRole }; }
+    if (Object.keys(updatePayload).length === 0) { const currentRoleData = await prisma.role.findUnique({ where: { id }, include: {permissions: true, _count: {select: {users: true}}} }); if (!currentRoleData) throw new NotFoundError(`角色 ID: ${id}`, `角色 ID ${id} 未找到。`); const appRole : AppRole = { id: currentRoleData.id, name: currentRoleData.name as AppRoleNameType, description: currentRoleData.description || undefined, permissions: currentRoleData.permissions.map(p=>p.id as AppPermissionIdType), userCount: (currentRoleData._count && typeof currentRoleData._count === 'object' ? currentRoleData._count.users : 0) || 0 }; return { success: true, data: appRole }; }
     const updatedRole = await prisma.role.update({ where: { id }, data: updatePayload, include: { permissions: true, _count: {select: {users: true}} } });
     await prisma.auditLog.create({ data: { userId: auditUser.userId, username: auditUser.username, action: 'update_role', details: `更新了角色 ${updatedRole.name}` } });
     revalidatePath("/roles");
-    const appRole : AppRole = { id: updatedRole.id, name: updatedRole.name as AppRoleNameType, description: updatedRole.description || undefined, permissions: updatedRole.permissions.map(p=>p.id as AppPermissionIdType), userCount: (updatedRole._count && typeof updatedRole._count === 'object' ? updatedRole._count.users : 0) };
+    const appRole : AppRole = { id: updatedRole.id, name: updatedRole.name as AppRoleNameType, description: updatedRole.description || undefined, permissions: updatedRole.permissions.map(p=>p.id as AppPermissionIdType), userCount: (updatedRole._count && typeof updatedRole._count === 'object' ? updatedRole._count.users : 0) || 0 };
     return { success: true, data: appRole };
   } catch (error: unknown) { return { success: false, error: createActionErrorResponse(error, actionName) }; }
 }
@@ -791,11 +791,11 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
   ]);
 
   const subnetCountMap = new Map(subnetCounts.filter(item => item.vlanId).map(item => {
-      const count = (item._count && typeof item._count === 'object' ? item._count._all : 0);
+      const count = (item._count && typeof item._count === 'object' ? item._count._all : 0) || 0;
       return [item.vlanId!, count];
   }));
   const directIpCountMap = new Map(directIpCounts.filter(item => item.directVlanId).map(item => {
-      const count = (item._count && typeof item._count === 'object' ? item._count._all : 0);
+      const count = (item._count && typeof item._count === 'object' ? item._count._all : 0) || 0;
       return [item.directVlanId!, count];
   }));
 
@@ -1500,8 +1500,6 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       prisma.iPAddress.count({
         where: { OR: [{ usageUnit: null }, { usageUnit: "" }] },
       }),
-      // This query is intentionally kept simple to avoid complex raw SQL in this action.
-      // The calculation of utilization happens in JS layer below.
       prisma.subnet.findMany({
         select: { id: true, cidr: true, name: true, _count: { select: { ipAddresses: { where: { status: 'allocated' } } } } },
       })
@@ -1550,7 +1548,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
       id: vlan.id,
       vlanNumber: vlan.vlanNumber,
       name: vlan.name || undefined,
-      resourceCount: ((vlan._count?.subnets || 0) + (vlan._count?.directIPs || 0)),
+      resourceCount: ((vlan._count && typeof vlan._count === 'object' ? vlan._count.subnets : 0) || 0) + ((vlan._count && typeof vlan._count === 'object' ? vlan._count.directIPs : 0) || 0),
     }));
     const busiestVlans = [...vlanResourceCounts].sort((a, b) => b.resourceCount - a.resourceCount).slice(0, DASHBOARD_TOP_N_COUNT);
     
@@ -1559,7 +1557,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         let utilization = 0;
         if (subnetProperties) {
             const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-            const allocatedIpsCount = subnet._count?.ipAddresses || 0;
+            const allocatedIpsCount = (subnet._count && typeof subnet._count === 'object' ? subnet._count.ipAddresses : 0) || 0;
             if (totalUsableIps > 0) {
                 const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
                 utilization = Math.round(rawPercentage);
