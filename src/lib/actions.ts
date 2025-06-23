@@ -790,8 +790,14 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
     })
   ]);
 
-  const subnetCountMap = new Map(subnetCounts.filter(item => item.vlanId).map(item => [item.vlanId, item._count?._all || 0]));
-  const directIpCountMap = new Map(directIpCounts.filter(item => item.directVlanId).map(item => [item.directVlanId, item._count?._all || 0]));
+  const subnetCountMap = new Map(subnetCounts.filter(item => item.vlanId).map(item => {
+      const count = (item._count && typeof item._count === 'object' && item._count._all) || 0;
+      return [item.vlanId!, count];
+  }));
+  const directIpCountMap = new Map(directIpCounts.filter(item => item.directVlanId).map(item => {
+      const count = (item._count && typeof item._count === 'object' && item._count._all) || 0;
+      return [item.directVlanId!, count];
+  }));
 
   const appVlans: AppVLAN[] = vlansFromDb.map(vlan => ({
     ...vlan,
@@ -1510,7 +1516,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
     ipStatusGroups.forEach(group => {
       const statusKey = group.status as keyof IPStatusCounts;
-      if (statusKey in ipStatusCounts && group._count) {
+      if (statusKey in ipStatusCounts && group._count && typeof group._count === 'object') {
         ipStatusCounts[statusKey] = group._count._all;
       }
     });
