@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -88,10 +89,10 @@ function IPAddressesView() {
         if (isMounted) {
           setSubnets(fetchedSubnetsResult.data);
           setVlans(fetchedVlansResult.data);
-          if (fetchedDeviceDictResult.success) setDeviceDictionaries(fetchedDeviceDictResult.data?.data || []);
-          if (fetchedPaymentDictResult.success) setPaymentSourceDictionaries(fetchedPaymentDictResult.data?.data || []);
-          if (fetchedAccessTypeDictResult.success) setAccessTypeDictionaries(fetchedAccessTypeDictResult.data?.data || []);
-          if (fetchedInterfaceTypesResult.success) setInterfaceTypes(fetchedInterfaceTypesResult.data?.data || []);
+          setDeviceDictionaries(fetchedDeviceDictResult.data || []);
+          setPaymentSourceDictionaries(fetchedPaymentDictResult.data || []);
+          setAccessTypeDictionaries(fetchedAccessTypeDictResult.data || []);
+          setInterfaceTypes(fetchedInterfaceTypesResult.data || []);
         }
       } catch (error) {
         toast({ title: "获取辅助数据错误", description: (error as Error).message, variant: "destructive" });
