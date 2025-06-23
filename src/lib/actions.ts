@@ -266,7 +266,7 @@ export async function getRolesAction(params?: FetchParams): Promise<PaginatedRes
     const page = params?.page || 1; const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE; const skip = (page - 1) * pageSize;
     const totalCount = await prisma.role.count(); const totalPages = Math.ceil(totalCount / pageSize);
     const rolesFromDb = await prisma.role.findMany({ include: { permissions: true, _count: { select: { users: true } } }, orderBy: { name: 'asc' }, skip, take: pageSize });
-    const appRoles: AppRole[] = rolesFromDb.map(role => ({ id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, permissions: role.permissions.map(p => p.id as AppPermissionIdType), userCount: role._count.users }));
+    const appRoles: AppRole[] = rolesFromDb.map(role => ({ id: role.id, name: role.name as AppRoleNameType, description: role.description || undefined, permissions: role.permissions.map(p => p.id as AppPermissionIdType), userCount: role._count?.users ?? 0 }));
     return { data: appRoles, totalCount, currentPage: page, totalPages, pageSize };
   } catch (error) { logger.error(`Error in ${actionName}`, error as Error, undefined, actionName); throw new AppError("获取角色数据时发生服务器错误。", 500, "GET_ROLES_FAILED", "无法加载角色数据。"); }
 }
@@ -790,8 +790,8 @@ export async function getVLANsAction(params?: FetchParams): Promise<PaginatedRes
     })
   ]);
 
-  const subnetCountMap = new Map(subnetCounts.map(item => [item.vlanId, item._count._all]));
-  const directIpCountMap = new Map(directIpCounts.map(item => [item.directVlanId, item._count._all]));
+  const subnetCountMap = new Map(subnetCounts.filter(item => item.vlanId).map(item => [item.vlanId, item._count?._all || 0]));
+  const directIpCountMap = new Map(directIpCounts.filter(item => item.directVlanId).map(item => [item.directVlanId, item._count?._all || 0]));
 
   const appVlans: AppVLAN[] = vlansFromDb.map(vlan => ({
     ...vlan,
@@ -1516,9 +1516,9 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     });
 
     let ipUsageByUnit: TopNItemCount[] = usageUnitGroups
-      .map((g, index) => ({ item: g.usageUnit!, count: g._count.usageUnit, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
+      .map((g, index) => ({ item: g.usageUnit!, count: g._count?.usageUnit || 0, fill: CHART_COLORS_REMAINDER[index % CHART_COLORS_REMAINDER.length] }))
       .slice(0, DASHBOARD_TOP_N_COUNT);
-    const otherUsageUnitCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + g._count.usageUnit, 0);
+    const otherUsageUnitCount = usageUnitGroups.slice(DASHBOARD_TOP_N_COUNT).reduce((sum, g) => sum + (g._count?.usageUnit || 0), 0);
     if (otherUsageUnitCount > 0) ipUsageByUnit.push({ item: "其他", count: otherUsageUnitCount, fill: CHART_COLORS_REMAINDER[DASHBOARD_TOP_N_COUNT % CHART_COLORS_REMAINDER.length]});
     if (unspecifiedUsageUnitCount > 0) {
         const unspecifiedExists = ipUsageByUnit.find(item => item.item === "未指定");
@@ -1553,7 +1553,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
         let utilization = 0;
         if (subnetProperties) {
             const totalUsableIps = getUsableIpCount(subnetProperties.prefix);
-            const allocatedIpsCount = subnet._count.ipAddresses;
+            const allocatedIpsCount = subnet._count?.ipAddresses || 0;
             if (totalUsableIps > 0) {
                 const rawPercentage = (allocatedIpsCount / totalUsableIps) * 100;
                 utilization = Math.round(rawPercentage);
