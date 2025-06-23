@@ -1510,7 +1510,7 @@ export async function getDashboardDataAction(): Promise<ActionResponse<Dashboard
     const ipStatusCounts: IPStatusCounts = { allocated: 0, free: 0, reserved: 0 };
     ipStatusGroups.forEach(group => {
       const statusKey = group.status as keyof IPStatusCounts;
-      if (statusKey in ipStatusCounts) {
+      if (statusKey in ipStatusCounts && group._count) {
         ipStatusCounts[statusKey] = group._count._all;
       }
     });
@@ -1744,31 +1744,31 @@ export async function batchDeleteDeviceDictionariesAction(ids: string[], perform
 }
 
 export async function getPaymentSourceDictionariesAction(params?: FetchParams): Promise<PaginatedResponse<AppPaymentSourceDictionary>> {
-    const actionName = 'getPaymentSourceDictionariesAction';
-    try {
-        const page = params?.page || 1;
-        const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
-        const skip = (page - 1) * pageSize;
-        const totalCount = await prisma.paymentSourceDictionary.count();
-        const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const actionName = 'getPaymentSourceDictionariesAction';
+  try {
+      const page = params?.page || 1;
+      const pageSize = params?.pageSize || DEFAULT_PAGE_SIZE;
+      const skip = (page - 1) * pageSize;
+      const totalCount = await prisma.paymentSourceDictionary.count();
+      const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
-        const itemsFromDb = await prisma.paymentSourceDictionary.findMany({
-            orderBy: { sourceName: 'asc' },
-            skip,
-            take: pageSize
-        });
-        
-        const appItems: AppPaymentSourceDictionary[] = itemsFromDb.map(item => ({ 
-            ...item, 
-            createdAt: item.createdAt.toISOString(), 
-            updatedAt: item.updatedAt.toISOString() 
-        }));
-        
-        return { data: appItems, totalCount, currentPage: page, totalPages, pageSize };
-    } catch (error: unknown) {
-        logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
-        throw new AppError("获取付费来源字典数据时发生服务器错误。", 500, "GET_PAYMENT_SOURCE_DICTS_FAILED", "无法加载付费来源字典数据。");
-    }
+      const itemsFromDb = await prisma.paymentSourceDictionary.findMany({
+          orderBy: { sourceName: 'asc' },
+          skip,
+          take: pageSize
+      });
+      
+      const appItems: AppPaymentSourceDictionary[] = itemsFromDb.map(item => ({ 
+          ...item, 
+          createdAt: item.createdAt.toISOString(), 
+          updatedAt: item.updatedAt.toISOString() 
+      }));
+      
+      return { data: appItems, totalCount, currentPage: page, totalPages, pageSize };
+  } catch (error: unknown) {
+      logger.error(`Error in ${actionName}`, error as Error, undefined, actionName);
+      throw new AppError("获取付费来源字典数据时发生服务器错误。", 500, "GET_PAYMENT_SOURCE_DICTS_FAILED", "无法加载付费来源字典数据。");
+  }
 }
 
 export async function createPaymentSourceDictionaryAction(data: Omit<AppPaymentSourceDictionary, 'id' | 'createdAt' | 'updatedAt'>, performingUserId?: string): Promise<ActionResponse<AppPaymentSourceDictionary>> {
