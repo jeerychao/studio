@@ -496,13 +496,9 @@ npm run test:e2e
 ### 💰 赞助支持
 
 <div align="center">
-
-**支付宝赞助**
-
-![支付宝二维码](./public/images/alipay-qr.jpg)
-
-*扫描二维码支持项目发展*
-
+  <b>支付宝赞助</b>
+  <img src="./public/images/alipay-qr.jpg" alt="支付宝二维码" width="300" height="300">
+  <i>扫描二维码支持项目发展</i>
 </div>
 
 ### 🌟 其他支持方式
