@@ -4,12 +4,12 @@
 
 ![IPAM Logo](./public/images/my-logo.png)
 
-**一个基于 Next.js 和 PostgreSQL 的现代化 IP 地址管理系统**
+**一个基于 Next.js 和 SQLite 的现代化 IP 地址管理系统**
 
 [![License](https://img.shields.io/badge/License-Custom-blue.svg)](#开源协议)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://postgresql.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-3+-blue.svg)](https://www.sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com/)
 
 </div>
@@ -50,7 +50,7 @@ IPAM（IP Address Management）是一个功能强大的现代化 IP 地址管理
 |------|------|------|
 | **Node.js** | 20.x | JavaScript 运行时环境 |
 | **Prisma** | 5.x | 现代化数据库 ORM |
-| **PostgreSQL** | 15+ | 强大的关系型数据库 |
+| **SQLite** | 3+ | 轻量级关系型数据库，嵌入式部署 |
 | **NextAuth.js** | 4.x | 完整的认证解决方案 |
 
 ### UI 组件库
@@ -110,7 +110,7 @@ erDiagram
     VLAN ||--o{ Subnet : contains
     VLAN ||--o{ IPAddress : "direct assignment"
     Subnet ||--o{ IPAddress : contains
-    
+
     User {
         string id PK
         string username UK
@@ -123,7 +123,7 @@ erDiagram
         datetime createdAt
         datetime updatedAt
     }
-    
+
     Role {
         string id PK
         string name UK
@@ -131,14 +131,14 @@ erDiagram
         datetime createdAt
         datetime updatedAt
     }
-    
+
     Permission {
         string id PK
         string name UK
         string group
         string description
     }
-    
+
     VLAN {
         string id PK
         int vlanNumber UK
@@ -147,7 +147,7 @@ erDiagram
         datetime createdAt
         datetime updatedAt
     }
-    
+
     Subnet {
         string id PK
         string cidr UK
@@ -158,7 +158,7 @@ erDiagram
         datetime createdAt
         datetime updatedAt
     }
-    
+
     IPAddress {
         string id PK
         string ipAddress UK
@@ -190,32 +190,32 @@ graph TB
         C[ShadCN UI]
         D[Tailwind CSS]
     end
-    
+
     subgraph "API 层"
         E[Next.js API Routes]
         F[Server Actions]
         G[Middleware]
     end
-    
+
     subgraph "业务逻辑层"
         H[Prisma ORM]
         I[数据验证]
         J[权限控制]
         K[错误处理]
     end
-    
+
     subgraph "数据层"
-        L[PostgreSQL]
+        L[SQLite]
         M[数据加密]
         N[备份策略]
     end
-    
+
     A --> E
     B --> F
     E --> H
     F --> H
     H --> L
-    
+
     style A fill:#e1f5fe
     style E fill:#f3e5f5
     style H fill:#e8f5e8
@@ -265,7 +265,7 @@ graph TB
 ### 系统要求
 
 - **Node.js**: 18.0 或更高版本
-- **PostgreSQL**: 13.0 或更高版本
+- **SQLite**: 3.0 或更高版本
 - **Docker**: 20.10 或更高版本（可选）
 - **内存**: 4GB 或更多
 - **存储**: 20GB 可用空间
@@ -276,7 +276,7 @@ graph TB
 
 ```env
 # 数据库配置
-DATABASE_URL="postgresql://username:password@localhost:5432/ipam_db?schema=public"
+DATABASE_URL="file:./dev.db"
 
 # 应用配置
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
@@ -293,7 +293,7 @@ NEXTAUTH_SECRET=your_nextauth_secret
 ```bash
 # 1. 克隆项目
 git clone <repository-url>
-cd ipam
+cd studio
 
 # 2. 安装依赖
 npm install
@@ -328,7 +328,7 @@ npm run dev
 
 该指南包含：
 - 系统环境准备和依赖安装
-- PostgreSQL 数据库配置
+- SQLite 数据库配置
 - 应用服务配置和管理
 - 反向代理和 SSL 配置
 - 安全加固和监控设置
@@ -338,7 +338,7 @@ npm run dev
 ### 项目结构
 
 ```
-ipam/
+studio/
 ├── src/
 │   ├── app/                 # Next.js App Router
 │   │   ├── (dashboard)/     # 仪表板页面
@@ -499,7 +499,7 @@ npm run test:e2e
 
 **支付宝赞助**
 
-![支付宝二维码](./public/images/alipay-qr.png)
+![支付宝二维码](./public/images/alipay-qr.jpg)
 
 *扫描二维码支持项目发展*
 
