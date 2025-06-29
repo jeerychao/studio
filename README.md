@@ -497,7 +497,9 @@ npm run test:e2e
 
 <div align="center">
   <b>支付宝赞助</b>
+  <br>
   <img src="./public/images/alipay-qr.jpg" alt="支付宝二维码" width="300" height="300">
+  <br>
   <i>扫描二维码支持项目发展</i>
 </div>
 
