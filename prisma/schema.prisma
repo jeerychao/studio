@@ -1,0 +1,179 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(uuid())
+  username    String    @unique
+  email       String    @unique
+  password    String
+  phone       String?
+  avatar      String?
+  lastLogin   DateTime? @map("last_login")
+  roleId      String    @map("role_id")
+  role        Role      @relation(fields: [roleId], references: [id])
+  auditLogs   AuditLog[] // Relation to AuditLog, if a user can have multiple logs
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Role {
+  id          String    @id @default(uuid())
+  name        String    @unique // e.g., "Administrator", "Operator", "Viewer"
+  description String?
+  users       User[]
+  permissions Permission[] @relation("RolePermissions") // Changed relation name for clarity
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id // Use predefined string IDs from PERMISSIONS object
+  name        String  @unique // User-friendly name of the permission
+  group       String  // Group name for UI organization (e.g., "Subnet Management")
+  description String? // Optional description of what the permission allows
+  roles       Role[]  @relation("RolePermissions")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("permissions")
+}
+
+model Subnet {
+  id              String  @id @default(uuid())
+  cidr            String  @unique // e.g., "192.168.1.0/24" - This should be the canonical network address + prefix
+  networkAddress  String  @map("network_address") // e.g., "192.168.1.0"
+  subnetMask      String  @map("subnet_mask")     // e.g., "255.255.255.0"
+  ipRange         String? @map("ip_range")        // e.g., "192.168.1.1 - 192.168.1.254", optional for /31, /32
+  name            String?
+  description     String?
+  dhcpEnabled     Boolean? @default(false) @map("dhcp_enabled")
+  vlanId          String? @map("vlan_id")
+  vlan            VLAN?   @relation(fields: [vlanId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ipAddresses     IPAddress[]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  @@index([networkAddress])
+  @@map("subnets")
+}
+
+model VLAN {
+  id          String    @id @default(uuid())
+  vlanNumber  Int       @unique @map("vlan_number") // e.g., 10, 20, 100
+  name        String?
+  description String?
+  subnets     Subnet[]
+  directIPs   IPAddress[] @relation("DirectVlanIPs") // IPs directly associated with this VLAN, not via subnet
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("vlans")
+}
+
+model IPAddress {
+  id            String  @id @default(uuid())
+  ipAddress     String  @unique @map("ip_address") // The IP address string itself, now globally unique
+  subnetId      String? @map("subnet_id")
+  directVlanId  String? @map("direct_vlan_id")      // For IPs directly on a VLAN, not via a subnet
+  
+  status        String  // "allocated", "free", "reserved"
+  isGateway     Boolean? @default(false) @map("is_gateway")
+  
+  allocatedTo   String? @map("allocated_to")
+  usageUnit     String? @map("usage_unit")
+  contactPerson String? @map("contact_person")
+  phone         String?
+  description   String?
+
+  peerUnitName            String? @map("peer_unit_name")
+  peerDeviceName          String? @map("peer_device_name") // Name of the peer device (from DeviceDictionary)
+  peerPortName            String? @map("peer_port_name")   // e.g., "GigabitEthernet0/1", "ge-0/0/0"
+
+  selectedLocalDeviceName String? @map("selected_local_device_name") // Name of the local device (from DeviceDictionary)
+  selectedDevicePort      String? @map("selected_device_port")       // e.g., "GigabitEthernet0/2"
+
+  selectedAccessType      String? @map("selected_access_type")       // Value from AccessTypeDictionary
+  selectedPaymentSource   String? @map("selected_payment_source")    // Value from PaymentSourceDictionary
+
+  subnet        Subnet? @relation(fields: [subnetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  directVlan    VLAN?   @relation("DirectVlanIPs", fields: [directVlanId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at") // Was lastSeen, now correctly updatedAt
+
+  @@index([status])
+  @@index([allocatedTo])
+  @@index([usageUnit])
+  // @@index([ipAddress, subnetId]) // Removed as ipAddress @unique is stronger for global uniqueness.
+  @@map("ip_addresses")
+}
+
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id") // Can be null for system-generated logs
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull) // SetNull to keep log if user deleted
+  username    String?  // Denormalized username for easier display, or "System"
+  action      String   // e.g., "create_subnet", "user_login"
+  timestamp   DateTime @default(now())
+  details     String?  // JSON string or plain text for more details
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+// Dictionaries
+model DeviceDictionary {
+  id          String   @id @default(uuid())
+  deviceName  String   @unique @map("device_name") // e.g., "Core-Switch-A", "Router-Branch-Office"
+  // Removed 'port' as it was not being used and complicates the "dictionary" nature. Ports are instance-specific.
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("device_dictionary")
+}
+
+model PaymentSourceDictionary {
+  id          String   @id @default(uuid())
+  sourceName  String   @unique @map("source_name") // e.g., "Self-funded", "Govt Project X"
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@map("payment_source_dictionary")
+}
+
+model AccessTypeDictionary {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g., "Dedicated Line", "Broadband PPPoE", "Wireless Bridge"
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@map("access_type_dictionary")
+}
+
+model InterfaceTypeDictionary {
+  id            String   @id @default(uuid())
+  name          String   @unique // e.g., "GigabitEthernet", "ge-", "TenGigabitEthernet", "xe-"
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  @@map("interface_type_dictionary")
+}

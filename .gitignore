@@ -1,0 +1,76 @@
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env*.local
+# .env
+
+# Prisma
+# Ignore the SQLite database file in development
+/prisma/dev.db
+/prisma/dev.db-journal
+
+# Turborepo
+.turbo
+
+# Docker
+.dockerignore
+# production.env # Keep if it contains non-sensitive defaults, otherwise add to .gitignore if it holds secrets
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs (if you generate local log files not meant for commit)
+/logs/*.log
+!/logs/.gitkeep # if you want to keep the directory structure
+
+# Build artifacts
+dist/
+build/
+public/build/
+
+# Patch-package
+patches/
+.patch-debug
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Environment variables specific to certain hosting platforms (example)
+.vercel
+.netlify
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
